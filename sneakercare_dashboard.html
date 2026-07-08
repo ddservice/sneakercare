@@ -9,7 +9,7 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="theme-color" content="#0f766e">
   <title>Sneaker Care - Smart Dashboard</title>
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.0.0/dist/tabler-icons.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.47.0/tabler-icons.min.css">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <!-- ตรวจสอบสิทธิ์การเข้าสู่ระบบแบบซิงโครนัสเพื่อป้องกันการกะพริบ (Flicker) ตอนโหลดหน้าจอ -->
@@ -879,13 +879,185 @@
       .tabs { gap: 2px; }
     }
 
+
     /* ── Very small phone < 380px ── */
     @media (max-width: 379px) {
-      .tab { padding: 8px 6px; font-size: 11px; }
-      .tab i { display: none; }
       .kpis { grid-template-columns: 1fr; }
       .kpi-grid-3x2 { grid-template-columns: 1fr; }
     }
+
+    /* ══════════════════════════════════════════════
+       HAMBURGER / MOBILE NAV
+    ══════════════════════════════════════════════ */
+    .hamburger-wrap { display: none; margin-bottom: 16px; }
+
+    .hamburger-btn {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 13px 16px;
+      background: var(--surface);
+      border: 1.5px solid var(--border);
+      border-radius: 14px;
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--c-primary);
+      cursor: pointer;
+      box-shadow: 0 2px 6px rgba(0,0,0,.06);
+      transition: box-shadow .15s;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .hamburger-btn:active { box-shadow: 0 1px 2px rgba(0,0,0,.04); }
+    .hamburger-btn .hbg-title { flex: 1; text-align: left; font-size: 14px; }
+    .hamburger-btn .hbg-chevron {
+      font-size: 18px;
+      color: var(--muted);
+      transition: transform .25s cubic-bezier(.4,0,.2,1);
+    }
+    .hamburger-btn.open .hbg-chevron { transform: rotate(180deg); }
+
+    .mobile-nav-dropdown {
+      display: none;
+      flex-direction: column;
+      margin-top: 8px;
+      background: var(--surface);
+      border: 1.5px solid var(--border);
+      border-radius: 14px;
+      overflow: hidden;
+      box-shadow: 0 8px 24px rgba(0,0,0,.1);
+      animation: slideDown .2s ease;
+    }
+    @keyframes slideDown {
+      from { opacity: 0; transform: translateY(-8px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .mobile-nav-dropdown.open { display: flex; }
+
+    .mobile-nav-dropdown .mob-tab {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 15px 18px;
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text);
+      background: transparent;
+      border: none;
+      border-bottom: 1px solid var(--border);
+      cursor: pointer;
+      text-align: left;
+      width: 100%;
+      min-height: 52px;
+      -webkit-tap-highlight-color: transparent;
+      transition: background .1s;
+    }
+    .mobile-nav-dropdown .mob-tab:last-child { border-bottom: none; }
+    .mobile-nav-dropdown .mob-tab:active { background: var(--surface-header); }
+    .mobile-nav-dropdown .mob-tab.on {
+      background: var(--c-primary-light);
+      color: var(--c-primary);
+    }
+    .mobile-nav-dropdown .mob-tab i {
+      font-size: 20px;
+      width: 24px;
+      text-align: center;
+      flex-shrink: 0;
+    }
+
+    @media (max-width: 767px) {
+      .hamburger-wrap { display: block; }
+      .tabs { display: none !important; }
+    }
+
+    /* ── Opex Confirm / History Modals ───────────────────── */
+    .opex-modal-overlay {
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,.45);
+      z-index: 9000;
+      display: flex; align-items: center; justify-content: center;
+      padding: 16px;
+      animation: fadeIn .15s ease;
+    }
+    @keyframes fadeIn { from{opacity:0} to{opacity:1} }
+    .opex-modal {
+      background: var(--surface);
+      border-radius: 18px;
+      padding: 24px;
+      width: 100%; max-width: 480px;
+      box-shadow: 0 16px 48px rgba(0,0,0,.18);
+      animation: slideUp .2s ease;
+      max-height: 90vh; overflow-y: auto;
+    }
+    @keyframes slideUp {
+      from{opacity:0;transform:translateY(16px)}
+      to{opacity:1;transform:translateY(0)}
+    }
+    .opex-modal h3 {
+      font-size: 16px; font-weight: 700;
+      color: var(--c-primary-hover);
+      margin-bottom: 16px;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .opex-confirm-row {
+      display: flex; justify-content: space-between;
+      padding: 8px 12px;
+      border-radius: 8px;
+      font-size: 13px;
+      margin-bottom: 4px;
+    }
+    .opex-confirm-row:nth-child(odd) { background: var(--surface-header); }
+    .opex-confirm-row .val {
+      font-weight: 700; color: var(--c-primary-hover);
+    }
+    .opex-confirm-row.highlight {
+      background: var(--c-primary-light);
+      border: 1px solid rgba(13,148,136,.2);
+    }
+    .opex-confirm-row.highlight .val { font-size: 15px; }
+    .opex-note-field {
+      margin: 14px 0;
+    }
+    .opex-note-field label {
+      font-size: 12px; font-weight: 700; color: var(--muted);
+      display: block; margin-bottom: 6px;
+    }
+    .opex-note-field textarea {
+      width: 100%; padding: 10px 12px;
+      border: 1.5px solid var(--border); border-radius: 10px;
+      font-size: 13px; resize: vertical; min-height: 70px;
+      font-family: inherit; color: var(--text);
+      background: var(--surface);
+    }
+    .opex-note-field textarea:focus { border-color: var(--c-primary); outline: none; }
+    .opex-modal-btns {
+      display: grid; grid-template-columns: 1fr 1fr;
+      gap: 10px; margin-top: 16px;
+    }
+    /* History list */
+    .hist-item {
+      border: 1px solid var(--border); border-radius: 10px;
+      padding: 12px 14px; margin-bottom: 8px;
+      background: var(--surface);
+    }
+    .hist-item:hover { border-color: var(--c-primary); }
+    .hist-meta { font-size: 11px; color: var(--muted); margin-top: 4px; }
+    .hist-note {
+      font-size: 12px; color: var(--text);
+      background: var(--c-primary-light);
+      border-radius: 6px; padding: 4px 8px; margin-top: 6px;
+      border-left: 3px solid var(--c-primary);
+    }
+    .hist-amounts {
+      display: flex; gap: 12px; flex-wrap: wrap;
+      margin-top: 8px; font-size: 12px;
+    }
+    .hist-amt-chip {
+      background: var(--surface-header);
+      border-radius: 20px; padding: 2px 10px;
+      font-weight: 600; color: var(--text);
+    }
+
   </style>
 </head>
 
@@ -966,15 +1138,31 @@
       </div>
     </div>
 
-    <!-- ── Navigation Tabs ── -->
-    <div class="tabs">
+    <!-- ══ MOBILE HAMBURGER NAV ══════════════════════════════ -->
+    <div class="hamburger-wrap">
+      <button class="hamburger-btn" id="hamburger_btn" onclick="toggleMobileNav()" aria-label="เมนูนำทาง">
+        <i class="ti ti-menu-2" style="font-size:20px"></i>
+        <span class="hbg-title" id="hbg_label">ภาพรวม</span>
+        <i class="ti ti-chevron-down hbg-chevron"></i>
+      </button>
+      <div class="mobile-nav-dropdown" id="mobile_nav_dd">
+        <button class="mob-tab on" onclick="swM(this,'sum','ภาพรวม')"><i class="ti ti-chart-bar"></i> ภาพรวม</button>
+        <button class="mob-tab" onclick="swM(this,'sale','งานบริการ/ยอดขาย')"><i class="ti ti-cash"></i> งานบริการ/ยอดขาย</button>
+        <button class="mob-tab" onclick="swM(this,'stock','คลังสินค้า')"><i class="ti ti-package"></i> คลังสินค้า</button>
+        <button class="mob-tab" onclick="swM(this,'opex','ค่าใช้จ่าย & พนักงาน')"><i class="ti ti-building-store"></i> ค่าใช้จ่าย &amp; พนักงาน</button>
+        <button class="mob-tab" onclick="swM(this,'stats','สถิติ');renderStats()"><i class="ti ti-chart-dots"></i> สถิติ</button>
+        <button class="mob-tab" onclick="swM(this,'settings','ตั้งค่า')"><i class="ti ti-settings"></i> ตั้งค่า</button>
+      </div>
+    </div>
+
+    <!-- ══ DESKTOP NAVIGATION TABS ════════════════════════════ -->
+    <div class="tabs" id="desktop_tabs">
       <button class="tab on" onclick="sw('sum',this)"><i class="ti ti-chart-bar"></i> ภาพรวม</button>
       <button class="tab" onclick="sw('sale',this)"><i class="ti ti-cash"></i> งานบริการ/ยอดขาย</button>
       <button class="tab" onclick="sw('stock',this)"><i class="ti ti-package"></i> คลังสินค้า</button>
-      <button class="tab" onclick="sw('opex',this)"><i class="ti ti-building-store"></i> ค่าใช้จ่าย & พนักงาน</button>
+      <button class="tab" onclick="sw('opex',this)"><i class="ti ti-building-store"></i> ค่าใช้จ่าย &amp; พนักงาน</button>
       <button class="tab" onclick="sw('stats',this);renderStats()"><i class="ti ti-chart-dots"></i> สถิติ</button>
-      <button class="tab" id="tab_settings" onclick="sw('settings',this)"><i class="ti ti-settings"></i>
-        ตั้งค่า</button>
+      <button class="tab" id="tab_settings" onclick="sw('settings',this)"><i class="ti ti-settings"></i> ตั้งค่า</button>
     </div>
 
     <!-- ════ TAB 1: ภาพรวม (Overview) ════ -->
@@ -1774,9 +1962,56 @@
       </div>
 
       <div id="status_opex" class="status"></div>
-      <button class="btn btn-primary btn-full" id="opex_save_btn" onclick="saveOpexData()">
-        <i class="ti ti-device-floppy"></i> บันทึกค่าใช้จ่ายประจำเดือนทั้งหมด
-      </button>
+      <div style="display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center">
+        <button class="btn btn-primary btn-full" id="opex_save_btn" onclick="saveOpexData()">
+          <i class="ti ti-device-floppy"></i> บันทึกค่าใช้จ่ายประจำเดือนทั้งหมด
+        </button>
+        <button class="btn btn-light" onclick="showOpexHistory()" title="ดูประวัติการแก้ไข"
+          style="white-space:nowrap;min-height:44px;padding:0 14px;display:flex;align-items:center;gap:6px">
+          <i class="ti ti-history"></i>
+          <span style="font-size:12px">ประวัติ</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- ══ OPEX CONFIRM MODAL ══════════════════════════════ -->
+    <div id="opex_confirm_overlay" style="display:none" class="opex-modal-overlay"
+         onclick="if(event.target===this)_closeOpexModal('opex_confirm_overlay')">
+      <div class="opex-modal">
+        <h3><i class="ti ti-shield-check"></i> ยืนยันการบันทึกข้อมูล</h3>
+        <div id="opex_confirm_body"></div>
+        <div class="opex-note-field">
+          <label><i class="ti ti-pencil"></i> บันทึกเหตุผลการแก้ไข (ถ้ามี)</label>
+          <textarea id="opex_change_note" placeholder="เช่น แก้ไขเงินเดือนพนักงาน, อัปเดตค่าไฟ..."></textarea>
+        </div>
+        <div class="opex-modal-btns">
+          <button class="btn btn-light" onclick="_closeOpexModal('opex_confirm_overlay')">
+            <i class="ti ti-x"></i> ยกเลิก
+          </button>
+          <button class="btn btn-primary" id="opex_confirm_ok_btn" onclick="_doSaveOpex()">
+            <i class="ti ti-check"></i> ยืนยันบันทึก
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ OPEX HISTORY MODAL ══════════════════════════════ -->
+    <div id="opex_history_overlay" style="display:none" class="opex-modal-overlay"
+         onclick="if(event.target===this)_closeOpexModal('opex_history_overlay')">
+      <div class="opex-modal" style="max-width:560px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+          <h3 style="margin:0"><i class="ti ti-history"></i> ประวัติการแก้ไข</h3>
+          <button onclick="_closeOpexModal('opex_history_overlay')"
+            style="background:none;border:none;font-size:22px;cursor:pointer;color:var(--muted);line-height:1">×</button>
+        </div>
+        <div id="opex_history_month_label"
+          style="font-size:12px;color:var(--muted);margin-bottom:12px"></div>
+        <div id="opex_history_body">
+          <div style="text-align:center;padding:24px;color:var(--muted)">
+            <i class="ti ti-loader" style="font-size:24px"></i><br>กำลังโหลด...
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- ════ TAB 5: สถิติ (Analytics) ════ -->
@@ -2369,12 +2604,42 @@
     // ── APP FUNCTIONS ───────────────────────────────────────────
     function sw(id, btn) {
       document.querySelectorAll('.panel').forEach(p => p.classList.remove('on'));
-      document.querySelectorAll('.tab').forEach(t => t.classList.remove('on'));
+      document.querySelectorAll('.tab, .mob-tab').forEach(t => t.classList.remove('on'));
       document.getElementById(id).classList.add('on');
-      btn.classList.add('on');
-      // Rebuild opex form immediately when tab is opened (don't wait for GAS)
+      if (btn) btn.classList.add('on');
       if (id === 'opex') buildOpexForm();
     }
+
+    /* ── Mobile hamburger toggle ── */
+    function toggleMobileNav() {
+      const btn = document.getElementById('hamburger_btn');
+      const dd  = document.getElementById('mobile_nav_dd');
+      btn.classList.toggle('open');
+      dd.classList.toggle('open');
+    }
+
+    /* ── Mobile tab switch: switch panel + close dropdown + sync desktop ── */
+    function swM(mobBtn, id, label) {
+      sw(id, mobBtn);
+      // Sync matching desktop tab
+      document.querySelectorAll('#desktop_tabs .tab').forEach(t => {
+        const oc = t.getAttribute('onclick') || '';
+        if (oc.includes("'" + id + "'")) t.classList.add('on');
+      });
+      // Update hamburger label and close
+      document.getElementById('hbg_label').textContent = label;
+      document.getElementById('hamburger_btn').classList.remove('open');
+      document.getElementById('mobile_nav_dd').classList.remove('open');
+    }
+
+    /* Close mobile nav on outside click */
+    document.addEventListener('click', function(e) {
+      const wrap = document.querySelector('.hamburger-wrap');
+      if (wrap && !wrap.contains(e.target)) {
+        document.getElementById('hamburger_btn')?.classList.remove('open');
+        document.getElementById('mobile_nav_dd')?.classList.remove('open');
+      }
+    });
 
     function todayStr() {
       const d = new Date();
@@ -4592,37 +4857,27 @@
       if (offsetEl) offsetEl.textContent = '+ ' + fc2(rentalIncome) + ' บาท';
     }
 
+    // ── Pending save payload (set by saveOpexData, consumed by _doSaveOpex) ──
+    let _pendingOpexItems = [];
+    let _pendingOpexMonth = '';
+
     function saveOpexData() {
       const m = document.getElementById('opex_month').value;
       if (!m) { alert('กรุณาระบุเดือนที่ต้องการบันทึก'); return; }
       const [y, mm] = m.split('-');
       const monthKey = mm + '/' + y;
 
-      const hasExistingOpex = opexSaved.some(o => o.month === monthKey);
-      if (hasExistingOpex) {
-        if (!confirm(`พบข้อมูลค่าใช้จ่ายและพนักงานประจำเดือน ${monthKey} อยู่ในระบบแล้ว คุณต้องการยืนยันการบันทึกแก้ไขเปลี่ยนแปลงข้อมูลหรือไม่?`)) {
-          return;
-        }
-      }
-
+      // ── Build opexItemsList (same as before) ───────────────────
       const opexItemsList = [];
 
-      // Add fixed opex
       OPEX_ITEMS.forEach(item => {
         const amt = +document.getElementById('op_amt_' + item.key).value || 0;
         const method = document.getElementById('op_method_' + item.key).value;
-        opexItemsList.push({
-          category: 'ค่าดำเนินการ',
-          key: item.key,
-          name: item.name,
-          amount: amt,
-          method: method
-        });
+        opexItemsList.push({ category: 'ค่าดำเนินการ', key: item.key, name: item.name, amount: amt, method });
       });
 
-      // Add staff payrolls
       employeesList.forEach(emp => {
-        if (emp.status === "Inactive") return;
+        if (emp.status === 'Inactive') return;
         const n = emp.name;
         const sal = +document.getElementById(`slip_sal_${n}`).value || 0;
         const comm = +document.getElementById(`slip_comm_${n}`).value || 0;
@@ -4635,178 +4890,248 @@
         const wht = Math.round(comm * 0.03);
         const net = sal + comm + diligence + ot - ssoEmp - wht - deductTotal;
 
-        // Sync deductList detail text before saving
         const items = _deductList[n] || [];
-        items.forEach((item, i) => {
-          const detailEl = document.getElementById(`ddetail_${n}_${i}`);
-          if (detailEl) item.detail = detailEl.value;
-          const typeEl = document.getElementById(`dtype_${n}_${i}`);
-          if (typeEl) item.type = typeEl.value;
+        items.forEach((it, i) => {
+          const dEl = document.getElementById(`ddetail_${n}_${i}`); if (dEl) it.detail = dEl.value;
+          const tEl = document.getElementById(`dtype_${n}_${i}`); if (tEl) it.type = tEl.value;
         });
 
-        // Main net transfer record (used in expense summary)
-        opexItemsList.push({
-          category: 'ค่าแรงพนักงาน',
-          key: 'emp_' + n,
-          name: `เงินจ่ายพนักงาน: ${n}`,
-          amount: net,
-          method: 'บัญชีร้าน'
-        });
-
-        // Component detail records (restore form values; not counted in summary)
-        const pushDetail = (k, label, val, nameOverride) => opexItemsList.push({
-          category: 'payslip_detail',
-          key: k,
-          name: (nameOverride || label) + ': ' + n,
-          amount: val,
-          method: '-'
-        });
-        pushDetail('empd_comm_pct_' + n, 'คอมมิชชัน%', commPct);
-        pushDetail('empd_diligence_' + n, 'เบี้ยขยัน', diligence);
-        pushDetail('empd_ot_' + n, 'โอที', ot);
-        pushDetail('empd_wht_' + n, 'WHT3%', wht);
-        pushDetail('empd_deduct_total_' + n, 'หักรวม', deductTotal);
-        // Save deduction detail as JSON string in the name field
-        opexItemsList.push({
-          category: 'payslip_detail',
-          key: 'empd_deduct_json_' + n,
-          name: JSON.stringify(items),
-          amount: 0,
-          method: '-'
-        });
+        opexItemsList.push({ category: 'ค่าแรงพนักงาน', key: 'emp_' + n, name: `เงินจ่ายพนักงาน: ${n}`, amount: net, method: 'บัญชีร้าน' });
+        const pushD = (k, v) => opexItemsList.push({ category: 'payslip_detail', key: k, name: k + ': ' + n, amount: v, method: '-' });
+        pushD('empd_comm_pct_' + n, commPct);
+        pushD('empd_diligence_' + n, diligence);
+        pushD('empd_ot_' + n, ot);
+        pushD('empd_wht_' + n, wht);
+        pushD('empd_deduct_total_' + n, deductTotal);
+        opexItemsList.push({ category: 'payslip_detail', key: 'empd_deduct_json_' + n, name: JSON.stringify(items), amount: 0, method: '-' });
       });
 
-      // Save misc items JSON (for restoration)
       if (_miscItems.length > 0) {
-        opexItemsList.push({
-          category: 'payslip_detail',
-          key: 'misc_items_json',
-          name: JSON.stringify(_miscItems),
-          amount: 0,
-          method: '-'
-        });
+        opexItemsList.push({ category: 'payslip_detail', key: 'misc_items_json', name: JSON.stringify(_miscItems), amount: 0, method: '-' });
       }
 
-      // Add rental income meter readings (for restoration next month)
       for (let ri = 0; ri < _ROOMS_COUNT; ri++) {
         const prevEl = document.getElementById(`room_prev_${ri}`);
         const currEl = document.getElementById(`room_curr_${ri}`);
         if (!prevEl || !currEl) continue;
-        opexItemsList.push({
-          category: 'rental_meter',
-          key: `room_prev_meter_${ri}`,
-          name: `มิเตอร์ก่อนหน้า: ${_roomsConfig[ri]?.name || 'ห้อง' + (ri + 1)}`,
-          amount: +prevEl.value || 0,
-          method: '-'
-        });
-        opexItemsList.push({
-          category: 'rental_meter',
-          key: `room_curr_meter_${ri}`,
-          name: `มิเตอร์ล่าสุด: ${_roomsConfig[ri]?.name || 'ห้อง' + (ri + 1)}`,
-          amount: +currEl.value || 0,
-          method: '-'
-        });
         const rentInpVal = +document.getElementById(`room_rent_inp_${ri}`)?.value || 0;
         const rateInpVal = +document.getElementById(`room_rate_inp_${ri}`)?.value || 5;
-        // บันทึกค่าเช่าของเดือนนี้แยกออกมา เพื่อ restore ได้ถูกต้องในภายหลัง
-        opexItemsList.push({
-          category: 'rental_meter',
-          key: `room_rent_saved_${ri}`,
-          name: `ค่าเช่า: ${_roomsConfig[ri]?.name || 'ห้อง' + (ri + 1)}`,
-          amount: rentInpVal,
-          method: '-'
-        });
-        opexItemsList.push({
-          category: 'rental_income',
-          key: `room_income_${ri}`,
-          name: `รายรับห้องเช่า: ${_roomsConfig[ri]?.name || 'ห้อง' + (ri + 1)} (${_roomsConfig[ri]?.tenant || ''})`,
-          amount: rentInpVal +
-            Math.max((+currEl.value || 0) - (+prevEl.value || 0), 0) * rateInpVal,
-          method: 'เงินสด/โอน'
-        });
+        opexItemsList.push({ category: 'rental_meter', key: `room_prev_meter_${ri}`, name: `มิเตอร์ก่อนหน้า: ห้อง${ri+1}`, amount: +prevEl.value||0, method: '-' });
+        opexItemsList.push({ category: 'rental_meter', key: `room_curr_meter_${ri}`, name: `มิเตอร์ล่าสุด: ห้อง${ri+1}`, amount: +currEl.value||0, method: '-' });
+        opexItemsList.push({ category: 'rental_meter', key: `room_rent_saved_${ri}`, name: `ค่าเช่า: ห้อง${ri+1}`, amount: rentInpVal, method: '-' });
+        opexItemsList.push({ category: 'rental_income', key: `room_income_${ri}`, name: `รายรับห้องเช่า: ห้อง${ri+1}`, amount: rentInpVal + Math.max((+currEl.value||0)-(+prevEl.value||0),0)*rateInpVal, method: 'เงินสด/โอน' });
       }
 
-      // Add calculated taxes
       const taxAmt = +document.getElementById('tax_amt_comm').value || 0;
-      opexItemsList.push({
-        category: 'ภาษี',
-        key: 'withholding_tax',
-        name: 'ภาษีหัก ณ ที่จ่าย 3% ค่าคอมมิชชันพนักงาน (เงินได้ 40(2))',
-        amount: taxAmt,
-        method: 'บัญชีภาษีนำส่ง'
-      });
+      opexItemsList.push({ category: 'ภาษี', key: 'withholding_tax', name: 'ภาษีหัก ณ ที่จ่าย 3% ค่าคอมมิชชัน', amount: taxAmt, method: 'บัญชีภาษีนำส่ง' });
+      const ssoE = +document.getElementById('tax_amt_sso_emp')?.value || 0;
+      const ssoR = +document.getElementById('tax_amt_sso_employer')?.value || 0;
+      if (ssoE > 0) opexItemsList.push({ category: 'ภาษี', key: 'sso_employee', name: 'ประกันสังคมส่วนลูกจ้าง 5%', amount: ssoE, method: 'บัญชีนายจ้าง' });
+      if (ssoR > 0) opexItemsList.push({ category: 'ภาษี', key: 'sso_employer', name: 'ประกันสังคมส่วนนายจ้าง 5%', amount: ssoR, method: 'บัญชีนายจ้าง' });
 
-      // Add SSO (employee + employer)
-      const ssoEmpAmt = +document.getElementById('tax_amt_sso_emp')?.value || 0;
-      const ssoEmployerAmt = +document.getElementById('tax_amt_sso_employer')?.value || 0;
-      if (ssoEmpAmt > 0) {
-        opexItemsList.push({
-          category: 'ภาษี',
-          key: 'sso_employee',
-          name: 'ประกันสังคมส่วนลูกจ้าง 5% (นำส่งสำนักงานประกันสังคม)',
-          amount: ssoEmpAmt,
-          method: 'บัญชีนายจ้าง'
-        });
-      }
-      if (ssoEmployerAmt > 0) {
-        opexItemsList.push({
-          category: 'ภาษี',
-          key: 'sso_employer',
-          name: 'ประกันสังคมส่วนนายจ้าง 5% (นำส่งสำนักงานประกันสังคม)',
-          amount: ssoEmployerAmt,
-          method: 'บัญชีนายจ้าง'
-        });
-      }
-
-      // Audit log record
+      // Audit record
       const now = new Date();
-      const nowStr = now.toLocaleDateString('th-TH', { year: 'numeric', month: 'long', day: 'numeric' }) + ' เวลา ' +
-        now.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
-      opexItemsList.push({
-        category: 'payslip_detail',
-        key: 'audit_log',
-        name: `บันทึกโดย: ${_auth.display_name} (${_auth.username}) เมื่อ ${nowStr}`,
-        amount: now.getTime(),
-        method: _auth.role
-      });
+      const nowStr = now.toLocaleDateString('th-TH', { year:'numeric', month:'long', day:'numeric' }) + ' เวลา ' +
+        now.toLocaleTimeString('th-TH', { hour:'2-digit', minute:'2-digit' });
+      opexItemsList.push({ category: 'payslip_detail', key: 'audit_log', name: `บันทึกโดย: ${_auth.display_name} (${_auth.username}) เมื่อ ${nowStr}`, amount: now.getTime(), method: _auth.role });
 
-      const payload = {
-        formType: 'save_opex',
-        token: _auth.token,
-        month: monthKey,
-        items: opexItemsList,
-        logged_by: _auth.display_name
-      };
+      // ── Store pending and show confirmation modal ───────────
+      _pendingOpexItems = opexItemsList;
+      _pendingOpexMonth = monthKey;
+      _showOpexConfirm(opexItemsList, monthKey);
+    }
+
+    /* ── Build and show confirmation modal ── */
+    function _showOpexConfirm(items, monthKey) {
+      const fc = v => Number(v).toLocaleString('th-TH', { minimumFractionDigits: 2 });
+
+      const fixedTotal  = items.filter(i => i.category === 'ค่าดำเนินการ').reduce((s,i) => s+i.amount, 0);
+      const staffTotal  = items.filter(i => i.category === 'ค่าแรงพนักงาน').reduce((s,i) => s+i.amount, 0);
+      const taxTotal    = items.filter(i => i.category === 'ภาษี').reduce((s,i) => s+i.amount, 0);
+      const rentalTotal = items.filter(i => i.category === 'rental_income').reduce((s,i) => s+i.amount, 0);
+      const grandTotal  = fixedTotal + staffTotal + taxTotal;
+
+      const isEdit = opexSaved.some(o => o.month === monthKey);
+      const badge  = isEdit
+        ? '<span style="background:#fef3c7;color:#92400e;font-size:11px;padding:2px 8px;border-radius:20px;font-weight:700">✏️ แก้ไขข้อมูลเดิม</span>'
+        : '<span style="background:#dcfce7;color:#166534;font-size:11px;padding:2px 8px;border-radius:20px;font-weight:700">🆕 บันทึกใหม่</span>';
+
+      document.getElementById('opex_confirm_body').innerHTML = `
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+          <span style="font-size:14px;font-weight:700">เดือน ${monthKey}</span>${badge}
+        </div>
+        <div class="opex-confirm-row"><span>ค่าดำเนินการร้าน</span><span class="val">${fc(fixedTotal)} ฿</span></div>
+        <div class="opex-confirm-row"><span>ค่าแรงพนักงาน (สุทธิ)</span><span class="val">${fc(staffTotal)} ฿</span></div>
+        <div class="opex-confirm-row"><span>ภาษี + ประกันสังคม</span><span class="val">${fc(taxTotal)} ฿</span></div>
+        ${rentalTotal > 0 ? `<div class="opex-confirm-row"><span style="color:#059669">รายรับห้องเช่า</span><span class="val" style="color:#059669">+${fc(rentalTotal)} ฿</span></div>` : ''}
+        <div class="opex-confirm-row highlight"><span style="font-weight:700">รวมค่าใช้จ่ายทั้งหมด</span><span class="val" style="color:var(--danger)">${fc(grandTotal)} ฿</span></div>
+        ${isEdit ? '<div style="font-size:11px;color:#d97706;background:#fffbeb;border-radius:8px;padding:8px 12px;margin-top:8px;border:1px solid #fde68a"><i class="ti ti-alert-triangle"></i> ข้อมูลเดิมของเดือน <strong>' + monthKey + '</strong> จะถูกแทนที่ และเก็บประวัติไว้โดยอัตโนมัติ</div>' : ''}
+      `;
+
+      document.getElementById('opex_change_note').value = '';
+      document.getElementById('opex_confirm_overlay').style.display = 'flex';
+      setTimeout(() => document.getElementById('opex_change_note').focus(), 200);
+    }
+
+    function _closeOpexModal(id) {
+      document.getElementById(id).style.display = 'none';
+    }
+
+    /* ── Execute save after confirmation ── */
+    async function _doSaveOpex() {
+      const monthKey = _pendingOpexMonth;
+      const items    = _pendingOpexItems;
+      const note     = (document.getElementById('opex_change_note').value || '').trim();
+      if (!monthKey || !items.length) return;
+
+      // Disable confirm button
+      const okBtn = document.getElementById('opex_confirm_ok_btn');
+      okBtn.disabled = true;
+      okBtn.innerHTML = '<i class="ti ti-loader"></i> กำลังบันทึก...';
+
+      _closeOpexModal('opex_confirm_overlay');
 
       const statusEl = document.getElementById('status_opex');
       statusEl.className = 'status show';
-      statusEl.textContent = 'กำลังทำการบันทึกบัญชีค่าใช้จ่ายประจำเดือน...';
+      statusEl.textContent = 'กำลังบันทึกบัญชีประจำเดือน...';
 
-      (async () => {
-        try {
-          // Delete existing opex for this month then insert all
-          await _sb.from('sc_opex').delete().eq('month', monthKey);
-          const rows = opexItemsList.map(item => ({
+      try {
+        // 1. Archive existing data to history BEFORE overwriting
+        const existing = opexSaved.filter(o => o.month === monthKey);
+        if (existing.length > 0) {
+          // Get next version number
+          const { data: latestHist } = await _sb.from('sc_opex_history')
+            .select('version').eq('month', monthKey)
+            .order('version', { ascending: false }).limit(1).maybeSingle();
+          const nextVer = (latestHist?.version || 0) + 1;
+
+          await _sb.from('sc_opex_history').insert({
             month:       monthKey,
-            category:    item.category,
-            key:         item.key,
-            name:        item.name,
-            amount:      item.amount,
-            pay_method:  item.method,
-            recorded_by: _auth.display_name,
-            last_updated: new Date().toISOString()
-          }));
-          const { error } = await _sb.from('sc_opex').insert(rows);
-          if (error) throw error;
-          statusEl.className = 'status show ok';
-          statusEl.textContent = 'บันทึกบัญชีประจำเดือน ' + monthKey + ' สำเร็จแล้ว ✓';
-          loadMonthlyData();
-          setTimeout(() => statusEl.className = 'status', 3000);
-        } catch(err) {
-          statusEl.className = 'status show err';
-          statusEl.textContent = 'ข้อผิดพลาด: ' + (err.message || 'บันทึกไม่สำเร็จ');
+            version:     nextVer,
+            saved_by:    _auth.display_name,
+            change_note: note || '(ไม่มีหมายเหตุ)',
+            items:       JSON.stringify(existing)
+          });
         }
-      })();
+
+        // 2. Replace current opex data
+        await _sb.from('sc_opex').delete().eq('month', monthKey);
+        const rows = items.map(item => ({
+          month:        monthKey,
+          category:     item.category,
+          key:          item.key,
+          name:         item.name,
+          amount:       item.amount,
+          pay_method:   item.method,
+          recorded_by:  _auth.display_name,
+          last_updated: new Date().toISOString()
+        }));
+        const { error } = await _sb.from('sc_opex').insert(rows);
+        if (error) throw error;
+
+        statusEl.className = 'status show ok';
+        statusEl.textContent = `บันทึกบัญชีเดือน ${monthKey} สำเร็จ ✓${note ? ' — ' + note : ''}`;
+        loadMonthlyData();
+        setTimeout(() => statusEl.className = 'status', 4000);
+      } catch(err) {
+        statusEl.className = 'status show err';
+        statusEl.textContent = 'ข้อผิดพลาด: ' + (err.message || 'บันทึกไม่สำเร็จ');
+      } finally {
+        okBtn.disabled = false;
+        okBtn.innerHTML = '<i class="ti ti-check"></i> ยืนยันบันทึก';
+        _pendingOpexItems = [];
+      }
+    }
+
+    /* ── Show history modal ── */
+    async function showOpexHistory() {
+      const m = document.getElementById('opex_month').value;
+      const [y, mm] = (m || '').split('-');
+      const monthKey = m ? (mm + '/' + y) : null;
+
+      const overlay = document.getElementById('opex_history_overlay');
+      const body    = document.getElementById('opex_history_body');
+      const label   = document.getElementById('opex_history_month_label');
+
+      overlay.style.display = 'flex';
+      label.textContent = monthKey ? `ประวัติเดือน ${monthKey}` : 'ประวัติทั้งหมด';
+      body.innerHTML = '<div style="text-align:center;padding:24px;color:var(--muted)"><i class="ti ti-loader" style="font-size:24px"></i><br>กำลังโหลด...</div>';
+
+      try {
+        let query = _sb.from('sc_opex_history').select('*').order('version', { ascending: false }).limit(30);
+        if (monthKey) query = query.eq('month', monthKey);
+
+        const { data: hist, error } = await query;
+        if (error) throw error;
+
+        if (!hist || hist.length === 0) {
+          body.innerHTML = '<div style="text-align:center;padding:24px;color:var(--muted)"><i class="ti ti-history" style="font-size:32px;opacity:.3"></i><br><br>ยังไม่มีประวัติการแก้ไข</div>';
+          return;
+        }
+
+        const fc = v => Number(v).toLocaleString('th-TH', { minimumFractionDigits: 2 });
+
+        body.innerHTML = hist.map(h => {
+          const items = typeof h.items === 'string' ? JSON.parse(h.items) : (h.items || []);
+          const fixedAmt  = items.filter(i => i.category === 'ค่าดำเนินการ').reduce((s,i)=>s+i.amount,0);
+          const staffAmt  = items.filter(i => i.category === 'ค่าแรงพนักงาน').reduce((s,i)=>s+i.amount,0);
+          const taxAmt2   = items.filter(i => i.category === 'ภาษี').reduce((s,i)=>s+i.amount,0);
+          const grand     = fixedAmt + staffAmt + taxAmt2;
+          const savedDate = new Date(h.saved_at).toLocaleString('th-TH', { year:'numeric', month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' });
+
+          return `<div class="hist-item">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start">
+              <div>
+                <span style="font-weight:700;font-size:13px;color:var(--c-primary-hover)">เดือน ${h.month}</span>
+                <span style="font-size:11px;background:var(--surface-header);color:var(--muted);padding:1px 8px;border-radius:20px;margin-left:8px">v${h.version}</span>
+              </div>
+              <button onclick="_restoreOpexVersion(${h.id},'${h.month}')"
+                style="font-size:11px;padding:4px 10px;border-radius:8px;border:1px solid var(--c-primary);background:var(--c-primary-light);color:var(--c-primary);cursor:pointer;font-weight:600;white-space:nowrap">
+                <i class="ti ti-restore"></i> คืนค่า
+              </button>
+            </div>
+            <div class="hist-meta"><i class="ti ti-user-check" style="font-size:10px"></i> ${h.saved_by} &nbsp;·&nbsp; ${savedDate}</div>
+            ${h.change_note && h.change_note !== '(ไม่มีหมายเหตุ)' ? `<div class="hist-note"><i class="ti ti-note"></i> ${h.change_note}</div>` : ''}
+            <div class="hist-amounts">
+              <span class="hist-amt-chip">ค่าดำเนิน ${fc(fixedAmt)}</span>
+              <span class="hist-amt-chip">ค่าแรง ${fc(staffAmt)}</span>
+              <span class="hist-amt-chip">ภาษี+ปกส ${fc(taxAmt2)}</span>
+              <span class="hist-amt-chip" style="background:var(--danger-bg);color:var(--danger)">รวม ${fc(grand)} ฿</span>
+            </div>
+          </div>`;
+        }).join('');
+      } catch(err) {
+        body.innerHTML = `<div style="color:var(--danger);font-size:12px;text-align:center;padding:16px">${err.message}</div>`;
+      }
+    }
+
+    /* ── Restore a history version ── */
+    async function _restoreOpexVersion(histId, monthKey) {
+      if (!confirm(`คืนค่าข้อมูลเดือน ${monthKey} จาก version นี้ใช่หรือไม่?\nข้อมูลปัจจุบันจะถูกเก็บประวัติก่อน`)) return;
+
+      const { data: h, error: hErr } = await _sb.from('sc_opex_history').select('items').eq('id', histId).maybeSingle();
+      if (hErr || !h) { alert('ไม่พบข้อมูล version นี้'); return; }
+
+      const items = typeof h.items === 'string' ? JSON.parse(h.items) : h.items;
+
+      // Archive current before restore
+      const existingNow = opexSaved.filter(o => o.month === monthKey);
+      if (existingNow.length > 0) {
+        const { data: lv } = await _sb.from('sc_opex_history').select('version').eq('month', monthKey).order('version',{ascending:false}).limit(1).maybeSingle();
+        await _sb.from('sc_opex_history').insert({ month: monthKey, version: (lv?.version||0)+1, saved_by: _auth.display_name, change_note: 'คืนค่าจากประวัติ (auto-backup)', items: JSON.stringify(existingNow) });
+      }
+
+      await _sb.from('sc_opex').delete().eq('month', monthKey);
+      const rows = items.map(item => ({ month: monthKey, category: item.category, key: item.key, name: item.name, amount: item.amount||0, pay_method: item.method||'', recorded_by: _auth.display_name, last_updated: new Date().toISOString() }));
+      const { error } = await _sb.from('sc_opex').insert(rows);
+      if (error) { alert('คืนค่าไม่สำเร็จ: ' + error.message); return; }
+
+      _closeOpexModal('opex_history_overlay');
+      document.getElementById('status_opex').className = 'status show ok';
+      document.getElementById('status_opex').textContent = `คืนค่าข้อมูลเดือน ${monthKey} สำเร็จ ✓`;
+      loadMonthlyData();
+      buildOpexForm();
+      setTimeout(() => document.getElementById('status_opex').className = 'status', 4000);
     }
 
     // Convert image URL → base64 (avoids CORS/timing issues in print popup)
@@ -5442,7 +5767,7 @@ ${bank ? `
           // Object format จาก GAS doGet
           name     = String(row.name || '').trim();
           salary   = Number(row.salary) || 0;
-          position = String(row.bank || '').trim();   // GAS: bank field ใช้เป็น position
+          position = String(row.position || '').trim();
           bank     = String(row.bank || '').trim();
           account  = String(row.account || '').trim();
           status   = String(row.status || 'Active').trim();
@@ -5805,15 +6130,22 @@ ${bank ? `
         totalL += r.size_l;
         totalXL += r.size_xl;
 
-        // Employee tallying
-        if (r.employee) {
-          empMap[r.employee] = empMap[r.employee] || { pairs: 0, income: 0 };
-          empMap[r.employee].pairs += r.size_s + r.size_m + r.size_l + r.size_xl;
-          empMap[r.employee].income += r.total_amount;
+        // Employee tallying (saleSaved uses entered_by, not employee)
+        const empKey = r.entered_by || r.employee || '';
+        if (empKey) {
+          empMap[empKey] = empMap[empKey] || { pairs: 0, income: 0 };
+          empMap[empKey].pairs += r.size_s + r.size_m + r.size_l + r.size_xl;
+          empMap[empKey].income += r.total_amount;
         }
 
-        // Payment method
-        const pm = r.pay_method || 'อื่นๆ';
+        // Payment method — derive from transfer_amount / cash_amount
+        const _tr = r.transfer_amount || 0;
+        const _ca = r.cash_amount || 0;
+        const pm = r.pay_method
+          || (_tr > 0 && _ca > 0 ? 'โอน+สด'
+            : _tr > 0 ? 'โอน'
+            : _ca > 0 ? 'สด'
+            : 'อื่นๆ');
         payMap[pm] = (payMap[pm] || 0) + r.total_amount;
 
         // Daily income
@@ -5835,15 +6167,16 @@ ${bank ? `
       document.getElementById('stat_avg_per_pair').textContent = f(avgPerPair);
 
       // ── Size breakdown bars ────────────────────────────────────
+      const ps = _sizePrices.s, pm2 = _sizePrices.m, pl = _sizePrices.l, pxl = _sizePrices.xl;
       const sizes = [
-        { label: 'Size S (200฿)', qty: totalS, color: '#0d9488' },
-        { label: 'Size M (400฿)', qty: totalM, color: '#0284c7' },
-        { label: 'Size L (600฿)', qty: totalL, color: '#7c3aed' },
-        { label: 'Size XL (800฿)', qty: totalXL, color: '#db2777' },
+        { label: `Size S (${ps}฿)`, qty: totalS, color: '#0d9488' },
+        { label: `Size M (${pm2}฿)`, qty: totalM, color: '#0284c7' },
+        { label: `Size L (${pl}฿)`, qty: totalL, color: '#7c3aed' },
+        { label: `Size XL (${pxl}฿)`, qty: totalXL, color: '#db2777' },
       ];
       const maxQty = Math.max(...sizes.map(s => s.qty), 1);
       const sizeIncome = [
-        totalS * 200, totalM * 400, totalL * 600, totalXL * 800
+        totalS * ps, totalM * pm2, totalL * pl, totalXL * pxl
       ];
       const totalSizeInc = sizeIncome.reduce((a, b) => a + b, 0) || 1;
 
@@ -6404,11 +6737,10 @@ ${bank ? `
         })
         .catch(() => {
           statusEl.className = 'status show err';
-          statusEl.textContent = 'ไม่สามารถเชื่อมต่อสัญญาณอินเทอร์เน็ตได้';
+          statusEl.textContent = 'ไม่สามารถเชื่อมต่อได้';
         });
     }
 
   </script>
 </body>
-
-</html>                                                                                                                                               
+</html>
