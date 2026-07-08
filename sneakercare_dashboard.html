@@ -11,6 +11,7 @@
   <title>Sneaker Care - Smart Dashboard</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.0.0/dist/tabler-icons.min.css">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <!-- ตรวจสอบสิทธิ์การเข้าสู่ระบบแบบซิงโครนัสเพื่อป้องกันการกะพริบ (Flicker) ตอนโหลดหน้าจอ -->
   <script>
     (function () {
@@ -2129,8 +2130,27 @@
   </footer>
 
   <script>
-    // ── CONFIGURATION ───────────────────────────────────────────
-    const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbyIlkQRXTyjjgovbKW0nN3wefb_NYGWb2Q7LfrYPv9_ouuOZt8xwrjIgowDVS58_0J5ZQ/exec";
+    // ── CONFIGURATION (Supabase) ────────────────────────────────
+    const _SB_URL  = 'https://mdlxogfkpwejnqpzhmoy.supabase.co';
+    const _SB_ANON = 'sb_publishable_J2u2IL2YvTu-ucyBzNC5Ag_VlBD85qC';
+    const _sb = supabase.createClient(_SB_URL, _SB_ANON);
+
+    // Helper: YYYY-MM-DD → DD/MM/YYYY (for storing saleSaved.date in Thai format)
+    function _isoToThai(iso) {
+      if (!iso) return '';
+      const s = String(iso).split('T')[0];
+      const p = s.split('-');
+      if (p.length === 3) return p[2] + '/' + p[1] + '/' + p[0];
+      return iso;
+    }
+    // Helper: upsert multiple settings key/value pairs
+    async function _saveSettings(obj) {
+      const rows = Object.entries(obj).map(([key, value]) => ({
+        key, value: String(value), updated_at: new Date().toISOString()
+      }));
+      const { error } = await _sb.from('sc_settings').upsert(rows, { onConflict: 'key' });
+      if (error) throw error;
+    }
 
     // ── DEBUG BAR (ชั่วคราว — ใช้ตรวจสอบ GAS response) ──────────
     function _showDebugBar(msg) {
@@ -2245,7 +2265,7 @@
     }
 
     // ── AUTH LOGIC ──────────────────────────────────────────────
-    function doLogin() {
+    async function doLogin() {
       const username = document.getElementById('login_user').value.trim();
       const password = document.getElementById('login_pw').value;
       if (!username || !password) {
@@ -2256,61 +2276,70 @@
       btn.disabled = true;
       btn.innerHTML = '<i class="ti ti-loader animate-spin"></i> กำลังตรวจสอบ...';
 
-      fetch(WEB_APP_URL, {
-        method: 'POST',
-        body: JSON.stringify({ formType: 'login', username, password })
-      })
-        .then(r => r.json())
-        .then(res => {
-          btn.disabled = false;
-          btn.innerHTML = '<i class="ti ti-login"></i> เข้าสู่ระบบ';
-          if (res.status === 'ok') {
-            _auth = { token: res.token, role: res.role, display_name: res.display_name, full_name: res.full_name || '', username: res.username };
-            localStorage.setItem('sc_auth', JSON.stringify(_auth));
-            showApp();
-            initApp();
-          } else {
-            document.getElementById('login_err').textContent = res.message || 'รหัสผ่านไม่ถูกต้อง';
-          }
-        })
-        .catch(() => {
-          btn.disabled = false;
-          btn.innerHTML = '<i class="ti ti-login"></i> เข้าสู่ระบบ';
-          document.getElementById('login_err').textContent = 'ไม่สามารถเชื่อมต่อเครื่องเซิร์ฟเวอร์ได้';
+      try {
+        const { data, error } = await _sb.auth.signInWithPassword({
+          email: username + '@ddserviceth.com',
+          password: password
         });
+        if (error) throw error;
+
+        // Fetch profile (role / nickname)
+        const { data: profile } = await _sb.from('sc_users')
+          .select('*').eq('user_id', data.user.id).maybeSingle();
+
+        _auth = {
+          token: data.session.access_token,
+          role:  profile?.role || 'staff',
+          display_name: profile?.nickname || username,
+          full_name:    profile?.fullname  || '',
+          username:     username
+        };
+        localStorage.setItem('sc_auth', JSON.stringify(_auth));
+        showApp();
+        initApp();
+      } catch(err) {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="ti ti-login"></i> เข้าสู่ระบบ';
+        document.getElementById('login_err').textContent =
+          (err.message && err.message.includes('Invalid')) ? 'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง' : (err.message || 'เชื่อมต่อไม่ได้');
+      }
     }
 
     function doLogout() {
-      fetch(WEB_APP_URL, {
-        method: 'POST',
-        body: JSON.stringify({ formType: 'logout', token: _auth.token })
-      }).catch(() => { });
+      _sb.auth.signOut().catch(() => {});
       _auth = { token: '', role: '', display_name: '', full_name: '', username: '' };
       localStorage.removeItem('sc_auth');
       document.documentElement.classList.remove('auth-logged-in');
       showLogin('ออกจากระบบเรียบร้อยแล้ว');
     }
 
-    function checkStoredAuth() {
-      const stored = localStorage.getItem('sc_auth');
-      if (!stored) return Promise.resolve(false);
+    async function checkStoredAuth() {
       try {
-        const a = JSON.parse(stored);
-        if (!a.token) return Promise.resolve(false);
-        _auth = a;
-        return fetch(WEB_APP_URL + '?action=validate&token=' + encodeURIComponent(a.token))
-          .then(r => r.json())
-          .then(res => {
-            if (res.valid) {
-              _auth = { ...a, role: res.role || a.role, display_name: res.display_name || a.display_name };
-              localStorage.setItem('sc_auth', JSON.stringify(_auth));
-              return true;
-            }
-            localStorage.removeItem('sc_auth');
-            return false;
-          })
-          .catch(() => true); // If network fails, allow offline session with cached credentials
-      } catch (e) { return Promise.resolve(false); }
+        const { data: { session } } = await _sb.auth.getSession();
+        if (!session) { localStorage.removeItem('sc_auth'); return false; }
+
+        const username = session.user.email.replace('@ddserviceth.com', '');
+        const { data: profile } = await _sb.from('sc_users')
+          .select('*').eq('user_id', session.user.id).maybeSingle();
+
+        _auth = {
+          token:        session.access_token,
+          role:         profile?.role || 'staff',
+          display_name: profile?.nickname || username,
+          full_name:    profile?.fullname  || '',
+          username:     username
+        };
+        localStorage.setItem('sc_auth', JSON.stringify(_auth));
+        return true;
+      } catch(e) {
+        console.warn('checkStoredAuth:', e);
+        // Fallback: allow offline session with cached credentials
+        try {
+          const cached = JSON.parse(localStorage.getItem('sc_auth') || 'null');
+          if (cached?.token) { _auth = cached; return true; }
+        } catch(_) {}
+        return false;
+      }
     }
 
     function showChangePw() {
@@ -2320,27 +2349,21 @@
       document.getElementById('chpw_overlay').classList.remove('hidden');
     }
 
-    function doChangePw() {
+    async function doChangePw() {
       const np = document.getElementById('chpw_new').value;
       const cp = document.getElementById('chpw_confirm').value;
       if (!np || np.length < 6) { document.getElementById('chpw_err').textContent = 'รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร'; return; }
       if (np !== cp) { document.getElementById('chpw_err').textContent = 'รหัสผ่านใหม่ไม่ตรงกัน'; return; }
 
-      fetch(WEB_APP_URL, {
-        method: 'POST',
-        body: JSON.stringify({ formType: 'change_password', token: _auth.token, target_user: _auth.username, new_password: np })
-      })
-        .then(r => r.json())
-        .then(res => {
-          if (res.status === 'ok') {
-            document.getElementById('chpw_overlay').classList.add('hidden');
-            alert('เปลี่ยนรหัสผ่านสำเร็จแล้ว กรุณาล็อกอินใหม่อีกครั้ง');
-            doLogout();
-          } else {
-            document.getElementById('chpw_err').textContent = res.message || 'เกิดข้อผิดพลาด';
-          }
-        })
-        .catch(() => { document.getElementById('chpw_err').textContent = 'ไม่สามารถเชื่อมต่อได้'; });
+      try {
+        const { error } = await _sb.auth.updateUser({ password: np });
+        if (error) throw error;
+        document.getElementById('chpw_overlay').classList.add('hidden');
+        alert('เปลี่ยนรหัสผ่านสำเร็จแล้ว กรุณาล็อกอินใหม่อีกครั้ง');
+        doLogout();
+      } catch(err) {
+        document.getElementById('chpw_err').textContent = err.message || 'เกิดข้อผิดพลาด';
+      }
     }
 
     // ── APP FUNCTIONS ───────────────────────────────────────────
@@ -2426,51 +2449,55 @@
       });
     }
 
-    function loadBackendMasterData() {
-      const token = _auth.token || "";
-      return fetch(WEB_APP_URL + '?token=' + encodeURIComponent(token))
-        .then(r => r.json())
-        .then(data => {
-          if (data.status === 'error' && data.message === 'unauthorized') {
-            console.warn("Unauthorized master data request, logging out.");
-            doLogout();
-            return;
-          }
-          console.log('[DEBUG] masterData: stock rows=' + (data.stock||[]).length +
-            ' settings rows=' + (data.settings||[]).length +
-            ' employees=' + (data.employees||[]).length);
+    async function loadBackendMasterData() {
+      try {
+        const [settingsRes, stockRes, empRes] = await Promise.all([
+          _sb.from('sc_settings').select('key, value'),
+          _sb.from('sc_stock_status').select('item_name, category, quantity, unit, last_price, min_alert').order('item_name'),
+          _sb.from('sc_employees').select('*').order('id')
+        ]);
 
-          // 1. Stock Status List
+        // 1. Settings
+        if (settingsRes.data) {
           try {
-            if (data.stock) {
-              stockStatusDB = data.stock;
-              populateStockDatalists();
-              populateStockOutSelect();
-              renderStockStatusTable();
-              renderStockAlerts();
-            }
-          } catch(e) { console.error('Stock load error:', e); }
-
-          // 2. Settings Profile
-          try {
-            if (data.settings && Array.isArray(data.settings)) {
-              populateBizProfile(data.settings);
-            }
+            const settings = settingsRes.data.map(r => [r.key, r.value]);
+            populateBizProfile(settings);
           } catch(e) { console.error('Settings load error:', e); }
+        }
 
-          // 3. Employee configuration
+        // 2. Stock Status
+        if (stockRes.data) {
           try {
-            if (data.employees) {
-              populateEmployees(data.employees);
-              if (document.getElementById('opex')?.classList.contains('on')) {
-                buildOpexForm();
-              }
+            stockStatusDB = [
+              ['รายการวัสดุ','ประเภท','หน่วย','จำนวนคงเหลือ','ราคาต่อหน่วย','แจ้งเตือนต่ำ'],
+              ...stockRes.data.map(r => [
+                r.item_name, r.category || '', r.unit || 'ชิ้น',
+                Number(r.quantity) || 0, Number(r.last_price) || 0, Number(r.min_alert) || 10
+              ])
+            ];
+            populateStockDatalists();
+            populateStockOutSelect();
+            renderStockStatusTable();
+            renderStockAlerts();
+          } catch(e) { console.error('Stock load error:', e); }
+        }
+
+        // 3. Employees (pass as array format)
+        if (empRes.data) {
+          try {
+            const empData = empRes.data.map(r => [
+              r.name, r.salary, r.position, r.bank, r.account,
+              r.status || 'Active', r.nickname
+            ]);
+            populateEmployees(empData);
+            if (document.getElementById('opex')?.classList.contains('on')) {
+              buildOpexForm();
             }
           } catch(e) { console.error('Employee load error:', e); }
-        })
-        .catch(e => {
-          console.error("Error loading master data: ", e);
-        });
+        }
+      } catch(e) {
+        console.error('loadBackendMasterData error:', e);
+      }
     }
 
     function loadMonthlyData() {
@@ -2491,122 +2518,103 @@
         });
       }, 12000);
 
-      const _debugPayload = { formType: 'list_monthly', token: _auth.token, months: months };
-      console.log('[DEBUG] list_monthly request:', JSON.stringify(_debugPayload));
+      // ── Query Supabase (parallel) ──────────────────────────────
+      _sb.from('sc_sales').select('*').gte('date', df).lte('date', dt)
+        .then(salesRes => {
+          _sb.from('sc_opex').select('*').in('month', months)
+            .then(opexRes => {
+              _sb.from('sc_stock_transactions').select('*').gte('date', df).lte('date', dt).order('id')
+                .then(txRes => {
+                  clearTimeout(_loadTimeout);
 
-      fetch(WEB_APP_URL, {
-        method: 'POST',
-        body: JSON.stringify(_debugPayload)
-      })
-        .then(r => r.json())
-        .then(res => {
-          clearTimeout(_loadTimeout);
-          // ── DEBUG: แสดง response ใน console ──
-          console.log('[DEBUG] list_monthly response status:', res.status, 'message:', res.message || '');
-          console.log('[DEBUG] sales:', (res.sales||[]).length, 'expenses:', (res.expenses||[]).length, 'opex:', (res.opex||[]).length);
-          if (res.sales && res.sales.length > 0) console.log('[DEBUG] sales[0]:', JSON.stringify(res.sales[0]));
-          if (res._debug) console.log('[DEBUG] GAS debug:', JSON.stringify(res._debug));
-          if (res.status !== 'ok' && res.status !== 'success') {
-            _showDebugBar('GAS ตอบ: ' + (res.message || res.status || 'ไม่ทราบ') + ' | months=' + months.join(','));
-          } else if (!(res.sales||[]).length && !(res.expenses||[]).length) {
-            _showDebugBar('GAS ตอบ OK แต่ข้อมูลว่าง | months=' + months.join(',') + ' | ตรวจ sheet SC_Sales');
-          }
-          if (res.status === 'success' || res.status === 'ok') {
-            // แปลงข้อมูลและ dedup โดยเก็บแถวล่าสุด (latest) ต่อวัน
-            const _rawSales = res.sales.map(row => ({
-              date: row[0],
-              bill_no: row[1],
-              customer: row[2],
-              size_s: Number(row[3]),
-              size_m: Number(row[4]),
-              size_l: Number(row[5]),
-              size_xl: Number(row[6]),
-              total_amount: Number(row[7]),
-              transfer_amount: Number(row[8]) || 0,
-              cash_amount: Number(row[9]) || 0,
-              entered_by: row[10] || '',
-              discount: Number(row[11]) || 0,
-              gross_amount: Number(row[12]) || Number(row[7]),
-              payment_status: row[13] || 'ชำระครบ',
-              received_amount: Number(row[14]) || Number(row[7])
-            }));
-            // Dedup: keep last record per date (latest overwrite wins)
-            const _salesMap = new Map();
-            _rawSales.forEach(r => { _salesMap.set(_isoDate(r.date), r); });
-            saleSaved = Array.from(_salesMap.values());
-            console.log('[DEBUG] saleSaved after dedup: raw=', _rawSales.length, '→ deduped=', saleSaved.length);
+                  if (salesRes.error) { console.error('[E] sc_sales:', salesRes.error); }
+                  if (opexRes.error)  { console.error('[E] sc_opex:',  opexRes.error);  }
+                  if (txRes.error)    { console.error('[E] sc_stock_transactions:', txRes.error); }
 
-            // Merge payments from GAS into paymentsSaved (GAS is authoritative)
-            if (res.payments && res.payments.length) {
-              const gasPayments = res.payments.map(p => ({
-                sale_date: p[0], received_date: p[1], amount: Number(p[2]),
-                method: p[3], received_by: p[4]
-              }));
-              // Merge: keep localStorage entries not in GAS, add GAS ones
-              const gasKeys = new Set(gasPayments.map(p => p.sale_date + '|' + p.received_date + '|' + p.amount));
-              const localOnly = paymentsSaved.filter(p => !gasKeys.has(p.sale_date + '|' + p.received_date + '|' + p.amount));
-              paymentsSaved = [...gasPayments, ...localOnly];
-              _savePayments();
-            }
+                  // ── Build saleSaved ──────────────────────────────────
+                  // NOTE: DB cash_amount = UI transfer_amount, DB transfer_amount = UI cash_amount (columns are swapped historically)
+                  const _rawSales = (salesRes.data || []).map(r => ({
+                    date:            _isoToThai(r.date),           // → DD/MM/YYYY for backward compat
+                    bill_no:         r.extra_items || '',
+                    customer:        'ยอดรวมประจำวัน',
+                    size_s:          Number(r.size_s)  || 0,
+                    size_m:          Number(r.size_m)  || 0,
+                    size_l:          Number(r.size_l)  || 0,
+                    size_xl:         Number(r.size_xl) || 0,
+                    total_amount:    Number(r.total_revenue) || 0,
+                    transfer_amount: Number(r.cash_amount)   || 0,  // SWAPPED
+                    cash_amount:     Number(r.transfer_amount) || 0, // SWAPPED
+                    entered_by:      r.recorded_by || '',
+                    discount:        Number(r.discount)      || 0,
+                    gross_amount:    Number(r.grand_total)   || Number(r.total_revenue) || 0,
+                    payment_status:  r.payment_status || 'ชำระครบ',
+                    received_amount: Number(r.amount_paid)   || Number(r.total_revenue) || 0
+                  }));
+                  const _salesMap = new Map();
+                  _rawSales.forEach(r => { _salesMap.set(_isoDate(r.date), r); });
+                  saleSaved = Array.from(_salesMap.values());
+                  console.log('[DEBUG] saleSaved:', saleSaved.length, 'rows');
 
-            expenseSaved = res.expenses.map((row, idx) => ({
-              _idx: idx,
-              date: row[0],
-              category: row[1],
-              item_name: row[2],
-              total_amount: Number(row[3]),
-              pay_method: row[4],
-              qty: Number(row[5]) || 0,
-              price_per_unit: Number(row[6]) || 0,
-              unit: row[7] || '',
-              type: row[8] || 'ซื้อเข้า'
-            }));
+                  // ── Build expenseSaved (from stock transactions) ──────
+                  expenseSaved = (txRes.data || []).map((r, idx) => ({
+                    _id:            r.id,                               // Supabase row id for delete
+                    _idx:           idx,
+                    date:           _isoToThai(r.date),                 // DD/MM/YYYY
+                    category:       r.type === 'ซื้อเข้า' ? 'ต้นทุนวัสดุคลัง' : r.type,
+                    item_name:      r.item_name,
+                    total_amount:   Number(r.total) || 0,
+                    pay_method:     r.pay_method || '',
+                    qty:            Number(r.quantity) || 0,
+                    price_per_unit: Number(r.price_per_unit) || 0,
+                    unit:           '',
+                    type:           r.type || 'ซื้อเข้า'
+                  }));
 
-            opexSaved = res.opex.map(row => ({
-              month: row[0],
-              category: row[1],
-              key: row[2],
-              name: row[3],
-              amount: Number(row[4]),
-              method: row[5]
-            }));
+                  // ── Build opexSaved ──────────────────────────────────
+                  opexSaved = (opexRes.data || []).map(r => ({
+                    month:    r.month,
+                    category: r.category,
+                    key:      r.key,
+                    name:     r.name,
+                    amount:   Number(r.amount) || 0,
+                    method:   r.pay_method || ''
+                  }));
 
-            try { renderSaleHistoryList(); } catch(e) { console.error('[E] renderSaleHistoryList:', e); }
-            try { updateSummaryData(); } catch(e) { console.error('[E] updateSummaryData:', e); }
-            try { buildOpexForm(); } catch(e) { console.error('[E] buildOpexForm:', e); }
-            try { renderStockPurchaseHistory(); } catch(e) { console.error('[E] renderStockPurchaseHistory:', e); }
+                  try { renderSaleHistoryList();       } catch(e) { console.error('[E] renderSaleHistoryList:', e); }
+                  try { updateSummaryData();           } catch(e) { console.error('[E] updateSummaryData:', e); }
+                  try { buildOpexForm();               } catch(e) { console.error('[E] buildOpexForm:', e); }
+                  try { renderStockPurchaseHistory();  } catch(e) { console.error('[E] renderStockPurchaseHistory:', e); }
 
-            // Re-restore draft after GAS loads:
-            // Use the date currently shown in the form (may be a past date)
-            try {
-              const activeDate = document.getElementById('s_date')?.value || todayStr();
-              const hasActiveDateInGAS = saleSaved.some(s => s.date === activeDate || s.date === thaiDate(activeDate));
-              if (!hasActiveDateInGAS) {
-                const restored = _loadDraft(activeDate);
-                if (restored) {
-                  const fs = document.getElementById('sale_fetch_status');
-                  if (fs) {
-                    fs.style.display = 'block';
-                    fs.style.background = '#f1f5f9';
-                    fs.style.color = 'var(--muted)';
-                    fs.textContent = `โหลดข้อมูลร่างวันที่ ${thaiDate(activeDate)} ✓`;
-                    setTimeout(() => { fs.style.display = 'none'; }, 2000);
-                  }
-                }
-              }
-            } catch(e) { console.error('[E] draft restore:', e); }
-          }
-        })
-        .catch(e => {
-          clearTimeout(_loadTimeout);
-          console.error('[E] loadMonthlyData fetch/parse failed:', e);
-          // Only reset display if still showing loading indicator
-          ['sum_income', 'sum_expense', 'sum_profit'].forEach(id => {
-            const el = document.getElementById(id);
-            if (el && el.textContent === 'กำลังโหลด...') el.textContent = '0.00';
-          });
-          // GAS failed — try to restore draft as fallback
-          _loadDraft(todayStr());
+                  // Re-restore draft if today's data not yet saved
+                  try {
+                    const activeDate = document.getElementById('s_date')?.value || todayStr();
+                    const activeThai = thaiDate(activeDate);
+                    const hasActiveDate = saleSaved.some(s => s.date === activeThai || s.date === activeDate);
+                    if (!hasActiveDate) {
+                      const restored = _loadDraft(activeDate);
+                      if (restored) {
+                        const fs = document.getElementById('sale_fetch_status');
+                        if (fs) {
+                          fs.style.display = 'block';
+                          fs.style.background = '#f1f5f9';
+                          fs.style.color = 'var(--muted)';
+                          fs.textContent = `โหลดข้อมูลร่างวันที่ ${thaiDate(activeDate)} ✓`;
+                          setTimeout(() => { fs.style.display = 'none'; }, 2000);
+                        }
+                      }
+                    }
+                  } catch(e) { console.error('[E] draft restore:', e); }
+                })
+                .catch(e => {
+                  clearTimeout(_loadTimeout);
+                  console.error('[E] loadMonthlyData Supabase failed:', e);
+                  ['sum_income', 'sum_expense', 'sum_profit'].forEach(id => {
+                    const el = document.getElementById(id);
+                    if (el && el.textContent === 'กำลังโหลด...') el.textContent = '0.00';
+                  });
+                  _loadDraft(todayStr());
+                });
+            });
         });
     }
 
@@ -2909,49 +2917,46 @@
       status.style.color = 'var(--info)';
       status.textContent = 'กำลังโหลดข้อมูลยอดขาย...';
 
-      fetch(WEB_APP_URL + '?action=getSale&date=' + encodeURIComponent(thaiDate(d)) + '&token=' + encodeURIComponent(_auth.token))
-        .then(r => r.json())
-        .then(data => {
-          if (data && data.found) {
-            // Pre-fill form with existing data for editing
-            document.getElementById('s_qty_s').value = data.size_s || 0;
-            document.getElementById('s_qty_m').value = data.size_m || 0;
-            document.getElementById('s_qty_l').value = data.size_l || 0;
-            document.getElementById('s_qty_xl').value = data.size_xl || 0;
-            // Clear per-size discounts (not stored individually in sheet)
-            ['s_disc_s', 's_disc_m', 's_disc_l', 's_disc_xl'].forEach(id => {
+      _sb.from('sc_sales').select('*').eq('date', d).maybeSingle()
+        .then(({ data: row, error }) => {
+          if (row) {
+            // NOTE: DB cash_amount = UI transfer_amount (swapped)
+            document.getElementById('s_qty_s').value  = row.size_s  || 0;
+            document.getElementById('s_qty_m').value  = row.size_m  || 0;
+            document.getElementById('s_qty_l').value  = row.size_l  || 0;
+            document.getElementById('s_qty_xl').value = row.size_xl || 0;
+            ['s_disc_s','s_disc_m','s_disc_l','s_disc_xl'].forEach(id => {
               const el = document.getElementById(id); if (el) el.value = 0;
             });
-            document.getElementById('s_transfer_amount').value = data.transfer_amount || 0;
-            document.getElementById('s_cash_amount').value = data.cash_amount || 0;
-            // Restore extra services
-            try { _extraLines = data.bill_no ? JSON.parse(data.bill_no) : []; } catch (e) { _extraLines = []; }
+            document.getElementById('s_transfer_amount').value = Number(row.cash_amount)     || 0; // SWAPPED
+            document.getElementById('s_cash_amount').value     = Number(row.transfer_amount) || 0; // SWAPPED
+            document.getElementById('s_discount').value        = Number(row.discount)        || 0;
+            try { _extraLines = row.extra_items ? JSON.parse(row.extra_items) : []; } catch(e) { _extraLines = []; }
             _renderExtraLines();
             calculateSaleTotal();
-
+            const ps = row.payment_status || 'ชำระครบ';
+            if (typeof _setPayStatus === 'function') _setPayStatus(ps);
+            if (ps !== 'ชำระครบ') {
+              const recEl = document.getElementById('s_received_amount');
+              if (recEl) recEl.value = Number(row.amount_paid) || 0;
+            }
             status.style.background = 'var(--success-bg)';
             status.style.color = 'var(--success)';
-            const enteredBy = data.entered_by ? ` · บันทึกโดย: ${data.entered_by}` : '';
+            const enteredBy = row.recorded_by ? ` · บันทึกโดย: ${row.recorded_by}` : '';
             status.textContent = `โหลดข้อมูลวันที่ ${thaiDate(d)} แล้ว ✓${enteredBy}`;
           } else {
-            document.getElementById('s_qty_s').value = 0;
-            document.getElementById('s_qty_m').value = 0;
-            document.getElementById('s_qty_l').value = 0;
+            document.getElementById('s_qty_s').value  = 0;
+            document.getElementById('s_qty_m').value  = 0;
+            document.getElementById('s_qty_l').value  = 0;
             document.getElementById('s_qty_xl').value = 0;
-            ['s_disc_s', 's_disc_m', 's_disc_l', 's_disc_xl'].forEach(id => {
+            ['s_disc_s','s_disc_m','s_disc_l','s_disc_xl'].forEach(id => {
               const el = document.getElementById(id); if (el) el.value = 0;
             });
             document.getElementById('s_discount').value = 0;
             document.getElementById('s_transfer_amount').value = 0;
             document.getElementById('s_cash_amount').value = 0;
-            // Try loading draft from localStorage
             const hasDraft = _loadDraft(d);
-            if (!hasDraft) {
-              _extraLines = [];
-              _renderExtraLines();
-              calculateSaleTotal();
-            }
-
+            if (!hasDraft) { _extraLines = []; _renderExtraLines(); calculateSaleTotal(); }
             status.style.background = '#f1f5f9';
             status.style.color = 'var(--muted)';
             status.textContent = hasDraft ? 'โหลดข้อมูลร่างที่บันทึกไว้ชั่วคราว (Draft) ✓' : 'ยังไม่มีข้อมูลบิลวันนี้';
@@ -2959,7 +2964,6 @@
           }
         })
         .catch(() => {
-          // GAS unavailable — try loading draft
           const hasDraft = _loadDraft(d);
           status.style.background = hasDraft ? '#f1f5f9' : 'var(--danger-bg)';
           status.style.color = hasDraft ? 'var(--muted)' : 'var(--danger)';
@@ -3146,55 +3150,53 @@
 
       const statusEl = document.getElementById('status_sale');
       statusEl.className = 'status show';
-      statusEl.textContent = 'กำลังบันทึกข้อมูลเข้า Google Sheets...';
+      statusEl.textContent = 'กำลังบันทึกข้อมูล...';
 
-      fetch(WEB_APP_URL, {
-        method: 'POST',
-        body: JSON.stringify(payload)
-      })
-        .then(r => r.json())
-        .then(res => {
-          if (res.status === 'success' || res.status === 'ok') {
-            statusEl.className = 'status show ok';
-            statusEl.textContent = 'บันทึกยอดขายสำเร็จเรียบร้อย ✓';
-
-            // Clear draft after successful save
-            _clearDraft(d);
-            // Reset extra services after save
-            _extraLines = [];
-            _renderExtraLines();
-
-            // Update session values
-            const idx = saleSaved.findIndex(r => r.date === thaiDate(d));
-            const record = {
-              date: thaiDate(d),
-              bill_no: payload.bill_no,
-              customer: 'ยอดรวมประจำวัน',
-              size_s: qs, size_m: qm, size_l: ql, size_xl: qxl,
-              gross_amount: grossAmount,
-              discount: discount,
-              total_amount: totalAmount,
-              transfer_amount: transferAmount,
-              cash_amount: cashAmount,
-              entered_by: _auth.display_name,
-              payment_status: paymentStatus,
-              received_amount: receivedAmount
-            };
-            if (idx >= 0) { saleSaved[idx] = record; } else { saleSaved.push(record); }
-
-            // If fully paid, clear any stale payment records for same date
-            if (paymentStatus === 'ชำระครบ') {
-              paymentsSaved = paymentsSaved.filter(p => p.sale_date !== thaiDate(d));
-              _savePayments();
-            }
-
-            renderSaleHistoryList();
-            updateSummaryData();
-            setTimeout(() => statusEl.className = 'status', 3000);
-          } else {
+      // NOTE: pay_method=transferAmount, employee=cashAmount (dashboard naming)
+      // DB mapping: cash_amount = transferAmount, transfer_amount = cashAmount (historically swapped)
+      _sb.from('sc_sales').upsert({
+        date:            d,
+        extra_items:     payload.bill_no || '',
+        size_s:          qs, size_m: qm, size_l: ql, size_xl: qxl,
+        total_revenue:   totalAmount,
+        cash_amount:     transferAmount,     // SWAPPED: UI transfer → DB cash
+        transfer_amount: cashAmount,         // SWAPPED: UI cash → DB transfer
+        recorded_by:     payload.entered_by,
+        discount:        discount,
+        grand_total:     grossAmount,
+        payment_status:  paymentStatus,
+        amount_paid:     receivedAmount,
+        last_updated:    new Date().toISOString()
+      }, { onConflict: 'date' })
+        .then(({ error }) => {
+          if (error) {
             statusEl.className = 'status show err';
-            statusEl.textContent = 'ข้อผิดพลาด: ' + (res.message || 'บันทึกไม่สำเร็จ');
+            statusEl.textContent = 'ข้อผิดพลาด: ' + (error.message || 'บันทึกไม่สำเร็จ');
+            return;
           }
+          statusEl.className = 'status show ok';
+          statusEl.textContent = 'บันทึกยอดขายสำเร็จเรียบร้อย ✓';
+          _clearDraft(d);
+          _extraLines = [];
+          _renderExtraLines();
+
+          const record = {
+            date: thaiDate(d), bill_no: payload.bill_no, customer: 'ยอดรวมประจำวัน',
+            size_s: qs, size_m: qm, size_l: ql, size_xl: qxl,
+            gross_amount: grossAmount, discount: discount, total_amount: totalAmount,
+            transfer_amount: transferAmount, cash_amount: cashAmount,
+            entered_by: _auth.display_name, payment_status: paymentStatus, received_amount: receivedAmount
+          };
+          const idx = saleSaved.findIndex(r => r.date === thaiDate(d));
+          if (idx >= 0) { saleSaved[idx] = record; } else { saleSaved.push(record); }
+
+          if (paymentStatus === 'ชำระครบ') {
+            paymentsSaved = paymentsSaved.filter(p => p.sale_date !== thaiDate(d));
+            _savePayments();
+          }
+          renderSaleHistoryList();
+          updateSummaryData();
+          setTimeout(() => statusEl.className = 'status', 3000);
         })
         .catch(() => {
           statusEl.className = 'status show err';
@@ -3387,19 +3389,14 @@
         }
       }
 
-      // POST to GAS
-      fetch(WEB_APP_URL, {
-        method: 'POST',
-        body: JSON.stringify({
-          formType: 'save_payment',
-          token: _auth.token,
-          sale_date: saleDateThai,
-          received_date: thaiDate(dateVal),
-          amount: amount,
-          method: method,
-          received_by: _auth.display_name
-        })
-      }).catch(err => { console.warn("Background payment sync to GAS delayed/failed:", err); });
+      // Save payment to Supabase (background)
+      _sb.from('sc_payments').insert({
+        sale_date:    _isoDate(saleDateThai),
+        amount:       amount,
+        pay_method:   method,
+        notes:        '',
+        recorded_by:  _auth.display_name
+      }).catch(err => { console.warn('Payment sync failed:', err); });
 
       closeCollectModal();
       renderSaleHistoryList();
@@ -3488,19 +3485,22 @@
         const editIdx = parseInt(editIdxStr);
         const oldRow = expenseSaved.find(e => e._idx === editIdx);
         if (oldRow) {
-          fetch(WEB_APP_URL, {
-            method: 'POST',
-            body: JSON.stringify({
-              formType: 'delete_expense',
-              token: _auth.token,
-              date: oldRow.date,
-              category: oldRow.category,
-              item_name: oldRow.item_name,
-              total_amount: oldRow.total_amount,
-              pay_method: oldRow.pay_method,
-              logged_by: _auth.display_name
-            })
-          }).catch(() => {}); // fire-and-forget
+          // Delete old stock transaction from Supabase + reverse stock qty
+          if (oldRow._id) {
+            (async () => {
+              try {
+                const txType = oldRow.type || 'ซื้อเข้า';
+                const { data: stkRow } = await _sb.from('sc_stock_status').select('quantity').eq('item_name', oldRow.item_name).maybeSingle();
+                await _sb.from('sc_stock_transactions').delete().eq('id', oldRow._id);
+                if (stkRow) {
+                  const newQty = txType === 'ซื้อเข้า'
+                    ? Math.max(0, Number(stkRow.quantity) - (oldRow.qty || 0))
+                    : Number(stkRow.quantity) + (oldRow.qty || 0);
+                  await _sb.from('sc_stock_status').update({ quantity: newQty, updated_at: new Date().toISOString() }).eq('item_name', oldRow.item_name);
+                }
+              } catch(e) { console.warn('Delete old stock tx failed:', e); }
+            })();
+          }
           expenseSaved = expenseSaved.filter(e => e._idx !== editIdx);
         }
         delete document.getElementById('st_in_name').dataset.editIdx;
@@ -3545,47 +3545,67 @@
       statusEl.className = 'status show';
       statusEl.textContent = 'กำลังทำการบันทึกข้อมูลและปรับปรุงคลังสินค้า...';
 
-      fetch(WEB_APP_URL, {
-        method: 'POST',
-        body: JSON.stringify(payload)
-      })
-        .then(r => r.json())
-        .then(res => {
-          if (res.status === 'success' || res.status === 'ok') {
-            statusEl.className = 'status show ok';
-            statusEl.textContent = 'บันทึกธุรกรรม ' + typeStr + ' เรียบร้อย ✓';
+      // Insert stock transaction + update sc_stock_status
+      (async () => {
+        try {
+          const isoD = document.getElementById(typeStr === 'ซื้อเข้า' ? 'st_in_date' : 'st_out_date').value;
+          const { error: txErr } = await _sb.from('sc_stock_transactions').insert({
+            date:           isoD,
+            type:           typeStr,
+            item_name:      name,
+            quantity:       qty,
+            price_per_unit: pricePerUnit,
+            total:          totalAmt,
+            pay_method:     payload.pay_method,
+            recorded_by:    _auth.display_name,
+            last_updated:   new Date().toISOString()
+          });
+          if (txErr) throw txErr;
 
-            // Clear forms
-            if (typeStr === "ซื้อเข้า") {
-              const nameInp = document.getElementById('st_in_name');
-              nameInp.value = '';
-              delete nameInp.dataset.editIdx;
-              document.getElementById('st_in_qty').value = 1;
-              document.getElementById('st_in_price').value = 0;
-              document.getElementById('st_in_total').value = 0;
-              document.getElementById('st_in_unit').value = '';
-            } else {
-              document.getElementById('st_out_name').value = '';
-              document.getElementById('st_out_qty').value = 1;
-              document.getElementById('st_out_employee').value = '';
-            }
-
-            // Reload fresh database state
-            loadBackendMasterData().then(() => {
-              loadMonthlyData();
-              _updateStockTimestamp();
-            });
-
-            setTimeout(() => statusEl.className = 'status', 3000);
+          // Update stock status
+          const { data: stkRow } = await _sb.from('sc_stock_status').select('quantity, unit, category').eq('item_name', name).maybeSingle();
+          if (typeStr === 'ซื้อเข้า') {
+            await _sb.from('sc_stock_status').upsert({
+              item_name:  name,
+              quantity:   (Number(stkRow?.quantity) || 0) + qty,
+              unit:       unit || stkRow?.unit || 'ชิ้น',
+              last_price: pricePerUnit,
+              category:   category || stkRow?.category || '',
+              updated_at: new Date().toISOString()
+            }, { onConflict: 'item_name' });
           } else {
-            statusEl.className = 'status show err';
-            statusEl.textContent = 'ข้อผิดพลาด: ' + (res.message || 'บันทึกไม่สำเร็จ');
+            if (stkRow) {
+              await _sb.from('sc_stock_status').update({
+                quantity: Math.max(0, Number(stkRow.quantity) - qty),
+                updated_at: new Date().toISOString()
+              }).eq('item_name', name);
+            }
           }
-        })
-        .catch(() => {
+
+          statusEl.className = 'status show ok';
+          statusEl.textContent = 'บันทึกธุรกรรม ' + typeStr + ' เรียบร้อย ✓';
+
+          if (typeStr === 'ซื้อเข้า') {
+            const nameInp = document.getElementById('st_in_name');
+            nameInp.value = '';
+            delete nameInp.dataset.editIdx;
+            document.getElementById('st_in_qty').value = 1;
+            document.getElementById('st_in_price').value = 0;
+            document.getElementById('st_in_total').value = 0;
+            document.getElementById('st_in_unit').value = '';
+          } else {
+            document.getElementById('st_out_name').value = '';
+            document.getElementById('st_out_qty').value = 1;
+            document.getElementById('st_out_employee').value = '';
+          }
+
+          loadBackendMasterData().then(() => { loadMonthlyData(); _updateStockTimestamp(); });
+          setTimeout(() => statusEl.className = 'status', 3000);
+        } catch(err) {
           statusEl.className = 'status show err';
-          statusEl.textContent = 'เกิดข้อผิดพลาดในการเชื่อมต่อเน็ตเวิร์ก';
-        });
+          statusEl.textContent = 'ข้อผิดพลาด: ' + (err.message || 'บันทึกไม่สำเร็จ');
+        }
+      })();
     }
 
     function renderStockPurchaseHistory() {
@@ -3707,32 +3727,24 @@
       btn.disabled = true;
       btn.textContent = 'กำลังลบ...';
 
-      fetch(WEB_APP_URL, {
-        method: 'POST',
-        body: JSON.stringify({
-          formType: 'delete_expense',
-          token: _auth.token,
-          date: r.date,
-          category: r.category,
-          item_name: r.item_name,
-          total_amount: r.total_amount,
-          pay_method: r.pay_method,
-          logged_by: _auth.display_name
-        })
-      })
-        .then(res => res.json())
-        .then(data => {
-          if (data.status === 'success' || data.status === 'ok') {
-            _applyLocalDelete(idx, r);
-          } else {
-            _applyLocalDelete(idx, r);
-            alert('ลบในหน้านี้แล้ว แต่ GAS ยังไม่รองรับ delete_expense — กรุณาลบแถวนั้นใน Google Sheet ด้วยตนเอง');
+      if (!r._id) { _applyLocalDelete(idx, r); btn.disabled = false; btn.textContent = 'ลบ'; return; }
+      (async () => {
+        try {
+          // Reverse stock qty effect before deleting
+          const { data: stkRow } = await _sb.from('sc_stock_status').select('quantity').eq('item_name', r.item_name).maybeSingle();
+          await _sb.from('sc_stock_transactions').delete().eq('id', r._id);
+          if (stkRow) {
+            const newQty = r.type === 'ซื้อเข้า'
+              ? Math.max(0, Number(stkRow.quantity) - (r.qty || 0))
+              : Number(stkRow.quantity) + (r.qty || 0);
+            await _sb.from('sc_stock_status').update({ quantity: newQty, updated_at: new Date().toISOString() }).eq('item_name', r.item_name);
           }
-        })
-        .catch(() => {
           _applyLocalDelete(idx, r);
-          alert('ลบในหน้าจอแล้ว แต่เชื่อมต่อ GAS ไม่ได้ — กรุณาลบแถวนั้นใน Google Sheet ด้วยตนเอง');
-        });
+        } catch(e) {
+          _applyLocalDelete(idx, r);
+          console.warn('deleteExpenseRow error:', e);
+        }
+      })();
     }
 
     // ── Stock refresh helpers ─────────────────────────────────
@@ -3822,23 +3834,9 @@
       const val = Number(newVal);
       if (isNaN(val) || val < 0) return;
 
-      fetch(WEB_APP_URL, {
-        method: 'POST',
-        body: JSON.stringify({
-          formType: 'save_biz_info', // settings helper key value
-          token: _auth.token,
-          settings: {
-            ["stock_alert_val_" + itemName]: val
-          }
-        })
-      })
+      _sb.from('sc_stock_status').update({ min_alert: val, updated_at: new Date().toISOString() }).eq('item_name', itemName)
         .then(() => {
-          // Proactively local update to avoid full reload delay
-          stockStatusDB.forEach(row => {
-            if (row[0] === itemName) {
-              row[5] = val;
-            }
-          });
+          stockStatusDB.forEach(row => { if (row[0] === itemName) row[5] = val; });
           renderStockStatusTable();
           renderStockAlerts();
         });
@@ -4784,26 +4782,31 @@
       statusEl.className = 'status show';
       statusEl.textContent = 'กำลังทำการบันทึกบัญชีค่าใช้จ่ายประจำเดือน...';
 
-      fetch(WEB_APP_URL, {
-        method: 'POST',
-        body: JSON.stringify(payload)
-      })
-        .then(r => r.json())
-        .then(res => {
-          if (res.status === 'success' || res.status === 'ok') {
-            statusEl.className = 'status show ok';
-            statusEl.textContent = 'บันทึกบัญชีประจำเดือน ' + monthKey + ' สำเร็จแล้ว ✓';
-            loadMonthlyData();
-            setTimeout(() => statusEl.className = 'status', 3000);
-          } else {
-            statusEl.className = 'status show err';
-            statusEl.textContent = 'ข้อผิดพลาด: ' + (res.message || 'บันทึกไม่สำเร็จ');
-          }
-        })
-        .catch(() => {
+      (async () => {
+        try {
+          // Delete existing opex for this month then insert all
+          await _sb.from('sc_opex').delete().eq('month', monthKey);
+          const rows = opexItemsList.map(item => ({
+            month:       monthKey,
+            category:    item.category,
+            key:         item.key,
+            name:        item.name,
+            amount:      item.amount,
+            pay_method:  item.method,
+            recorded_by: _auth.display_name,
+            last_updated: new Date().toISOString()
+          }));
+          const { error } = await _sb.from('sc_opex').insert(rows);
+          if (error) throw error;
+          statusEl.className = 'status show ok';
+          statusEl.textContent = 'บันทึกบัญชีประจำเดือน ' + monthKey + ' สำเร็จแล้ว ✓';
+          loadMonthlyData();
+          setTimeout(() => statusEl.className = 'status', 3000);
+        } catch(err) {
           statusEl.className = 'status show err';
-          statusEl.textContent = 'เกิดข้อผิดพลาดสัญญาณอินเทอร์เน็ต';
-        });
+          statusEl.textContent = 'ข้อผิดพลาด: ' + (err.message || 'บันทึกไม่สำเร็จ');
+        }
+      })();
     }
 
     // Convert image URL → base64 (avoids CORS/timing issues in print popup)
@@ -5026,20 +5029,13 @@ ${bank ? `
       const statusEl = document.getElementById('status_size_prices');
       statusEl.className = 'status show';
       statusEl.textContent = 'กำลังบันทึกราคา...';
-      fetch(WEB_APP_URL, { method: 'POST', body: JSON.stringify(payload) })
-        .then(r => r.json())
-        .then(res => {
-          if (res.status === 'success' || res.status === 'ok') {
-            statusEl.className = 'status show ok';
-            statusEl.textContent = 'บันทึกราคาสำเร็จ ✓';
-            setTimeout(() => statusEl.className = 'status', 3000);
-          } else {
-            statusEl.className = 'status show err';
-            statusEl.textContent = 'บันทึกไม่สำเร็จ: ' + (res.message || '');
-          }
+      _saveSettings(payload.settings)
+        .then(() => {
+          statusEl.className = 'status show ok';
+          statusEl.textContent = 'บันทึกราคาสำเร็จ ✓';
+          setTimeout(() => statusEl.className = 'status', 3000);
         })
         .catch(() => {
-          // Save to localStorage as fallback
           localStorage.setItem('sneaker_size_prices', JSON.stringify(_sizePrices));
           statusEl.className = 'status show ok';
           statusEl.textContent = 'บันทึกในเครื่องแล้ว (offline) ✓';
@@ -5408,20 +5404,11 @@ ${bank ? `
       statusEl.className = 'status show';
       statusEl.textContent = 'กำลังบันทึกข้อมูลโปรไฟล์ร้าน...';
 
-      fetch(WEB_APP_URL, {
-        method: 'POST',
-        body: JSON.stringify(payload)
-      })
-        .then(r => r.json())
-        .then(res => {
-          if (res.status === 'success' || res.status === 'ok') {
-            statusEl.className = 'status show ok';
-            statusEl.textContent = 'บันทึกโปรไฟล์ร้านค้าสำเร็จเรียบร้อย ✓';
-            setTimeout(() => statusEl.className = 'status', 3000);
-          } else {
-            statusEl.className = 'status show err';
-            statusEl.textContent = 'ข้อผิดพลาด: ' + (res.message || 'บันทึกไม่สำเร็จ');
-          }
+      _saveSettings(payload.settings)
+        .then(() => {
+          statusEl.className = 'status show ok';
+          statusEl.textContent = 'บันทึกโปรไฟล์ร้านค้าสำเร็จเรียบร้อย ✓';
+          setTimeout(() => statusEl.className = 'status', 3000);
         })
         .catch(() => {
           statusEl.className = 'status show err';
@@ -5594,29 +5581,31 @@ ${bank ? `
       statusEl.className = 'status show';
       statusEl.textContent = 'กำลังทำการบันทึกรายชื่อพนักงานขึ้นฐานข้อมูล...';
 
-      fetch(WEB_APP_URL, {
-        method: 'POST',
-        body: JSON.stringify(payload)
-      })
-        .then(r => r.json())
-        .then(res => {
-          if (res.status === 'success' || res.status === 'ok') {
-            statusEl.className = 'status show ok';
-            statusEl.textContent = 'อัปเดตข้อมูลพนักงานสำเร็จเรียบร้อย ✓';
-
-            // Reload fresh master list
-            loadBackendMasterData();
-
-            setTimeout(() => statusEl.className = 'status', 3000);
-          } else {
-            statusEl.className = 'status show err';
-            statusEl.textContent = 'ข้อผิดพลาด: ' + (res.message || 'บันทึกไม่สำเร็จ');
-          }
-        })
-        .catch(() => {
+      (async () => {
+        try {
+          // Replace all employees: delete then insert
+          await _sb.from('sc_employees').delete().gte('id', 0);
+          const empRows = list.map(emp => ({
+            name:         emp.name,
+            salary:       emp.salary || 0,
+            position:     emp.position || '',
+            bank:         emp.bank || '',
+            account:      emp.account_no || '',
+            status:       emp.status || 'Active',
+            nickname:     emp.nickname || '',
+            last_updated: new Date().toISOString()
+          }));
+          const { error } = await _sb.from('sc_employees').insert(empRows);
+          if (error) throw error;
+          statusEl.className = 'status show ok';
+          statusEl.textContent = 'อัปเดตข้อมูลพนักงานสำเร็จเรียบร้อย ✓';
+          loadBackendMasterData();
+          setTimeout(() => statusEl.className = 'status', 3000);
+        } catch(err) {
           statusEl.className = 'status show err';
-          statusEl.textContent = 'เกิดข้อผิดพลาดทางเทคนิคอินเทอร์เน็ต';
-        });
+          statusEl.textContent = 'ข้อผิดพลาด: ' + (err.message || 'บันทึกไม่สำเร็จ');
+        }
+      })();
     }
 
     // ── IMPORT / EXPORT EXCEL ──────────────────────────────────
@@ -5730,23 +5719,39 @@ ${bank ? `
           };
         }
 
-        fetch(WEB_APP_URL, {
-          method: 'POST',
-          body: JSON.stringify(payload)
-        })
-          .then(r => r.json())
-          .then(res => {
-            if (res.status === 'success' || res.status === 'ok') {
-              successCount++;
-            } else {
-              failCount++;
-            }
-            checkDone();
-          })
-          .catch(() => {
-            failCount++;
-            checkDone();
+        // Send to Supabase
+        let sbPromise;
+        if (isSales) {
+          const isoDate = _isoDate(String(row[0] || ''));
+          sbPromise = _sb.from('sc_sales').upsert({
+            date:           isoDate || String(row[0]),
+            extra_items:    String(row[1] || ''),
+            size_s: Number(row[3]||0), size_m: Number(row[4]||0),
+            size_l: Number(row[5]||0), size_xl: Number(row[6]||0),
+            total_revenue:  Number(row[7]||0),
+            cash_amount:    Number(row[8]||0),
+            transfer_amount: 0,
+            recorded_by:    'Import Tool',
+            last_updated:   new Date().toISOString()
+          }, { onConflict: 'date' });
+        } else {
+          const isoDate = _isoDate(String(row[0] || ''));
+          sbPromise = _sb.from('sc_stock_transactions').insert({
+            date:           isoDate || String(row[0]),
+            type:           String(row[1]||'ซื้อเข้า'),
+            item_name:      String(row[2]||''),
+            quantity:       Number(row[3]||0),
+            price_per_unit: Number(row[4]||0),
+            total:          Number(row[5]||0),
+            pay_method:     String(row[6]||'เงินสดร้าน'),
+            recorded_by:    'Import Tool',
+            last_updated:   new Date().toISOString()
           });
+        }
+        sbPromise.then(({ error }) => {
+          if (!error) { successCount++; } else { failCount++; }
+          checkDone();
+        }).catch(() => { failCount++; checkDone(); });
       }
 
       function checkDone() {
@@ -6217,33 +6222,31 @@ ${bank ? `
         statusEl.className = 'status show';
         statusEl.textContent = 'กำลังลบข้อมูลใน Google Sheets...';
 
-        fetch(WEB_APP_URL, {
-          method: 'POST',
-          body: JSON.stringify({
-            formType: 'delete_month',
-            token: _auth.token,
-            month: monthInput,
-            category: category
-          })
-        })
-          .then(r => r.json())
-          .then(res => {
-            if (res.status === 'success' || res.status === 'ok') {
-              statusEl.className = 'status show ok';
-              statusEl.textContent = 'ลบข้อมูลสำเร็จเรียบร้อย ✓';
+        (async () => {
+          try {
+            // Compute first/last day of the month (monthInput = MM/YYYY)
+            const [mm, yyyy] = monthInput.split('/');
+            const firstDay = `${yyyy}-${mm.padStart(2,'0')}-01`;
+            const lastDay  = new Date(Number(yyyy), Number(mm), 0).toISOString().split('T')[0];
 
-              // Reload data
-              loadMonthlyData();
-              setTimeout(() => statusEl.className = 'status', 3000);
-            } else {
-              statusEl.className = 'status show err';
-              statusEl.textContent = 'ข้อผิดพลาด: ' + (res.message || 'ลบข้อมูลไม่สำเร็จ');
+            if (category === 'all' || category === 'sales') {
+              await _sb.from('sc_sales').delete().gte('date', firstDay).lte('date', lastDay);
             }
-          })
-          .catch(() => {
+            if (category === 'all' || category === 'expense' || category === 'stock') {
+              await _sb.from('sc_stock_transactions').delete().gte('date', firstDay).lte('date', lastDay);
+            }
+            if (category === 'all' || category === 'opex') {
+              await _sb.from('sc_opex').delete().eq('month', monthInput);
+            }
+            statusEl.className = 'status show ok';
+            statusEl.textContent = 'ลบข้อมูลสำเร็จเรียบร้อย ✓';
+            loadMonthlyData();
+            setTimeout(() => statusEl.className = 'status', 3000);
+          } catch(err) {
             statusEl.className = 'status show err';
-            statusEl.textContent = 'ไม่สามารถเชื่อมต่อสัญญาณอินเทอร์เน็ตได้';
-          });
+            statusEl.textContent = 'ข้อผิดพลาด: ' + (err.message || 'ลบข้อมูลไม่สำเร็จ');
+          }
+        })();
       }
     }
 
@@ -6253,58 +6256,37 @@ ${bank ? `
       const statusEl = document.getElementById('status_user_mgmt');
       wrap.innerHTML = '<div style="text-align:center;padding:16px"><i class="ti ti-loader animate-spin" style="font-size:24px;color:var(--c-primary)"></i> กำลังโหลดรายชื่อ...</div>';
 
-      fetch(WEB_APP_URL, {
-        method: 'POST',
-        body: JSON.stringify({ formType: 'list_users', token: _auth.token })
-      })
-        .then(r => r.json())
-        .then(res => {
-          if (res.status === 'ok') {
-            if (!res.users || !res.users.length) {
-              wrap.innerHTML = '<p style="font-size:12px;color:var(--muted);text-align:center">ไม่พบข้อมูลผู้ใช้งาน</p>';
-              return;
-            }
-            let html = `
-            <div class="table-responsive">
-              <table class="table" style="width:100%; border-collapse:collapse; font-size:12px">
-                <thead>
-                  <tr style="border-bottom:2px solid var(--border); text-align:left; background:var(--c-primary-light)">
-                    <th style="padding:8px">Username</th>
-                    <th style="padding:8px">ชื่อ-นามสกุล</th>
-                    <th style="padding:8px">ชื่อเรียก</th>
-                    <th style="padding:8px">สิทธิ์</th>
-                    <th style="padding:8px; text-align:center">การจัดการ</th>
-                  </tr>
-                </thead>
-                <tbody>
-          `;
-            res.users.forEach(u => {
-              const roleName = u.role === 'admin' ? 'Admin' : u.role === 'co-admin' ? 'Co-Admin' : 'Manager';
-              html += `
-              <tr style="border-bottom:1px solid var(--border)">
-                <td style="padding:8px; font-weight:bold">${u.username}</td>
-                <td style="padding:8px">${u.fullname}</td>
-                <td style="padding:8px">${u.nickname}</td>
-                <td style="padding:8px"><span class="role-chip ${u.role}">${roleName}</span></td>
-                <td style="padding:8px; text-align:center; display:flex; gap:6px; justify-content:center">
-                  <button type="button" class="btn btn-primary btn-sm" onclick="editUserPrompt('${u.username}', '${u.fullname}', '${u.nickname}', '${u.role}')" title="แก้ไข"><i class="ti ti-edit"></i></button>
-                  <button type="button" class="btn btn-accent btn-sm" onclick="resetUserPwPrompt('${u.username}')" title="เปลี่ยนรหัสผ่าน"><i class="ti ti-key"></i></button>
-                  <button type="button" class="btn btn-danger btn-sm" onclick="deleteUserConfirm('${u.username}')" title="ลบ" ${u.username === _auth.username ? 'disabled style="opacity:0.5; cursor:not-allowed"' : ''}><i class="ti ti-trash"></i></button>
-                </td>
-              </tr>
-            `;
-            });
-            html += `
-                </tbody>
-              </table>
-            </div>
-          `;
-            wrap.innerHTML = html;
-          } else {
-            wrap.innerHTML = `<p style="font-size:12px;color:var(--danger);text-align:center">ข้อผิดพลาด: ${res.message || 'ไม่สามารถดึงข้อมูลได้'}</p>`;
+      _sb.from('sc_users').select('*').order('id')
+        .then(({ data: users, error }) => {
+          if (error || !users || !users.length) {
+            wrap.innerHTML = '<p style="font-size:12px;color:var(--muted);text-align:center">ไม่พบข้อมูลผู้ใช้งาน</p>';
+            return;
           }
+          let tbl = `<div class="table-responsive"><table class="table" style="width:100%;border-collapse:collapse;font-size:12px">
+            <thead><tr style="border-bottom:2px solid var(--border);text-align:left;background:var(--c-primary-light)">
+              <th style="padding:8px">Username</th><th style="padding:8px">ชื่อ-นามสกุล</th>
+              <th style="padding:8px">ชื่อเรียก</th><th style="padding:8px">สิทธิ์</th>
+              <th style="padding:8px;text-align:center">การจัดการ</th>
+            </tr></thead><tbody>`;
+          users.forEach(u => {
+            const roleName = u.role === 'admin' ? 'Admin' : u.role === 'co-admin' ? 'Co-Admin' : 'Manager';
+            const fn = (u.fullname||'').replace(/'/g,"&#39;");
+            const nk = (u.nickname||'').replace(/'/g,"&#39;");
+            tbl += `<tr style="border-bottom:1px solid var(--border)">
+              <td style="padding:8px;font-weight:bold">${u.username}</td>
+              <td style="padding:8px">${u.fullname||''}</td>
+              <td style="padding:8px">${u.nickname||''}</td>
+              <td style="padding:8px"><span class="role-chip ${u.role}">${roleName}</span></td>
+              <td style="padding:8px;text-align:center;display:flex;gap:6px;justify-content:center">
+                <button type="button" class="btn btn-primary btn-sm" onclick="editUserPrompt('${u.username}','${fn}','${nk}','${u.role||'staff'}')" title="แก้ไข"><i class="ti ti-edit"></i></button>
+                <button type="button" class="btn btn-accent btn-sm" onclick="resetUserPwPrompt('${u.username}')" title="เปลี่ยนรหัสผ่าน"><i class="ti ti-key"></i></button>
+                <button type="button" class="btn btn-danger btn-sm" onclick="deleteUserConfirm('${u.username}')" title="ลบ" ${u.username===_auth.username?'disabled style="opacity:0.5;cursor:not-allowed"':''}><i class="ti ti-trash"></i></button>
+              </td></tr>`;
+          });
+          tbl += '</tbody></table></div>';
+          wrap.innerHTML = tbl;
         })
-        .catch(err => {
+        .catch(() => {
           wrap.innerHTML = '<p style="font-size:12px;color:var(--danger);text-align:center">ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้</p>';
         });
     }
@@ -6332,41 +6314,18 @@ ${bank ? `
       statusEl.className = 'status show';
       statusEl.textContent = 'กำลังสร้างผู้ใช้ใหม่...';
 
-      fetch(WEB_APP_URL, {
-        method: 'POST',
-        body: JSON.stringify({
-          formType: 'create_user',
-          token: _auth.token,
-          username,
-          password,
-          full_name: fullname,
-          nickname,
-          role
-        })
-      })
-        .then(r => r.json())
-        .then(res => {
-          if (res.status === 'ok') {
-            statusEl.className = 'status show ok';
-            statusEl.textContent = 'สร้างผู้ใช้สำเร็จเรียบร้อย ✓';
-
-            // Clear inputs
-            document.getElementById('nu_username').value = '';
-            document.getElementById('nu_fullname').value = '';
-            document.getElementById('nu_nickname').value = '';
-            document.getElementById('nu_password').value = '';
-
-            loadUsers();
-            setTimeout(() => statusEl.className = 'status', 3000);
-          } else {
-            statusEl.className = 'status show err';
-            statusEl.textContent = 'ข้อผิดพลาด: ' + (res.message || 'สร้างผู้ใช้ไม่สำเร็จ');
-          }
-        })
-        .catch(() => {
-          statusEl.className = 'status show err';
-          statusEl.textContent = 'ไม่สามารถเชื่อมต่อสัญญาณอินเทอร์เน็ตได้';
-        });
+      // Supabase: ต้องสร้าง Auth User ผ่าน Supabase Dashboard ก่อน แล้วค่อย insert sc_users
+      // เนื่องจาก anon key ไม่มีสิทธิ์สร้าง Auth user ใหม่
+      // วิธีสร้างผู้ใช้ใหม่: Supabase Dashboard → Authentication → Users → Invite / Add User
+      statusEl.className = 'status show err';
+      statusEl.textContent = 'ต้องสร้าง Auth User ผ่าน Supabase Dashboard ก่อน แล้วค่อยเพิ่ม Profile ที่นี่';
+      // After creating auth user in Supabase Dashboard, insert profile:
+      // (หากสร้าง auth user แล้ว ให้ระบุ user_id UUID ที่ได้ แล้วกด Save Profile)
+      /* Example manual insert:
+      _sb.from('sc_users').insert({
+        user_id: '<UUID from Supabase Auth>', username, fullname, nickname, role
+      }).then(({error}) => { if (!error) { loadUsers(); } });
+      */
     }
 
     function deleteUserConfirm(username) {
@@ -6375,25 +6334,18 @@ ${bank ? `
         statusEl.className = 'status show';
         statusEl.textContent = 'กำลังลบผู้ใช้งาน...';
 
-        fetch(WEB_APP_URL, {
-          method: 'POST',
-          body: JSON.stringify({ formType: 'delete_user', token: _auth.token, username: username })
-        })
-          .then(r => r.json())
-          .then(res => {
-            if (res.status === 'ok') {
+        // Delete profile from sc_users (cannot delete Auth user via anon key)
+        _sb.from('sc_users').delete().eq('username', username)
+          .then(({ error }) => {
+            if (!error) {
               statusEl.className = 'status show ok';
-              statusEl.textContent = 'ลบผู้ใช้สำเร็จเรียบร้อย ✓';
+              statusEl.textContent = 'ลบ Profile สำเร็จ ✓ (ลบ Auth User ใน Supabase Dashboard ด้วย)';
               loadUsers();
-              setTimeout(() => statusEl.className = 'status', 3000);
+              setTimeout(() => statusEl.className = 'status', 4000);
             } else {
               statusEl.className = 'status show err';
-              statusEl.textContent = 'ข้อผิดพลาด: ' + (res.message || 'ลบไม่สำเร็จ');
+              statusEl.textContent = 'ข้อผิดพลาด: ' + (error.message || 'ลบไม่สำเร็จ');
             }
-          })
-          .catch(() => {
-            statusEl.className = 'status show err';
-            statusEl.textContent = 'ไม่สามารถเชื่อมต่อสัญญาณอินเทอร์เน็ตได้';
           });
       }
     }
@@ -6409,25 +6361,11 @@ ${bank ? `
       statusEl.className = 'status show';
       statusEl.textContent = 'กำลังเปลี่ยนรหัสผ่าน...';
 
-      fetch(WEB_APP_URL, {
-        method: 'POST',
-        body: JSON.stringify({ formType: 'reset_user_password', token: _auth.token, username: username, new_password: newPw.trim() })
-      })
-        .then(r => r.json())
-        .then(res => {
-          if (res.status === 'ok') {
-            statusEl.className = 'status show ok';
-            statusEl.textContent = 'เปลี่ยนรหัสผ่านสำเร็จ ✓';
-            setTimeout(() => statusEl.className = 'status', 3000);
-          } else {
-            statusEl.className = 'status show err';
-            statusEl.textContent = 'ข้อผิดพลาด: ' + (res.message || 'เปลี่ยนรหัสผ่านไม่สำเร็จ');
-          }
-        })
-        .catch(() => {
-          statusEl.className = 'status show err';
-          statusEl.textContent = 'ไม่สามารถเชื่อมต่อสัญญาณอินเทอร์เน็ตได้';
-        });
+      // anon key cannot change other users' passwords
+      // Admin must reset via Supabase Dashboard → Authentication → Users → Reset Password
+      statusEl.className = 'status show err';
+      statusEl.textContent = `กรุณา Reset Password ของ "${username}" ใน Supabase Dashboard → Authentication → Users`;
+      setTimeout(() => statusEl.className = 'status', 5000);
     }
 
     function editUserPrompt(username, fullname, nickname, role) {
@@ -6448,27 +6386,20 @@ ${bank ? `
       statusEl.className = 'status show';
       statusEl.textContent = 'กำลังอัปเดตข้อมูลผู้ใช้...';
 
-      fetch(WEB_APP_URL, {
-        method: 'POST',
-        body: JSON.stringify({
-          formType: 'update_user',
-          token: _auth.token,
-          username: username,
-          full_name: newFullname.trim(),
-          nickname: newNickname.trim(),
-          role: roleVal
-        })
-      })
-        .then(r => r.json())
-        .then(res => {
-          if (res.status === 'ok') {
+      _sb.from('sc_users').update({
+        fullname: newFullname.trim(),
+        nickname: newNickname.trim(),
+        role: roleVal
+      }).eq('username', username)
+        .then(({ error }) => {
+          if (!error) {
             statusEl.className = 'status show ok';
             statusEl.textContent = 'อัปเดตข้อมูลผู้ใช้สำเร็จ ✓';
             loadUsers();
             setTimeout(() => statusEl.className = 'status', 3000);
           } else {
             statusEl.className = 'status show err';
-            statusEl.textContent = 'ข้อผิดพลาด: ' + (res.message || 'อัปเดตไม่สำเร็จ');
+            statusEl.textContent = 'ข้อผิดพลาด: ' + (error.message || 'อัปเดตไม่สำเร็จ');
           }
         })
         .catch(() => {
@@ -6480,4 +6411,4 @@ ${bank ? `
   </script>
 </body>
 
-</html>
+</html>                                                                                                                                               
