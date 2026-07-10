@@ -1173,6 +1173,39 @@
     </div>
   </div>
 
+  <!-- ── Edit User Modal ── -->
+  <div id="edit_user_modal_overlay" class="modal-overlay hidden">
+    <div class="modal-card" style="max-width:400px">
+      <h3 style="font-size:16px;font-weight:700;color:var(--c-primary-hover)"><i class="ti ti-user-edit"></i>
+        แก้ไขผู้ใช้งาน <span id="eu_username_label"></span>
+      </h3>
+      <input type="hidden" id="eu_username">
+      <div class="field">
+        <label>ชื่อ-นามสกุลจริง</label>
+        <input type="text" id="eu_fullname">
+      </div>
+      <div class="field">
+        <label>ชื่อเรียก/ชื่อแสดง</label>
+        <input type="text" id="eu_nickname">
+      </div>
+      <div class="field">
+        <label>สิทธิ์การใช้งาน</label>
+        <select id="eu_role">
+          <option value="manager">Manager (กรอกเฉพาะข้อมูลประจำวัน)</option>
+          <option value="co-admin">Co-Admin (สิทธิ์เต็ม ยกเว้นตั้งค่าพนักงาน)</option>
+          <option value="admin">Admin (สิทธิ์สูงสุดจัดการพนักงานและบัญชี)</option>
+          <option value="staff">Staff (ค่าเก่า — แนะนำเปลี่ยนเป็น Manager)</option>
+        </select>
+      </div>
+      <div id="eu_err" style="font-size:12px;color:var(--danger);min-height:16px"></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <button onclick="document.getElementById('edit_user_modal_overlay').classList.add('hidden')"
+          class="btn btn-light">ยกเลิก</button>
+        <button onclick="saveEditUser()" class="btn btn-primary">บันทึก</button>
+      </div>
+    </div>
+  </div>
+
   <div class="wrap">
     <!-- ── Brand Banner ── -->
     <div class="brand">
@@ -6772,7 +6805,7 @@ ${bank ? `
               <th style="padding:8px;text-align:center">การจัดการ</th>
             </tr></thead><tbody>`;
           users.forEach(u => {
-            const roleName = u.role === 'admin' ? 'Admin' : u.role === 'co-admin' ? 'Co-Admin' : 'Manager';
+            const roleName = u.role === 'admin' ? 'Admin' : u.role === 'co-admin' ? 'Co-Admin' : u.role === 'staff' ? 'Staff' : 'Manager';
             const fn = (u.fullname||'').replace(/'/g,"&#39;");
             const nk = (u.nickname||'').replace(/'/g,"&#39;");
             tbl += `<tr style="border-bottom:1px solid var(--border)">
@@ -6781,7 +6814,7 @@ ${bank ? `
               <td style="padding:8px">${u.nickname||''}</td>
               <td style="padding:8px"><span class="role-chip ${u.role}">${roleName}</span></td>
               <td style="padding:8px;text-align:center;display:flex;gap:6px;justify-content:center">
-                <button type="button" class="btn btn-primary btn-sm" onclick="editUserPrompt('${u.username}','${fn}','${nk}','${u.role||'staff'}')" title="แก้ไข"><i class="ti ti-edit"></i></button>
+                <button type="button" class="btn btn-primary btn-sm" onclick="openEditUserModal('${u.username}','${fn}','${nk}','${u.role||'manager'}')" title="แก้ไข"><i class="ti ti-edit"></i></button>
                 <button type="button" class="btn btn-accent btn-sm" onclick="resetUserPwPrompt('${u.username}')" title="เปลี่ยนรหัสผ่าน"><i class="ti ti-key"></i></button>
                 <button type="button" class="btn btn-danger btn-sm" onclick="deleteUserConfirm('${u.username}')" title="ลบ" ${u.username===_auth.username?'disabled style="opacity:0.5;cursor:not-allowed"':''}><i class="ti ti-trash"></i></button>
               </td></tr>`;
@@ -6871,43 +6904,52 @@ ${bank ? `
       setTimeout(() => statusEl.className = 'status', 5000);
     }
 
-    function editUserPrompt(username, fullname, nickname, role) {
-      const newFullname = prompt(`แก้ไขชื่อจริง-นามสกุล ของ "${username}":`, fullname);
-      if (newFullname === null) return;
-      const newNickname = prompt(`แก้ไขชื่อเรียก/ชื่อแสดง ของ "${username}":`, nickname);
-      if (newNickname === null) return;
-      const newRole = prompt(`แก้ไขสิทธิ์ ของ "${username}" (พิมพ์: admin, co-admin, manager):`, role);
-      if (newRole === null) return;
-
-      const roleVal = newRole.trim().toLowerCase();
-      if (roleVal !== 'admin' && roleVal !== 'co-admin' && roleVal !== 'manager') {
-        alert('สิทธิ์ไม่ถูกต้อง (ต้องเป็น admin, co-admin, หรือ manager เท่านั้น)');
-        return;
+    // ── Edit user (modal — แทนที่ triple prompt() เดิม) ───────────
+    function openEditUserModal(username, fullname, nickname, role) {
+      document.getElementById('eu_username').value = username;
+      document.getElementById('eu_username_label').textContent = '"' + username + '"';
+      document.getElementById('eu_fullname').value = fullname || '';
+      document.getElementById('eu_nickname').value = nickname || '';
+      const roleSel = document.getElementById('eu_role');
+      roleSel.value = role || 'manager';
+      if (roleSel.value !== role) {
+        // ค่า role แปลกที่ไม่อยู่ใน option ใดๆ (ไม่ควรเกิด แต่กันไว้) — เพิ่ม option ชั่วคราวให้เห็นค่าจริง
+        const opt = document.createElement('option');
+        opt.value = role; opt.textContent = role + ' (ไม่รู้จัก)';
+        roleSel.appendChild(opt);
+        roleSel.value = role;
       }
+      document.getElementById('eu_err').textContent = '';
+      document.getElementById('edit_user_modal_overlay').classList.remove('hidden');
+    }
+
+    function saveEditUser() {
+      const username = document.getElementById('eu_username').value;
+      const fullname = document.getElementById('eu_fullname').value.trim();
+      const nickname = document.getElementById('eu_nickname').value.trim();
+      const role = document.getElementById('eu_role').value;
+      const errEl = document.getElementById('eu_err');
+
+      if (!fullname || !nickname) { errEl.textContent = 'กรุณากรอกชื่อ-นามสกุล และชื่อเรียกให้ครบ'; return; }
 
       const statusEl = document.getElementById('status_user_mgmt');
       statusEl.className = 'status show';
       statusEl.textContent = 'กำลังอัปเดตข้อมูลผู้ใช้...';
 
-      _sb.from('sc_users').update({
-        fullname: newFullname.trim(),
-        nickname: newNickname.trim(),
-        role: roleVal
-      }).eq('username', username)
+      _sb.from('sc_users').update({ fullname, nickname, role }).eq('username', username)
         .then(({ error }) => {
           if (!error) {
+            document.getElementById('edit_user_modal_overlay').classList.add('hidden');
             statusEl.className = 'status show ok';
             statusEl.textContent = 'อัปเดตข้อมูลผู้ใช้สำเร็จ ✓';
             loadUsers();
             setTimeout(() => statusEl.className = 'status', 3000);
           } else {
-            statusEl.className = 'status show err';
-            statusEl.textContent = 'ข้อผิดพลาด: ' + (error.message || 'อัปเดตไม่สำเร็จ');
+            errEl.textContent = 'ข้อผิดพลาด: ' + (error.message || 'อัปเดตไม่สำเร็จ');
           }
         })
         .catch(() => {
-          statusEl.className = 'status show err';
-          statusEl.textContent = 'ไม่สามารถเชื่อมต่อได้';
+          errEl.textContent = 'ไม่สามารถเชื่อมต่อได้';
         });
     }
 
