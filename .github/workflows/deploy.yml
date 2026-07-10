@@ -1,0 +1,19 @@
+name: Deploy to server
+
+# ทำงานทุกครั้งที่มีการ push เข้า main — SSH เข้าเซิร์ฟเวอร์แล้วสั่ง git pull
+# กุญแจ SSH ที่ใช้ถูกจำกัดฝั่งเซิร์ฟเวอร์ให้รันได้แค่คำสั่ง git pull เท่านั้น (ดู authorized_keys)
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Pull latest changes on server
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          script: cd /var/www/sneakercare && git pull origin main
