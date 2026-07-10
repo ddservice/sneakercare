@@ -1120,6 +1120,59 @@
     </div>
   </div>
 
+  <!-- ── Inventory v2: Add/Edit Item Modal ── -->
+  <div id="inv_item_modal_overlay" class="modal-overlay hidden">
+    <div class="modal-card" style="max-width:460px">
+      <h3 style="font-size:16px;font-weight:700;color:var(--c-primary-hover)"><i class="ti ti-package"></i>
+        <span id="inv_item_modal_title">เพิ่มสินค้าใหม่</span>
+      </h3>
+      <input type="hidden" id="inv_item_id">
+      <div class="field">
+        <label>ชื่อสินค้า</label>
+        <input type="text" id="inv_item_name" placeholder="เช่น น้ำยาทำความสะอาดสูตรเข้มข้น">
+      </div>
+      <div class="row2" style="margin-bottom:12px">
+        <div class="field">
+          <label>ประเภท</label>
+          <select id="inv_item_type">
+            <option value="consumable">สินค้าสิ้นเปลือง (Consumable)</option>
+            <option value="inventory">สินค้าคงคลัง (Inventory)</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>หมวดหมู่</label>
+          <input type="text" id="inv_item_category" placeholder="เช่น น้ำยาทำความสะอาด">
+        </div>
+      </div>
+      <div class="row2" style="margin-bottom:12px">
+        <div class="field">
+          <label>หน่วยฐาน (ตัดสต๊อก)</label>
+          <input type="text" id="inv_item_base_unit" placeholder="ml, g, ชิ้น">
+        </div>
+        <div class="field">
+          <label>หน่วยที่ซื้อ</label>
+          <input type="text" id="inv_item_purchase_unit" placeholder="ขวด, แพ็ค, ชิ้น">
+        </div>
+      </div>
+      <div class="row2" style="margin-bottom:12px">
+        <div class="field">
+          <label>1 หน่วยซื้อ = กี่หน่วยฐาน</label>
+          <input type="number" id="inv_item_purchase_unit_qty" value="1" min="0.001" step="0.001">
+        </div>
+        <div class="field">
+          <label>จุดสั่งซื้อขั้นต่ำเริ่มต้น</label>
+          <input type="number" id="inv_item_min_stock" value="0" min="0" step="0.01">
+        </div>
+      </div>
+      <div id="inv_item_modal_err" style="font-size:12px;color:var(--danger);min-height:16px"></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <button onclick="document.getElementById('inv_item_modal_overlay').classList.add('hidden')"
+          class="btn btn-light">ยกเลิก</button>
+        <button onclick="invSaveItem()" class="btn btn-primary">บันทึก</button>
+      </div>
+    </div>
+  </div>
+
   <div class="wrap">
     <!-- ── Brand Banner ── -->
     <div class="brand">
@@ -1637,72 +1690,72 @@
 
     <!-- ════ TAB 3: คลังสินค้า (Stock / Inventory) ════ -->
     <div id="stock" class="panel">
-      <!-- Split to Buy-In / Use Forms -->
+
+      <!-- Admin: item catalog -->
+      <div class="card" id="inv_card_items" style="display:none">
+        <div class="card-head">
+          <div class="card-head-left"><i class="ti ti-list-details"></i><span>จัดการสินค้า (แคตตาล็อกกลาง)</span></div>
+          <button onclick="invOpenItemModal()"
+            style="display:inline-flex; align-items:center; gap:4px; font-size:12px; padding:5px 12px;
+                   border:1.5px solid var(--c-primary); border-radius:8px; background:var(--c-primary);
+                   color:#fff; font-weight:600; cursor:pointer">
+            <i class="ti ti-plus"></i> เพิ่มสินค้าใหม่
+          </button>
+        </div>
+        <div class="card-body" style="padding:0">
+          <div class="table-container">
+            <table class="tbl" id="inv_items_table">
+              <thead>
+                <tr>
+                  <th>ชื่อสินค้า</th><th>ประเภท</th><th>หมวดหมู่</th><th>หน่วยฐาน</th>
+                  <th>หน่วยซื้อ</th><th>สถานะ</th><th style="text-align:center">จัดการ</th>
+                </tr>
+              </thead>
+              <tbody id="inv_items_tbody">
+                <tr><td colspan="7" style="text-align:center; color:var(--muted); padding:20px">กำลังโหลด...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Stock in / Stock out -->
       <div class="row2">
-        <!-- Buy in -->
-        <div class="card">
+        <!-- Stock in (admin/co-admin) -->
+        <div class="card" id="inv_card_stock_in" style="display:none">
           <div class="card-head">
             <div class="card-head-left"><i class="ti ti-circle-plus" style="color:var(--success)"></i><span>1.
-                ซื้อของเข้าคลัง (Stock Inflow)</span></div>
+                รับของเข้าคลัง (Stock In)</span></div>
           </div>
           <div class="card-body">
             <div class="field" style="margin-bottom:12px">
-              <label>วันที่ซื้อเข้า</label>
-              <input type="date" id="st_in_date">
-            </div>
-            <div class="field" style="margin-bottom:12px">
-              <label>รายการสินค้า/วัสดุ</label>
-              <input type="text" id="st_in_name" placeholder="เช่น น้ำยาดีพคลีน, กล่องกระดาษ"
-                list="stock_items_datalist">
-              <datalist id="stock_items_datalist"></datalist>
+              <label>สินค้า</label>
+              <select id="inv_in_item" onchange="invUpdateInUnitLabel()">
+                <option value="">— เลือกสินค้า —</option>
+              </select>
             </div>
             <div class="row2" style="margin-bottom:12px">
               <div class="field">
-                <label>หมวดหมู่</label>
-                <select id="st_in_category">
-                  <option value="น้ำยาทำความสะอาด">น้ำยาทำความสะอาด</option>
-                  <option value="แปรงซักรองเท้า">แปรงซักรองเท้า</option>
-                  <option value="สีและสปา">สีและสปา</option>
-                  <option value="ถุงและบรรจุภัณฑ์">ถุงและบรรจุภัณฑ์</option>
-                  <option value="อุปกรณ์ซ่อม">อุปกรณ์ซ่อม</option>
-                  <option value="อื่นๆ">อื่นๆ</option>
-                </select>
+                <label>จำนวนที่ซื้อ (หน่วยซื้อ) <span id="inv_in_unit_label" style="color:var(--muted)"></span></label>
+                <input type="number" id="inv_in_qty" value="1" min="0.001" step="0.001">
               </div>
               <div class="field">
-                <label>หน่วยนับ</label>
-                <input type="text" id="st_in_unit" placeholder="เช่น ขวด, ชิ้น, ม้วน">
-              </div>
-            </div>
-            <div class="row3" style="margin-bottom:12px">
-              <div class="field">
-                <label>จำนวน</label>
-                <input type="number" id="st_in_qty" value="1" min="1" oninput="calculateStInTotal()">
-              </div>
-              <div class="field">
-                <label>ราคาต่อหน่วย</label>
-                <input type="number" id="st_in_price" value="0" min="0" oninput="calculateStInTotal()">
-              </div>
-              <div class="field">
-                <label>ยอดรวม (บาท)</label>
-                <input type="number" id="st_in_total" value="0" readonly>
+                <label>ยอดที่จ่ายจริงทั้งหมด (บาท)</label>
+                <input type="number" id="inv_in_total" value="0" min="0" step="0.01">
               </div>
             </div>
             <div class="field" style="margin-bottom:12px">
-              <label>ช่องทางชำระเงิน</label>
-              <select id="st_in_pay_method">
-                <option value="บัญชีร้าน">บัญชีร้าน (เงินโอน)</option>
-                <option value="เงินสดร้าน">เงินสดร้าน</option>
-                <option value="สำรองจ่ายส่วนตัว">สำรองจ่ายส่วนตัว</option>
-              </select>
+              <label>เลขที่ใบเสร็จ/ผู้ขาย (ถ้ามี)</label>
+              <input type="text" id="inv_in_note">
             </div>
-            <div id="status_stock_in" class="status"></div>
-            <button class="btn btn-primary btn-full" onclick="saveStockTransaction('ซื้อเข้า')">
-              <i class="ti ti-plus"></i> บันทึกสต๊อกซื้อเข้า
+            <div id="inv_status_in" class="status"></div>
+            <button class="btn btn-primary btn-full" onclick="invSaveStockIn()">
+              <i class="ti ti-plus"></i> บันทึกรับของเข้า
             </button>
           </div>
         </div>
 
-        <!-- Use stock -->
+        <!-- Stock out (everyone) -->
         <div class="card">
           <div class="card-head">
             <div class="card-head-left"><i class="ti ti-circle-minus" style="color:var(--danger)"></i><span>2.
@@ -1710,71 +1763,92 @@
           </div>
           <div class="card-body">
             <div class="field" style="margin-bottom:12px">
-              <label>วันที่เบิกใช้งาน</label>
-              <input type="date" id="st_out_date">
-            </div>
-            <div class="field" style="margin-bottom:12px">
               <label>เลือกรายการที่จะเบิก</label>
-              <select id="st_out_name" onchange="updateOutUnitInfo()">
+              <select id="inv_out_item" onchange="invUpdateOutUnitLabel()">
                 <option value="">— เลือกวัสดุที่จะใช้งาน —</option>
               </select>
             </div>
             <div class="row2" style="margin-bottom:12px">
               <div class="field">
-                <label>จำนวนที่ต้องการเบิก</label>
-                <input type="number" id="st_out_qty" value="1" min="1">
-                <span id="st_out_unit_label" style="font-size:11px; color:var(--muted); margin-top:4px"></span>
+                <label>จำนวนที่เบิก</label>
+                <input type="number" id="inv_out_qty" value="1" min="0.001" step="0.001">
+                <span id="inv_out_unit_label" style="font-size:11px; color:var(--muted); margin-top:4px"></span>
               </div>
               <div class="field">
-                <label>จุดประสงค์ / พนักงานที่นำไปใช้</label>
-                <select id="st_out_employee">
-                  <option value="">— เลือกพนักงานที่เบิก —</option>
-                </select>
+                <label>เลขบิล/ออเดอร์ (ถ้ามี)</label>
+                <input type="text" id="inv_out_note" placeholder="เช่น เลขบิล #1234">
               </div>
             </div>
-            <div style="min-height:54px"></div> <!-- Spacer alignment -->
-            <div id="status_stock_out" class="status"></div>
-            <button class="btn btn-danger btn-full" onclick="saveStockTransaction('ใช้งาน')">
-              <i class="ti ti-minus"></i> บันทึกการใช้งาน
+            <div id="inv_status_out" class="status"></div>
+            <button class="btn btn-danger btn-full" onclick="invSaveStockOut()">
+              <i class="ti ti-minus"></i> บันทึกการเบิกใช้งาน
             </button>
           </div>
         </div>
       </div>
 
-      <!-- Purchase history -->
-      <div class="card">
+      <!-- Adjustment (admin/co-admin) -->
+      <div class="card" id="inv_card_adjustment" style="display:none">
         <div class="card-head">
-          <div class="card-head-left"><i class="ti ti-history"></i><span>ประวัติการซื้อของเข้าคลัง</span></div>
-          <div style="display:flex; gap:8px; align-items:center">
-            <input type="month" id="stock_history_month" onchange="renderStockPurchaseHistory()"
-              style="height:32px; padding:0 10px; border:1.5px solid var(--c-primary); border-radius:8px; font-size:12px; font-weight:600">
-            <span id="stock_history_total" style="font-size:12px; color:var(--c-primary); font-weight:700"></span>
+          <div class="card-head-left"><i class="ti ti-adjustments"></i><span>ปรับปรุงสต๊อกจากตรวจนับ</span></div>
+        </div>
+        <div class="card-body">
+          <div class="row2" style="margin-bottom:12px">
+            <div class="field">
+              <label>สินค้า</label>
+              <select id="inv_adj_item">
+                <option value="">— เลือกสินค้า —</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>ทิศทาง</label>
+              <select id="inv_adj_direction">
+                <option value="decrease">ปรับลด (นับได้น้อยกว่าระบบ)</option>
+                <option value="increase">ปรับเพิ่ม (นับได้มากกว่าระบบ)</option>
+              </select>
+            </div>
           </div>
+          <div class="row2" style="margin-bottom:12px">
+            <div class="field">
+              <label>จำนวนที่ต่างไป</label>
+              <input type="number" id="inv_adj_qty" value="1" min="0.001" step="0.001">
+            </div>
+            <div class="field">
+              <label>เหตุผล (บังคับกรอก)</label>
+              <input type="text" id="inv_adj_reason" placeholder="เช่น ตรวจนับประจำเดือนพบของขาด">
+            </div>
+          </div>
+          <p id="inv_adj_hint" style="font-size:11px; color:var(--muted); margin-bottom:8px"></p>
+          <div id="inv_status_adj" class="status"></div>
+          <button class="btn btn-primary btn-full" onclick="invSaveAdjustment()">
+            <i class="ti ti-check"></i> บันทึกการปรับปรุงสต๊อก
+          </button>
+        </div>
+      </div>
+
+      <!-- Pending approvals (admin only) -->
+      <div class="card" id="inv_card_pending" style="display:none">
+        <div class="card-head">
+          <div class="card-head-left"><i class="ti ti-hourglass"></i><span>รายการรออนุมัติ</span></div>
         </div>
         <div class="card-body" style="padding:0">
           <div class="table-container">
-            <table class="tbl" id="stock_purchase_history_table">
+            <table class="tbl" id="inv_pending_table">
               <thead>
                 <tr>
-                  <th>วันที่</th>
-                  <th>รายการ</th>
-                  <th>หมวดหมู่</th>
-                  <th style="text-align:right">จำนวน</th>
-                  <th style="text-align:right">ราคา/หน่วย</th>
-                  <th style="text-align:right">ยอดรวม</th>
-                  <th>ช่องทางชำระ</th>
-                  <th style="text-align:center">จัดการ</th>
+                  <th>สินค้า</th><th>ทิศทาง</th><th style="text-align:right">จำนวน</th>
+                  <th>เหตุผล</th><th>ผู้ขอ</th><th style="text-align:center">อนุมัติ</th>
                 </tr>
               </thead>
-              <tbody id="stock_purchase_history_tbody">
-                <tr><td colspan="8" style="text-align:center; color:var(--muted); padding:20px">กำลังโหลด...</td></tr>
+              <tbody id="inv_pending_tbody">
+                <tr><td colspan="6" style="text-align:center; color:var(--muted); padding:16px">ไม่มีรายการรออนุมัติ</td></tr>
               </tbody>
             </table>
           </div>
         </div>
       </div>
 
-      <!-- Master stock list -->
+      <!-- Current stock -->
       <div class="card">
         <div class="card-head" style="flex-wrap:wrap; gap:8px">
           <div class="card-head-left"><i class="ti ti-database"></i><span>รายงานจำนวนวัสดุและสินค้าคงคลัง</span></div>
@@ -1796,18 +1870,65 @@
               <thead>
                 <tr>
                   <th>ชื่อวัสดุ / รายการ</th>
+                  <th>ประเภท</th>
                   <th>หมวดหมู่</th>
                   <th>คงเหลือ</th>
-                  <th>ราคาซื้อล่าสุด</th>
+                  <th id="inv_cost_col_head" style="display:none">ต้นทุนถัวเฉลี่ย</th>
                   <th>แจ้งเตือนขั้นต่ำ</th>
                   <th style="text-align:right">สถานะสต๊อก</th>
                 </tr>
               </thead>
-              <tbody>
-                <!-- Injected by JS -->
+              <tbody id="stock_status_tbody">
+                <tr><td colspan="7" style="text-align:center; color:var(--muted); padding:20px">กำลังโหลด...</td></tr>
               </tbody>
             </table>
           </div>
+        </div>
+      </div>
+
+      <!-- Audit log (admin/co-admin) -->
+      <div class="card" id="inv_card_audit" style="display:none">
+        <div class="card-head">
+          <div class="card-head-left"><i class="ti ti-history"></i><span>ประวัติการเคลื่อนไหวสต๊อก (Audit Log)</span></div>
+        </div>
+        <div class="card-body" style="padding:0">
+          <div class="table-container">
+            <table class="tbl" id="inv_audit_table">
+              <thead>
+                <tr>
+                  <th>เวลา</th><th>ประเภทรายการ</th><th>สินค้า</th>
+                  <th style="text-align:right">จำนวน</th><th>เหตุผล</th><th>ผู้ทำรายการ</th>
+                </tr>
+              </thead>
+              <tbody id="inv_audit_tbody">
+                <tr><td colspan="6" style="text-align:center; color:var(--muted); padding:16px">กำลังโหลด...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Settings: Telegram low-stock alert (admin only) -->
+      <div class="card" id="inv_card_settings" style="display:none">
+        <div class="card-head">
+          <div class="card-head-left"><i class="ti ti-brand-telegram"></i><span>แจ้งเตือนสต๊อกต่ำผ่าน Telegram</span></div>
+        </div>
+        <div class="card-body">
+          <p id="inv_telegram_status" style="font-size:12px; color:var(--muted); margin-bottom:12px"></p>
+          <div class="row2" style="margin-bottom:12px">
+            <div class="field">
+              <label>Telegram Bot Token (ได้จาก @BotFather)</label>
+              <input type="password" id="inv_telegram_token" placeholder="กรอกเฉพาะตอนต้องการเปลี่ยน" autocomplete="off">
+            </div>
+            <div class="field">
+              <label>Chat ID ของกลุ่มพนักงาน</label>
+              <input type="text" id="inv_telegram_chat_id" placeholder="เช่น -1001234567890">
+            </div>
+          </div>
+          <div id="inv_status_settings" class="status"></div>
+          <button class="btn btn-primary" onclick="invSaveTelegramSettings()">
+            <i class="ti ti-device-floppy"></i> บันทึกการตั้งค่า
+          </button>
         </div>
       </div>
     </div>
@@ -2403,7 +2524,7 @@
     }
 
     // ── GLOBAL STATE ────────────────────────────────────────────
-    let _auth = { token: '', role: '', display_name: '', full_name: '', username: '' };
+    let _auth = { token: '', user_id: '', role: '', display_name: '', full_name: '', username: '' };
     let priceDB = [];
     let employeesList = [];
     // Size prices — loaded from Settings, used in sales form calculation
@@ -2524,6 +2645,7 @@
 
         _auth = {
           token: data.session.access_token,
+          user_id: data.user.id,
           role:  profile?.role || 'staff',
           display_name: profile?.nickname || username,
           full_name:    profile?.fullname  || '',
@@ -2542,7 +2664,7 @@
 
     function doLogout() {
       _sb.auth.signOut().catch(() => {});
-      _auth = { token: '', role: '', display_name: '', full_name: '', username: '' };
+      _auth = { token: '', user_id: '', role: '', display_name: '', full_name: '', username: '' };
       localStorage.removeItem('sc_auth');
       document.documentElement.classList.remove('auth-logged-in');
       showLogin('ออกจากระบบเรียบร้อยแล้ว');
@@ -2559,6 +2681,7 @@
 
         _auth = {
           token:        session.access_token,
+          user_id:      session.user.id,
           role:         profile?.role || 'staff',
           display_name: profile?.nickname || username,
           full_name:    profile?.fullname  || '',
@@ -2658,8 +2781,6 @@
     function initApp() {
       const today = todayStr();
       document.getElementById('s_date').value = today;
-      document.getElementById('st_in_date').value = today;
-      document.getElementById('st_out_date').value = today;
 
       const d = new Date();
       const firstOfMonth = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-01';
@@ -2709,6 +2830,7 @@
 
       loadBackendMasterData().then(() => {
         loadMonthlyData();
+        loadInventoryData();
         _updateStockTimestamp();
         _startStockAutoRefresh();
       });
@@ -2730,7 +2852,8 @@
           } catch(e) { console.error('Settings load error:', e); }
         }
 
-        // 2. Stock Status
+        // 2. Stock Status (เก็บ stockStatusDB ไว้เผื่อแท็บสถิติยังใช้ Material analysis จากระบบเดิม —
+        // ตัวหน้าคลังสินค้าเองย้ายไปใช้ inv_* ทั้งหมดแล้ว ผ่าน loadInventoryData())
         if (stockRes.data) {
           try {
             stockStatusDB = [
@@ -2740,10 +2863,6 @@
                 Number(r.quantity) || 0, Number(r.last_price) || 0, Number(r.min_alert) || 10
               ])
             ];
-            populateStockDatalists();
-            populateStockOutSelect();
-            renderStockStatusTable();
-            renderStockAlerts();
           } catch(e) { console.error('Stock load error:', e); }
         }
 
@@ -3668,348 +3787,399 @@
       updateSummaryData();
     }
 
-    function populateStockDatalists() {
-      const datalist = document.getElementById('stock_items_datalist');
-      if (!datalist) return;
-      datalist.innerHTML = '';
+    // ════════════════════════════════════════════════════════════
+    //  INVENTORY v2 — คลังสินค้า (ระบบใหม่)
+    //  หมายเหตุการ dual-write: เมื่อ "รับของเข้า" สินค้าที่ purchase_unit_qty === 1 (หน่วยซื้อ = หน่วยฐาน
+    //  1:1 เช่น ชิ้น/ม้วน/ขวด) จะเขียนสำเนาลง sc_stock_status + sc_stock_transactions (type='ซื้อเข้า')
+    //  ด้วย เพื่อให้ยอดค่าใช้จ่าย "ต้นทุนวัสดุคลัง" ในแท็บภาพรวม และตาราง Material analysis ในแท็บสถิติ
+    //  ยังทำงานถูกต้องเหมือนเดิม (ทั้งสองจุดนี้อ่านจากตารางเก่าโดยตรง) สินค้าที่ตัดหน่วยละเอียด (เช่น ml)
+    //  จะไม่ dual-write เพราะระบบเก่าไม่รองรับหน่วยแบบนั้นอยู่แล้ว
+    // ════════════════════════════════════════════════════════════
 
-      const addedItems = new Set();
-      stockStatusDB.forEach(row => {
-        const itemName = row[0];
-        if (itemName && itemName !== "รายการวัสดุ" && !addedItems.has(itemName)) {
-          const opt = document.createElement('option');
-          opt.value = itemName;
-          datalist.appendChild(opt);
-          addedItems.add(itemName);
-        }
-      });
+    let INV_BRANCH_ID = null;
+    let INV_ITEMS = [];   // แคตตาล็อกสินค้า (active + inactive)
+    let INV_STOCK = [];   // ยอดคงเหลือ join กับ items ของสาขานี้
+
+    function invRole() { return _auth.role || ''; }
+    function invIsAdmin() { return invRole() === 'admin'; }
+    function invIsCoAdmin() { return invRole() === 'co-admin'; }
+    function invCanManageStock() { return invIsAdmin() || invIsCoAdmin(); }
+
+    function invApplyRoleVisibility() {
+      const show = (id, on) => { const el = document.getElementById(id); if (el) el.style.display = on ? '' : 'none'; };
+      show('inv_card_items', invIsAdmin());
+      show('inv_card_stock_in', invCanManageStock());
+      show('inv_card_adjustment', invCanManageStock());
+      show('inv_card_pending', invIsAdmin());
+      show('inv_card_audit', invCanManageStock());
+      show('inv_card_settings', invIsAdmin());
+      const costHead = document.getElementById('inv_cost_col_head');
+      if (costHead) costHead.style.display = invCanManageStock() ? '' : 'none';
+      invUpdateAdjHint();
     }
 
-    function populateStockOutSelect() {
-      const sel = document.getElementById('st_out_name');
-      if (!sel) return;
-      sel.innerHTML = '<option value="">— เลือกวัสดุที่จะใช้งาน —</option>';
-
-      stockStatusDB.forEach((row, idx) => {
-        const name = row[0];
-        const unit = row[2];
-        const qty = Number(row[3]);
-        if (idx > 0 && name) {
-          const opt = document.createElement('option');
-          opt.value = name;
-          opt.textContent = `${name} (คงเหลือ: ${qty} ${unit})`;
-          opt.dataset.unit = unit;
-          opt.dataset.qty = qty;
-          sel.appendChild(opt);
+    async function loadInventoryData() {
+      try {
+        if (!INV_BRANCH_ID) {
+          const { data: branch } = await _sb.from('inv_branches').select('id').eq('is_active', true).limit(1).maybeSingle();
+          INV_BRANCH_ID = branch?.id || null;
         }
-      });
-    }
+        if (!INV_BRANCH_ID) return;
 
-    function updateOutUnitInfo() {
-      const sel = document.getElementById('st_out_name');
-      const opt = sel.options[sel.selectedIndex];
-      const unitSpan = document.getElementById('st_out_unit_label');
+        const [itemsRes, stockRes] = await Promise.all([
+          _sb.from('inv_items').select('*').order('name'),
+          _sb.from('inv_item_stock').select('*').eq('branch_id', INV_BRANCH_ID)
+        ]);
 
-      if (opt && opt.value) {
-        unitSpan.textContent = `หน่วยเบิก: ${opt.dataset.unit} (คงเหลือสูงสุด ${opt.dataset.qty})`;
-        document.getElementById('st_out_qty').max = opt.dataset.qty;
-      } else {
-        unitSpan.textContent = '';
+        INV_ITEMS = itemsRes.data || [];
+        const stockByItem = new Map((stockRes.data || []).map(s => [s.item_id, s]));
+        INV_STOCK = INV_ITEMS.filter(i => i.is_active).map(i => {
+          const s = stockByItem.get(i.id);
+          return {
+            item_id: i.id, name: i.name, item_type: i.item_type, category: i.category,
+            base_unit: i.base_unit, purchase_unit: i.purchase_unit, purchase_unit_qty: i.purchase_unit_qty,
+            current_qty: Number(s?.current_qty || 0), avg_unit_cost: Number(s?.avg_unit_cost || 0),
+            min_stock_level: Number(s?.min_stock_level ?? i.default_min_stock_level ?? 0)
+          };
+        });
+
+        invApplyRoleVisibility();
+        invRenderItemsTable();
+        invPopulateItemSelects();
+        renderStockStatusTable();
+        renderStockAlerts();
+        if (invIsAdmin()) { invRenderPendingTable(); }
+        if (invCanManageStock()) { invRenderAuditLog(); invLoadTelegramSettings(); }
+      } catch (e) {
+        console.error('loadInventoryData error:', e);
       }
     }
 
-    function calculateStInTotal() {
-      const qty = +document.getElementById('st_in_qty').value || 0;
-      const price = +document.getElementById('st_in_price').value || 0;
-      document.getElementById('st_in_total').value = qty * price;
+    // ── Item catalog (admin) ──────────────────────────────────────
+    function invOpenItemModal(itemId) {
+      const item = itemId ? INV_ITEMS.find(i => i.id === itemId) : null;
+      document.getElementById('inv_item_modal_title').textContent = item ? 'แก้ไขสินค้า' : 'เพิ่มสินค้าใหม่';
+      document.getElementById('inv_item_id').value = item ? item.id : '';
+      document.getElementById('inv_item_name').value = item ? item.name : '';
+      document.getElementById('inv_item_type').value = item ? item.item_type : 'consumable';
+      document.getElementById('inv_item_category').value = item ? item.category : '';
+      document.getElementById('inv_item_base_unit').value = item ? item.base_unit : '';
+      document.getElementById('inv_item_purchase_unit').value = item ? item.purchase_unit : '';
+      document.getElementById('inv_item_purchase_unit_qty').value = item ? item.purchase_unit_qty : 1;
+      document.getElementById('inv_item_min_stock').value = item ? item.default_min_stock_level : 0;
+      document.getElementById('inv_item_modal_err').textContent = '';
+      document.getElementById('inv_item_modal_overlay').classList.remove('hidden');
     }
 
-    function saveStockTransaction(typeStr) {
-      const dateInput = typeStr === "ซื้อเข้า" ? 'st_in_date' : 'st_out_date';
-      const nameInput = typeStr === "ซื้อเข้า" ? 'st_in_name' : 'st_out_name';
-      const qtyInput = typeStr === "ซื้อเข้า" ? 'st_in_qty' : 'st_out_qty';
-      const statusId = typeStr === "ซื้อเข้า" ? 'status_stock_in' : 'status_stock_out';
+    async function invSaveItem() {
+      const id = document.getElementById('inv_item_id').value;
+      const name = document.getElementById('inv_item_name').value.trim();
+      const item_type = document.getElementById('inv_item_type').value;
+      const category = document.getElementById('inv_item_category').value.trim();
+      const base_unit = document.getElementById('inv_item_base_unit').value.trim();
+      const purchase_unit = document.getElementById('inv_item_purchase_unit').value.trim();
+      const purchase_unit_qty = +document.getElementById('inv_item_purchase_unit_qty').value || 0;
+      const default_min_stock_level = +document.getElementById('inv_item_min_stock').value || 0;
+      const errEl = document.getElementById('inv_item_modal_err');
 
-      const d = document.getElementById(dateInput).value;
-      let name = "";
-      if (typeStr === "ซื้อเข้า") {
-        name = document.getElementById(nameInput).value.trim();
-      } else {
-        name = document.getElementById(nameInput).value;
-      }
+      if (!name || !category || !base_unit || !purchase_unit) { errEl.textContent = 'กรุณากรอกข้อมูลให้ครบทุกช่อง'; return; }
+      if (purchase_unit_qty <= 0) { errEl.textContent = 'อัตราแปลงหน่วยต้องมากกว่า 0'; return; }
 
-      const qty = +document.getElementById(qtyInput).value || 0;
+      const payload = { name, item_type, category, base_unit, purchase_unit, purchase_unit_qty, default_min_stock_level };
+      const q = id ? _sb.from('inv_items').update(payload).eq('id', id) : _sb.from('inv_items').insert(payload);
+      const { error } = await q;
+      if (error) { errEl.textContent = 'บันทึกไม่สำเร็จ: ' + error.message; return; }
 
-      if (!d) { alert('กรุณาระบุวันที่'); return; }
-      if (!name) { alert('กรุณาระบุหรือเลือกรายการวัสดุ'); return; }
-      if (qty <= 0) { alert('กรุณาระบุจำนวนมากกว่า 0'); return; }
-
-      // Edit mode: delete old record silently before saving the corrected one
-      const editIdxStr = document.getElementById('st_in_name')?.dataset?.editIdx;
-      if (editIdxStr !== undefined && editIdxStr !== '') {
-        const editIdx = parseInt(editIdxStr);
-        const oldRow = expenseSaved.find(e => e._idx === editIdx);
-        if (oldRow) {
-          // Delete old stock transaction from Supabase + reverse stock qty
-          if (oldRow._id) {
-            (async () => {
-              try {
-                const txType = oldRow.type || 'ซื้อเข้า';
-                const { data: stkRow } = await _sb.from('sc_stock_status').select('quantity').eq('item_name', oldRow.item_name).maybeSingle();
-                await _sb.from('sc_stock_transactions').delete().eq('id', oldRow._id);
-                if (stkRow) {
-                  const newQty = txType === 'ซื้อเข้า'
-                    ? Math.max(0, Number(stkRow.quantity) - (oldRow.qty || 0))
-                    : Number(stkRow.quantity) + (oldRow.qty || 0);
-                  await _sb.from('sc_stock_status').update({ quantity: newQty, updated_at: new Date().toISOString() }).eq('item_name', oldRow.item_name);
-                }
-              } catch(e) { console.warn('Delete old stock tx failed:', e); }
-            })();
-          }
-          expenseSaved = expenseSaved.filter(e => e._idx !== editIdx);
-        }
-        delete document.getElementById('st_in_name').dataset.editIdx;
-        const statusEl2 = document.getElementById('status_stock_in');
-        if (statusEl2) { statusEl2.style.background = ''; statusEl2.style.color = ''; }
-      }
-
-      let pricePerUnit = 0;
-      let totalAmt = 0;
-      let payMethod = "";
-      let category = "ทั่วไป";
-      let unit = "ชิ้น";
-      let staff = "";
-
-      if (typeStr === "ซื้อเข้า") {
-        pricePerUnit = +document.getElementById('st_in_price').value || 0;
-        totalAmt = +document.getElementById('st_in_total').value || 0;
-        payMethod = document.getElementById('st_in_pay_method').value;
-        category = document.getElementById('st_in_category').value;
-        unit = document.getElementById('st_in_unit').value.trim() || 'ชิ้น';
-      } else {
-        staff = document.getElementById('st_out_employee').value;
-        if (!staff) { alert('กรุณาระบุพนักงานผู้รับผิดชอบเบิกคลัง'); return; }
-      }
-
-      const payload = {
-        formType: 'stock_transaction_form',
-        token: _auth.token,
-        date: thaiDate(d),
-        type: typeStr,
-        item_name: name,
-        qty: qty,
-        price_per_unit: pricePerUnit,
-        total_amount: totalAmt,
-        pay_method: typeStr === "ซื้อเข้า" ? payMethod : ("เบิกจ่ายโดย " + staff),
-        category: category,
-        unit: unit,
-        logged_by: _auth.display_name
-      };
-
-      const statusEl = document.getElementById(statusId);
-      statusEl.className = 'status show';
-      statusEl.textContent = 'กำลังทำการบันทึกข้อมูลและปรับปรุงคลังสินค้า...';
-
-      // Insert stock transaction + update sc_stock_status
-      (async () => {
-        try {
-          const isoD = document.getElementById(typeStr === 'ซื้อเข้า' ? 'st_in_date' : 'st_out_date').value;
-          const { error: txErr } = await _sb.from('sc_stock_transactions').insert({
-            date:           isoD,
-            type:           typeStr,
-            item_name:      name,
-            quantity:       qty,
-            price_per_unit: pricePerUnit,
-            total:          totalAmt,
-            pay_method:     payload.pay_method,
-            recorded_by:    _auth.display_name,
-            last_updated:   new Date().toISOString()
-          });
-          if (txErr) throw txErr;
-
-          // Update stock status
-          const { data: stkRow } = await _sb.from('sc_stock_status').select('quantity, unit, category').eq('item_name', name).maybeSingle();
-          if (typeStr === 'ซื้อเข้า') {
-            await _sb.from('sc_stock_status').upsert({
-              item_name:  name,
-              quantity:   (Number(stkRow?.quantity) || 0) + qty,
-              unit:       unit || stkRow?.unit || 'ชิ้น',
-              last_price: pricePerUnit,
-              category:   category || stkRow?.category || '',
-              updated_at: new Date().toISOString()
-            }, { onConflict: 'item_name' });
-          } else {
-            if (stkRow) {
-              await _sb.from('sc_stock_status').update({
-                quantity: Math.max(0, Number(stkRow.quantity) - qty),
-                updated_at: new Date().toISOString()
-              }).eq('item_name', name);
-            }
-          }
-
-          statusEl.className = 'status show ok';
-          statusEl.textContent = 'บันทึกธุรกรรม ' + typeStr + ' เรียบร้อย ✓';
-
-          if (typeStr === 'ซื้อเข้า') {
-            const nameInp = document.getElementById('st_in_name');
-            nameInp.value = '';
-            delete nameInp.dataset.editIdx;
-            document.getElementById('st_in_qty').value = 1;
-            document.getElementById('st_in_price').value = 0;
-            document.getElementById('st_in_total').value = 0;
-            document.getElementById('st_in_unit').value = '';
-          } else {
-            document.getElementById('st_out_name').value = '';
-            document.getElementById('st_out_qty').value = 1;
-            document.getElementById('st_out_employee').value = '';
-          }
-
-          loadBackendMasterData().then(() => { loadMonthlyData(); _updateStockTimestamp(); });
-          setTimeout(() => statusEl.className = 'status', 3000);
-        } catch(err) {
-          statusEl.className = 'status show err';
-          statusEl.textContent = 'ข้อผิดพลาด: ' + (err.message || 'บันทึกไม่สำเร็จ');
-        }
-      })();
+      document.getElementById('inv_item_modal_overlay').classList.add('hidden');
+      loadInventoryData();
     }
 
-    function renderStockPurchaseHistory() {
-      const tbody = document.getElementById('stock_purchase_history_tbody');
+    async function invToggleItemActive(id, nextActive) {
+      await _sb.from('inv_items').update({ is_active: nextActive }).eq('id', id);
+      loadInventoryData();
+    }
+
+    function invRenderItemsTable() {
+      const tbody = document.getElementById('inv_items_tbody');
       if (!tbody) return;
-
-      // Default to current month if not set
-      const monthEl = document.getElementById('stock_history_month');
-      if (!monthEl.value) {
-        const now = new Date();
-        monthEl.value = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0');
+      if (!INV_ITEMS.length) {
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:20px">ยังไม่มีสินค้า กด "เพิ่มสินค้าใหม่" เพื่อเริ่มต้น</td></tr>';
+        return;
       }
-      const [y, m] = monthEl.value.split('-');
+      tbody.innerHTML = INV_ITEMS.map(i => `
+        <tr>
+          <td><strong>${i.name}</strong></td>
+          <td><span class="badge ${i.item_type === 'consumable' ? 'badge-amber' : 'badge-blue'}">${i.item_type === 'consumable' ? 'สิ้นเปลือง' : 'คงคลัง'}</span></td>
+          <td>${i.category}</td>
+          <td>${i.base_unit}</td>
+          <td>${i.purchase_unit} (=${i.purchase_unit_qty} ${i.base_unit})</td>
+          <td><span class="badge ${i.is_active ? 'badge-green' : 'badge-red'}">${i.is_active ? 'ใช้งานอยู่' : 'ปิดใช้งาน'}</span></td>
+          <td style="text-align:center; white-space:nowrap">
+            <button onclick="invOpenItemModal('${i.id}')" style="font-size:11px;padding:3px 10px;border:1.5px solid var(--c-primary);background:white;color:var(--c-primary);border-radius:6px;cursor:pointer;margin-right:4px">แก้ไข</button>
+            <button onclick="invToggleItemActive('${i.id}', ${!i.is_active})" style="font-size:11px;padding:3px 10px;border:1.5px solid var(--muted);background:white;color:var(--muted);border-radius:6px;cursor:pointer">${i.is_active ? 'ปิดใช้งาน' : 'เปิดใช้งาน'}</button>
+          </td>
+        </tr>
+      `).join('');
+    }
 
-      const rows = expenseSaved.filter(r => {
-        if (r.category !== 'ต้นทุนวัสดุคลัง') return false;
-        const iso = _isoDate(r.date);
-        return iso && iso.startsWith(y + '-' + m);
-      }).sort((a, b) => _isoDate(b.date).localeCompare(_isoDate(a.date)));
+    // ── Dropdowns ──────────────────────────────────────────────────
+    function invPopulateItemSelects() {
+      const activeStock = INV_STOCK;
+      const fillSelect = (id, placeholder, withStock) => {
+        const sel = document.getElementById(id);
+        if (!sel) return;
+        sel.innerHTML = `<option value="">${placeholder}</option>`;
+        activeStock.forEach(s => {
+          const opt = document.createElement('option');
+          opt.value = s.item_id;
+          opt.textContent = withStock ? `${s.name} (คงเหลือ: ${s.current_qty} ${s.base_unit})` : s.name;
+          opt.dataset.baseUnit = s.base_unit;
+          opt.dataset.purchaseUnit = s.purchase_unit;
+          opt.dataset.qty = s.current_qty;
+          sel.appendChild(opt);
+        });
+      };
+      fillSelect('inv_in_item', '— เลือกสินค้า —', false);
+      fillSelect('inv_out_item', '— เลือกวัสดุที่จะใช้งาน —', true);
+      fillSelect('inv_adj_item', '— เลือกสินค้า —', true);
+    }
 
-      const fc = v => v.toLocaleString('th-TH', { minimumFractionDigits: 2 });
-      const totalEl = document.getElementById('stock_history_total');
-      const total = rows.reduce((s, r) => s + r.total_amount, 0);
-      if (totalEl) totalEl.textContent = 'รวม ' + fc(total) + ' ฿';
+    function invUpdateInUnitLabel() {
+      const sel = document.getElementById('inv_in_item');
+      const opt = sel.options[sel.selectedIndex];
+      document.getElementById('inv_in_unit_label').textContent = (opt && opt.value) ? `(${opt.dataset.purchaseUnit})` : '';
+    }
 
-      if (!rows.length) {
-        tbody.innerHTML = '<tr><td colspan="8" style="text-align:center; color:var(--muted); padding:20px">ไม่มีรายการซื้อในเดือนนี้</td></tr>';
+    function invUpdateOutUnitLabel() {
+      const sel = document.getElementById('inv_out_item');
+      const opt = sel.options[sel.selectedIndex];
+      const label = document.getElementById('inv_out_unit_label');
+      if (opt && opt.value) {
+        label.textContent = `หน่วยเบิก: ${opt.dataset.baseUnit} (คงเหลือ ${opt.dataset.qty})`;
+      } else {
+        label.textContent = '';
+      }
+    }
+
+    // ── Dual-write helper: sync ยอดไปยังตารางเก่าเฉพาะสินค้าที่หน่วยซื้อ = หน่วยฐาน (1:1) ──
+    async function invSyncLegacyStock(item, qtyDelta, unitCost, txnTypeThai) {
+      if (Number(item.purchase_unit_qty) !== 1) return; // หน่วยละเอียด (เช่น ml) ระบบเก่าไม่รองรับ ข้ามไป
+      try {
+        const { data: stkRow } = await _sb.from('sc_stock_status').select('quantity').eq('item_name', item.name).maybeSingle();
+        const newQty = Math.max(0, (Number(stkRow?.quantity) || 0) + qtyDelta);
+        await _sb.from('sc_stock_status').upsert({
+          item_name: item.name, quantity: newQty, unit: item.base_unit,
+          last_price: unitCost || undefined, category: item.category,
+          updated_at: new Date().toISOString()
+        }, { onConflict: 'item_name' });
+
+        if (txnTypeThai === 'ซื้อเข้า') {
+          await _sb.from('sc_stock_transactions').insert({
+            date: new Date().toISOString().slice(0, 10), type: 'ซื้อเข้า', item_name: item.name,
+            quantity: Math.abs(qtyDelta), price_per_unit: unitCost || 0, total: Math.abs(qtyDelta) * (unitCost || 0),
+            pay_method: 'ระบบคลังสินค้าใหม่', recorded_by: _auth.display_name, last_updated: new Date().toISOString()
+          });
+        }
+      } catch (e) { console.warn('invSyncLegacyStock failed (non-fatal):', e); }
+    }
+
+    // ── Stock In ───────────────────────────────────────────────────
+    async function invSaveStockIn() {
+      const itemId = document.getElementById('inv_in_item').value;
+      const purchaseQty = +document.getElementById('inv_in_qty').value || 0;
+      const totalCost = +document.getElementById('inv_in_total').value;
+      const note = document.getElementById('inv_in_note').value.trim();
+      const statusEl = document.getElementById('inv_status_in');
+
+      const item = INV_ITEMS.find(i => i.id === itemId);
+      if (!item) { statusEl.className = 'status show err'; statusEl.textContent = 'กรุณาเลือกสินค้า'; return; }
+      if (purchaseQty <= 0) { statusEl.className = 'status show err'; statusEl.textContent = 'กรุณากรอกจำนวนให้ถูกต้อง'; return; }
+      if (isNaN(totalCost) || totalCost < 0) { statusEl.className = 'status show err'; statusEl.textContent = 'กรุณากรอกยอดที่จ่ายให้ถูกต้อง'; return; }
+
+      const baseQty = purchaseQty * item.purchase_unit_qty;
+      const unitCost = baseQty > 0 ? totalCost / baseQty : 0;
+
+      statusEl.className = 'status show'; statusEl.textContent = 'กำลังบันทึก...';
+      const { error } = await _sb.from('inv_stock_transactions').insert({
+        item_id: itemId, branch_id: INV_BRANCH_ID, txn_type: 'stock_in',
+        quantity_delta: baseQty, unit_cost_snapshot: unitCost,
+        reference_type: 'purchase', reference_note: note || null, performed_by: _auth.user_id
+      });
+      if (error) { statusEl.className = 'status show err'; statusEl.textContent = 'ข้อผิดพลาด: ' + error.message; return; }
+
+      await invSyncLegacyStock(item, baseQty, unitCost, 'ซื้อเข้า');
+
+      statusEl.className = 'status show ok'; statusEl.textContent = 'บันทึกรับของเข้าเรียบร้อย ✓';
+      document.getElementById('inv_in_qty').value = 1;
+      document.getElementById('inv_in_total').value = 0;
+      document.getElementById('inv_in_note').value = '';
+      setTimeout(() => statusEl.className = 'status', 3000);
+      loadInventoryData();
+    }
+
+    // ── Stock Out ──────────────────────────────────────────────────
+    async function invSaveStockOut() {
+      const itemId = document.getElementById('inv_out_item').value;
+      const qty = +document.getElementById('inv_out_qty').value || 0;
+      const note = document.getElementById('inv_out_note').value.trim();
+      const statusEl = document.getElementById('inv_status_out');
+
+      const item = INV_ITEMS.find(i => i.id === itemId);
+      if (!item) { statusEl.className = 'status show err'; statusEl.textContent = 'กรุณาเลือกสินค้า'; return; }
+      if (qty <= 0) { statusEl.className = 'status show err'; statusEl.textContent = 'กรุณากรอกจำนวนให้ถูกต้อง'; return; }
+
+      statusEl.className = 'status show'; statusEl.textContent = 'กำลังบันทึก...';
+      const { error } = await _sb.from('inv_stock_transactions').insert({
+        item_id: itemId, branch_id: INV_BRANCH_ID, txn_type: 'stock_out',
+        quantity_delta: -Math.abs(qty), reference_type: 'service_order',
+        reference_note: note || null, performed_by: _auth.user_id
+      });
+      if (error) { statusEl.className = 'status show err'; statusEl.textContent = 'ข้อผิดพลาด: ' + error.message; return; }
+
+      await invSyncLegacyStock(item, -Math.abs(qty), 0, 'ใช้งาน');
+
+      statusEl.className = 'status show ok'; statusEl.textContent = 'บันทึกการเบิกใช้งานเรียบร้อย ✓';
+      document.getElementById('inv_out_qty').value = 1;
+      document.getElementById('inv_out_note').value = '';
+      setTimeout(() => statusEl.className = 'status', 3000);
+      loadInventoryData();
+    }
+
+    // ── Adjustment (ปรับปรุงสต๊อกจากตรวจนับ) ─────────────────────
+    async function invSaveAdjustment() {
+      const itemId = document.getElementById('inv_adj_item').value;
+      const direction = document.getElementById('inv_adj_direction').value;
+      const qty = +document.getElementById('inv_adj_qty').value || 0;
+      const reason = document.getElementById('inv_adj_reason').value.trim();
+      const statusEl = document.getElementById('inv_status_adj');
+
+      if (!itemId) { statusEl.className = 'status show err'; statusEl.textContent = 'กรุณาเลือกสินค้า'; return; }
+      if (qty <= 0) { statusEl.className = 'status show err'; statusEl.textContent = 'กรุณากรอกจำนวนให้ถูกต้อง'; return; }
+      if (!reason) { statusEl.className = 'status show err'; statusEl.textContent = 'กรุณากรอกเหตุผล'; return; }
+
+      const status = invIsAdmin() ? 'approved' : 'pending_approval';
+      statusEl.className = 'status show'; statusEl.textContent = 'กำลังบันทึก...';
+      const { error } = await _sb.from('inv_stock_transactions').insert({
+        item_id: itemId, branch_id: INV_BRANCH_ID,
+        txn_type: direction === 'increase' ? 'adjustment_increase' : 'adjustment_decrease',
+        status, quantity_delta: direction === 'increase' ? Math.abs(qty) : -Math.abs(qty),
+        reason, performed_by: _auth.user_id
+      });
+      if (error) { statusEl.className = 'status show err'; statusEl.textContent = 'ข้อผิดพลาด: ' + error.message; return; }
+
+      statusEl.className = 'status show ok';
+      statusEl.textContent = invIsAdmin() ? 'บันทึกการปรับปรุงสต๊อกเรียบร้อย ✓' : 'ส่งคำขอปรับปรุงสต๊อกไปรออนุมัติแล้ว ✓';
+      document.getElementById('inv_adj_qty').value = 1;
+      document.getElementById('inv_adj_reason').value = '';
+      setTimeout(() => statusEl.className = 'status', 3000);
+      loadInventoryData();
+    }
+
+    function invUpdateAdjHint() {
+      const hint = document.getElementById('inv_adj_hint');
+      if (hint) hint.textContent = invIsAdmin() ? '' : 'รายการนี้จะถูกส่งไปรออนุมัติจาก Admin ก่อน ยอดคงเหลือจะยังไม่เปลี่ยนจนกว่าจะอนุมัติ';
+    }
+
+    // ── Pending approvals (admin) ────────────────────────────────
+    async function invRenderPendingTable() {
+      const tbody = document.getElementById('inv_pending_tbody');
+      if (!tbody) return;
+      const { data, error } = await _sb.from('inv_stock_transactions')
+        .select('id, quantity_delta, reason, txn_type, item_id, performed_by')
+        .eq('status', 'pending_approval').order('created_at', { ascending: true });
+
+      if (error || !data || !data.length) {
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:16px">ไม่มีรายการรออนุมัติ</td></tr>';
         return;
       }
 
-      tbody.innerHTML = rows.map((r, i) => {
-        const iso = _isoDate(r.date);
-        const displayDate = iso ? new Date(iso).toLocaleDateString('th-TH', { day: 'numeric', month: 'short' }) : r.date;
-        const qtyStr = r.qty > 0 ? r.qty + (r.unit ? ' ' + r.unit : '') : '—';
-        const priceStr = r.price_per_unit > 0 ? fc(r.price_per_unit) : '—';
+      tbody.innerHTML = data.map(r => {
+        const item = INV_ITEMS.find(i => i.id === r.item_id);
         return `<tr>
-          <td style="white-space:nowrap">${displayDate}</td>
-          <td><strong>${r.item_name}</strong></td>
-          <td><span style="font-size:11px; background:#f1f5f9; padding:2px 7px; border-radius:10px">${r.category || '—'}</span></td>
-          <td style="text-align:right">${qtyStr}</td>
-          <td style="text-align:right">${priceStr}</td>
-          <td style="text-align:right; font-weight:700">${fc(r.total_amount)}</td>
-          <td style="font-size:12px">${r.pay_method || '—'}</td>
+          <td>${item ? item.name : '-'}</td>
+          <td>${r.txn_type === 'adjustment_increase' ? 'ปรับเพิ่ม' : 'ปรับลด'}</td>
+          <td style="text-align:right">${Math.abs(r.quantity_delta)}</td>
+          <td>${r.reason || ''}</td>
+          <td>${r.performed_by === _auth.user_id ? _auth.display_name : r.performed_by}</td>
           <td style="text-align:center; white-space:nowrap">
-            <button onclick="editStockPurchase(${r._idx})" style="font-size:11px; padding:3px 10px; border:1.5px solid var(--c-primary); background:white; color:var(--c-primary); border-radius:6px; cursor:pointer; margin-right:4px">
-              <i class="ti ti-pencil"></i> แก้ไข
-            </button>
-            <button onclick="deleteExpenseRow(${r._idx}, this)" style="font-size:11px; padding:3px 10px; border:1.5px solid var(--danger); background:white; color:var(--danger); border-radius:6px; cursor:pointer">
-              <i class="ti ti-trash"></i> ลบ
-            </button>
+            <button onclick="invApproveAdjustment('${r.id}', true)" style="font-size:11px;padding:3px 10px;border:1.5px solid var(--success);background:var(--success);color:white;border-radius:6px;cursor:pointer;margin-right:4px">อนุมัติ</button>
+            <button onclick="invApproveAdjustment('${r.id}', false)" style="font-size:11px;padding:3px 10px;border:1.5px solid var(--danger);background:white;color:var(--danger);border-radius:6px;cursor:pointer">ปฏิเสธ</button>
           </td>
         </tr>`;
       }).join('');
     }
 
-    function editStockPurchase(idx) {
-      const r = expenseSaved.find(e => e._idx === idx);
-      if (!r) return;
-      const iso = _isoDate(r.date);
-      if (iso) document.getElementById('st_in_date').value = iso;
-      document.getElementById('st_in_name').value = r.item_name;
-      document.getElementById('st_in_qty').value = r.qty || 1;
-      document.getElementById('st_in_price').value = r.price_per_unit || 0;
-      document.getElementById('st_in_total').value = r.total_amount || 0;
-      if (r.unit) document.getElementById('st_in_unit').value = r.unit;
-      const payEl = document.getElementById('st_in_pay_method');
-      if (r.pay_method) {
-        [...payEl.options].forEach(o => { if (o.value === r.pay_method) o.selected = true; });
-      }
-      // Scroll to form
-      document.getElementById('st_in_name').scrollIntoView({ behavior: 'smooth', block: 'center' });
-      document.getElementById('st_in_name').focus();
-      // Show hint
-      const statusEl = document.getElementById('status_stock_in');
-      statusEl.className = 'status show';
-      statusEl.textContent = 'กรอกค่าแก้ไขแล้วกด "บันทึกสต๊อกซื้อเข้า" — รายการเดิมลบออกให้อัตโนมัติ';
-      statusEl.style.background = '#fef9c3';
-      statusEl.style.color = '#854d0e';
-      // Store the idx to delete on next save
-      document.getElementById('st_in_name').dataset.editIdx = idx;
+    async function invApproveAdjustment(txnId, approve) {
+      const { error } = await _sb.rpc('inv_fn_approve_adjustment', { p_txn_id: txnId, p_approve: approve });
+      if (error) { alert('ข้อผิดพลาด: ' + error.message); return; }
+      loadInventoryData();
     }
 
-    function _applyLocalDelete(idx, r) {
-      // 1. Remove from expense list
-      expenseSaved = expenseSaved.filter(e => e._idx !== idx);
+    // ── Audit log (admin/co-admin, read-only) ────────────────────
+    async function invRenderAuditLog() {
+      const tbody = document.getElementById('inv_audit_tbody');
+      if (!tbody) return;
+      const { data, error } = await _sb.from('inv_audit_logs')
+        .select('*').eq('table_name', 'inv_stock_transactions').order('performed_at', { ascending: false }).limit(30);
 
-      // 2. Subtract qty from stockStatusDB so the inventory table reflects the deletion
-      const deletedQty = r.qty || 0;
-      if (deletedQty > 0 && r.type !== 'ใช้งาน') {
-        // It was a purchase (ซื้อเข้า) → subtract from stock
-        stockStatusDB.forEach((row, i) => {
-          if (i === 0) return; // skip header row
-          if (String(row[0]).trim() === String(r.item_name).trim()) {
-            row[3] = Math.max(0, Number(row[3]) - deletedQty);
-          }
-        });
-      } else if (deletedQty > 0 && r.type === 'ใช้งาน') {
-        // It was a stock-out → add back to stock
-        stockStatusDB.forEach((row, i) => {
-          if (i === 0) return;
-          if (String(row[0]).trim() === String(r.item_name).trim()) {
-            row[3] = Number(row[3]) + deletedQty;
-          }
-        });
+      if (error || !data || !data.length) {
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:16px">ยังไม่มีประวัติ</td></tr>';
+        return;
       }
 
-      // 3. Re-render all affected views
-      updateSummaryData();
-      renderStockPurchaseHistory();
-      renderStockStatusTable();
-      renderStockAlerts();
+      const typeLabel = { stock_in: 'รับของเข้า', stock_out: 'เบิกใช้งาน', adjustment_increase: 'ปรับเพิ่ม', adjustment_decrease: 'ปรับลด', waste: 'ของเสีย' };
+      tbody.innerHTML = data.map(row => {
+        const d = row.after_data || {};
+        const item = INV_ITEMS.find(i => i.id === d.item_id);
+        const when = row.performed_at ? new Date(row.performed_at).toLocaleString('th-TH', { dateStyle: 'short', timeStyle: 'short' }) : '';
+        return `<tr>
+          <td style="white-space:nowrap; font-size:12px">${when}</td>
+          <td>${typeLabel[d.txn_type] || d.txn_type || ''}</td>
+          <td>${item ? item.name : '-'}</td>
+          <td style="text-align:right">${d.quantity_delta ?? ''}</td>
+          <td style="font-size:12px">${d.reason || d.reference_note || ''}</td>
+          <td style="font-size:12px">${row.performed_by === _auth.user_id ? _auth.display_name : (row.performed_by || '-')}</td>
+        </tr>`;
+      }).join('');
     }
 
-    function deleteExpenseRow(idx, btn) {
-      const r = expenseSaved.find(e => e._idx === idx);
-      if (!r) return;
-      if (!confirm(`ลบรายการ "${r.item_name}" วันที่ ${r.date} ยอด ${r.total_amount.toLocaleString('th-TH')} ฿ ใช่หรือไม่?`)) return;
+    // ── Telegram settings (admin, write-only secret pattern) ─────
+    async function invLoadTelegramSettings() {
+      if (!invIsAdmin()) return;
+      const statusEl = document.getElementById('inv_telegram_status');
+      const { data, error } = await _sb.rpc('inv_fn_integration_secret_status', { p_key: 'telegram_bot_token' });
+      const status = (!error && data && data[0]) ? data[0] : { is_set: false };
+      if (statusEl) {
+        statusEl.textContent = status.is_set
+          ? `ตั้งค่าแล้ว (ลงท้าย ****${status.value_suffix}) แก้ไขล่าสุด ${new Date(status.updated_at).toLocaleString('th-TH')}`
+          : 'ยังไม่ได้ตั้งค่า Bot Token';
+      }
+      const { data: branch } = await _sb.from('inv_branches').select('telegram_chat_id').eq('id', INV_BRANCH_ID).maybeSingle();
+      const chatIdInput = document.getElementById('inv_telegram_chat_id');
+      if (chatIdInput) chatIdInput.value = branch?.telegram_chat_id || '';
+    }
 
-      btn.disabled = true;
-      btn.textContent = 'กำลังลบ...';
+    async function invSaveTelegramSettings() {
+      const token = document.getElementById('inv_telegram_token').value.trim();
+      const chatId = document.getElementById('inv_telegram_chat_id').value.trim();
+      const statusEl = document.getElementById('inv_status_settings');
+      statusEl.className = 'status show'; statusEl.textContent = 'กำลังบันทึก...';
 
-      if (!r._id) { _applyLocalDelete(idx, r); btn.disabled = false; btn.textContent = 'ลบ'; return; }
-      (async () => {
-        try {
-          // Reverse stock qty effect before deleting
-          const { data: stkRow } = await _sb.from('sc_stock_status').select('quantity').eq('item_name', r.item_name).maybeSingle();
-          await _sb.from('sc_stock_transactions').delete().eq('id', r._id);
-          if (stkRow) {
-            const newQty = r.type === 'ซื้อเข้า'
-              ? Math.max(0, Number(stkRow.quantity) - (r.qty || 0))
-              : Number(stkRow.quantity) + (r.qty || 0);
-            await _sb.from('sc_stock_status').update({ quantity: newQty, updated_at: new Date().toISOString() }).eq('item_name', r.item_name);
-          }
-          _applyLocalDelete(idx, r);
-        } catch(e) {
-          _applyLocalDelete(idx, r);
-          console.warn('deleteExpenseRow error:', e);
+      try {
+        if (token) {
+          const { error } = await _sb.rpc('inv_fn_set_integration_secret', { p_key: 'telegram_bot_token', p_value: token });
+          if (error) throw error;
         }
-      })();
+        const { error: branchErr } = await _sb.from('inv_branches').update({ telegram_chat_id: chatId || null }).eq('id', INV_BRANCH_ID);
+        if (branchErr) throw branchErr;
+
+        statusEl.className = 'status show ok'; statusEl.textContent = 'บันทึกการตั้งค่าเรียบร้อย ✓';
+        document.getElementById('inv_telegram_token').value = '';
+        setTimeout(() => statusEl.className = 'status', 3000);
+        invLoadTelegramSettings();
+      } catch (e) {
+        statusEl.className = 'status show err'; statusEl.textContent = 'ข้อผิดพลาด: ' + (e.message || 'บันทึกไม่สำเร็จ');
+      }
     }
 
     // ── Stock refresh helpers ─────────────────────────────────
@@ -4028,7 +4198,7 @@
       const btn = document.getElementById('stock_refresh_btn');
       if (icon) icon.style.animation = 'spin 0.8s linear infinite';
       if (btn) btn.disabled = true;
-      loadBackendMasterData().then(() => {
+      Promise.all([loadBackendMasterData(), loadInventoryData()]).then(() => {
         loadMonthlyData();
         _updateStockTimestamp();
         if (icon) icon.style.animation = '';
@@ -4042,7 +4212,7 @@
     function _startStockAutoRefresh() {
       if (_stockAutoRefreshTimer) clearInterval(_stockAutoRefreshTimer);
       _stockAutoRefreshTimer = setInterval(() => {
-        loadBackendMasterData().then(() => {
+        Promise.all([loadBackendMasterData(), loadInventoryData()]).then(() => {
           loadMonthlyData();
           _updateStockTimestamp();
         });
@@ -4050,44 +4220,39 @@
     }
 
     function renderStockStatusTable() {
-      const tbody = document.querySelector('#stock_status_table tbody');
+      const tbody = document.getElementById('stock_status_tbody');
       if (!tbody) return;
       tbody.innerHTML = '';
 
-      const searchVal = document.getElementById('stock_search').value.toLowerCase().trim();
+      const searchEl = document.getElementById('stock_search');
+      const searchVal = searchEl ? searchEl.value.toLowerCase().trim() : '';
+      const canSeeCost = invCanManageStock();
 
-      stockStatusDB.forEach((row, idx) => {
-        if (idx === 0) return; // Skip headers
+      const rows = INV_STOCK.filter(s =>
+        !searchVal || s.name.toLowerCase().includes(searchVal) || s.category.toLowerCase().includes(searchVal)
+      );
 
-        const name = row[0];
-        const cat = row[1] || 'ทั่วไป';
-        const unit = row[2] || 'ชิ้น';
-        const qty = Number(row[3] || 0);
-        const lastPrice = Number(row[4] || 0);
-        const minAlert = Number(row[5] || 10);
+      if (!rows.length) {
+        tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:20px">ยังไม่มีสินค้าในคลัง</td></tr>`;
+        return;
+      }
 
-        if (searchVal && !name.toLowerCase().includes(searchVal) && !cat.toLowerCase().includes(searchVal)) {
-          return;
-        }
-
+      rows.forEach(s => {
         let statusBadge = '';
-        if (qty === 0) {
-          statusBadge = '<span class="badge badge-red">สินค้าหมด</span>';
-        } else if (qty <= minAlert) {
-          statusBadge = '<span class="badge badge-amber">ใกล้หมดสต๊อก</span>';
-        } else {
-          statusBadge = '<span class="badge badge-green">ปกติ</span>';
-        }
+        if (s.current_qty === 0) statusBadge = '<span class="badge badge-red">สินค้าหมด</span>';
+        else if (s.current_qty <= s.min_stock_level) statusBadge = '<span class="badge badge-amber">ใกล้หมดสต๊อก</span>';
+        else statusBadge = '<span class="badge badge-green">ปกติ</span>';
 
         const tr = document.createElement('tr');
         tr.innerHTML = `
-      <td><strong>${name}</strong></td>
-      <td><span class="badge badge-blue">${cat}</span></td>
-      <td style="font-weight:700">${qty} ${unit}</td>
-      <td>${lastPrice.toLocaleString()} ฿</td>
+      <td><strong>${s.name}</strong></td>
+      <td><span class="badge ${s.item_type === 'consumable' ? 'badge-amber' : 'badge-blue'}">${s.item_type === 'consumable' ? 'สิ้นเปลือง' : 'คงคลัง'}</span></td>
+      <td><span class="badge badge-blue">${s.category}</span></td>
+      <td style="font-weight:700">${s.current_qty} ${s.base_unit}</td>
+      ${canSeeCost ? `<td style="display:${canSeeCost ? '' : 'none'}">${s.avg_unit_cost.toLocaleString('th-TH', { minimumFractionDigits: 2 })} ฿</td>` : ''}
       <td>
-        <input type="number" value="${minAlert}" style="width:64px; text-align:center; padding:4px; font-size:12px; border:1px solid var(--border); border-radius:4px" 
-               onchange="updateMinAlert('${name}', this.value)">
+        <input type="number" value="${s.min_stock_level}" style="width:64px; text-align:center; padding:4px; font-size:12px; border:1px solid var(--border); border-radius:4px"
+               onchange="invUpdateMinStock('${s.item_id}', this.value)" ${canSeeCost ? '' : 'disabled'}>
       </td>
       <td style="text-align:right">${statusBadge}</td>
     `;
@@ -4095,16 +4260,12 @@
       });
     }
 
-    function updateMinAlert(itemName, newVal) {
+    async function invUpdateMinStock(itemId, newVal) {
       const val = Number(newVal);
       if (isNaN(val) || val < 0) return;
-
-      _sb.from('sc_stock_status').update({ min_alert: val, updated_at: new Date().toISOString() }).eq('item_name', itemName)
-        .then(() => {
-          stockStatusDB.forEach(row => { if (row[0] === itemName) row[5] = val; });
-          renderStockStatusTable();
-          renderStockAlerts();
-        });
+      const { error } = await _sb.rpc('inv_fn_set_min_stock_level', { p_item_id: itemId, p_branch_id: INV_BRANCH_ID, p_new_min: val });
+      if (error) { alert('ข้อผิดพลาด: ' + error.message); return; }
+      loadInventoryData();
     }
 
     function renderStockAlerts() {
@@ -4112,17 +4273,9 @@
       if (!container) return;
       container.innerHTML = '';
 
-      const lowStockItems = [];
-      stockStatusDB.forEach((row, idx) => {
-        if (idx === 0) return;
-        const name = row[0];
-        const qty = Number(row[3] || 0);
-        const minAlert = Number(row[5] || 10);
-
-        if (qty <= minAlert) {
-          lowStockItems.push(`${name} (คงเหลือ: ${qty} ${row[2] || 'ชิ้น'})`);
-        }
-      });
+      const lowStockItems = INV_STOCK
+        .filter(s => s.current_qty <= s.min_stock_level)
+        .map(s => `${s.name} (คงเหลือ: ${s.current_qty} ${s.base_unit})`);
 
       if (lowStockItems.length > 0) {
         const alertBar = document.createElement('div');
@@ -5763,10 +5916,8 @@ ${bank ? `
     function populateEmployees(employeesData) {
       employeesList = [];
       const handlerSelect = document.getElementById('s_employee');
-      const outSelect = document.getElementById('st_out_employee');
 
       if (handlerSelect) handlerSelect.innerHTML = '<option value="">— เลือกพนักงาน —</option>';
-      if (outSelect) outSelect.innerHTML = '<option value="">— เลือกพนักงานที่เบิก —</option>';
 
       const container = document.getElementById('emp_config_list');
       container.innerHTML = '';
