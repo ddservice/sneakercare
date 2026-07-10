@@ -4980,9 +4980,13 @@
     /* ── Execute save after confirmation ── */
     async function _doSaveOpex() {
       const monthKey = _pendingOpexMonth;
-      const items    = _pendingOpexItems;
+      const items    = [..._pendingOpexItems]; // snapshot before any clear
       const note     = (document.getElementById('opex_change_note').value || '').trim();
-      if (!monthKey || !items.length) return;
+
+      if (!monthKey || !items.length) {
+        alert('ไม่มีข้อมูลที่จะบันทึก (monthKey=' + monthKey + ', items=' + items.length + ')');
+        return;
+      }
 
       // Disable confirm button
       const okBtn = document.getElementById('opex_confirm_ok_btn');
@@ -4991,51 +4995,66 @@
 
       _closeOpexModal('opex_confirm_overlay');
 
+      // Scroll to status so user sees it
       const statusEl = document.getElementById('status_opex');
       statusEl.className = 'status show';
-      statusEl.textContent = 'กำลังบันทึกบัญชีประจำเดือน...';
+      statusEl.textContent = 'กำลังบันทึกบัญชีประจำเดือน ' + monthKey + '...';
+      statusEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
 
       try {
-        // 1. Archive existing data to history BEFORE overwriting
+        // 1. Archive existing data to history BEFORE overwriting (non-blocking)
         const existing = opexSaved.filter(o => o.month === monthKey);
         if (existing.length > 0) {
-          // Get next version number
-          const { data: latestHist } = await _sb.from('sc_opex_history')
-            .select('version').eq('month', monthKey)
-            .order('version', { ascending: false }).limit(1).maybeSingle();
-          const nextVer = (latestHist?.version || 0) + 1;
-
-          await _sb.from('sc_opex_history').insert({
-            month:       monthKey,
-            version:     nextVer,
-            saved_by:    _auth.display_name,
-            change_note: note || '(ไม่มีหมายเหตุ)',
-            items:       JSON.stringify(existing)
-          });
+          try {
+            const { data: latestHist } = await _sb.from('sc_opex_history')
+              .select('version').eq('month', monthKey)
+              .order('version', { ascending: false }).limit(1).maybeSingle();
+            const nextVer = (latestHist?.version || 0) + 1;
+            const { error: histErr } = await _sb.from('sc_opex_history').insert({
+              month:       monthKey,
+              version:     nextVer,
+              saved_by:    _auth.display_name,
+              change_note: note || '(ไม่มีหมายเหตุ)',
+              items:       JSON.stringify(existing)
+            });
+            if (histErr) console.warn('History save warning (non-fatal):', histErr.message);
+          } catch(histEx) {
+            console.warn('History archive failed (non-fatal):', histEx.message);
+          }
         }
 
-        // 2. Replace current opex data
-        await _sb.from('sc_opex').delete().eq('month', monthKey);
+        // 2. Upsert rows (INSERT or UPDATE on conflict month+key)
+        //    ไม่ใช้ DELETE อีกต่อไป — ป้องกันปัญหา RLS บล็อก delete
         const rows = items.map(item => ({
           month:        monthKey,
           category:     item.category,
           key:          item.key,
           name:         item.name,
           amount:       item.amount,
-          pay_method:   item.method,
+          pay_method:   item.method || '',
           recorded_by:  _auth.display_name,
           last_updated: new Date().toISOString()
         }));
-        const { error } = await _sb.from('sc_opex').insert(rows);
-        if (error) throw error;
+        const { error: insErr } = await _sb.from('sc_opex')
+          .upsert(rows, { onConflict: 'month,key' });
+        if (insErr) throw new Error('บันทึกข้อมูลไม่สำเร็จ: ' + insErr.message);
+
+        // 3. ลบ keys เก่าที่ไม่มีในชุดใหม่ (กรณีลด item ออก)
+        const newKeys = rows.map(r => r.key);
+        await _sb.from('sc_opex')
+          .delete()
+          .eq('month', monthKey)
+          .not('key', 'in', '(' + newKeys.map(k => '"' + k + '"').join(',') + ')');
 
         statusEl.className = 'status show ok';
-        statusEl.textContent = `บันทึกบัญชีเดือน ${monthKey} สำเร็จ ✓${note ? ' — ' + note : ''}`;
+        statusEl.textContent = 'บันทึกบัญชีเดือน ' + monthKey + ' สำเร็จ ✓' + (note ? ' — ' + note : '');
         loadMonthlyData();
-        setTimeout(() => statusEl.className = 'status', 4000);
+        setTimeout(() => statusEl.className = 'status', 5000);
       } catch(err) {
+        console.error('_doSaveOpex error:', err);
         statusEl.className = 'status show err';
         statusEl.textContent = 'ข้อผิดพลาด: ' + (err.message || 'บันทึกไม่สำเร็จ');
+        alert('บันทึกไม่สำเร็จ: ' + (err.message || 'กรุณาลองใหม่อีกครั้ง'));
       } finally {
         okBtn.disabled = false;
         okBtn.innerHTML = '<i class="ti ti-check"></i> ยืนยันบันทึก';
