@@ -6848,18 +6848,28 @@ ${bank ? `
       statusEl.className = 'status show';
       statusEl.textContent = 'กำลังสร้างผู้ใช้ใหม่...';
 
-      // Supabase: ต้องสร้าง Auth User ผ่าน Supabase Dashboard ก่อน แล้วค่อย insert sc_users
-      // เนื่องจาก anon key ไม่มีสิทธิ์สร้าง Auth user ใหม่
-      // วิธีสร้างผู้ใช้ใหม่: Supabase Dashboard → Authentication → Users → Invite / Add User
-      statusEl.className = 'status show err';
-      statusEl.textContent = 'ต้องสร้าง Auth User ผ่าน Supabase Dashboard ก่อน แล้วค่อยเพิ่ม Profile ที่นี่';
-      // After creating auth user in Supabase Dashboard, insert profile:
-      // (หากสร้าง auth user แล้ว ให้ระบุ user_id UUID ที่ได้ แล้วกด Save Profile)
-      /* Example manual insert:
-      _sb.from('sc_users').insert({
-        user_id: '<UUID from Supabase Auth>', username, fullname, nickname, role
-      }).then(({error}) => { if (!error) { loadUsers(); } });
-      */
+      // สร้างทั้ง Auth user + profile ผ่าน Edge Function (ตรวจสิทธิ์ Admin ฝั่งเซิร์ฟเวอร์ก่อนเสมอ
+      // ไม่เปิดช่องให้ anon key สร้าง Auth user ตรงๆ จากฝั่ง browser)
+      _sb.functions.invoke('create-user', {
+        body: { username, fullname, nickname, password, role }
+      }).then(({ data, error }) => {
+        if (error || data?.error) {
+          statusEl.className = 'status show err';
+          statusEl.textContent = 'ข้อผิดพลาด: ' + (data?.error || error?.message || 'สร้างไม่สำเร็จ');
+          return;
+        }
+        statusEl.className = 'status show ok';
+        statusEl.textContent = 'สร้างผู้ใช้ใหม่สำเร็จ ✓';
+        document.getElementById('nu_username').value = '';
+        document.getElementById('nu_fullname').value = '';
+        document.getElementById('nu_nickname').value = '';
+        document.getElementById('nu_password').value = '';
+        loadUsers();
+        setTimeout(() => statusEl.className = 'status', 3000);
+      }).catch((e) => {
+        statusEl.className = 'status show err';
+        statusEl.textContent = 'ไม่สามารถเชื่อมต่อได้: ' + (e.message || '');
+      });
     }
 
     function deleteUserConfirm(username) {
