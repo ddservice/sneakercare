@@ -3000,7 +3000,6 @@
                   try { renderSaleHistoryList();       } catch(e) { console.error('[E] renderSaleHistoryList:', e); }
                   try { updateSummaryData();           } catch(e) { console.error('[E] updateSummaryData:', e); }
                   try { buildOpexForm();               } catch(e) { console.error('[E] buildOpexForm:', e); }
-                  try { renderStockPurchaseHistory();  } catch(e) { console.error('[E] renderStockPurchaseHistory:', e); }
 
                   // Re-restore draft if today's data not yet saved
                   try {
@@ -6003,7 +6002,6 @@ ${bank ? `
           opt.value = name;
           opt.textContent = label;
           if (handlerSelect) handlerSelect.appendChild(opt.cloneNode(true));
-          if (outSelect) outSelect.appendChild(opt.cloneNode(true));
         }
 
         addEmpConfigRow(name, salary, position, bank, account, status, isLocked, nickname);
