@@ -2379,8 +2379,8 @@
         </div>
       </div>
 
-      <!-- Data importing & templates -->
-      <div class="card">
+      <!-- Data importing & templates — Admin/Co-Admin only -->
+      <div class="card" id="card_data_import" style="display:none">
         <div class="card-head">
           <div class="card-head-left"><i class="ti ti-database-import"></i><span>การจัดการฐานข้อมูล (Import / Export
               Excel)</span></div>
@@ -2632,6 +2632,11 @@
       if (_auth.role === 'admin') {
         document.getElementById('card_user_mgmt').style.display = '';
         document.getElementById('card_data_purge').style.display = '';
+      }
+
+      // Admin/Co-Admin access
+      if (_auth.role === 'admin' || _auth.role === 'co-admin') {
+        document.getElementById('card_data_import').style.display = '';
       }
 
       // Manager access limits
