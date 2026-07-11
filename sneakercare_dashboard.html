@@ -6852,10 +6852,25 @@ ${bank ? `
       // ไม่เปิดช่องให้ anon key สร้าง Auth user ตรงๆ จากฝั่ง browser)
       _sb.functions.invoke('create-user', {
         body: { username, fullname, nickname, password, role }
-      }).then(({ data, error }) => {
-        if (error || data?.error) {
+      }).then(async ({ data, error }) => {
+        if (error) {
+          // เมื่อ Edge Function ตอบ non-2xx, supabase-js จะให้แค่ error.message ทั่วไป
+          // ("Edge Function returned a non-2xx status code") ต้องไปดึงข้อความจริงจาก
+          // error.context (Response object ของการเรียกจริง) เอง
+          let msg = error.message || 'สร้างไม่สำเร็จ';
+          try {
+            if (error.context && typeof error.context.json === 'function') {
+              const body = await error.context.json();
+              if (body?.error) msg = body.error;
+            }
+          } catch (parseErr) { /* ใช้ msg เดิมถ้า parse ไม่ได้ */ }
           statusEl.className = 'status show err';
-          statusEl.textContent = 'ข้อผิดพลาด: ' + (data?.error || error?.message || 'สร้างไม่สำเร็จ');
+          statusEl.textContent = 'ข้อผิดพลาด: ' + msg;
+          return;
+        }
+        if (data?.error) {
+          statusEl.className = 'status show err';
+          statusEl.textContent = 'ข้อผิดพลาด: ' + data.error;
           return;
         }
         statusEl.className = 'status show ok';
