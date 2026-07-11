@@ -2396,9 +2396,9 @@
                 class="ti ti-download"></i> ดาวน์โหลด Template ตัวอย่าง</div>
             <div style="display:grid; grid-template-columns: 1fr 1fr; gap:8px">
               <button class="btn btn-light" style="font-size:12px; padding:8px" onclick="downloadTemplate('sales')"><i
-                  class="ti ti-cash"></i> แม่แบบบิลยอดขาย</button>
+                  class="ti ti-cash"></i> เทมเพลตบิลยอดขาย</button>
               <button class="btn btn-light" style="font-size:12px; padding:8px" onclick="downloadTemplate('stock')"><i
-                  class="ti ti-package"></i> แม่แบบบันทึกคลังสินค้า</button>
+                  class="ti ti-package"></i> เทมเพลตบันทึกคลังสินค้า</button>
             </div>
           </div>
 
@@ -2479,8 +2479,8 @@
         </div>
       </div>
 
-      <!-- Data purging operations -->
-      <div class="card">
+      <!-- Data purging operations — Admin only -->
+      <div class="card" id="card_data_purge" style="display:none">
         <div class="card-head">
           <div class="card-head-left"><i class="ti ti-trash" style="color:var(--danger)"></i><span>ทำความสะอาดข้อมูล
               (Data Purge)</span></div>
@@ -2631,6 +2631,7 @@
       // Admin access
       if (_auth.role === 'admin') {
         document.getElementById('card_user_mgmt').style.display = '';
+        document.getElementById('card_data_purge').style.display = '';
       }
 
       // Manager access limits
@@ -2882,6 +2883,22 @@
           try {
             const settings = settingsRes.data.map(r => [r.key, r.value]);
             populateBizProfile(settings);
+
+            // ห้องเช่า: ถ้าเซิร์ฟเวอร์มีค่าที่บันทึกไว้ ให้ใช้ค่านั้นเป็นค่าจริงเสมอ (ทับค่า localStorage
+            // ชั่วคราวที่โหลดไว้ตอน initApp) เพื่อให้ตั้งค่าครั้งเดียวแล้วเห็นเหมือนกันทุกเครื่อง
+            const roomsRow = settingsRes.data.find(r => r.key === 'rooms_config');
+            if (roomsRow && roomsRow.value) {
+              try {
+                const parsed = JSON.parse(roomsRow.value);
+                if (Array.isArray(parsed) && parsed.length) {
+                  _roomsConfig = parsed;
+                  while (_roomsConfig.length < _ROOMS_COUNT) _roomsConfig.push(_defaultRoom(_roomsConfig.length));
+                  localStorage.setItem(_ROOMS_CFG_KEY, JSON.stringify(_roomsConfig));
+                  renderRoomsConfigForm();
+                  buildRentalIncomeSection();
+                }
+              } catch(parseErr) { console.error('rooms_config parse error:', parseErr); }
+            }
           } catch(e) { console.error('Settings load error:', e); }
         }
 
@@ -5651,15 +5668,32 @@ ${bank ? `
           elec_rate: +document.getElementById(`room_elec_rate_${i}`)?.value || 5
         };
       }
+      // เก็บ local cache ไว้เผื่อโหลดหน้าใหม่ก่อนเซิร์ฟเวอร์ตอบ แต่แหล่งข้อมูลจริงคือ sc_settings
+      // (ก่อนหน้านี้เก็บแค่ localStorage อย่างเดียว ทำให้ตั้งค่าแล้วเห็นแค่เครื่อง/เบราว์เซอร์ที่ตั้งเท่านั้น)
       localStorage.setItem(_ROOMS_CFG_KEY, JSON.stringify(_roomsConfig));
       renderRoomsConfigForm();
 
       const statusEl = document.getElementById('status_rooms_cfg');
       if (statusEl) {
-        statusEl.className = 'status show ok';
-        statusEl.textContent = 'บันทึกข้อมูลห้องเช่าในเครื่องเรียบร้อยแล้ว ✓';
-        setTimeout(() => statusEl.className = 'status', 3000);
+        statusEl.className = 'status show';
+        statusEl.textContent = 'กำลังบันทึกข้อมูลห้องเช่า...';
       }
+
+      _saveSettings({ rooms_config: JSON.stringify(_roomsConfig) })
+        .then(() => {
+          if (statusEl) {
+            statusEl.className = 'status show ok';
+            statusEl.textContent = 'บันทึกข้อมูลห้องเช่าเรียบร้อยแล้ว ✓ (ใช้ได้ทุกเครื่อง/ทุกอุปกรณ์)';
+            setTimeout(() => statusEl.className = 'status', 3000);
+          }
+        })
+        .catch(() => {
+          if (statusEl) {
+            statusEl.className = 'status show err';
+            statusEl.textContent = 'บันทึกขึ้นเซิร์ฟเวอร์ไม่สำเร็จ (บันทึกไว้ในเครื่องนี้ชั่วคราวแล้ว ลองบันทึกใหม่อีกครั้ง)';
+          }
+        });
+
       // Re-render rental income if opex tab is open
       buildRentalIncomeSection();
     }
