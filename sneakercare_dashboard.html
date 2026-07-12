@@ -2479,6 +2479,34 @@
         </div>
       </div>
 
+      <!-- Role-based menu visibility (checkbox) — Admin only -->
+      <div class="card" id="card_ui_permissions" style="display:none">
+        <div class="card-head">
+          <div class="card-head-left"><i class="ti ti-checkbox"></i><span>สิทธิ์การมองเห็นเมนู (Role Permissions)</span></div>
+        </div>
+        <div class="card-body">
+          <p style="font-size:12px; color:var(--muted); line-height:1.6; margin-bottom:14px">
+            ติ๊กว่าตำแหน่งไหนควรเห็นเมนู/การ์ดไหนบ้าง — Admin เห็นทุกอย่างเสมอไม่ต้องตั้งค่า
+            <br>หมายเหตุ: ควบคุมแค่การมองเห็นเมนู เท่านั้น สิทธิ์เขียน/ลบข้อมูลจริงบางจุดยังผูกกับ role ตรงๆ
+            (เช่น การอนุมัติปรับปรุงสต๊อกทำได้เฉพาะ Admin เสมอ ต่อให้เปิดให้เห็นเมนูนี้)
+          </p>
+          <div class="table-container">
+            <table class="tbl" id="ui_perm_table">
+              <thead>
+                <tr><th>เมนู/การ์ด</th><th style="text-align:center">Co-Admin</th><th style="text-align:center">Manager</th></tr>
+              </thead>
+              <tbody id="ui_perm_tbody">
+                <tr><td colspan="3" style="text-align:center;color:var(--muted);padding:16px">กำลังโหลด...</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div id="status_ui_perm" class="status" style="margin-top:12px"></div>
+          <button class="btn btn-primary" style="margin-top:12px" onclick="saveUiPermissionsAdmin()">
+            <i class="ti ti-device-floppy"></i> บันทึกสิทธิ์การมองเห็นเมนู
+          </button>
+        </div>
+      </div>
+
       <!-- Data purging operations — Admin only -->
       <div class="card" id="card_data_purge" style="display:none">
         <div class="card-head">
@@ -2595,8 +2623,7 @@
     window.onload = function () {
       checkStoredAuth().then(isValid => {
         if (isValid) {
-          showApp();
-          initApp();
+          showApp().then(() => initApp());
         } else {
           showLogin();
         }
@@ -2613,10 +2640,36 @@
       document.getElementById('login_pw').value = '';
     }
 
-    function showApp() {
+    // ── UI Permissions (Admin ปรับได้เองผ่าน checkbox) ────────────
+    // หมายเหตุ: ควบคุมแค่การ "มองเห็นเมนู/การ์ด" เท่านั้น — สิทธิ์เขียน/ลบข้อมูลจริงยังคุมด้วย RLS
+    // แยกต่างหาก (ดู applyRoleRestrictions/invApplyRoleVisibility สำหรับจุดที่ยังผูกกับ role ตรงๆ
+    // เพราะเป็น business logic ที่ต้องตรงกับ RLS เป๊ะ ไม่ใช่แค่เรื่องมองเห็น)
+    let UI_PERMISSIONS = {};
+
+    function uiRoleKey() { return _auth.role === 'staff' ? 'manager' : _auth.role; }
+
+    async function loadUiPermissions() {
+      if (_auth.role === 'admin') { UI_PERMISSIONS = {}; return; }
+      try {
+        const { data } = await _sb.from('ui_permissions').select('feature_key, visible').eq('role', uiRoleKey());
+        UI_PERMISSIONS = {};
+        (data || []).forEach(r => { UI_PERMISSIONS[r.feature_key] = r.visible; });
+      } catch (e) {
+        console.error('loadUiPermissions error:', e);
+        UI_PERMISSIONS = {};
+      }
+    }
+
+    function uiVisible(featureKey) {
+      if (_auth.role === 'admin') return true;
+      return UI_PERMISSIONS[featureKey] === true;
+    }
+
+    async function showApp() {
       document.documentElement.classList.remove('auth-checking');
       document.documentElement.classList.add('auth-logged-in');
       document.getElementById('login_overlay').classList.add('hidden');
+      await loadUiPermissions();
       applyRoleRestrictions();
     }
 
@@ -2628,20 +2681,17 @@
       chip.textContent = _auth.role === 'admin' ? 'Admin' : _auth.role === 'co-admin' ? 'Co-Admin' : 'Manager';
       chip.className = 'role-chip' + (_auth.role === 'admin' ? ' admin' : _auth.role === 'co-admin' ? ' co-admin' : '');
 
-      // Admin access
-      if (_auth.role === 'admin') {
-        document.getElementById('card_user_mgmt').style.display = '';
-        document.getElementById('card_data_purge').style.display = '';
-      }
+      const showIf = (id, on) => { const el = document.getElementById(id); if (el) el.style.display = on ? '' : 'none'; };
 
-      // Admin/Co-Admin access
-      if (_auth.role === 'admin' || _auth.role === 'co-admin') {
-        document.getElementById('card_data_import').style.display = '';
-      }
+      showIf('card_user_mgmt', uiVisible('card_user_mgmt'));
+      showIf('card_data_purge', uiVisible('card_data_purge'));
+      showIf('card_data_import', uiVisible('card_data_import'));
+      showIf('tab_settings', _auth.role === 'admin' || uiVisible('tab_settings'));
+      showIf('card_ui_permissions', _auth.role === 'admin');
 
-      // Manager access limits
-      if (_auth.role === 'manager') {
-        document.getElementById('tab_settings').style.display = 'none';
+      // ข้อจำกัดอื่นที่ไม่ใช่เรื่อง "มองเห็นเมนู" แต่เป็นสิทธิ์การกระทำ (action-level) ยังผูกกับ role ตรงๆ
+      // ไม่ผ่านระบบ checkbox เพราะต้องตรงกับ RLS จริงเสมอ
+      if (_auth.role === 'manager' || _auth.role === 'staff') {
         const sDate = document.getElementById('s_date');
         if (sDate) {
           sDate.max = todayStr();
@@ -2691,7 +2741,7 @@
           username:     username
         };
         localStorage.setItem('sc_auth', JSON.stringify(_auth));
-        showApp();
+        await showApp();
         initApp();
       } catch(err) {
         btn.disabled = false;
@@ -2870,6 +2920,7 @@
       loadBackendMasterData().then(() => {
         loadMonthlyData();
         loadInventoryData();
+        loadUiPermissionsAdmin();
         _updateStockTimestamp();
         _startStockAutoRefresh();
       });
@@ -3861,14 +3912,14 @@
 
     function invApplyRoleVisibility() {
       const show = (id, on) => { const el = document.getElementById(id); if (el) el.style.display = on ? '' : 'none'; };
-      show('inv_card_items', invIsAdmin());
-      show('inv_card_stock_in', invCanManageStock());
-      show('inv_card_adjustment', invCanManageStock());
-      show('inv_card_pending', invIsAdmin());
-      show('inv_card_audit', invCanManageStock());
-      show('inv_card_settings', invIsAdmin());
+      show('inv_card_items', uiVisible('inv_card_items'));
+      show('inv_card_stock_in', uiVisible('inv_card_stock_in'));
+      show('inv_card_adjustment', uiVisible('inv_card_adjustment'));
+      show('inv_card_pending', uiVisible('inv_card_pending'));
+      show('inv_card_audit', uiVisible('inv_card_audit'));
+      show('inv_card_settings', uiVisible('inv_card_settings'));
       const costHead = document.getElementById('inv_cost_col_head');
-      if (costHead) costHead.style.display = invCanManageStock() ? '' : 'none';
+      if (costHead) costHead.style.display = uiVisible('inv_cost_col_head') ? '' : 'none';
       invUpdateAdjHint();
     }
 
@@ -3902,8 +3953,9 @@
         invPopulateItemSelects();
         renderStockStatusTable();
         renderStockAlerts();
-        if (invIsAdmin()) { invRenderPendingTable(); }
-        if (invCanManageStock()) { invRenderAuditLog(); invLoadTelegramSettings(); }
+        if (uiVisible('inv_card_pending')) { invRenderPendingTable(); }
+        if (uiVisible('inv_card_audit')) { invRenderAuditLog(); }
+        if (uiVisible('inv_card_settings')) { invLoadTelegramSettings(); }
       } catch (e) {
         console.error('loadInventoryData error:', e);
       }
@@ -4280,7 +4332,7 @@
 
       const searchEl = document.getElementById('stock_search');
       const searchVal = searchEl ? searchEl.value.toLowerCase().trim() : '';
-      const canSeeCost = invCanManageStock();
+      const canSeeCost = uiVisible('inv_cost_col_head');
 
       const rows = INV_STOCK.filter(s =>
         !searchVal || s.name.toLowerCase().includes(searchVal) || s.category.toLowerCase().includes(searchVal)
@@ -7013,6 +7065,66 @@ ${bank ? `
         .catch(() => {
           errEl.textContent = 'ไม่สามารถเชื่อมต่อได้';
         });
+    }
+
+    // ── Role Permissions (checkbox grid, Admin only) ──────────────
+    const UI_PERM_FEATURES = [
+      { key: 'card_user_mgmt',     label: 'จัดการบัญชีผู้ใช้งานระบบ' },
+      { key: 'card_data_purge',    label: 'ทำความสะอาดข้อมูล (Data Purge)' },
+      { key: 'card_data_import',   label: 'นำเข้า/ส่งออกข้อมูล Excel' },
+      { key: 'tab_settings',       label: 'แท็บตั้งค่า (ทั้งหมด)' },
+      { key: 'inv_card_items',     label: 'จัดการสินค้า (คลังสินค้า)' },
+      { key: 'inv_card_stock_in',  label: 'รับของเข้าคลัง' },
+      { key: 'inv_card_adjustment', label: 'ปรับปรุงสต๊อกจากตรวจนับ' },
+      { key: 'inv_card_pending',   label: 'อนุมัติการปรับปรุงสต๊อก' },
+      { key: 'inv_card_audit',     label: 'ประวัติการเคลื่อนไหวสต๊อก' },
+      { key: 'inv_card_settings',  label: 'ตั้งค่า Telegram แจ้งเตือนสต๊อก' },
+      { key: 'inv_cost_col_head',  label: 'เห็นต้นทุน/ราคาในคลังสินค้า' }
+    ];
+
+    async function loadUiPermissionsAdmin() {
+      if (!invIsAdmin()) return;
+      const tbody = document.getElementById('ui_perm_tbody');
+      if (!tbody) return;
+
+      const { data, error } = await _sb.from('ui_permissions').select('role, feature_key, visible');
+      if (error) {
+        tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;color:var(--danger);padding:16px">โหลดไม่สำเร็จ: ' + error.message + '</td></tr>';
+        return;
+      }
+      const map = {}; // "role:feature_key" -> boolean
+      (data || []).forEach(r => { map[r.role + ':' + r.feature_key] = r.visible; });
+
+      tbody.innerHTML = UI_PERM_FEATURES.map(f => `
+        <tr>
+          <td>${f.label}</td>
+          <td style="text-align:center"><input type="checkbox" data-role="co-admin" data-feature="${f.key}" ${map['co-admin:' + f.key] ? 'checked' : ''}></td>
+          <td style="text-align:center"><input type="checkbox" data-role="manager" data-feature="${f.key}" ${map['manager:' + f.key] ? 'checked' : ''}></td>
+        </tr>
+      `).join('');
+    }
+
+    async function saveUiPermissionsAdmin() {
+      const statusEl = document.getElementById('status_ui_perm');
+      const checkboxes = document.querySelectorAll('#ui_perm_tbody input[type="checkbox"]');
+      const rows = Array.from(checkboxes).map(cb => ({
+        role: cb.dataset.role,
+        feature_key: cb.dataset.feature,
+        visible: cb.checked
+      }));
+
+      statusEl.className = 'status show';
+      statusEl.textContent = 'กำลังบันทึก...';
+
+      const { error } = await _sb.from('ui_permissions').upsert(rows, { onConflict: 'role,feature_key' });
+      if (error) {
+        statusEl.className = 'status show err';
+        statusEl.textContent = 'ข้อผิดพลาด: ' + error.message;
+        return;
+      }
+      statusEl.className = 'status show ok';
+      statusEl.textContent = 'บันทึกสิทธิ์การมองเห็นเมนูสำเร็จ ✓ (มีผลกับผู้ใช้อื่นตอนล็อกอินครั้งถัดไป)';
+      setTimeout(() => statusEl.className = 'status', 4000);
     }
 
   </script>
