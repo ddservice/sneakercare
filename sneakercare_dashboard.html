@@ -5454,6 +5454,7 @@
       const bizTaxId = document.getElementById('biz_tax_id').value || '';
       const bizLogoUrl = document.getElementById('biz_logo_url').value || '';
       const logoSrc = bizLogoUrl ? await _imgToBase64(bizLogoUrl) : '';
+      const payerName = _auth.display_name || _auth.username || bizName;
 
       const m = document.getElementById('opex_month').value;
       const [y, mm] = m.split('-');
@@ -5505,8 +5506,9 @@
     .tr-deduct td{color:#ef4444;background:#fef2f2}
     .tr-net td{background:#0d9488;color:#fff;font-weight:700;font-size:14px;padding:10px 12px}
     .bank-block{border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;margin-bottom:20px}
-    .footer-grid{display:grid;grid-template-columns:1fr 1fr;gap:40px;margin-top:24px}
+    .footer-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:20px;margin-top:24px}
     .sign-box{text-align:center;padding-top:40px;border-top:1px solid #94a3b8}
+    .stamp-box{text-align:center;padding-top:16px;border-top:1px dashed #94a3b8;min-height:64px}
     .sign-label{font-size:11px;color:#64748b}
     .disclaimer{margin-top:24px;padding:8px 12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:4px;font-size:10px;color:#64748b;text-align:center}
     .print-toolbar{position:sticky;top:0;z-index:10;display:flex;gap:10px;justify-content:flex-end;
@@ -5525,7 +5527,7 @@
 </div>
 <div class="doc-header">
   <div class="company-block">
-    ${logoSrc ? `<img src="${logoSrc}" style="height:52px; object-fit:contain; border-radius:6px; flex-shrink:0; margin-right:4px">` : ''}
+    ${logoSrc ? `<img src="${logoSrc}" style="height:84px; object-fit:contain; border-radius:6px; flex-shrink:0; margin-right:8px">` : ''}
     <div>
       <div class="bname">${bizName}</div>
       ${bizAddress ? `<div class="bsub">${bizAddress}</div>` : ''}
@@ -5575,7 +5577,8 @@ ${bank ? `
 </div>` : ''}
 
 <div class="footer-grid">
-  <div><div class="sign-box"><div class="sign-label">ลงลายมือชื่อผู้จ่ายเงิน</div><div style="font-weight:600; margin-top:8px">${bizName}</div></div></div>
+  <div><div class="stamp-box"><div class="sign-label">ตราประทับ (ถ้ามี)</div></div></div>
+  <div><div class="sign-box"><div class="sign-label">ลงลายมือชื่อผู้จ่ายเงิน</div><div style="font-weight:600; margin-top:8px">${payerName}</div></div></div>
   <div><div class="sign-box"><div class="sign-label">ลงลายมือชื่อผู้รับเงิน</div><div style="font-weight:600; margin-top:8px">${name}</div></div></div>
 </div>
 
