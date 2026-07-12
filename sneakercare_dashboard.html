@@ -4628,6 +4628,14 @@
         return;
       }
 
+      // เช็คว่ารายการซื้อเข้าแต่ละแถว เคยถูกกด "แก้ไข"/"ลบ" ไปแล้วหรือยัง (มีรายการ adjustment_decrease
+      // อ้าง corrects_txn_id กลับมาที่แถวนี้ไหม) เพื่อโชว์สถานะ + ปิดปุ่มกันกดซ้ำซ้อน
+      const reductionsByTarget = new Map();
+      data.forEach(row => {
+        const dd = row.after_data || {};
+        if (dd.corrects_txn_id && dd.txn_type === 'adjustment_decrease') reductionsByTarget.set(dd.corrects_txn_id, dd.status);
+      });
+
       INV_PURCHASE_HISTORY = rows.map(row => ({ ...(row.after_data || {}), performed_at: row.performed_at, performed_by: row.performed_by }));
 
       tbody.innerHTML = rows.map(row => {
@@ -4638,9 +4646,20 @@
         const unitCost = Number(d.unit_cost_snapshot || 0);
         const total = Number(d.total_cost || (Number(d.quantity_delta || 0) * unitCost));
         const isRebook = d.reference_type === 'correction';
-        return `<tr>
+        const reductionRaw = reductionsByTarget.get(d.id);
+        const reduction = reductionRaw === 'rejected' ? undefined : reductionRaw; // ถูกปฏิเสธแล้ว = แก้ไข/ลบใหม่ได้อีก
+        const badge = isRebook
+          ? ' <span class="badge badge-amber" style="font-size:10px">แก้ไขจากรายการเดิม</span>'
+          : reduction === 'pending_approval'
+            ? ' <span class="badge badge-amber" style="font-size:10px">รออนุมัติการลบ/แก้ไข</span>'
+            : reduction === 'approved'
+              ? ' <span class="badge badge-red" style="font-size:10px">ถูกลบ/แก้ไขแล้ว</span>'
+              : reductionRaw === 'rejected'
+                ? ' <span class="badge badge-red" style="font-size:10px">คำขอลบ/แก้ไขถูกปฏิเสธ</span>'
+                : '';
+        return `<tr${reduction === 'approved' ? ' style="opacity:0.6; text-decoration:line-through"' : ''}>
           <td style="white-space:nowrap; font-size:12px">${when}</td>
-          <td>${item ? item.name : '-'}${isRebook ? ' <span class="badge badge-amber" style="font-size:10px">แก้ไขจากรายการเดิม</span>' : ''}</td>
+          <td>${item ? item.name : '-'}${badge}</td>
           <td style="text-align:right">${Number(d.quantity_delta || 0).toLocaleString('th-TH')} ${item ? item.base_unit : ''}</td>
           <td style="text-align:right">${unitCost.toLocaleString('th-TH', { minimumFractionDigits: 2 })} ฿</td>
           <td style="text-align:right; font-weight:600">${total.toLocaleString('th-TH', { minimumFractionDigits: 2 })} ฿</td>
@@ -4648,8 +4667,10 @@
           <td style="font-size:12px">${d.reference_note || '-'}</td>
           <td style="font-size:12px">${row.performed_by === _auth.user_id ? _auth.display_name : (row.performed_by || '-')}</td>
           <td style="text-align:center; white-space:nowrap">
-            <button onclick="invOpenCorrectPurchaseModal('${d.id}')" style="font-size:11px;padding:3px 10px;border:1.5px solid var(--c-primary);background:white;color:var(--c-primary);border-radius:6px;cursor:pointer;margin-right:4px">แก้ไข</button>
-            <button onclick="invOpenVoidPurchaseModal('${d.id}')" style="font-size:11px;padding:3px 10px;border:1.5px solid var(--danger);background:white;color:var(--danger);border-radius:6px;cursor:pointer">ลบ</button>
+            ${reduction ? '' : `
+              <button onclick="invOpenCorrectPurchaseModal('${d.id}')" style="font-size:11px;padding:3px 10px;border:1.5px solid var(--c-primary);background:white;color:var(--c-primary);border-radius:6px;cursor:pointer;margin-right:4px">แก้ไข</button>
+              <button onclick="invOpenVoidPurchaseModal('${d.id}')" style="font-size:11px;padding:3px 10px;border:1.5px solid var(--danger);background:white;color:var(--danger);border-radius:6px;cursor:pointer">ลบ</button>
+            `}
           </td>
         </tr>`;
       }).join('');
