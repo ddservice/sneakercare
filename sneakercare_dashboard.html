@@ -1259,6 +1259,32 @@
     </div>
   </div>
 
+  <!-- ── Void Purchase Modal (ลบรายการซื้อเข้าที่กรอกซ้ำ/ผิด — บังคับกรอกเหตุผล) ── -->
+  <div id="void_txn_modal_overlay" class="modal-overlay hidden">
+    <div class="modal-card" style="max-width:420px">
+      <h3 style="font-size:16px;font-weight:700;color:var(--danger)"><i class="ti ti-trash"></i>
+        ลบรายการซื้อเข้า — <span id="void_txn_item_label"></span>
+      </h3>
+      <input type="hidden" id="void_txn_id">
+      <p id="void_txn_orig_label" style="font-size:13px;margin-bottom:10px"></p>
+      <p style="font-size:12px;color:var(--muted);margin-bottom:12px">
+        ระบบจะไม่ลบรายการเดิมออกจากประวัติ แต่จะสร้างรายการยกเลิกที่หักล้างจำนวน/ยอดเงินออกให้ครบ
+        (เก็บประวัติทั้งของเดิมและที่ลบไว้ให้ตรวจสอบย้อนหลังได้เสมอ)
+      </p>
+      <div class="field" style="margin-bottom:12px">
+        <label>เหตุผลที่ลบรายการนี้ (จำเป็น)</label>
+        <input type="text" id="void_txn_reason" placeholder="เช่น กรอกซ้ำกับอีกรายการ, บันทึกผิดสินค้า">
+      </div>
+      <div id="void_txn_err" style="font-size:12px;color:var(--danger);min-height:16px"></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <button onclick="document.getElementById('void_txn_modal_overlay').classList.add('hidden')"
+          class="btn btn-light">ยกเลิก</button>
+        <button onclick="invSaveVoidPurchase()"
+          style="padding:10px;border:none;border-radius:8px;background:var(--danger);color:#fff;font-weight:600;cursor:pointer">ยืนยันลบรายการ</button>
+      </div>
+    </div>
+  </div>
+
   <!-- ── Delete Item Modal (ต้องพิมพ์ชื่อสินค้ายืนยันก่อนลบ) ── -->
   <div id="delete_item_modal_overlay" class="modal-overlay hidden">
     <div class="modal-card" style="max-width:420px">
@@ -4620,7 +4646,10 @@
           <td style="font-size:12px">${d.reference_note || '-'}</td>
           <td style="font-size:12px">${row.performed_by === _auth.user_id ? _auth.display_name : (row.performed_by || '-')}</td>
           <td style="text-align:center; white-space:nowrap">
-            ${isCorrection ? '' : `<button onclick="invOpenCorrectPurchaseModal('${d.id}')" style="font-size:11px;padding:3px 10px;border:1.5px solid var(--c-primary);background:white;color:var(--c-primary);border-radius:6px;cursor:pointer">แก้ไข</button>`}
+            ${isCorrection ? '' : `
+              <button onclick="invOpenCorrectPurchaseModal('${d.id}')" style="font-size:11px;padding:3px 10px;border:1.5px solid var(--c-primary);background:white;color:var(--c-primary);border-radius:6px;cursor:pointer;margin-right:4px">แก้ไข</button>
+              <button onclick="invOpenVoidPurchaseModal('${d.id}')" style="font-size:11px;padding:3px 10px;border:1.5px solid var(--danger);background:white;color:var(--danger);border-radius:6px;cursor:pointer">ลบ</button>
+            `}
           </td>
         </tr>`;
       }).join('');
@@ -4687,6 +4716,49 @@
       if (newErr) { errEl.textContent = 'ยกเลิกรายการเดิมสำเร็จแล้ว แต่บันทึกรายการที่แก้ไขไม่สำเร็จ: ' + newErr.message + ' (กรุณาแจ้ง Admin ตรวจสอบยอดคงเหลือ)'; return; }
 
       document.getElementById('correct_txn_modal_overlay').classList.add('hidden');
+      loadInventoryData();
+    }
+
+    // ── ลบรายการซื้อเข้าที่กรอกซ้ำ/ผิดออกทั้งหมด (ไม่ใช่แก้เป็นค่าใหม่ แค่ต้องการให้จำนวน+ยอดเงินหายไป)
+    // เหมือนแก้ไขด้านบนแต่ทำแค่ขั้นตอน "ยกเลิก" ขั้นตอนเดียว ไม่มีขั้นตอน "บันทึกใหม่" ────────────────
+    function invOpenVoidPurchaseModal(txnId) {
+      const d = INV_PURCHASE_HISTORY.find(r => r.id === txnId);
+      if (!d) { alert('ไม่พบรายการนี้ อาจถูกแก้ไข/ลบไปแล้ว ลองรีเฟรชหน้าใหม่'); return; }
+      const item = INV_ITEMS.find(i => i.id === d.item_id);
+      if (!item) { alert('ไม่พบข้อมูลสินค้าของรายการนี้'); return; }
+
+      document.getElementById('void_txn_id').value = d.id;
+      document.getElementById('void_txn_item_label').textContent = item.name;
+      const qty = Number(d.quantity_delta || 0) / item.purchase_unit_qty;
+      document.getElementById('void_txn_orig_label').textContent =
+        `จะลบรายการ: ${qty.toLocaleString('th-TH')} ${item.purchase_unit} รวม ${Number(d.total_cost || 0).toLocaleString('th-TH', { minimumFractionDigits: 2 })} ฿ — ยอดคงเหลือและมูลค่าจะถูกหักออกทันที`;
+      document.getElementById('void_txn_reason').value = '';
+      document.getElementById('void_txn_err').textContent = '';
+      document.getElementById('void_txn_modal_overlay').classList.remove('hidden');
+    }
+
+    async function invSaveVoidPurchase() {
+      const txnId = document.getElementById('void_txn_id').value;
+      const d = INV_PURCHASE_HISTORY.find(r => r.id === txnId);
+      const errEl = document.getElementById('void_txn_err');
+      if (!d) { errEl.textContent = 'ไม่พบรายการเดิม'; return; }
+      const item = INV_ITEMS.find(i => i.id === d.item_id);
+      if (!item) { errEl.textContent = 'ไม่พบข้อมูลสินค้า'; return; }
+
+      const reason = document.getElementById('void_txn_reason').value.trim();
+      if (!reason) { errEl.textContent = 'กรุณาระบุเหตุผลที่ลบรายการนี้ (จำเป็นสำหรับตรวจสอบย้อนหลัง)'; return; }
+
+      errEl.style.color = ''; errEl.textContent = 'กำลังบันทึก...';
+
+      const { error } = await _sb.from('inv_stock_transactions').insert({
+        item_id: item.id, branch_id: d.branch_id, txn_type: 'stock_in',
+        quantity_delta: -Number(d.quantity_delta), unit_cost_snapshot: Number(d.unit_cost_snapshot),
+        supplier_id: d.supplier_id || null, reference_type: 'correction', corrects_txn_id: d.id,
+        reference_note: `ลบรายการที่กรอกซ้ำ/ผิด — เหตุผล: ${reason}`, performed_by: _auth.user_id
+      });
+      if (error) { errEl.textContent = 'ลบไม่สำเร็จ: ' + error.message; return; }
+
+      document.getElementById('void_txn_modal_overlay').classList.add('hidden');
       loadInventoryData();
     }
 
