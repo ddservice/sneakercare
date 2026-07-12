@@ -1175,12 +1175,46 @@
             <input type="number" id="inv_item_init_total" value="0" min="0" step="0.01">
           </div>
         </div>
+        <div class="field" style="margin-bottom:12px">
+          <label>Supplier / ร้านค้า (ถ้ามี)</label>
+          <select id="inv_item_init_supplier">
+            <option value="">— ไม่ระบุ —</option>
+          </select>
+        </div>
       </div>
       <div id="inv_item_modal_err" style="font-size:12px;color:var(--danger);min-height:16px"></div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
         <button onclick="document.getElementById('inv_item_modal_overlay').classList.add('hidden')"
           class="btn btn-light">ยกเลิก</button>
         <button onclick="invSaveItem()" class="btn btn-primary">บันทึก</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Supplier Modal ── -->
+  <div id="supplier_modal_overlay" class="modal-overlay hidden">
+    <div class="modal-card" style="max-width:400px">
+      <h3 style="font-size:16px;font-weight:700;color:var(--c-primary-hover)"><i class="ti ti-truck-delivery"></i>
+        <span id="supplier_modal_title">เพิ่ม Supplier ใหม่</span>
+      </h3>
+      <input type="hidden" id="supplier_id">
+      <div class="field">
+        <label>ชื่อ Supplier / ร้านค้า</label>
+        <input type="text" id="supplier_name" placeholder="เช่น ร้านอุปกรณ์ทำความสะอาด ABC">
+      </div>
+      <div class="field">
+        <label>เบอร์โทร (ถ้ามี)</label>
+        <input type="text" id="supplier_phone">
+      </div>
+      <div class="field" style="margin-bottom:12px">
+        <label>หมายเหตุ (ที่อยู่/Line ฯลฯ ถ้ามี)</label>
+        <input type="text" id="supplier_note">
+      </div>
+      <div id="supplier_modal_err" style="font-size:12px;color:var(--danger);min-height:16px"></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <button onclick="document.getElementById('supplier_modal_overlay').classList.add('hidden')"
+          class="btn btn-light">ยกเลิก</button>
+        <button onclick="invSaveSupplier()" class="btn btn-primary">บันทึก</button>
       </div>
     </div>
   </div>
@@ -1764,6 +1798,34 @@
         </div>
       </div>
 
+      <!-- Supplier master list (admin/co-admin) -->
+      <div class="card" id="inv_card_suppliers" style="display:none">
+        <div class="card-head">
+          <div class="card-head-left"><i class="ti ti-truck-delivery"></i><span>จัดการ Supplier / ร้านค้า</span></div>
+          <button onclick="invOpenSupplierModal()"
+            style="display:inline-flex; align-items:center; gap:4px; font-size:12px; padding:5px 12px;
+                   border:1.5px solid var(--c-primary); border-radius:8px; background:var(--c-primary);
+                   color:#fff; font-weight:600; cursor:pointer">
+            <i class="ti ti-plus"></i> เพิ่ม Supplier
+          </button>
+        </div>
+        <div class="card-body" style="padding:0">
+          <div class="table-container">
+            <table class="tbl" id="inv_suppliers_table">
+              <thead>
+                <tr>
+                  <th>ชื่อ Supplier / ร้านค้า</th><th>เบอร์โทร</th><th>หมายเหตุ</th>
+                  <th>สถานะ</th><th style="text-align:center">จัดการ</th>
+                </tr>
+              </thead>
+              <tbody id="inv_suppliers_tbody">
+                <tr><td colspan="5" style="text-align:center; color:var(--muted); padding:20px">กำลังโหลด...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
       <!-- Stock in / Stock out -->
       <div class="row2">
         <!-- Stock in (admin/co-admin) -->
@@ -1789,9 +1851,22 @@
                 <input type="number" id="inv_in_total" value="0" min="0" step="0.01">
               </div>
             </div>
-            <div class="field" style="margin-bottom:12px">
-              <label>เลขที่ใบเสร็จ/ผู้ขาย (ถ้ามี)</label>
-              <input type="text" id="inv_in_note">
+            <div class="row2" style="margin-bottom:12px">
+              <div class="field">
+                <label>Supplier / ร้านค้า (ถ้ามี)</label>
+                <div style="display:flex; gap:6px">
+                  <select id="inv_in_supplier" style="flex:1">
+                    <option value="">— ไม่ระบุ —</option>
+                  </select>
+                  <button type="button" onclick="invOpenSupplierModal()" title="เพิ่ม Supplier ใหม่"
+                    style="flex-shrink:0; padding:0 10px; border:1.5px solid var(--c-primary); border-radius:8px;
+                           background:#fff; color:var(--c-primary); font-weight:600; cursor:pointer">+</button>
+                </div>
+              </div>
+              <div class="field">
+                <label>เลขที่ใบเสร็จ (ถ้ามี)</label>
+                <input type="text" id="inv_in_note">
+              </div>
             </div>
             <div id="inv_status_in" class="status"></div>
             <button class="btn btn-primary btn-full" onclick="invSaveStockIn()">
@@ -1964,11 +2039,11 @@
                 <tr>
                   <th>วันที่</th><th>สินค้า</th><th style="text-align:right">จำนวน</th>
                   <th style="text-align:right">ราคาต่อหน่วย</th><th style="text-align:right">รวม</th>
-                  <th>เลขที่ใบเสร็จ/ผู้ขาย</th><th>ผู้ทำรายการ</th>
+                  <th>Supplier</th><th>เลขที่ใบเสร็จ</th><th>ผู้ทำรายการ</th>
                 </tr>
               </thead>
               <tbody id="inv_purchase_history_tbody">
-                <tr><td colspan="7" style="text-align:center; color:var(--muted); padding:16px">กำลังโหลด...</td></tr>
+                <tr><td colspan="8" style="text-align:center; color:var(--muted); padding:16px">กำลังโหลด...</td></tr>
               </tbody>
             </table>
           </div>
@@ -3942,6 +4017,7 @@
     let INV_BRANCH_ID = null;
     let INV_ITEMS = [];   // แคตตาล็อกสินค้า (active + inactive)
     let INV_STOCK = [];   // ยอดคงเหลือ join กับ items ของสาขานี้
+    let INV_SUPPLIERS = []; // รายชื่อ supplier/ร้านค้า (active + inactive)
 
     function invRole() { return _auth.role || ''; }
     function invIsAdmin() { return invRole() === 'admin'; }
@@ -3956,6 +4032,7 @@
       show('inv_card_pending', uiVisible('inv_card_pending'));
       show('inv_card_audit', uiVisible('inv_card_audit'));
       show('inv_card_purchase_history', uiVisible('inv_card_purchase_history'));
+      show('inv_card_suppliers', uiVisible('inv_card_suppliers'));
       show('inv_card_settings', uiVisible('inv_card_settings'));
       const costHead = document.getElementById('inv_cost_col_head');
       if (costHead) costHead.style.display = uiVisible('inv_cost_col_head') ? '' : 'none';
@@ -3970,11 +4047,14 @@
         }
         if (!INV_BRANCH_ID) return;
 
-        const [itemsRes, stockRes] = await Promise.all([
+        const [itemsRes, stockRes, suppliersRes] = await Promise.all([
           _sb.from('inv_items').select('*').order('name'),
-          _sb.from('inv_item_stock').select('*').eq('branch_id', INV_BRANCH_ID)
+          _sb.from('inv_item_stock').select('*').eq('branch_id', INV_BRANCH_ID),
+          uiVisible('inv_card_stock_in') || uiVisible('inv_card_suppliers') || invIsAdmin()
+            ? _sb.from('inv_suppliers').select('*').order('name') : Promise.resolve({ data: [] })
         ]);
 
+        INV_SUPPLIERS = suppliersRes.data || [];
         INV_ITEMS = itemsRes.data || [];
         const stockByItem = new Map((stockRes.data || []).map(s => [s.item_id, s]));
         INV_STOCK = INV_ITEMS.filter(i => i.is_active).map(i => {
@@ -3990,8 +4070,10 @@
         invApplyRoleVisibility();
         invRenderItemsTable();
         invPopulateItemSelects();
+        invPopulateSupplierSelects();
         renderStockStatusTable();
         renderStockAlerts();
+        if (uiVisible('inv_card_suppliers')) { invRenderSuppliersTable(); }
         if (uiVisible('inv_card_pending')) { invRenderPendingTable(); }
         if (uiVisible('inv_card_audit')) { invRenderAuditLog(); }
         if (uiVisible('inv_card_purchase_history')) { invRenderPurchaseHistory(); }
@@ -4015,6 +4097,7 @@
       document.getElementById('inv_item_min_stock').value = item ? item.default_min_stock_level : 0;
       document.getElementById('inv_item_init_qty').value = 0;
       document.getElementById('inv_item_init_total').value = 0;
+      document.getElementById('inv_item_init_supplier').value = '';
       document.getElementById('inv_item_init_stock_wrap').style.display = item ? 'none' : '';
       document.getElementById('inv_item_modal_err').textContent = '';
       document.getElementById('inv_item_modal_overlay').classList.remove('hidden');
@@ -4031,6 +4114,7 @@
       const default_min_stock_level = +document.getElementById('inv_item_min_stock').value || 0;
       const initQty = +document.getElementById('inv_item_init_qty').value || 0;
       const initTotal = +document.getElementById('inv_item_init_total').value || 0;
+      const initSupplier = document.getElementById('inv_item_init_supplier').value || null;
       const errEl = document.getElementById('inv_item_modal_err');
 
       if (!name || !category || !base_unit || !purchase_unit) { errEl.textContent = 'กรุณากรอกข้อมูลให้ครบทุกช่อง'; return; }
@@ -4050,7 +4134,7 @@
           const unitCost = baseQty > 0 ? initTotal / baseQty : 0;
           const { error: txnErr } = await _sb.from('inv_stock_transactions').insert({
             item_id: newItem.id, branch_id: INV_BRANCH_ID, txn_type: 'stock_in',
-            quantity_delta: baseQty, unit_cost_snapshot: unitCost,
+            quantity_delta: baseQty, unit_cost_snapshot: unitCost, supplier_id: initSupplier,
             reference_type: 'purchase', reference_note: 'สต๊อกเริ่มต้นตอนเพิ่มสินค้าใหม่', performed_by: _auth.user_id
           });
           if (txnErr) { errEl.textContent = 'เพิ่มสินค้าสำเร็จ แต่บันทึกสต๊อกเริ่มต้นไม่สำเร็จ: ' + txnErr.message; }
@@ -4088,6 +4172,85 @@
           </td>
         </tr>
       `).join('');
+    }
+
+    // ── Suppliers (admin/co-admin) ──────────────────────────────────
+    function invOpenSupplierModal(supplierId) {
+      const supplier = supplierId ? INV_SUPPLIERS.find(s => s.id === supplierId) : null;
+      document.getElementById('supplier_modal_title').textContent = supplier ? 'แก้ไข Supplier' : 'เพิ่ม Supplier ใหม่';
+      document.getElementById('supplier_id').value = supplier ? supplier.id : '';
+      document.getElementById('supplier_name').value = supplier ? supplier.name : '';
+      document.getElementById('supplier_phone').value = supplier ? (supplier.phone || '') : '';
+      document.getElementById('supplier_note').value = supplier ? (supplier.note || '') : '';
+      document.getElementById('supplier_modal_err').textContent = '';
+      document.getElementById('supplier_modal_overlay').classList.remove('hidden');
+    }
+
+    async function invSaveSupplier() {
+      const id = document.getElementById('supplier_id').value;
+      const name = document.getElementById('supplier_name').value.trim();
+      const phone = document.getElementById('supplier_phone').value.trim();
+      const note = document.getElementById('supplier_note').value.trim();
+      const errEl = document.getElementById('supplier_modal_err');
+
+      if (!name) { errEl.textContent = 'กรุณากรอกชื่อ Supplier'; return; }
+
+      const payload = { name, phone: phone || null, note: note || null };
+      const q = id ? _sb.from('inv_suppliers').update(payload).eq('id', id)
+                   : _sb.from('inv_suppliers').insert(payload).select().single();
+      const { data: savedSupplier, error } = await q;
+      if (error) { errEl.textContent = 'บันทึกไม่สำเร็จ: ' + error.message; return; }
+
+      document.getElementById('supplier_modal_overlay').classList.add('hidden');
+      await loadInventoryData();
+      // ถ้าเปิด modal นี้จากปุ่ม + ในฟอร์มรับของเข้า ให้เลือก supplier ที่เพิ่งสร้างให้อัตโนมัติเลย
+      const newId = id || savedSupplier?.id;
+      if (!id && newId) {
+        const inSel = document.getElementById('inv_in_supplier');
+        if (inSel) inSel.value = newId;
+      }
+    }
+
+    async function invToggleSupplierActive(id, nextActive) {
+      await _sb.from('inv_suppliers').update({ is_active: nextActive }).eq('id', id);
+      loadInventoryData();
+    }
+
+    function invRenderSuppliersTable() {
+      const tbody = document.getElementById('inv_suppliers_tbody');
+      if (!tbody) return;
+      if (!INV_SUPPLIERS.length) {
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:20px">ยังไม่มี Supplier กด "เพิ่ม Supplier" เพื่อเริ่มต้น</td></tr>';
+        return;
+      }
+      tbody.innerHTML = INV_SUPPLIERS.map(s => `
+        <tr>
+          <td><strong>${s.name}</strong></td>
+          <td>${s.phone || '-'}</td>
+          <td style="font-size:12px">${s.note || '-'}</td>
+          <td><span class="badge ${s.is_active ? 'badge-green' : 'badge-red'}">${s.is_active ? 'ใช้งานอยู่' : 'ปิดใช้งาน'}</span></td>
+          <td style="text-align:center; white-space:nowrap">
+            <button onclick="invOpenSupplierModal('${s.id}')" style="font-size:11px;padding:3px 10px;border:1.5px solid var(--c-primary);background:white;color:var(--c-primary);border-radius:6px;cursor:pointer;margin-right:4px">แก้ไข</button>
+            <button onclick="invToggleSupplierActive('${s.id}', ${!s.is_active})" style="font-size:11px;padding:3px 10px;border:1.5px solid var(--muted);background:white;color:var(--muted);border-radius:6px;cursor:pointer">${s.is_active ? 'ปิดใช้งาน' : 'เปิดใช้งาน'}</button>
+          </td>
+        </tr>
+      `).join('');
+    }
+
+    function invPopulateSupplierSelects() {
+      const activeSuppliers = INV_SUPPLIERS.filter(s => s.is_active);
+      ['inv_in_supplier', 'inv_item_init_supplier'].forEach(id => {
+        const sel = document.getElementById(id);
+        if (!sel) return;
+        const current = sel.value;
+        sel.innerHTML = '<option value="">— ไม่ระบุ —</option>';
+        activeSuppliers.forEach(s => {
+          const opt = document.createElement('option');
+          opt.value = s.id; opt.textContent = s.name;
+          sel.appendChild(opt);
+        });
+        if (current) sel.value = current;
+      });
     }
 
     // ── Dropdowns ──────────────────────────────────────────────────
@@ -4157,6 +4320,7 @@
       const purchaseQty = +document.getElementById('inv_in_qty').value || 0;
       const totalCost = +document.getElementById('inv_in_total').value;
       const note = document.getElementById('inv_in_note').value.trim();
+      const supplierId = document.getElementById('inv_in_supplier').value || null;
       const statusEl = document.getElementById('inv_status_in');
 
       const item = INV_ITEMS.find(i => i.id === itemId);
@@ -4170,7 +4334,7 @@
       statusEl.className = 'status show'; statusEl.textContent = 'กำลังบันทึก...';
       const { error } = await _sb.from('inv_stock_transactions').insert({
         item_id: itemId, branch_id: INV_BRANCH_ID, txn_type: 'stock_in',
-        quantity_delta: baseQty, unit_cost_snapshot: unitCost,
+        quantity_delta: baseQty, unit_cost_snapshot: unitCost, supplier_id: supplierId,
         reference_type: 'purchase', reference_note: note || null, performed_by: _auth.user_id
       });
       if (error) { statusEl.className = 'status show err'; statusEl.textContent = 'ข้อผิดพลาด: ' + error.message; return; }
@@ -4180,6 +4344,7 @@
       statusEl.className = 'status show ok'; statusEl.textContent = 'บันทึกรับของเข้าเรียบร้อย ✓';
       document.getElementById('inv_in_qty').value = 1;
       document.getElementById('inv_in_total').value = 0;
+      document.getElementById('inv_in_supplier').value = '';
       document.getElementById('inv_in_note').value = '';
       setTimeout(() => statusEl.className = 'status', 3000);
       loadInventoryData();
@@ -4320,19 +4485,20 @@
         .select('*').eq('table_name', 'inv_stock_transactions').order('performed_at', { ascending: false }).limit(50);
 
       if (error || !data || !data.length) {
-        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:16px">ยังไม่มีประวัติการซื้อเข้า</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:16px">ยังไม่มีประวัติการซื้อเข้า</td></tr>';
         return;
       }
 
       const rows = data.filter(row => (row.after_data || {}).txn_type === 'stock_in');
       if (!rows.length) {
-        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:16px">ยังไม่มีประวัติการซื้อเข้า</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:16px">ยังไม่มีประวัติการซื้อเข้า</td></tr>';
         return;
       }
 
       tbody.innerHTML = rows.map(row => {
         const d = row.after_data || {};
         const item = INV_ITEMS.find(i => i.id === d.item_id);
+        const supplier = INV_SUPPLIERS.find(s => s.id === d.supplier_id);
         const when = row.performed_at ? new Date(row.performed_at).toLocaleString('th-TH', { dateStyle: 'short', timeStyle: 'short' }) : '';
         const unitCost = Number(d.unit_cost_snapshot || 0);
         const total = Number(d.total_cost || (Number(d.quantity_delta || 0) * unitCost));
@@ -4342,6 +4508,7 @@
           <td style="text-align:right">${Number(d.quantity_delta || 0).toLocaleString('th-TH')} ${item ? item.base_unit : ''}</td>
           <td style="text-align:right">${unitCost.toLocaleString('th-TH', { minimumFractionDigits: 2 })} ฿</td>
           <td style="text-align:right; font-weight:600">${total.toLocaleString('th-TH', { minimumFractionDigits: 2 })} ฿</td>
+          <td style="font-size:12px">${supplier ? supplier.name : '-'}</td>
           <td style="font-size:12px">${d.reference_note || '-'}</td>
           <td style="font-size:12px">${row.performed_by === _auth.user_id ? _auth.display_name : (row.performed_by || '-')}</td>
         </tr>`;
@@ -7190,6 +7357,7 @@ ${bank ? `
       { key: 'card_data_import',   label: 'นำเข้า/ส่งออกข้อมูล Excel' },
       { key: 'tab_settings',       label: 'แท็บตั้งค่า (ทั้งหมด)' },
       { key: 'inv_card_items',     label: 'จัดการสินค้า (คลังสินค้า)' },
+      { key: 'inv_card_suppliers', label: 'จัดการ Supplier / ร้านค้า' },
       { key: 'inv_card_stock_in',  label: 'รับของเข้าคลัง' },
       { key: 'inv_card_adjustment', label: 'ปรับปรุงสต๊อกจากตรวจนับ' },
       { key: 'inv_card_pending',   label: 'อนุมัติการปรับปรุงสต๊อก' },
