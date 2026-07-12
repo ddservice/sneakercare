@@ -1230,6 +1230,7 @@
       <p style="font-size:12px;color:var(--muted);margin-bottom:12px">
         ระบบจะไม่แก้ไขรายการเดิม แต่จะสร้างรายการยกเลิก + รายการใหม่ที่ถูกต้องแทน (เก็บประวัติครบ ตรวจสอบย้อนหลังได้)
       </p>
+      <p id="correct_txn_hint" style="font-size:12px;color:var(--warning);margin-bottom:12px"></p>
       <div class="row2" style="margin-bottom:12px">
         <div class="field">
           <label>จำนวนที่ถูกต้อง (หน่วยซื้อ)</label>
@@ -1271,6 +1272,7 @@
         ระบบจะไม่ลบรายการเดิมออกจากประวัติ แต่จะสร้างรายการยกเลิกที่หักล้างจำนวน/ยอดเงินออกให้ครบ
         (เก็บประวัติทั้งของเดิมและที่ลบไว้ให้ตรวจสอบย้อนหลังได้เสมอ)
       </p>
+      <p id="void_txn_hint" style="font-size:12px;color:var(--warning);margin-bottom:12px"></p>
       <div class="field" style="margin-bottom:12px">
         <label>เหตุผลที่ลบรายการนี้ (จำเป็น)</label>
         <input type="text" id="void_txn_reason" placeholder="เช่น กรอกซ้ำกับอีกรายการ, บันทึกผิดสินค้า">
@@ -4635,10 +4637,10 @@
         const when = row.performed_at ? new Date(row.performed_at).toLocaleString('th-TH', { dateStyle: 'short', timeStyle: 'short' }) : '';
         const unitCost = Number(d.unit_cost_snapshot || 0);
         const total = Number(d.total_cost || (Number(d.quantity_delta || 0) * unitCost));
-        const isCorrection = d.reference_type === 'correction';
-        return `<tr${isCorrection ? ' style="opacity:0.65"' : ''}>
+        const isRebook = d.reference_type === 'correction';
+        return `<tr>
           <td style="white-space:nowrap; font-size:12px">${when}</td>
-          <td>${item ? item.name : '-'}${isCorrection ? ' <span class="badge badge-red" style="font-size:10px">ยกเลิกรายการเดิม</span>' : ''}</td>
+          <td>${item ? item.name : '-'}${isRebook ? ' <span class="badge badge-amber" style="font-size:10px">แก้ไขจากรายการเดิม</span>' : ''}</td>
           <td style="text-align:right">${Number(d.quantity_delta || 0).toLocaleString('th-TH')} ${item ? item.base_unit : ''}</td>
           <td style="text-align:right">${unitCost.toLocaleString('th-TH', { minimumFractionDigits: 2 })} ฿</td>
           <td style="text-align:right; font-weight:600">${total.toLocaleString('th-TH', { minimumFractionDigits: 2 })} ฿</td>
@@ -4646,10 +4648,8 @@
           <td style="font-size:12px">${d.reference_note || '-'}</td>
           <td style="font-size:12px">${row.performed_by === _auth.user_id ? _auth.display_name : (row.performed_by || '-')}</td>
           <td style="text-align:center; white-space:nowrap">
-            ${isCorrection ? '' : `
-              <button onclick="invOpenCorrectPurchaseModal('${d.id}')" style="font-size:11px;padding:3px 10px;border:1.5px solid var(--c-primary);background:white;color:var(--c-primary);border-radius:6px;cursor:pointer;margin-right:4px">แก้ไข</button>
-              <button onclick="invOpenVoidPurchaseModal('${d.id}')" style="font-size:11px;padding:3px 10px;border:1.5px solid var(--danger);background:white;color:var(--danger);border-radius:6px;cursor:pointer">ลบ</button>
-            `}
+            <button onclick="invOpenCorrectPurchaseModal('${d.id}')" style="font-size:11px;padding:3px 10px;border:1.5px solid var(--c-primary);background:white;color:var(--c-primary);border-radius:6px;cursor:pointer;margin-right:4px">แก้ไข</button>
+            <button onclick="invOpenVoidPurchaseModal('${d.id}')" style="font-size:11px;padding:3px 10px;border:1.5px solid var(--danger);background:white;color:var(--danger);border-radius:6px;cursor:pointer">ลบ</button>
           </td>
         </tr>`;
       }).join('');
@@ -4674,6 +4674,8 @@
       document.getElementById('correct_txn_supplier').value = d.supplier_id || '';
       document.getElementById('correct_txn_reason').value = '';
       document.getElementById('correct_txn_err').textContent = '';
+      document.getElementById('correct_txn_hint').textContent = invIsAdmin() ? '' :
+        'ขั้นตอนยกเลิกจำนวนเดิมต้องรอ Admin อนุมัติก่อนจึงจะมีผลกับยอดคงเหลือ (ส่วนรายการที่แก้ไขใหม่จะถูกบันทึกทันที)';
       document.getElementById('correct_txn_modal_overlay').classList.remove('hidden');
     }
 
@@ -4699,18 +4701,24 @@
 
       errEl.style.color = ''; errEl.textContent = 'กำลังบันทึก...';
 
+      // ขั้นที่ 1: หักล้างจำนวนเดิมออก — ต้องใช้ txn_type='adjustment_decrease' (ไม่ใช่ stock_in ติดลบ เพราะ
+      // DB มี check constraint บังคับ stock_in ต้องเป็นจำนวนบวกเท่านั้น) ถ้าเป็น Co-Admin จะต้องรอ Admin
+      // อนุมัติก่อนตามกฎ "ปรับปรุงสต๊อกของ Co-Admin ต้อง pending_approval เสมอ"
+      const revStatus = invIsAdmin() ? 'approved' : 'pending_approval';
       const { error: revErr } = await _sb.from('inv_stock_transactions').insert({
-        item_id: item.id, branch_id: d.branch_id, txn_type: 'stock_in',
-        quantity_delta: -Number(d.quantity_delta), unit_cost_snapshot: Number(d.unit_cost_snapshot),
+        item_id: item.id, branch_id: d.branch_id, txn_type: 'adjustment_decrease', status: revStatus,
+        quantity_delta: -Number(d.quantity_delta), reason: `แก้ไขรายการซื้อเข้าที่กรอกผิด: ${reason}`,
         supplier_id: d.supplier_id || null, reference_type: 'correction', corrects_txn_id: d.id,
         reference_note: `ยกเลิกรายการที่กรอกผิด — เหตุผล: ${reason}`, performed_by: _auth.user_id
       });
       if (revErr) { errEl.textContent = 'แก้ไขไม่สำเร็จ (ขั้นยกเลิกรายการเดิม): ' + revErr.message; return; }
 
+      // ขั้นที่ 2: บันทึกรายการที่แก้ไขแล้วเป็นรายการซื้อเข้าใหม่ (stock_in ปกติ ใช้ทันที ไม่ต้องรออนุมัติ
+      // เหมือนการรับของเข้าคลังทั่วไปที่ Co-Admin ทำได้อยู่แล้ว)
       const { error: newErr } = await _sb.from('inv_stock_transactions').insert({
         item_id: item.id, branch_id: d.branch_id, txn_type: 'stock_in',
         quantity_delta: newBaseQty, unit_cost_snapshot: newUnitCost,
-        supplier_id: newSupplier, reference_type: 'purchase', corrects_txn_id: d.id,
+        supplier_id: newSupplier, reference_type: 'correction', corrects_txn_id: d.id,
         reference_note: `แก้ไขจากรายการเดิม — เหตุผล: ${reason}`, performed_by: _auth.user_id
       });
       if (newErr) { errEl.textContent = 'ยกเลิกรายการเดิมสำเร็จแล้ว แต่บันทึกรายการที่แก้ไขไม่สำเร็จ: ' + newErr.message + ' (กรุณาแจ้ง Admin ตรวจสอบยอดคงเหลือ)'; return; }
@@ -4731,9 +4739,12 @@
       document.getElementById('void_txn_item_label').textContent = item.name;
       const qty = Number(d.quantity_delta || 0) / item.purchase_unit_qty;
       document.getElementById('void_txn_orig_label').textContent =
-        `จะลบรายการ: ${qty.toLocaleString('th-TH')} ${item.purchase_unit} รวม ${Number(d.total_cost || 0).toLocaleString('th-TH', { minimumFractionDigits: 2 })} ฿ — ยอดคงเหลือและมูลค่าจะถูกหักออกทันที`;
+        `จะลบรายการ: ${qty.toLocaleString('th-TH')} ${item.purchase_unit} รวม ${Number(d.total_cost || 0).toLocaleString('th-TH', { minimumFractionDigits: 2 })} ฿`;
       document.getElementById('void_txn_reason').value = '';
       document.getElementById('void_txn_err').textContent = '';
+      document.getElementById('void_txn_hint').textContent = invIsAdmin()
+        ? 'ยอดคงเหลือและมูลค่าจะถูกหักออกทันที'
+        : 'รายการนี้ต้องรอ Admin อนุมัติก่อน ยอดคงเหลือจะยังไม่ถูกหักออกจนกว่าจะอนุมัติ';
       document.getElementById('void_txn_modal_overlay').classList.remove('hidden');
     }
 
@@ -4750,9 +4761,12 @@
 
       errEl.style.color = ''; errEl.textContent = 'กำลังบันทึก...';
 
+      // ต้องใช้ txn_type='adjustment_decrease' (ไม่ใช่ stock_in ติดลบ เพราะ DB บังคับ stock_in ต้องเป็นบวก
+      // เท่านั้น) Co-Admin จะต้องรอ Admin อนุมัติก่อนเหมือนการปรับปรุงสต๊อกทั่วไป
+      const status = invIsAdmin() ? 'approved' : 'pending_approval';
       const { error } = await _sb.from('inv_stock_transactions').insert({
-        item_id: item.id, branch_id: d.branch_id, txn_type: 'stock_in',
-        quantity_delta: -Number(d.quantity_delta), unit_cost_snapshot: Number(d.unit_cost_snapshot),
+        item_id: item.id, branch_id: d.branch_id, txn_type: 'adjustment_decrease', status,
+        quantity_delta: -Number(d.quantity_delta), reason: `ลบรายการซื้อเข้าที่กรอกซ้ำ/ผิด: ${reason}`,
         supplier_id: d.supplier_id || null, reference_type: 'correction', corrects_txn_id: d.id,
         reference_note: `ลบรายการที่กรอกซ้ำ/ผิด — เหตุผล: ${reason}`, performed_by: _auth.user_id
       });
