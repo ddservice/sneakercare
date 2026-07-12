@@ -136,7 +136,12 @@ feature_key ยกเว้น `card_user_mgmt`**
     ในทั้ง `invSaveVoidPurchase`/`invSaveCorrectPurchase` หลัง insert สำเร็จและ status เป็น `approved` แล้ว
     **ถ้าจะเพิ่มฟีเจอร์ใหม่ที่แก้ไข/ยกเลิก stock_in transaction ในอนาคต ต้องเรียก `invSyncLegacyStock()`
     ทุกครั้งเสมอ ไม่ใช่แค่ตอน insert ใหม่ปกติ** เพราะมี 2 ระบบขนานกันอยู่ (inv_* กับ sc_stock_transactions
-    เดิม) ที่ยังไม่ได้รวมเป็นระบบเดียว
+    เดิม) ที่ยังไม่ได้รวมเป็นระบบเดียว **มี 2 รายการที่ทำก่อนแก้บั๊กนี้ต้องแก้มือ (migration 0013, 0014):
+    น้ำยาซักผ้า กับ ค่าน้ำยาซักรองเท้าหนังกลับ** — ถ้าเจอ user รายงานว่ายอด "ต้นทุนวัสดุคลัง" ในแท็บภาพรวมดู
+    ไม่ตรงกับที่แก้ไข/ลบไปในหน้าคลังสินค้าอีก **ให้ไล่ trace ledger เต็มของ item นั้นใน
+    `inv_stock_transactions` ก่อนเสมอ (ดู `reference_note`/`performed_by` แยกแยะรายการ "นำเข้าข้อมูลเดิม"
+    ออกจากรายการซื้อจริงให้ดี — เคยสับสนระหว่าง 2 อย่างนี้มาแล้วรอบหนึ่ง ทำให้คำนวณผิดว่ายอดตรงอยู่แล้วทั้งที่
+    จริงๆ ไม่ตรง) แล้วเทียบกับยอดจริงใน `sc_stock_transactions`/`sc_stock_status` ก่อนสรุปว่าตรงหรือไม่ตรง**
   - **บั๊กที่ 3 (แก้แล้ว 2026-07-13)**: การ์ด "ประวัติการซื้อเข้า" เดิมอ่านสถานะ (badge "รออนุมัติ"/"ถูกลบ
     แล้ว") จาก `inv_audit_logs.after_data` ซึ่งเป็นแค่ **snapshot ตอน INSERT เท่านั้น**
     (`inv_trg_audit_stock_transactions` เป็น `after insert` ล้วน ไม่มี `after update`) — พอมีรายการที่สร้าง
@@ -160,7 +165,7 @@ feature_key ยกเว้น `card_user_mgmt`**
 
 ## Migrations
 
-อยู่ที่ `supabase/migrations/` เรียงลำดับ 0001-0013+ — **ห้ามแก้ไฟล์ migration เก่าที่ apply ไปแล้ว** สร้าง
+อยู่ที่ `supabase/migrations/` เรียงลำดับ 0001-0014+ — **ห้ามแก้ไฟล์ migration เก่าที่ apply ไปแล้ว** สร้าง
 ไฟล์ใหม่เสมอ วิธี apply:
 ```bash
 export SUPABASE_ACCESS_TOKEN="<personal access token>"
