@@ -1219,6 +1219,69 @@
     </div>
   </div>
 
+  <!-- ── Correct Purchase Modal (แก้ไขรายการซื้อเข้าที่กรอกผิด) ── -->
+  <div id="correct_txn_modal_overlay" class="modal-overlay hidden">
+    <div class="modal-card" style="max-width:440px">
+      <h3 style="font-size:16px;font-weight:700;color:var(--c-primary-hover)"><i class="ti ti-edit"></i>
+        แก้ไขรายการซื้อเข้า — <span id="correct_txn_item_label"></span>
+      </h3>
+      <input type="hidden" id="correct_txn_id">
+      <p id="correct_txn_orig_label" style="font-size:12px;color:var(--muted);margin-bottom:12px"></p>
+      <p style="font-size:12px;color:var(--muted);margin-bottom:12px">
+        ระบบจะไม่แก้ไขรายการเดิม แต่จะสร้างรายการยกเลิก + รายการใหม่ที่ถูกต้องแทน (เก็บประวัติครบ ตรวจสอบย้อนหลังได้)
+      </p>
+      <div class="row2" style="margin-bottom:12px">
+        <div class="field">
+          <label>จำนวนที่ถูกต้อง (หน่วยซื้อ)</label>
+          <input type="number" id="correct_txn_qty" min="0.001" step="0.001">
+        </div>
+        <div class="field">
+          <label>ยอดที่จ่ายจริงที่ถูกต้อง (บาท)</label>
+          <input type="number" id="correct_txn_total" min="0" step="0.01">
+        </div>
+      </div>
+      <div class="field">
+        <label>Supplier / ร้านค้า (ถ้ามี)</label>
+        <select id="correct_txn_supplier">
+          <option value="">— ไม่ระบุ —</option>
+        </select>
+      </div>
+      <div class="field" style="margin-bottom:12px">
+        <label>เหตุผลที่แก้ไข (จำเป็น)</label>
+        <input type="text" id="correct_txn_reason" placeholder="เช่น พิมพ์จำนวนผิด, ราคาที่กรอกไม่ตรงกับใบเสร็จ">
+      </div>
+      <div id="correct_txn_err" style="font-size:12px;color:var(--danger);min-height:16px"></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <button onclick="document.getElementById('correct_txn_modal_overlay').classList.add('hidden')"
+          class="btn btn-light">ยกเลิก</button>
+        <button onclick="invSaveCorrectPurchase()" class="btn btn-primary">บันทึกการแก้ไข</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Delete Item Modal (ต้องพิมพ์ชื่อสินค้ายืนยันก่อนลบ) ── -->
+  <div id="delete_item_modal_overlay" class="modal-overlay hidden">
+    <div class="modal-card" style="max-width:420px">
+      <h3 style="font-size:16px;font-weight:700;color:var(--danger)"><i class="ti ti-alert-triangle"></i>
+        ลบสินค้าถาวร
+      </h3>
+      <input type="hidden" id="delete_item_id">
+      <p style="font-size:13px;margin-bottom:10px">
+        การลบนี้ย้อนกลับไม่ได้ (สินค้านี้ยังไม่เคยมีประวัติการเคลื่อนไหวสต๊อกเลย จึงลบออกจากระบบได้ทันที
+        โดยไม่กระทบยอดคงเหลือหรือประวัติของสินค้าอื่น)
+      </p>
+      <p style="font-size:13px;margin-bottom:6px">พิมพ์ชื่อสินค้า "<strong id="delete_item_name_label"></strong>" เพื่อยืนยัน:</p>
+      <input type="text" id="delete_item_confirm_input" oninput="invUpdateDeleteItemBtn()" style="margin-bottom:12px">
+      <div id="delete_item_err" style="font-size:12px;color:var(--danger);min-height:16px"></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <button onclick="document.getElementById('delete_item_modal_overlay').classList.add('hidden')"
+          class="btn btn-light">ยกเลิก</button>
+        <button id="delete_item_confirm_btn" disabled onclick="invDeleteItemConfirmed()"
+          style="padding:10px;border:none;border-radius:8px;background:var(--danger);color:#fff;font-weight:600;cursor:pointer;opacity:0.4">ลบถาวร</button>
+      </div>
+    </div>
+  </div>
+
   <!-- ── Edit User Modal ── -->
   <div id="edit_user_modal_overlay" class="modal-overlay hidden">
     <div class="modal-card" style="max-width:400px">
@@ -2039,11 +2102,11 @@
                 <tr>
                   <th>วันที่</th><th>สินค้า</th><th style="text-align:right">จำนวน</th>
                   <th style="text-align:right">ราคาต่อหน่วย</th><th style="text-align:right">รวม</th>
-                  <th>Supplier</th><th>เลขที่ใบเสร็จ</th><th>ผู้ทำรายการ</th>
+                  <th>Supplier</th><th>เลขที่ใบเสร็จ</th><th>ผู้ทำรายการ</th><th style="text-align:center">จัดการ</th>
                 </tr>
               </thead>
               <tbody id="inv_purchase_history_tbody">
-                <tr><td colspan="8" style="text-align:center; color:var(--muted); padding:16px">กำลังโหลด...</td></tr>
+                <tr><td colspan="9" style="text-align:center; color:var(--muted); padding:16px">กำลังโหลด...</td></tr>
               </tbody>
             </table>
           </div>
@@ -4018,6 +4081,7 @@
     let INV_ITEMS = [];   // แคตตาล็อกสินค้า (active + inactive)
     let INV_STOCK = [];   // ยอดคงเหลือ join กับ items ของสาขานี้
     let INV_SUPPLIERS = []; // รายชื่อ supplier/ร้านค้า (active + inactive)
+    let INV_PURCHASE_HISTORY = []; // แถวรับของเข้าล่าสุดที่ render ไว้ (ใช้เปิด modal แก้ไขรายการ)
 
     function invRole() { return _auth.role || ''; }
     function invIsAdmin() { return invRole() === 'admin'; }
@@ -4151,6 +4215,46 @@
       loadInventoryData();
     }
 
+    // ── ลบสินค้าถาวร — อนุญาตเฉพาะสินค้าที่ไม่เคยมีประวัติเคลื่อนไหวสต๊อกเลย (append-only ledger ห้าม
+    // เหลือ orphan reference) ถ้าเคยมีประวัติแล้วต้องใช้ "ปิดใช้งาน" แทนเสมอ เพื่อรักษาประวัติไว้ครบ ────
+    async function invConfirmDeleteItem(id) {
+      const item = INV_ITEMS.find(i => i.id === id);
+      if (!item) return;
+      const name = item.name;
+      const { count, error } = await _sb.from('inv_stock_transactions')
+        .select('id', { count: 'exact', head: true }).eq('item_id', id);
+      if (error) { alert('ตรวจสอบไม่สำเร็จ: ' + error.message); return; }
+      if (count > 0) {
+        alert(`ลบสินค้า "${name}" ไม่ได้ เพราะมีประวัติการเคลื่อนไหวสต๊อกอยู่แล้ว ${count} รายการ (ต้องเก็บไว้เพื่อตรวจสอบย้อนหลัง)\n\nถ้าต้องการเลิกใช้งานสินค้านี้ ให้กด "ปิดใช้งาน" แทน`);
+        return;
+      }
+      document.getElementById('delete_item_id').value = id;
+      document.getElementById('delete_item_name_label').textContent = name;
+      document.getElementById('delete_item_confirm_input').value = '';
+      document.getElementById('delete_item_confirm_btn').disabled = true;
+      document.getElementById('delete_item_err').textContent = '';
+      document.getElementById('delete_item_modal_overlay').classList.remove('hidden');
+    }
+
+    function invUpdateDeleteItemBtn() {
+      const name = document.getElementById('delete_item_name_label').textContent;
+      const typed = document.getElementById('delete_item_confirm_input').value;
+      const btn = document.getElementById('delete_item_confirm_btn');
+      const match = typed === name;
+      btn.disabled = !match;
+      btn.style.opacity = match ? '1' : '0.4';
+      btn.style.cursor = match ? 'pointer' : 'not-allowed';
+    }
+
+    async function invDeleteItemConfirmed() {
+      const id = document.getElementById('delete_item_id').value;
+      const errEl = document.getElementById('delete_item_err');
+      const { error } = await _sb.from('inv_items').delete().eq('id', id);
+      if (error) { errEl.textContent = 'ลบไม่สำเร็จ: ' + error.message; return; }
+      document.getElementById('delete_item_modal_overlay').classList.add('hidden');
+      loadInventoryData();
+    }
+
     function invRenderItemsTable() {
       const tbody = document.getElementById('inv_items_tbody');
       if (!tbody) return;
@@ -4168,6 +4272,7 @@
           <td><span class="badge ${i.is_active ? 'badge-green' : 'badge-red'}">${i.is_active ? 'ใช้งานอยู่' : 'ปิดใช้งาน'}</span></td>
           <td style="text-align:center; white-space:nowrap">
             <button onclick="invOpenItemModal('${i.id}')" style="font-size:11px;padding:3px 10px;border:1.5px solid var(--c-primary);background:white;color:var(--c-primary);border-radius:6px;cursor:pointer;margin-right:4px">แก้ไข</button>
+            <button onclick="invConfirmDeleteItem('${i.id}')" style="font-size:11px;padding:3px 10px;border:1.5px solid var(--danger);background:white;color:var(--danger);border-radius:6px;cursor:pointer;margin-right:4px">ลบ</button>
             <button onclick="invToggleItemActive('${i.id}', ${!i.is_active})" style="font-size:11px;padding:3px 10px;border:1.5px solid var(--muted);background:white;color:var(--muted);border-radius:6px;cursor:pointer">${i.is_active ? 'ปิดใช้งาน' : 'เปิดใช้งาน'}</button>
           </td>
         </tr>
@@ -4239,7 +4344,7 @@
 
     function invPopulateSupplierSelects() {
       const activeSuppliers = INV_SUPPLIERS.filter(s => s.is_active);
-      ['inv_in_supplier', 'inv_item_init_supplier'].forEach(id => {
+      ['inv_in_supplier', 'inv_item_init_supplier', 'correct_txn_supplier'].forEach(id => {
         const sel = document.getElementById(id);
         if (!sel) return;
         const current = sel.value;
@@ -4491,9 +4596,11 @@
 
       const rows = data.filter(row => (row.after_data || {}).txn_type === 'stock_in');
       if (!rows.length) {
-        tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:16px">ยังไม่มีประวัติการซื้อเข้า</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--muted);padding:16px">ยังไม่มีประวัติการซื้อเข้า</td></tr>';
         return;
       }
+
+      INV_PURCHASE_HISTORY = rows.map(row => ({ ...(row.after_data || {}), performed_at: row.performed_at, performed_by: row.performed_by }));
 
       tbody.innerHTML = rows.map(row => {
         const d = row.after_data || {};
@@ -4502,17 +4609,85 @@
         const when = row.performed_at ? new Date(row.performed_at).toLocaleString('th-TH', { dateStyle: 'short', timeStyle: 'short' }) : '';
         const unitCost = Number(d.unit_cost_snapshot || 0);
         const total = Number(d.total_cost || (Number(d.quantity_delta || 0) * unitCost));
-        return `<tr>
+        const isCorrection = d.reference_type === 'correction';
+        return `<tr${isCorrection ? ' style="opacity:0.65"' : ''}>
           <td style="white-space:nowrap; font-size:12px">${when}</td>
-          <td>${item ? item.name : '-'}</td>
+          <td>${item ? item.name : '-'}${isCorrection ? ' <span class="badge badge-red" style="font-size:10px">ยกเลิกรายการเดิม</span>' : ''}</td>
           <td style="text-align:right">${Number(d.quantity_delta || 0).toLocaleString('th-TH')} ${item ? item.base_unit : ''}</td>
           <td style="text-align:right">${unitCost.toLocaleString('th-TH', { minimumFractionDigits: 2 })} ฿</td>
           <td style="text-align:right; font-weight:600">${total.toLocaleString('th-TH', { minimumFractionDigits: 2 })} ฿</td>
           <td style="font-size:12px">${supplier ? supplier.name : '-'}</td>
           <td style="font-size:12px">${d.reference_note || '-'}</td>
           <td style="font-size:12px">${row.performed_by === _auth.user_id ? _auth.display_name : (row.performed_by || '-')}</td>
+          <td style="text-align:center; white-space:nowrap">
+            ${isCorrection ? '' : `<button onclick="invOpenCorrectPurchaseModal('${d.id}')" style="font-size:11px;padding:3px 10px;border:1.5px solid var(--c-primary);background:white;color:var(--c-primary);border-radius:6px;cursor:pointer">แก้ไข</button>`}
+          </td>
         </tr>`;
       }).join('');
+    }
+
+    // ── แก้ไขรายการซื้อเข้าที่กรอกผิด — ห้าม UPDATE/DELETE แถวเดิมเด็ดขาด (append-only ledger)
+    // ทำโดยสร้าง 2 แถวใหม่แทน: (1) หักล้างรายการเดิมให้เป็นศูนย์ (2) บันทึกรายการที่แก้ไขแล้วใหม่
+    // ทั้งคู่อ้าง corrects_txn_id กลับไปที่รายการต้นฉบับ เพื่อให้ตรวจสอบย้อนหลังได้ครบ ────────────
+    function invOpenCorrectPurchaseModal(txnId) {
+      const d = INV_PURCHASE_HISTORY.find(r => r.id === txnId);
+      if (!d) { alert('ไม่พบรายการนี้ อาจถูกแก้ไขไปแล้ว ลองรีเฟรชหน้าใหม่'); return; }
+      const item = INV_ITEMS.find(i => i.id === d.item_id);
+      if (!item) { alert('ไม่พบข้อมูลสินค้าของรายการนี้'); return; }
+
+      document.getElementById('correct_txn_id').value = d.id;
+      document.getElementById('correct_txn_item_label').textContent = item.name;
+      const origQty = Number(d.quantity_delta || 0) / item.purchase_unit_qty;
+      document.getElementById('correct_txn_orig_label').textContent =
+        `รายการเดิม: ${origQty.toLocaleString('th-TH')} ${item.purchase_unit} รวม ${Number(d.total_cost || 0).toLocaleString('th-TH', { minimumFractionDigits: 2 })} ฿`;
+      document.getElementById('correct_txn_qty').value = origQty;
+      document.getElementById('correct_txn_total').value = Number(d.total_cost || 0).toFixed(2);
+      document.getElementById('correct_txn_supplier').value = d.supplier_id || '';
+      document.getElementById('correct_txn_reason').value = '';
+      document.getElementById('correct_txn_err').textContent = '';
+      document.getElementById('correct_txn_modal_overlay').classList.remove('hidden');
+    }
+
+    async function invSaveCorrectPurchase() {
+      const txnId = document.getElementById('correct_txn_id').value;
+      const d = INV_PURCHASE_HISTORY.find(r => r.id === txnId);
+      const errEl = document.getElementById('correct_txn_err');
+      if (!d) { errEl.textContent = 'ไม่พบรายการเดิม'; return; }
+      const item = INV_ITEMS.find(i => i.id === d.item_id);
+      if (!item) { errEl.textContent = 'ไม่พบข้อมูลสินค้า'; return; }
+
+      const newPurchaseQty = +document.getElementById('correct_txn_qty').value || 0;
+      const newTotal = +document.getElementById('correct_txn_total').value;
+      const newSupplier = document.getElementById('correct_txn_supplier').value || null;
+      const reason = document.getElementById('correct_txn_reason').value.trim();
+
+      if (newPurchaseQty <= 0) { errEl.textContent = 'กรุณากรอกจำนวนให้ถูกต้อง'; return; }
+      if (isNaN(newTotal) || newTotal < 0) { errEl.textContent = 'กรุณากรอกยอดที่จ่ายให้ถูกต้อง'; return; }
+      if (!reason) { errEl.textContent = 'กรุณาระบุเหตุผลที่แก้ไข (จำเป็นสำหรับตรวจสอบย้อนหลัง)'; return; }
+
+      const newBaseQty = newPurchaseQty * item.purchase_unit_qty;
+      const newUnitCost = newBaseQty > 0 ? newTotal / newBaseQty : 0;
+
+      errEl.style.color = ''; errEl.textContent = 'กำลังบันทึก...';
+
+      const { error: revErr } = await _sb.from('inv_stock_transactions').insert({
+        item_id: item.id, branch_id: d.branch_id, txn_type: 'stock_in',
+        quantity_delta: -Number(d.quantity_delta), unit_cost_snapshot: Number(d.unit_cost_snapshot),
+        supplier_id: d.supplier_id || null, reference_type: 'correction', corrects_txn_id: d.id,
+        reference_note: `ยกเลิกรายการที่กรอกผิด — เหตุผล: ${reason}`, performed_by: _auth.user_id
+      });
+      if (revErr) { errEl.textContent = 'แก้ไขไม่สำเร็จ (ขั้นยกเลิกรายการเดิม): ' + revErr.message; return; }
+
+      const { error: newErr } = await _sb.from('inv_stock_transactions').insert({
+        item_id: item.id, branch_id: d.branch_id, txn_type: 'stock_in',
+        quantity_delta: newBaseQty, unit_cost_snapshot: newUnitCost,
+        supplier_id: newSupplier, reference_type: 'purchase', corrects_txn_id: d.id,
+        reference_note: `แก้ไขจากรายการเดิม — เหตุผล: ${reason}`, performed_by: _auth.user_id
+      });
+      if (newErr) { errEl.textContent = 'ยกเลิกรายการเดิมสำเร็จแล้ว แต่บันทึกรายการที่แก้ไขไม่สำเร็จ: ' + newErr.message + ' (กรุณาแจ้ง Admin ตรวจสอบยอดคงเหลือ)'; return; }
+
+      document.getElementById('correct_txn_modal_overlay').classList.add('hidden');
+      loadInventoryData();
     }
 
     // ── Telegram settings (admin, write-only secret pattern) ─────
