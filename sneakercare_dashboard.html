@@ -4142,7 +4142,7 @@
         const [itemsRes, stockRes, suppliersRes] = await Promise.all([
           _sb.from('inv_items').select('*').order('name'),
           _sb.from('inv_item_stock').select('*').eq('branch_id', INV_BRANCH_ID),
-          uiVisible('inv_card_stock_in') || uiVisible('inv_card_suppliers') || invIsAdmin()
+          uiVisible('inv_card_stock_in') || uiVisible('inv_card_suppliers') || invCanManageStock()
             ? _sb.from('inv_suppliers').select('*').order('name') : Promise.resolve({ data: [] })
         ]);
 
@@ -4523,7 +4523,7 @@
       if (qty <= 0) { statusEl.className = 'status show err'; statusEl.textContent = 'กรุณากรอกจำนวนให้ถูกต้อง'; return; }
       if (!reason) { statusEl.className = 'status show err'; statusEl.textContent = 'กรุณากรอกเหตุผล'; return; }
 
-      const status = invIsAdmin() ? 'approved' : 'pending_approval';
+      const status = invCanManageStock() ? 'approved' : 'pending_approval';
       statusEl.className = 'status show'; statusEl.textContent = 'กำลังบันทึก...';
       const { error } = await _sb.from('inv_stock_transactions').insert({
         item_id: itemId, branch_id: INV_BRANCH_ID,
@@ -4534,7 +4534,7 @@
       if (error) { statusEl.className = 'status show err'; statusEl.textContent = 'ข้อผิดพลาด: ' + error.message; return; }
 
       statusEl.className = 'status show ok';
-      statusEl.textContent = invIsAdmin() ? 'บันทึกการปรับปรุงสต๊อกเรียบร้อย ✓' : 'ส่งคำขอปรับปรุงสต๊อกไปรออนุมัติแล้ว ✓';
+      statusEl.textContent = invCanManageStock() ? 'บันทึกการปรับปรุงสต๊อกเรียบร้อย ✓' : 'ส่งคำขอปรับปรุงสต๊อกไปรออนุมัติแล้ว ✓';
       document.getElementById('inv_adj_qty').value = 1;
       document.getElementById('inv_adj_reason').value = '';
       setTimeout(() => statusEl.className = 'status', 3000);
@@ -4543,7 +4543,7 @@
 
     function invUpdateAdjHint() {
       const hint = document.getElementById('inv_adj_hint');
-      if (hint) hint.textContent = invIsAdmin() ? '' : 'รายการนี้จะถูกส่งไปรออนุมัติจาก Admin ก่อน ยอดคงเหลือจะยังไม่เปลี่ยนจนกว่าจะอนุมัติ';
+      if (hint) hint.textContent = invCanManageStock() ? '' : 'รายการนี้จะถูกส่งไปรออนุมัติจาก Admin ก่อน ยอดคงเหลือจะยังไม่เปลี่ยนจนกว่าจะอนุมัติ';
     }
 
     // ── Pending approvals (admin) ────────────────────────────────
@@ -4695,7 +4695,7 @@
       document.getElementById('correct_txn_supplier').value = d.supplier_id || '';
       document.getElementById('correct_txn_reason').value = '';
       document.getElementById('correct_txn_err').textContent = '';
-      document.getElementById('correct_txn_hint').textContent = invIsAdmin() ? '' :
+      document.getElementById('correct_txn_hint').textContent = invCanManageStock() ? '' :
         'ขั้นตอนยกเลิกจำนวนเดิมต้องรอ Admin อนุมัติก่อนจึงจะมีผลกับยอดคงเหลือ (ส่วนรายการที่แก้ไขใหม่จะถูกบันทึกทันที)';
       document.getElementById('correct_txn_modal_overlay').classList.remove('hidden');
     }
@@ -4723,9 +4723,9 @@
       errEl.style.color = ''; errEl.textContent = 'กำลังบันทึก...';
 
       // ขั้นที่ 1: หักล้างจำนวนเดิมออก — ต้องใช้ txn_type='adjustment_decrease' (ไม่ใช่ stock_in ติดลบ เพราะ
-      // DB มี check constraint บังคับ stock_in ต้องเป็นจำนวนบวกเท่านั้น) ถ้าเป็น Co-Admin จะต้องรอ Admin
-      // อนุมัติก่อนตามกฎ "ปรับปรุงสต๊อกของ Co-Admin ต้อง pending_approval เสมอ"
-      const revStatus = invIsAdmin() ? 'approved' : 'pending_approval';
+      // DB มี check constraint บังคับ stock_in ต้องเป็นจำนวนบวกเท่านั้น) Admin/Co-Admin ได้ผลทันที
+      // เฉพาะ Manager/Staff เท่านั้นที่ต้องรออนุมัติ (แต่ role นี้ไม่มีสิทธิ์เห็นปุ่มนี้อยู่แล้ว)
+      const revStatus = invCanManageStock() ? 'approved' : 'pending_approval';
       const { error: revErr } = await _sb.from('inv_stock_transactions').insert({
         item_id: item.id, branch_id: d.branch_id, txn_type: 'adjustment_decrease', status: revStatus,
         quantity_delta: -Number(d.quantity_delta), reason: `แก้ไขรายการซื้อเข้าที่กรอกผิด: ${reason}`,
@@ -4763,7 +4763,7 @@
         `จะลบรายการ: ${qty.toLocaleString('th-TH')} ${item.purchase_unit} รวม ${Number(d.total_cost || 0).toLocaleString('th-TH', { minimumFractionDigits: 2 })} ฿`;
       document.getElementById('void_txn_reason').value = '';
       document.getElementById('void_txn_err').textContent = '';
-      document.getElementById('void_txn_hint').textContent = invIsAdmin()
+      document.getElementById('void_txn_hint').textContent = invCanManageStock()
         ? 'ยอดคงเหลือและมูลค่าจะถูกหักออกทันที'
         : 'รายการนี้ต้องรอ Admin อนุมัติก่อน ยอดคงเหลือจะยังไม่ถูกหักออกจนกว่าจะอนุมัติ';
       document.getElementById('void_txn_modal_overlay').classList.remove('hidden');
@@ -4783,8 +4783,8 @@
       errEl.style.color = ''; errEl.textContent = 'กำลังบันทึก...';
 
       // ต้องใช้ txn_type='adjustment_decrease' (ไม่ใช่ stock_in ติดลบ เพราะ DB บังคับ stock_in ต้องเป็นบวก
-      // เท่านั้น) Co-Admin จะต้องรอ Admin อนุมัติก่อนเหมือนการปรับปรุงสต๊อกทั่วไป
-      const status = invIsAdmin() ? 'approved' : 'pending_approval';
+      // เท่านั้น) Admin/Co-Admin ได้ผลทันที
+      const status = invCanManageStock() ? 'approved' : 'pending_approval';
       const { error } = await _sb.from('inv_stock_transactions').insert({
         item_id: item.id, branch_id: d.branch_id, txn_type: 'adjustment_decrease', status,
         quantity_delta: -Number(d.quantity_delta), reason: `ลบรายการซื้อเข้าที่กรอกซ้ำ/ผิด: ${reason}`,
@@ -4797,9 +4797,9 @@
       loadInventoryData();
     }
 
-    // ── Telegram settings (admin, write-only secret pattern) ─────
+    // ── Telegram settings (admin/co-admin, write-only secret pattern) ─────
     async function invLoadTelegramSettings() {
-      if (!invIsAdmin()) return;
+      if (!invCanManageStock()) return;
       const statusEl = document.getElementById('inv_telegram_status');
       const { data, error } = await _sb.rpc('inv_fn_integration_secret_status', { p_key: 'telegram_bot_token' });
       const status = (!error && data && data[0]) ? data[0] : { is_set: false };
