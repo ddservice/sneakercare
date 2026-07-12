@@ -4612,40 +4612,43 @@
       }).join('');
     }
 
-    // ── Purchase history (ประวัติการซื้อเข้า) — อ่านจาก audit log เดียวกับด้านบน เพราะมี RLS
-    // จำกัดเฉพาะ admin/co-admin อยู่แล้ว (ต่างจาก inv_stock_transactions ตรงๆ ที่ RLS เปิดกว้างกว่า) ───
+    // ── Purchase history (ประวัติการซื้อเข้า) — อ่านจาก inv_stock_transactions ตรงๆ (ไม่ใช่ audit log)
+    // เพราะ audit log เก็บแค่ snapshot ตอน INSERT เท่านั้น (trigger เป็น after-insert ล้วน ไม่มี after-update)
+    // ถ้ารายการไหนถูกสร้างเป็น pending_approval แล้วมาอนุมัติทีหลัง (เป็นการ UPDATE ไม่ใช่ INSERT ใหม่)
+    // audit log จะไม่มีวันเห็น status ที่เปลี่ยนไปเลย ทำให้ badge ค้างโชว์ "รออนุมัติ" ตลอดไปแม้อนุมัติแล้วจริง
+    // (เคยเจอบั๊กนี้จริง 2026-07-13) — RLS ของ inv_stock_transactions เองก็จำกัด admin/co-admin อยู่แล้ว
+    // (migration 0008) จึงอ่านตรงได้อย่างปลอดภัยไม่ต้องอ้อมผ่าน audit log อีกต่อไป ───────────────────
     async function invRenderPurchaseHistory() {
       const tbody = document.getElementById('inv_purchase_history_tbody');
       if (!tbody) return;
-      const { data, error } = await _sb.from('inv_audit_logs')
-        .select('*').eq('table_name', 'inv_stock_transactions').order('performed_at', { ascending: false }).limit(50);
+      const { data, error } = await _sb.from('inv_stock_transactions')
+        .select('*').in('txn_type', ['stock_in', 'adjustment_decrease']).order('created_at', { ascending: false }).limit(100);
 
-      if (error || !data || !data.length) {
-        tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:16px">ยังไม่มีประวัติการซื้อเข้า</td></tr>';
+      if (error) {
+        tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--danger);padding:16px">โหลดไม่สำเร็จ: ' + error.message + '</td></tr>';
         return;
       }
 
-      const rows = data.filter(row => (row.after_data || {}).txn_type === 'stock_in');
+      const rows = (data || []).filter(d => d.txn_type === 'stock_in');
       if (!rows.length) {
         tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--muted);padding:16px">ยังไม่มีประวัติการซื้อเข้า</td></tr>';
         return;
       }
 
       // เช็คว่ารายการซื้อเข้าแต่ละแถว เคยถูกกด "แก้ไข"/"ลบ" ไปแล้วหรือยัง (มีรายการ adjustment_decrease
-      // อ้าง corrects_txn_id กลับมาที่แถวนี้ไหม) เพื่อโชว์สถานะ + ปิดปุ่มกันกดซ้ำซ้อน
+      // อ้าง corrects_txn_id กลับมาที่แถวนี้ไหม) เพื่อโชว์สถานะ + ปิดปุ่มกันกดซ้ำซ้อน — ใช้ status ปัจจุบัน
+      // จริงเสมอ เพราะอ่านจากตารางตรงๆ ไม่ใช่ audit log ที่อาจ stale
       const reductionsByTarget = new Map();
-      data.forEach(row => {
-        const dd = row.after_data || {};
-        if (dd.corrects_txn_id && dd.txn_type === 'adjustment_decrease') reductionsByTarget.set(dd.corrects_txn_id, dd.status);
+      (data || []).forEach(d => {
+        if (d.corrects_txn_id && d.txn_type === 'adjustment_decrease') reductionsByTarget.set(d.corrects_txn_id, d.status);
       });
 
-      INV_PURCHASE_HISTORY = rows.map(row => ({ ...(row.after_data || {}), performed_at: row.performed_at, performed_by: row.performed_by }));
+      INV_PURCHASE_HISTORY = rows;
 
-      tbody.innerHTML = rows.map(row => {
-        const d = row.after_data || {};
+      tbody.innerHTML = rows.map(d => {
         const item = INV_ITEMS.find(i => i.id === d.item_id);
         const supplier = INV_SUPPLIERS.find(s => s.id === d.supplier_id);
-        const when = row.performed_at ? new Date(row.performed_at).toLocaleString('th-TH', { dateStyle: 'short', timeStyle: 'short' }) : '';
+        const when = d.created_at ? new Date(d.created_at).toLocaleString('th-TH', { dateStyle: 'short', timeStyle: 'short' }) : '';
         const unitCost = Number(d.unit_cost_snapshot || 0);
         const total = Number(d.total_cost || (Number(d.quantity_delta || 0) * unitCost));
         const isRebook = d.reference_type === 'correction';
@@ -4668,7 +4671,7 @@
           <td style="text-align:right; font-weight:600">${total.toLocaleString('th-TH', { minimumFractionDigits: 2 })} ฿</td>
           <td style="font-size:12px">${supplier ? supplier.name : '-'}</td>
           <td style="font-size:12px">${d.reference_note || '-'}</td>
-          <td style="font-size:12px">${row.performed_by === _auth.user_id ? _auth.display_name : (row.performed_by || '-')}</td>
+          <td style="font-size:12px">${d.performed_by === _auth.user_id ? _auth.display_name : (d.performed_by || '-')}</td>
           <td style="text-align:center; white-space:nowrap">
             ${reduction ? '' : `
               <button onclick="invOpenCorrectPurchaseModal('${d.id}')" style="font-size:11px;padding:3px 10px;border:1.5px solid var(--c-primary);background:white;color:var(--c-primary);border-radius:6px;cursor:pointer;margin-right:4px">แก้ไข</button>
