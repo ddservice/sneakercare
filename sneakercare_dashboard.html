@@ -7098,8 +7098,8 @@ ${bank ? `
       tbody.innerHTML = UI_PERM_FEATURES.map(f => `
         <tr>
           <td>${f.label}</td>
-          <td style="text-align:center"><input type="checkbox" data-role="co-admin" data-feature="${f.key}" ${map['co-admin:' + f.key] ? 'checked' : ''}></td>
-          <td style="text-align:center"><input type="checkbox" data-role="manager" data-feature="${f.key}" ${map['manager:' + f.key] ? 'checked' : ''}></td>
+          <td style="text-align:center"><input type="checkbox" data-role="co-admin" data-feature="${f.key}" ${map['co-admin:' + f.key] ? 'checked' : ''} style="appearance:auto; -webkit-appearance:auto; width:18px; height:18px; cursor:pointer; accent-color:var(--c-primary)"></td>
+          <td style="text-align:center"><input type="checkbox" data-role="manager" data-feature="${f.key}" ${map['manager:' + f.key] ? 'checked' : ''} style="appearance:auto; -webkit-appearance:auto; width:18px; height:18px; cursor:pointer; accent-color:var(--c-primary)"></td>
         </tr>
       `).join('');
     }
