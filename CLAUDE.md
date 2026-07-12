@@ -50,22 +50,37 @@
 
 - **Admin**: เห็น/ทำได้ทุกอย่างเสมอ ไม่ต้องตั้งค่าอะไร (hardcode ไว้ใน `uiVisible()` — คืน `true` เสมอถ้า
   `_auth.role === 'admin'`)
-- **Co-Admin**: สิทธิ์เกือบเท่า Admin ยกเว้นบางจุด (จัดการผู้ใช้, ทำความสะอาดข้อมูล, อนุมัติปรับปรุงสต๊อก)
+- **Co-Admin (เปลี่ยนแล้ว 2026-07-13)**: **สิทธิ์เท่า Admin ทุกอย่าง ยกเว้น 2 จุดเท่านั้น** ที่ตั้งใจสงวนไว้
+  เฉพาะ Admin:
+  1. จัดการบัญชีผู้ใช้งานระบบ (`card_user_mgmt`, RLS `sc_users_admin_all`) — สร้าง/แก้ไข/ลบ user, เปลี่ยน
+     role, Edge Function `create-user`
+  2. หน้า "สิทธิ์การมองเห็นเมนู" (`card_ui_permissions`, RLS `ui_permissions_write`) — เพราะถ้าให้ Co-Admin
+     แก้ตารางนี้เองได้ จะเปิดสิทธิ์ตัวเองเพิ่มแบบไม่มีการตรวจสอบ (circular — ห้ามแก้เป็นอันขาด)
+
+  ทุกอย่างอื่น (รวมถึงทำความสะอาดข้อมูล, ตั้งค่า Telegram, จัดการสาขา, **อนุมัติปรับปรุงสต๊อกของตัวเอง**)
+  Co-Admin ทำได้เท่า Admin แล้ว (migration `0012_coadmin_equals_admin.sql`) — เดิมเคย hardcode
+  admin-only ไว้หลายจุด (RLS + `inv_fn_approve_adjustment` + `invIsAdmin()` ใน JS) ตอนนี้เปลี่ยนเป็น
+  `invCanManageStock()` (= admin หรือ co-admin) เกือบทั้งหมด **ยกเว้น 2 จุดข้างต้นเท่านั้นที่ยังเป็น
+  `invIsAdmin()`/`_auth.role === 'admin'` ตรงๆ** — ถ้าจะเพิ่มฟีเจอร์ admin-only ใหม่ในอนาคต ต้องถามก่อนว่า
+  เข้าข่ายข้อยกเว้น 2 ข้อนี้จริงไหม ไม่ใช่ default ไปเป็น admin-only ตามความเคยชิน
 - **Manager/Staff**: เห็นเฉพาะเบิกใช้งานสต๊อก + กรอกข้อมูลประจำวัน กรอกย้อนหลังไม่ได้ (`s_date` ถูกล็อกไว้)
 
 ### ระบบสิทธิ์แบบ checkbox (ใหม่ 2026-07-11)
 
 ตาราง `ui_permissions(role, feature_key, visible)` — Admin ปรับได้เองผ่านการ์ด **"สิทธิ์การมองเห็นเมนู"**
-ในหน้าตั้งค่า (ไม่ต้องแก้โค้ดอีกต่อไปเวลาต้องการเปิด/ปิดเมนูให้ role ไหน)
+ในหน้าตั้งค่า (ไม่ต้องแก้โค้ดอีกต่อไปเวลาต้องการเปิด/ปิดเมนูให้ role ไหน) **Co-Admin ตอนนี้ = `true` ทุก
+feature_key ยกเว้น `card_user_mgmt`**
 
 - โหลดผ่าน `loadUiPermissions()` (ตอน login, เก็บใน global `UI_PERMISSIONS`), เช็คด้วย `uiVisible(featureKey)`
 - **คุมแค่ "มองเห็นเมนู" เท่านั้น ไม่ใช่สิทธิ์เขียนข้อมูลจริง** — สิทธิ์เขียน/ลบข้อมูลจริงยังคุมด้วย RLS
   แยกต่างหาก ถ้าจะเปิดเมนูใหม่ให้ role ไหนเห็น **ต้องเช็ค RLS ของตารางที่เกี่ยวข้องด้วยเสมอ** ว่า role นั้น
   เขียนข้อมูลได้จริงไหม ไม่งั้นจะเห็นปุ่มแต่กดแล้ว error (เคยเกิดแล้วตอนเปิด `inv_card_items` ให้ Co-Admin —
   ต้องแก้ RLS `inv_p_items_write_admin_co_admin` คู่กันไปด้วย)
-- ฟีเจอร์ที่ยังคุมด้วย role ตรงๆ ไม่ผ่านระบบ checkbox (เพราะผูกกับ RLS แบบตายตัว): การอนุมัติปรับปรุงสต๊อก
-  (`fn_approve_adjustment`/`inv_fn_approve_adjustment` เช็ค admin เท่านั้นเสมอ), สถานะ adjustment ของ
-  Co-Admin ที่ต้องเป็น `pending_approval` เสมอ
+- `card_ui_permissions` **ไม่ได้อยู่ในตาราง `ui_permissions` เลย** — คุมด้วย `_auth.role === 'admin'` ตรงๆ
+  ในโค้ด (`showIf('card_ui_permissions', _auth.role === 'admin')`) ตั้งใจให้เป็นแบบนี้ตลอดไป
+- การอนุมัติปรับปรุงสต๊อก (`inv_fn_approve_adjustment`) ตอนนี้ Co-Admin อนุมัติเองได้แล้ว (จำกัดแค่สาขาตัวเอง
+  ส่วน Admin อนุมัติได้ทุกสาขา) — adjustment ที่ Co-Admin สร้างเองก็ `status='approved'` ทันทีเหมือน Admin
+  ไม่ต้องรออนุมัติอีกต่อไป (เปลี่ยนจากเดิมที่บังคับ `pending_approval` เสมอ)
 - Feature keys ทั้งหมดที่มีตอนนี้: `card_user_mgmt`, `card_data_purge`, `card_data_import`, `tab_settings`,
   `inv_card_items`, `inv_card_suppliers`, `inv_card_stock_in`, `inv_card_adjustment`, `inv_card_pending`,
   `inv_card_audit`, `inv_card_purchase_history`, `inv_card_settings`, `inv_cost_col_head`
@@ -125,7 +140,7 @@
 
 ## Migrations
 
-อยู่ที่ `supabase/migrations/` เรียงลำดับ 0001-0011+ — **ห้ามแก้ไฟล์ migration เก่าที่ apply ไปแล้ว** สร้าง
+อยู่ที่ `supabase/migrations/` เรียงลำดับ 0001-0012+ — **ห้ามแก้ไฟล์ migration เก่าที่ apply ไปแล้ว** สร้าง
 ไฟล์ใหม่เสมอ วิธี apply:
 ```bash
 export SUPABASE_ACCESS_TOKEN="<personal access token>"
