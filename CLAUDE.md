@@ -137,6 +137,17 @@ feature_key ยกเว้น `card_user_mgmt`**
     **ถ้าจะเพิ่มฟีเจอร์ใหม่ที่แก้ไข/ยกเลิก stock_in transaction ในอนาคต ต้องเรียก `invSyncLegacyStock()`
     ทุกครั้งเสมอ ไม่ใช่แค่ตอน insert ใหม่ปกติ** เพราะมี 2 ระบบขนานกันอยู่ (inv_* กับ sc_stock_transactions
     เดิม) ที่ยังไม่ได้รวมเป็นระบบเดียว
+  - **บั๊กที่ 3 (แก้แล้ว 2026-07-13)**: การ์ด "ประวัติการซื้อเข้า" เดิมอ่านสถานะ (badge "รออนุมัติ"/"ถูกลบ
+    แล้ว") จาก `inv_audit_logs.after_data` ซึ่งเป็นแค่ **snapshot ตอน INSERT เท่านั้น**
+    (`inv_trg_audit_stock_transactions` เป็น `after insert` ล้วน ไม่มี `after update`) — พอมีรายการที่สร้าง
+    เป็น `pending_approval` แล้วมาอนุมัติทีหลังผ่าน `inv_fn_approve_adjustment` (เป็นการ UPDATE) audit log
+    จะไม่เห็นการเปลี่ยนสถานะนั้นเลย badge เลยค้างโชว์ "รออนุมัติ" ตลอดไปทั้งที่อนุมัติจริงแล้ว (ยืนยันแล้วจาก
+    ข้อมูลจริง: audit snapshot บอก `pending_approval` แต่ค่าจริงใน `inv_stock_transactions` เป็น `approved`)
+    แก้โดยเปลี่ยน `invRenderPurchaseHistory()` ให้อ่านจาก `inv_stock_transactions` ตรงๆ แทน (ปลอดภัยแล้ว
+    เพราะ migration 0008 จำกัด RLS SELECT ของตารางนี้ไว้เท่ากับ audit_logs อยู่แล้ว เหตุผลเดิมที่เลี่ยงไปอ่าน
+    ผ่าน audit log จึงไม่จำเป็นอีกต่อไป) **บทเรียน: ห้ามใช้ `inv_audit_logs` เพื่อเช็ค "สถานะปัจจุบัน" ของ
+    อะไรก็ตามที่อาจถูก UPDATE ทีหลัง (เช่น `status` ของ adjustment) ใช้ได้แค่เป็น log ประวัติ insert/
+    update/delete เท่านั้น ไม่ใช่แหล่งข้อมูล live state**
   - **UX เพิ่มเติม**: การ์ด "ประวัติการซื้อเข้า" ตอนนี้เช็คว่าแต่ละแถวเคยถูกกด "แก้ไข"/"ลบ" ไปแล้วหรือยัง
     (มี `adjustment_decrease` อ้าง `corrects_txn_id` กลับมาไหม) ถ้ามีจะโชว์ badge สถานะ (รออนุมัติ / ถูกลบแล้ว
     ขีดฆ่า / ถูกปฏิเสธ) และปิดปุ่มแก้ไข/ลบซ้ำถ้ายัง pending หรือ approved ไปแล้ว — กัน Co-Admin กดซ้ำซ้อน
