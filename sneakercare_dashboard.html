@@ -4438,9 +4438,12 @@
         }, { onConflict: 'item_name' });
 
         if (txnTypeThai === 'ซื้อเข้า') {
+          // qtyDelta ส่งเข้ามาแบบมีเครื่องหมายตรงๆ (บวก = ซื้อเข้าปกติ, ลบ = ยกเลิก/แก้ไขรายการซื้อเข้าเดิม)
+          // ต้อง "คง" เครื่องหมายไว้ ห้ามใช้ Math.abs() เพราะ "ต้นทุนวัสดุคลัง" ในแท็บภาพรวมรวมยอดจาก total
+          // ตรงๆ (stockInAmt += total) ถ้าใช้ abs() รายการยกเลิกจะไปบวกเพิ่มยอดรายจ่ายแทนที่จะหักออก
           await _sb.from('sc_stock_transactions').insert({
             date: new Date().toISOString().slice(0, 10), type: 'ซื้อเข้า', item_name: item.name,
-            quantity: Math.abs(qtyDelta), price_per_unit: unitCost || 0, total: Math.abs(qtyDelta) * (unitCost || 0),
+            quantity: qtyDelta, price_per_unit: unitCost || 0, total: qtyDelta * (unitCost || 0),
             pay_method: 'ระบบคลังสินค้าใหม่', recorded_by: _auth.display_name, last_updated: new Date().toISOString()
           });
         }
@@ -4733,6 +4736,9 @@
         reference_note: `ยกเลิกรายการที่กรอกผิด — เหตุผล: ${reason}`, performed_by: _auth.user_id
       });
       if (revErr) { errEl.textContent = 'แก้ไขไม่สำเร็จ (ขั้นยกเลิกรายการเดิม): ' + revErr.message; return; }
+      // ยอดเก่าใน "ต้นทุนวัสดุคลัง" (แท็บภาพรวม) อ่านจากตาราง sc_stock_transactions เดิม ไม่ใช่ inv_* —
+      // ถ้าไม่หักออกที่นี่ด้วย ยอดซื้อเดือนนั้นจะค้างเป็นตัวเลขเดิมทั้งที่จำนวนสต๊อกถูกแก้ไปแล้ว
+      if (revStatus === 'approved') { await invSyncLegacyStock(item, -Number(d.quantity_delta), Number(d.unit_cost_snapshot), 'ซื้อเข้า'); }
 
       // ขั้นที่ 2: บันทึกรายการที่แก้ไขแล้วเป็นรายการซื้อเข้าใหม่ (stock_in ปกติ ใช้ทันที ไม่ต้องรออนุมัติ
       // เหมือนการรับของเข้าคลังทั่วไปที่ Co-Admin ทำได้อยู่แล้ว)
@@ -4743,6 +4749,7 @@
         reference_note: `แก้ไขจากรายการเดิม — เหตุผล: ${reason}`, performed_by: _auth.user_id
       });
       if (newErr) { errEl.textContent = 'ยกเลิกรายการเดิมสำเร็จแล้ว แต่บันทึกรายการที่แก้ไขไม่สำเร็จ: ' + newErr.message + ' (กรุณาแจ้ง Admin ตรวจสอบยอดคงเหลือ)'; return; }
+      await invSyncLegacyStock(item, newBaseQty, newUnitCost, 'ซื้อเข้า');
 
       document.getElementById('correct_txn_modal_overlay').classList.add('hidden');
       loadInventoryData();
@@ -4792,6 +4799,8 @@
         reference_note: `ลบรายการที่กรอกซ้ำ/ผิด — เหตุผล: ${reason}`, performed_by: _auth.user_id
       });
       if (error) { errEl.textContent = 'ลบไม่สำเร็จ: ' + error.message; return; }
+      // หักยอด "ต้นทุนวัสดุคลัง" ในแท็บภาพรวมออกด้วย (อ่านจาก sc_stock_transactions เดิม แยกจาก inv_*)
+      if (status === 'approved') { await invSyncLegacyStock(item, -Number(d.quantity_delta), Number(d.unit_cost_snapshot), 'ซื้อเข้า'); }
 
       document.getElementById('void_txn_modal_overlay').classList.add('hidden');
       loadInventoryData();
