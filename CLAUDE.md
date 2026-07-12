@@ -67,8 +67,8 @@
   (`fn_approve_adjustment`/`inv_fn_approve_adjustment` เช็ค admin เท่านั้นเสมอ), สถานะ adjustment ของ
   Co-Admin ที่ต้องเป็น `pending_approval` เสมอ
 - Feature keys ทั้งหมดที่มีตอนนี้: `card_user_mgmt`, `card_data_purge`, `card_data_import`, `tab_settings`,
-  `inv_card_items`, `inv_card_stock_in`, `inv_card_adjustment`, `inv_card_pending`, `inv_card_audit`,
-  `inv_card_purchase_history`, `inv_card_settings`, `inv_cost_col_head`
+  `inv_card_items`, `inv_card_suppliers`, `inv_card_stock_in`, `inv_card_adjustment`, `inv_card_pending`,
+  `inv_card_audit`, `inv_card_purchase_history`, `inv_card_settings`, `inv_cost_col_head`
 
 ## ระบบคลังสินค้าใหม่ (inv_*) — เพิ่มเข้าไปแบบ additive เมื่อ 2026-07-10/11
 
@@ -76,7 +76,8 @@
 
 - `inv_branches`, `inv_items` (แคตตาล็อกกลาง), `inv_item_stock` (ยอดคงเหลือต่อสาขา), `inv_stock_transactions`
   (ledger แบบ append-only), `inv_audit_logs` (แก้ไข/ลบไม่ได้เด็ดขาด แม้แต่ Admin — revoke สิทธิ์ระดับ DB),
-  `inv_integration_secrets` (Telegram token แบบ write-only), `inv_notification_log`
+  `inv_integration_secrets` (Telegram token แบบ write-only), `inv_notification_log`,
+  `inv_suppliers` (master data ผู้ขาย/ร้านค้า — เพิ่ม 2026-07-12 ดูหัวข้อ Supplier ด้านล่าง)
 - **ต้นทุนคำนวณแบบถัวเฉลี่ยเคลื่อนที่ (moving average)** อัตโนมัติผ่าน DB trigger `inv_fn_apply_stock_transaction`
   ห้ามคำนวณต้นทุนซ้ำฝั่ง JS
 - **สินค้าคงคลัง vs สิ้นเปลือง**: ถ้าใช้ครั้งเดียวหมดไปจริง (น้ำยา, ทิชชู่) = สิ้นเปลือง (consumable) หน่วยฐาน
@@ -88,10 +89,15 @@
   Material analysis ในแท็บสถิติที่ยังอ้างอิงตารางเก่าอยู่ (ดูฟังก์ชัน `invSyncLegacyStock`)
 - แจ้งเตือนสต๊อกต่ำผ่าน Telegram Bot `@SneakerCareStockBot` → กลุ่ม "SneakerCare Team" (chat_id
   `-5034072774`) ทุก 30 นาทีผ่าน `pg_cron` เรียก Edge Function `inv-low-stock-alert`
+- **Supplier (2026-07-12)**: `inv_suppliers` เป็น master data แยกต่างหาก ไม่ใช่แค่ช่องข้อความอิสระ — เลือกได้
+  จาก dropdown ตอน "รับของเข้าคลัง" และตอน "เพิ่มสินค้าใหม่" (initial stock) `inv_stock_transactions.supplier_id`
+  เป็น FK แบบ nullable (ของเก่าที่นำเข้าไปก่อนหน้าจะเป็น null) การ์ด "ประวัติการซื้อเข้า" โชว์ supplier ของแต่ละ
+  รายการซื้อ ทำให้เทียบราคาข้าม supplier ได้จากตารางเดียว RLS ของ `inv_suppliers` จำกัดแค่ admin/co-admin
+  เหมือน `inv_items`
 
 ## Migrations
 
-อยู่ที่ `supabase/migrations/` เรียงลำดับ 0001-0010+ — **ห้ามแก้ไฟล์ migration เก่าที่ apply ไปแล้ว** สร้าง
+อยู่ที่ `supabase/migrations/` เรียงลำดับ 0001-0011+ — **ห้ามแก้ไฟล์ migration เก่าที่ apply ไปแล้ว** สร้าง
 ไฟล์ใหม่เสมอ วิธี apply:
 ```bash
 export SUPABASE_ACCESS_TOKEN="<personal access token>"
