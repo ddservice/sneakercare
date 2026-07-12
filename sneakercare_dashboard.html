@@ -5454,7 +5454,7 @@
       const bizTaxId = document.getElementById('biz_tax_id').value || '';
       const bizLogoUrl = document.getElementById('biz_logo_url').value || '';
       const logoSrc = bizLogoUrl ? await _imgToBase64(bizLogoUrl) : '';
-      const payerName = _auth.display_name || _auth.username || bizName;
+      const payerName = _auth.full_name || _auth.display_name || _auth.username || bizName;
 
       const m = document.getElementById('opex_month').value;
       const [y, mm] = m.split('-');
