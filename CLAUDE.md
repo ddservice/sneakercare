@@ -128,6 +128,15 @@ feature_key ยกเว้น `card_user_mgmt`**
     ถูกต้องแล้ว เพราะมันไม่ใช่ "การซื้อเข้า" อีกต่อไปในทางความหมาย
   - **บทเรียน**: ก่อนจะ insert `inv_stock_transactions` ด้วย `quantity_delta` ติดลบ **ต้องเช็ค
     `inv_chk_delta_sign` ใน `0001_inventory_v2.sql` ก่อนทุกครั้ง** ว่า txn_type ที่ใช้อนุญาตค่าติดลบจริง
+  - **บั๊กที่ 2 (แก้แล้ว 2026-07-13)**: ตอนแรกลืมสิ้นเชิงว่ามี "ต้นทุนวัสดุคลัง" ในแท็บภาพรวมที่อ่านจากตาราง
+    เดิม `sc_stock_transactions` (ไม่ใช่ `inv_*`) ผ่าน `invSyncLegacyStock()` — ฟังก์ชัน "แก้ไข"/"ลบ" ทั้งคู่
+    ไม่เคยเรียก `invSyncLegacyStock()` เลย ทำให้ยอดรายจ่ายเดือนนั้นค้างเป็นค่าเดิมทั้งที่จำนวนสต๊อกถูกแก้ไปแล้ว
+    ใน `inv_*` แล้ว แก้โดย (1) แก้ `invSyncLegacyStock()` ให้ใช้ `qtyDelta` แบบมีเครื่องหมายตรงๆ (เดิมใช้
+    `Math.abs()` ซึ่งจะทำให้รายการยกเลิกไปบวกเพิ่มยอดแทนที่จะหักออก) (2) เรียก `invSyncLegacyStock()` เพิ่ม
+    ในทั้ง `invSaveVoidPurchase`/`invSaveCorrectPurchase` หลัง insert สำเร็จและ status เป็น `approved` แล้ว
+    **ถ้าจะเพิ่มฟีเจอร์ใหม่ที่แก้ไข/ยกเลิก stock_in transaction ในอนาคต ต้องเรียก `invSyncLegacyStock()`
+    ทุกครั้งเสมอ ไม่ใช่แค่ตอน insert ใหม่ปกติ** เพราะมี 2 ระบบขนานกันอยู่ (inv_* กับ sc_stock_transactions
+    เดิม) ที่ยังไม่ได้รวมเป็นระบบเดียว
   - **UX เพิ่มเติม**: การ์ด "ประวัติการซื้อเข้า" ตอนนี้เช็คว่าแต่ละแถวเคยถูกกด "แก้ไข"/"ลบ" ไปแล้วหรือยัง
     (มี `adjustment_decrease` อ้าง `corrects_txn_id` กลับมาไหม) ถ้ามีจะโชว์ badge สถานะ (รออนุมัติ / ถูกลบแล้ว
     ขีดฆ่า / ถูกปฏิเสธ) และปิดปุ่มแก้ไข/ลบซ้ำถ้ายัง pending หรือ approved ไปแล้ว — กัน Co-Admin กดซ้ำซ้อน
@@ -140,7 +149,7 @@ feature_key ยกเว้น `card_user_mgmt`**
 
 ## Migrations
 
-อยู่ที่ `supabase/migrations/` เรียงลำดับ 0001-0012+ — **ห้ามแก้ไฟล์ migration เก่าที่ apply ไปแล้ว** สร้าง
+อยู่ที่ `supabase/migrations/` เรียงลำดับ 0001-0013+ — **ห้ามแก้ไฟล์ migration เก่าที่ apply ไปแล้ว** สร้าง
 ไฟล์ใหม่เสมอ วิธี apply:
 ```bash
 export SUPABASE_ACCESS_TOKEN="<personal access token>"
