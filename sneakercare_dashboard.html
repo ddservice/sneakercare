@@ -1164,6 +1164,18 @@
           <input type="number" id="inv_item_min_stock" value="0" min="0" step="0.01">
         </div>
       </div>
+      <div id="inv_item_init_stock_wrap">
+        <div class="row2" style="margin-bottom:12px">
+          <div class="field">
+            <label>จำนวนสต๊อกเริ่มต้น (หน่วยซื้อ) — ถ้ามี</label>
+            <input type="number" id="inv_item_init_qty" value="0" min="0" step="0.001">
+          </div>
+          <div class="field">
+            <label>ยอดที่จ่ายจริงทั้งหมด (บาท)</label>
+            <input type="number" id="inv_item_init_total" value="0" min="0" step="0.01">
+          </div>
+        </div>
+      </div>
       <div id="inv_item_modal_err" style="font-size:12px;color:var(--danger);min-height:16px"></div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
         <button onclick="document.getElementById('inv_item_modal_overlay').classList.add('hidden')"
@@ -1935,6 +1947,28 @@
               </thead>
               <tbody id="inv_audit_tbody">
                 <tr><td colspan="6" style="text-align:center; color:var(--muted); padding:16px">กำลังโหลด...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div class="card" id="inv_card_purchase_history" style="display:none">
+        <div class="card-head">
+          <div class="card-head-left"><i class="ti ti-receipt"></i><span>ประวัติการซื้อเข้า (Purchase History)</span></div>
+        </div>
+        <div class="card-body" style="padding:0">
+          <div class="table-container">
+            <table class="tbl" id="inv_purchase_history_table">
+              <thead>
+                <tr>
+                  <th>วันที่</th><th>สินค้า</th><th style="text-align:right">จำนวน</th>
+                  <th style="text-align:right">ราคาต่อหน่วย</th><th style="text-align:right">รวม</th>
+                  <th>เลขที่ใบเสร็จ/ผู้ขาย</th><th>ผู้ทำรายการ</th>
+                </tr>
+              </thead>
+              <tbody id="inv_purchase_history_tbody">
+                <tr><td colspan="7" style="text-align:center; color:var(--muted); padding:16px">กำลังโหลด...</td></tr>
               </tbody>
             </table>
           </div>
@@ -3921,6 +3955,7 @@
       show('inv_card_adjustment', uiVisible('inv_card_adjustment'));
       show('inv_card_pending', uiVisible('inv_card_pending'));
       show('inv_card_audit', uiVisible('inv_card_audit'));
+      show('inv_card_purchase_history', uiVisible('inv_card_purchase_history'));
       show('inv_card_settings', uiVisible('inv_card_settings'));
       const costHead = document.getElementById('inv_cost_col_head');
       if (costHead) costHead.style.display = uiVisible('inv_cost_col_head') ? '' : 'none';
@@ -3959,6 +3994,7 @@
         renderStockAlerts();
         if (uiVisible('inv_card_pending')) { invRenderPendingTable(); }
         if (uiVisible('inv_card_audit')) { invRenderAuditLog(); }
+        if (uiVisible('inv_card_purchase_history')) { invRenderPurchaseHistory(); }
         if (uiVisible('inv_card_settings')) { invLoadTelegramSettings(); }
       } catch (e) {
         console.error('loadInventoryData error:', e);
@@ -3977,6 +4013,9 @@
       document.getElementById('inv_item_purchase_unit').value = item ? item.purchase_unit : '';
       document.getElementById('inv_item_purchase_unit_qty').value = item ? item.purchase_unit_qty : 1;
       document.getElementById('inv_item_min_stock').value = item ? item.default_min_stock_level : 0;
+      document.getElementById('inv_item_init_qty').value = 0;
+      document.getElementById('inv_item_init_total').value = 0;
+      document.getElementById('inv_item_init_stock_wrap').style.display = item ? 'none' : '';
       document.getElementById('inv_item_modal_err').textContent = '';
       document.getElementById('inv_item_modal_overlay').classList.remove('hidden');
     }
@@ -3990,15 +4029,34 @@
       const purchase_unit = document.getElementById('inv_item_purchase_unit').value.trim();
       const purchase_unit_qty = +document.getElementById('inv_item_purchase_unit_qty').value || 0;
       const default_min_stock_level = +document.getElementById('inv_item_min_stock').value || 0;
+      const initQty = +document.getElementById('inv_item_init_qty').value || 0;
+      const initTotal = +document.getElementById('inv_item_init_total').value || 0;
       const errEl = document.getElementById('inv_item_modal_err');
 
       if (!name || !category || !base_unit || !purchase_unit) { errEl.textContent = 'กรุณากรอกข้อมูลให้ครบทุกช่อง'; return; }
       if (purchase_unit_qty <= 0) { errEl.textContent = 'อัตราแปลงหน่วยต้องมากกว่า 0'; return; }
 
       const payload = { name, item_type, category, base_unit, purchase_unit, purchase_unit_qty, default_min_stock_level };
-      const q = id ? _sb.from('inv_items').update(payload).eq('id', id) : _sb.from('inv_items').insert(payload);
-      const { error } = await q;
-      if (error) { errEl.textContent = 'บันทึกไม่สำเร็จ: ' + error.message; return; }
+
+      if (id) {
+        const { error } = await _sb.from('inv_items').update(payload).eq('id', id);
+        if (error) { errEl.textContent = 'บันทึกไม่สำเร็จ: ' + error.message; return; }
+      } else {
+        const { data: newItem, error } = await _sb.from('inv_items').insert(payload).select().single();
+        if (error) { errEl.textContent = 'บันทึกไม่สำเร็จ: ' + error.message; return; }
+
+        if (initQty > 0) {
+          const baseQty = initQty * purchase_unit_qty;
+          const unitCost = baseQty > 0 ? initTotal / baseQty : 0;
+          const { error: txnErr } = await _sb.from('inv_stock_transactions').insert({
+            item_id: newItem.id, branch_id: INV_BRANCH_ID, txn_type: 'stock_in',
+            quantity_delta: baseQty, unit_cost_snapshot: unitCost,
+            reference_type: 'purchase', reference_note: 'สต๊อกเริ่มต้นตอนเพิ่มสินค้าใหม่', performed_by: _auth.user_id
+          });
+          if (txnErr) { errEl.textContent = 'เพิ่มสินค้าสำเร็จ แต่บันทึกสต๊อกเริ่มต้นไม่สำเร็จ: ' + txnErr.message; }
+          else { await invSyncLegacyStock(payload, baseQty, unitCost, 'ซื้อเข้า'); }
+        }
+      }
 
       document.getElementById('inv_item_modal_overlay').classList.add('hidden');
       loadInventoryData();
@@ -4248,6 +4306,43 @@
           <td>${item ? item.name : '-'}</td>
           <td style="text-align:right">${d.quantity_delta ?? ''}</td>
           <td style="font-size:12px">${d.reason || d.reference_note || ''}</td>
+          <td style="font-size:12px">${row.performed_by === _auth.user_id ? _auth.display_name : (row.performed_by || '-')}</td>
+        </tr>`;
+      }).join('');
+    }
+
+    // ── Purchase history (ประวัติการซื้อเข้า) — อ่านจาก audit log เดียวกับด้านบน เพราะมี RLS
+    // จำกัดเฉพาะ admin/co-admin อยู่แล้ว (ต่างจาก inv_stock_transactions ตรงๆ ที่ RLS เปิดกว้างกว่า) ───
+    async function invRenderPurchaseHistory() {
+      const tbody = document.getElementById('inv_purchase_history_tbody');
+      if (!tbody) return;
+      const { data, error } = await _sb.from('inv_audit_logs')
+        .select('*').eq('table_name', 'inv_stock_transactions').order('performed_at', { ascending: false }).limit(50);
+
+      if (error || !data || !data.length) {
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:16px">ยังไม่มีประวัติการซื้อเข้า</td></tr>';
+        return;
+      }
+
+      const rows = data.filter(row => (row.after_data || {}).txn_type === 'stock_in');
+      if (!rows.length) {
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:16px">ยังไม่มีประวัติการซื้อเข้า</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = rows.map(row => {
+        const d = row.after_data || {};
+        const item = INV_ITEMS.find(i => i.id === d.item_id);
+        const when = row.performed_at ? new Date(row.performed_at).toLocaleString('th-TH', { dateStyle: 'short', timeStyle: 'short' }) : '';
+        const unitCost = Number(d.unit_cost_snapshot || 0);
+        const total = Number(d.total_cost || (Number(d.quantity_delta || 0) * unitCost));
+        return `<tr>
+          <td style="white-space:nowrap; font-size:12px">${when}</td>
+          <td>${item ? item.name : '-'}</td>
+          <td style="text-align:right">${Number(d.quantity_delta || 0).toLocaleString('th-TH')} ${item ? item.base_unit : ''}</td>
+          <td style="text-align:right">${unitCost.toLocaleString('th-TH', { minimumFractionDigits: 2 })} ฿</td>
+          <td style="text-align:right; font-weight:600">${total.toLocaleString('th-TH', { minimumFractionDigits: 2 })} ฿</td>
+          <td style="font-size:12px">${d.reference_note || '-'}</td>
           <td style="font-size:12px">${row.performed_by === _auth.user_id ? _auth.display_name : (row.performed_by || '-')}</td>
         </tr>`;
       }).join('');
@@ -7099,6 +7194,7 @@ ${bank ? `
       { key: 'inv_card_adjustment', label: 'ปรับปรุงสต๊อกจากตรวจนับ' },
       { key: 'inv_card_pending',   label: 'อนุมัติการปรับปรุงสต๊อก' },
       { key: 'inv_card_audit',     label: 'ประวัติการเคลื่อนไหวสต๊อก' },
+      { key: 'inv_card_purchase_history', label: 'ประวัติการซื้อเข้า' },
       { key: 'inv_card_settings',  label: 'ตั้งค่า Telegram แจ้งเตือนสต๊อก' },
       { key: 'inv_cost_col_head',  label: 'เห็นต้นทุน/ราคาในคลังสินค้า' }
     ];
