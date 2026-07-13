@@ -1175,11 +1175,17 @@
             <input type="number" id="inv_item_init_total" value="0" min="0" step="0.01">
           </div>
         </div>
-        <div class="field" style="margin-bottom:12px">
-          <label>Supplier / ร้านค้า (ถ้ามี)</label>
-          <select id="inv_item_init_supplier">
-            <option value="">— ไม่ระบุ —</option>
-          </select>
+        <div class="row2" style="margin-bottom:12px">
+          <div class="field">
+            <label>Supplier / ร้านค้า (ถ้ามี)</label>
+            <select id="inv_item_init_supplier">
+              <option value="">— ไม่ระบุ —</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>วันที่รับของเข้าจริง</label>
+            <input type="date" id="inv_item_init_date">
+          </div>
         </div>
       </div>
       <div id="inv_item_modal_err" style="font-size:12px;color:var(--danger);min-height:16px"></div>
@@ -1941,6 +1947,14 @@
                 <label>ยอดที่จ่ายจริงทั้งหมด (บาท)</label>
                 <input type="number" id="inv_in_total" value="0" min="0" step="0.01">
               </div>
+            </div>
+            <div class="row2" style="margin-bottom:12px">
+              <div class="field">
+                <label>วันที่รับของเข้าจริง</label>
+                <input type="date" id="inv_in_date">
+                <span style="font-size:11px; color:var(--muted)">เลือกย้อนหลังได้ — ค่าใช้จ่ายจะถูกนับเข้าเดือนของวันที่นี้ ไม่ใช่วันที่กดบันทึก</span>
+              </div>
+              <div></div>
             </div>
             <div class="row2" style="margin-bottom:12px">
               <div class="field">
@@ -4133,6 +4147,12 @@
 
     async function loadInventoryData() {
       try {
+        const inDateEl = document.getElementById('inv_in_date');
+        if (inDateEl) {
+          const todayIso = new Date().toISOString().slice(0, 10);
+          inDateEl.max = todayIso;
+          if (!inDateEl.value) inDateEl.value = todayIso;
+        }
         if (!INV_BRANCH_ID) {
           const { data: branch } = await _sb.from('inv_branches').select('id').eq('is_active', true).limit(1).maybeSingle();
           INV_BRANCH_ID = branch?.id || null;
@@ -4190,6 +4210,9 @@
       document.getElementById('inv_item_init_qty').value = 0;
       document.getElementById('inv_item_init_total').value = 0;
       document.getElementById('inv_item_init_supplier').value = '';
+      const initDateEl = document.getElementById('inv_item_init_date');
+      const todayIso = new Date().toISOString().slice(0, 10);
+      initDateEl.max = todayIso; initDateEl.value = todayIso;
       document.getElementById('inv_item_init_stock_wrap').style.display = item ? 'none' : '';
       document.getElementById('inv_item_modal_err').textContent = '';
       document.getElementById('inv_item_modal_overlay').classList.remove('hidden');
@@ -4207,10 +4230,12 @@
       const initQty = +document.getElementById('inv_item_init_qty').value || 0;
       const initTotal = +document.getElementById('inv_item_init_total').value || 0;
       const initSupplier = document.getElementById('inv_item_init_supplier').value || null;
+      const initDate = document.getElementById('inv_item_init_date').value || new Date().toISOString().slice(0, 10);
       const errEl = document.getElementById('inv_item_modal_err');
 
       if (!name || !category || !base_unit || !purchase_unit) { errEl.textContent = 'กรุณากรอกข้อมูลให้ครบทุกช่อง'; return; }
       if (purchase_unit_qty <= 0) { errEl.textContent = 'อัตราแปลงหน่วยต้องมากกว่า 0'; return; }
+      if (initDate > new Date().toISOString().slice(0, 10)) { errEl.textContent = 'วันที่รับของเข้าเป็นวันที่ในอนาคตไม่ได้'; return; }
 
       const payload = { name, item_type, category, base_unit, purchase_unit, purchase_unit_qty, default_min_stock_level };
 
@@ -4225,12 +4250,12 @@
           const baseQty = initQty * purchase_unit_qty;
           const unitCost = baseQty > 0 ? initTotal / baseQty : 0;
           const { error: txnErr } = await _sb.from('inv_stock_transactions').insert({
-            item_id: newItem.id, branch_id: INV_BRANCH_ID, txn_type: 'stock_in',
+            item_id: newItem.id, branch_id: INV_BRANCH_ID, txn_type: 'stock_in', transaction_date: initDate,
             quantity_delta: baseQty, unit_cost_snapshot: unitCost, supplier_id: initSupplier,
             reference_type: 'purchase', reference_note: 'สต๊อกเริ่มต้นตอนเพิ่มสินค้าใหม่', performed_by: _auth.user_id
           });
           if (txnErr) { errEl.textContent = 'เพิ่มสินค้าสำเร็จ แต่บันทึกสต๊อกเริ่มต้นไม่สำเร็จ: ' + txnErr.message; }
-          else { await invSyncLegacyStock(payload, baseQty, unitCost, 'ซื้อเข้า'); }
+          else { await invSyncLegacyStock(payload, baseQty, unitCost, 'ซื้อเข้า', initDate); }
         }
       }
 
@@ -4426,7 +4451,8 @@
     }
 
     // ── Dual-write helper: sync ยอดไปยังตารางเก่าเฉพาะสินค้าที่หน่วยซื้อ = หน่วยฐาน (1:1) ──
-    async function invSyncLegacyStock(item, qtyDelta, unitCost, txnTypeThai) {
+    // txnDate (optional): วันที่ต้องการให้ค่าใช้จ่ายไปตกในเดือนนั้น (กรอกย้อนหลังได้) ไม่ระบุ = วันนี้
+    async function invSyncLegacyStock(item, qtyDelta, unitCost, txnTypeThai, txnDate) {
       if (Number(item.purchase_unit_qty) !== 1) return; // หน่วยละเอียด (เช่น ml) ระบบเก่าไม่รองรับ ข้ามไป
       try {
         const { data: stkRow } = await _sb.from('sc_stock_status').select('quantity').eq('item_name', item.name).maybeSingle();
@@ -4442,7 +4468,7 @@
           // ต้อง "คง" เครื่องหมายไว้ ห้ามใช้ Math.abs() เพราะ "ต้นทุนวัสดุคลัง" ในแท็บภาพรวมรวมยอดจาก total
           // ตรงๆ (stockInAmt += total) ถ้าใช้ abs() รายการยกเลิกจะไปบวกเพิ่มยอดรายจ่ายแทนที่จะหักออก
           await _sb.from('sc_stock_transactions').insert({
-            date: new Date().toISOString().slice(0, 10), type: 'ซื้อเข้า', item_name: item.name,
+            date: txnDate || new Date().toISOString().slice(0, 10), type: 'ซื้อเข้า', item_name: item.name,
             quantity: qtyDelta, price_per_unit: unitCost || 0, total: qtyDelta * (unitCost || 0),
             pay_method: 'ระบบคลังสินค้าใหม่', recorded_by: _auth.display_name, last_updated: new Date().toISOString()
           });
@@ -4457,31 +4483,34 @@
       const totalCost = +document.getElementById('inv_in_total').value;
       const note = document.getElementById('inv_in_note').value.trim();
       const supplierId = document.getElementById('inv_in_supplier').value || null;
+      const txnDate = document.getElementById('inv_in_date').value || new Date().toISOString().slice(0, 10);
       const statusEl = document.getElementById('inv_status_in');
 
       const item = INV_ITEMS.find(i => i.id === itemId);
       if (!item) { statusEl.className = 'status show err'; statusEl.textContent = 'กรุณาเลือกสินค้า'; return; }
       if (purchaseQty <= 0) { statusEl.className = 'status show err'; statusEl.textContent = 'กรุณากรอกจำนวนให้ถูกต้อง'; return; }
       if (isNaN(totalCost) || totalCost < 0) { statusEl.className = 'status show err'; statusEl.textContent = 'กรุณากรอกยอดที่จ่ายให้ถูกต้อง'; return; }
+      if (txnDate > new Date().toISOString().slice(0, 10)) { statusEl.className = 'status show err'; statusEl.textContent = 'วันที่รับของเข้าเป็นวันที่ในอนาคตไม่ได้'; return; }
 
       const baseQty = purchaseQty * item.purchase_unit_qty;
       const unitCost = baseQty > 0 ? totalCost / baseQty : 0;
 
       statusEl.className = 'status show'; statusEl.textContent = 'กำลังบันทึก...';
       const { error } = await _sb.from('inv_stock_transactions').insert({
-        item_id: itemId, branch_id: INV_BRANCH_ID, txn_type: 'stock_in',
+        item_id: itemId, branch_id: INV_BRANCH_ID, txn_type: 'stock_in', transaction_date: txnDate,
         quantity_delta: baseQty, unit_cost_snapshot: unitCost, supplier_id: supplierId,
         reference_type: 'purchase', reference_note: note || null, performed_by: _auth.user_id
       });
       if (error) { statusEl.className = 'status show err'; statusEl.textContent = 'ข้อผิดพลาด: ' + error.message; return; }
 
-      await invSyncLegacyStock(item, baseQty, unitCost, 'ซื้อเข้า');
+      await invSyncLegacyStock(item, baseQty, unitCost, 'ซื้อเข้า', txnDate);
 
       statusEl.className = 'status show ok'; statusEl.textContent = 'บันทึกรับของเข้าเรียบร้อย ✓';
       document.getElementById('inv_in_qty').value = 1;
       document.getElementById('inv_in_total').value = 0;
       document.getElementById('inv_in_supplier').value = '';
       document.getElementById('inv_in_note').value = '';
+      document.getElementById('inv_in_date').value = new Date().toISOString().slice(0, 10);
       setTimeout(() => statusEl.className = 'status', 3000);
       loadInventoryData();
     }
@@ -4648,7 +4677,8 @@
       tbody.innerHTML = rows.map(d => {
         const item = INV_ITEMS.find(i => i.id === d.item_id);
         const supplier = INV_SUPPLIERS.find(s => s.id === d.supplier_id);
-        const when = d.created_at ? new Date(d.created_at).toLocaleString('th-TH', { dateStyle: 'short', timeStyle: 'short' }) : '';
+        const when = d.transaction_date ? new Date(d.transaction_date + 'T00:00:00').toLocaleDateString('th-TH', { dateStyle: 'short' })
+          : d.created_at ? new Date(d.created_at).toLocaleString('th-TH', { dateStyle: 'short', timeStyle: 'short' }) : '';
         const unitCost = Number(d.unit_cost_snapshot || 0);
         const total = Number(d.total_cost || (Number(d.quantity_delta || 0) * unitCost));
         const isRebook = d.reference_type === 'correction';
