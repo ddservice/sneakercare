@@ -102,6 +102,13 @@ feature_key ยกเว้น `card_user_mgmt`**
 - **Dual-write ไปตาราง sc_stock_status/sc_stock_transactions เดิม** เฉพาะตอน stock-in ของสินค้าที่
   `purchase_unit_qty === 1` (หน่วยซื้อ=หน่วยฐาน 1:1) เพื่อไม่ให้กระทบยอด "ต้นทุนวัสดุคลัง" ในแท็บภาพรวม และ
   Material analysis ในแท็บสถิติที่ยังอ้างอิงตารางเก่าอยู่ (ดูฟังก์ชัน `invSyncLegacyStock`)
+- **กรอกวันที่ย้อนหลังได้ (2026-07-13)**: `inv_stock_transactions.transaction_date` (คอลัมน์ใหม่ migration
+  0015 แยกจาก `created_at` ซึ่งเป็น audit timestamp จริงว่ากดบันทึกเมื่อไหร่ ห้ามแก้) — ฟอร์ม "รับของเข้าคลัง"
+  และ "เพิ่มสินค้าใหม่" (initial stock) มีช่องเลือกวันที่ ค่าเริ่มต้น=วันนี้ เลือกย้อนหลังได้ (ห้ามเลือก
+  อนาคต, เช็คทั้ง client-side และควร cross-check กับ business logic เสมอ) ต้องส่งวันที่นี้ต่อให้
+  `invSyncLegacyStock(..., txnDate)` ด้วยเสมอ ไม่งั้น `sc_stock_transactions.date` (ตัวที่ตัดสินว่า
+  "ต้นทุนวัสดุคลัง" เข้าเดือนไหน) จะยังใช้วันนี้อยู่ดี ทำให้ backdate ไม่มีผลจริงกับรายงาน — Purchase History
+  โชว์ `transaction_date` แทน `created_at` แล้ว
 - แจ้งเตือนสต๊อกต่ำผ่าน Telegram Bot `@SneakerCareStockBot` → กลุ่ม "SneakerCare Team" (chat_id
   `-5034072774`) ทุก 30 นาทีผ่าน `pg_cron` เรียก Edge Function `inv-low-stock-alert`
 - **Supplier (2026-07-12)**: `inv_suppliers` เป็น master data แยกต่างหาก ไม่ใช่แค่ช่องข้อความอิสระ — เลือกได้
