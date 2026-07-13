@@ -1192,7 +1192,7 @@
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
         <button onclick="document.getElementById('inv_item_modal_overlay').classList.add('hidden')"
           class="btn btn-light">ยกเลิก</button>
-        <button onclick="invSaveItem()" class="btn btn-primary">บันทึก</button>
+        <button id="inv_item_save_btn" onclick="invSaveItem()" class="btn btn-primary">บันทึก</button>
       </div>
     </div>
   </div>
@@ -1220,7 +1220,7 @@
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
         <button onclick="document.getElementById('supplier_modal_overlay').classList.add('hidden')"
           class="btn btn-light">ยกเลิก</button>
-        <button onclick="invSaveSupplier()" class="btn btn-primary">บันทึก</button>
+        <button id="supplier_save_btn" onclick="invSaveSupplier()" class="btn btn-primary">บันทึก</button>
       </div>
     </div>
   </div>
@@ -1261,7 +1261,7 @@
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
         <button onclick="document.getElementById('correct_txn_modal_overlay').classList.add('hidden')"
           class="btn btn-light">ยกเลิก</button>
-        <button onclick="invSaveCorrectPurchase()" class="btn btn-primary">บันทึกการแก้ไข</button>
+        <button id="correct_txn_save_btn" onclick="invSaveCorrectPurchase()" class="btn btn-primary">บันทึกการแก้ไข</button>
       </div>
     </div>
   </div>
@@ -1287,7 +1287,7 @@
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
         <button onclick="document.getElementById('void_txn_modal_overlay').classList.add('hidden')"
           class="btn btn-light">ยกเลิก</button>
-        <button onclick="invSaveVoidPurchase()"
+        <button id="void_txn_save_btn" onclick="invSaveVoidPurchase()"
           style="padding:10px;border:none;border-radius:8px;background:var(--danger);color:#fff;font-weight:600;cursor:pointer">ยืนยันลบรายการ</button>
       </div>
     </div>
@@ -1974,7 +1974,7 @@
               </div>
             </div>
             <div id="inv_status_in" class="status"></div>
-            <button class="btn btn-primary btn-full" onclick="invSaveStockIn()">
+            <button id="inv_in_save_btn" class="btn btn-primary btn-full" onclick="invSaveStockIn()">
               <i class="ti ti-plus"></i> บันทึกรับของเข้า
             </button>
           </div>
@@ -2005,7 +2005,7 @@
               </div>
             </div>
             <div id="inv_status_out" class="status"></div>
-            <button class="btn btn-danger btn-full" onclick="invSaveStockOut()">
+            <button id="inv_out_save_btn" class="btn btn-danger btn-full" onclick="invSaveStockOut()">
               <i class="ti ti-minus"></i> บันทึกการเบิกใช้งาน
             </button>
           </div>
@@ -2045,7 +2045,7 @@
           </div>
           <p id="inv_adj_hint" style="font-size:11px; color:var(--muted); margin-bottom:8px"></p>
           <div id="inv_status_adj" class="status"></div>
-          <button class="btn btn-primary btn-full" onclick="invSaveAdjustment()">
+          <button id="inv_adj_save_btn" class="btn btn-primary btn-full" onclick="invSaveAdjustment()">
             <i class="ti ti-check"></i> บันทึกการปรับปรุงสต๊อก
           </button>
         </div>
@@ -4237,30 +4237,37 @@
       if (purchase_unit_qty <= 0) { errEl.textContent = 'อัตราแปลงหน่วยต้องมากกว่า 0'; return; }
       if (initDate > new Date().toISOString().slice(0, 10)) { errEl.textContent = 'วันที่รับของเข้าเป็นวันที่ในอนาคตไม่ได้'; return; }
 
-      const payload = { name, item_type, category, base_unit, purchase_unit, purchase_unit_qty, default_min_stock_level };
+      const saveBtn = document.getElementById('inv_item_save_btn');
+      if (saveBtn.disabled) return;
+      saveBtn.disabled = true; saveBtn.style.opacity = '0.6'; saveBtn.style.cursor = 'not-allowed';
+      try {
+        const payload = { name, item_type, category, base_unit, purchase_unit, purchase_unit_qty, default_min_stock_level };
 
-      if (id) {
-        const { error } = await _sb.from('inv_items').update(payload).eq('id', id);
-        if (error) { errEl.textContent = 'บันทึกไม่สำเร็จ: ' + error.message; return; }
-      } else {
-        const { data: newItem, error } = await _sb.from('inv_items').insert(payload).select().single();
-        if (error) { errEl.textContent = 'บันทึกไม่สำเร็จ: ' + error.message; return; }
+        if (id) {
+          const { error } = await _sb.from('inv_items').update(payload).eq('id', id);
+          if (error) { errEl.textContent = 'บันทึกไม่สำเร็จ: ' + error.message; return; }
+        } else {
+          const { data: newItem, error } = await _sb.from('inv_items').insert(payload).select().single();
+          if (error) { errEl.textContent = 'บันทึกไม่สำเร็จ: ' + error.message; return; }
 
-        if (initQty > 0) {
-          const baseQty = initQty * purchase_unit_qty;
-          const unitCost = baseQty > 0 ? initTotal / baseQty : 0;
-          const { error: txnErr } = await _sb.from('inv_stock_transactions').insert({
-            item_id: newItem.id, branch_id: INV_BRANCH_ID, txn_type: 'stock_in', transaction_date: initDate,
-            quantity_delta: baseQty, unit_cost_snapshot: unitCost, supplier_id: initSupplier,
-            reference_type: 'purchase', reference_note: 'สต๊อกเริ่มต้นตอนเพิ่มสินค้าใหม่', performed_by: _auth.user_id
-          });
-          if (txnErr) { errEl.textContent = 'เพิ่มสินค้าสำเร็จ แต่บันทึกสต๊อกเริ่มต้นไม่สำเร็จ: ' + txnErr.message; }
-          else { await invSyncLegacyStock(payload, baseQty, unitCost, 'ซื้อเข้า', initDate); }
+          if (initQty > 0) {
+            const baseQty = initQty * purchase_unit_qty;
+            const unitCost = baseQty > 0 ? initTotal / baseQty : 0;
+            const { error: txnErr } = await _sb.from('inv_stock_transactions').insert({
+              item_id: newItem.id, branch_id: INV_BRANCH_ID, txn_type: 'stock_in', transaction_date: initDate,
+              quantity_delta: baseQty, unit_cost_snapshot: unitCost, supplier_id: initSupplier,
+              reference_type: 'purchase', reference_note: 'สต๊อกเริ่มต้นตอนเพิ่มสินค้าใหม่', performed_by: _auth.user_id
+            });
+            if (txnErr) { errEl.textContent = 'เพิ่มสินค้าสำเร็จ แต่บันทึกสต๊อกเริ่มต้นไม่สำเร็จ: ' + txnErr.message; }
+            else { await invSyncLegacyStock(payload, baseQty, unitCost, 'ซื้อเข้า', initDate); }
+          }
         }
-      }
 
-      document.getElementById('inv_item_modal_overlay').classList.add('hidden');
-      loadInventoryData();
+        document.getElementById('inv_item_modal_overlay').classList.add('hidden');
+        loadInventoryData();
+      } finally {
+        saveBtn.disabled = false; saveBtn.style.opacity = ''; saveBtn.style.cursor = '';
+      }
     }
 
     async function invToggleItemActive(id, nextActive) {
@@ -4353,19 +4360,26 @@
 
       if (!name) { errEl.textContent = 'กรุณากรอกชื่อ Supplier'; return; }
 
-      const payload = { name, phone: phone || null, note: note || null };
-      const q = id ? _sb.from('inv_suppliers').update(payload).eq('id', id)
-                   : _sb.from('inv_suppliers').insert(payload).select().single();
-      const { data: savedSupplier, error } = await q;
-      if (error) { errEl.textContent = 'บันทึกไม่สำเร็จ: ' + error.message; return; }
+      const saveBtn = document.getElementById('supplier_save_btn');
+      if (saveBtn.disabled) return;
+      saveBtn.disabled = true; saveBtn.style.opacity = '0.6'; saveBtn.style.cursor = 'not-allowed';
+      try {
+        const payload = { name, phone: phone || null, note: note || null };
+        const q = id ? _sb.from('inv_suppliers').update(payload).eq('id', id)
+                     : _sb.from('inv_suppliers').insert(payload).select().single();
+        const { data: savedSupplier, error } = await q;
+        if (error) { errEl.textContent = 'บันทึกไม่สำเร็จ: ' + error.message; return; }
 
-      document.getElementById('supplier_modal_overlay').classList.add('hidden');
-      await loadInventoryData();
-      // ถ้าเปิด modal นี้จากปุ่ม + ในฟอร์มรับของเข้า ให้เลือก supplier ที่เพิ่งสร้างให้อัตโนมัติเลย
-      const newId = id || savedSupplier?.id;
-      if (!id && newId) {
-        const inSel = document.getElementById('inv_in_supplier');
-        if (inSel) inSel.value = newId;
+        document.getElementById('supplier_modal_overlay').classList.add('hidden');
+        await loadInventoryData();
+        // ถ้าเปิด modal นี้จากปุ่ม + ในฟอร์มรับของเข้า ให้เลือก supplier ที่เพิ่งสร้างให้อัตโนมัติเลย
+        const newId = id || savedSupplier?.id;
+        if (!id && newId) {
+          const inSel = document.getElementById('inv_in_supplier');
+          if (inSel) inSel.value = newId;
+        }
+      } finally {
+        saveBtn.disabled = false; saveBtn.style.opacity = ''; saveBtn.style.cursor = '';
       }
     }
 
@@ -4495,24 +4509,33 @@
       const baseQty = purchaseQty * item.purchase_unit_qty;
       const unitCost = baseQty > 0 ? totalCost / baseQty : 0;
 
+      // กันกดซ้ำซ้อน (double-click หรือกดซ้ำระหว่างรอบันทึก) ที่เคยทำให้เกิดรายการซื้อซ้ำ 2 เท่า —
+      // ปิดปุ่มไว้ตั้งแต่ก่อน insert จนกว่าจะเสร็จ (สำเร็จหรือ error ก็ตาม) ค่อยเปิดใหม่
+      const saveBtn = document.getElementById('inv_in_save_btn');
+      if (saveBtn.disabled) return;
+      saveBtn.disabled = true; saveBtn.style.opacity = '0.6'; saveBtn.style.cursor = 'not-allowed';
       statusEl.className = 'status show'; statusEl.textContent = 'กำลังบันทึก...';
-      const { error } = await _sb.from('inv_stock_transactions').insert({
-        item_id: itemId, branch_id: INV_BRANCH_ID, txn_type: 'stock_in', transaction_date: txnDate,
-        quantity_delta: baseQty, unit_cost_snapshot: unitCost, supplier_id: supplierId,
-        reference_type: 'purchase', reference_note: note || null, performed_by: _auth.user_id
-      });
-      if (error) { statusEl.className = 'status show err'; statusEl.textContent = 'ข้อผิดพลาด: ' + error.message; return; }
+      try {
+        const { error } = await _sb.from('inv_stock_transactions').insert({
+          item_id: itemId, branch_id: INV_BRANCH_ID, txn_type: 'stock_in', transaction_date: txnDate,
+          quantity_delta: baseQty, unit_cost_snapshot: unitCost, supplier_id: supplierId,
+          reference_type: 'purchase', reference_note: note || null, performed_by: _auth.user_id
+        });
+        if (error) { statusEl.className = 'status show err'; statusEl.textContent = 'ข้อผิดพลาด: ' + error.message; return; }
 
-      await invSyncLegacyStock(item, baseQty, unitCost, 'ซื้อเข้า', txnDate);
+        await invSyncLegacyStock(item, baseQty, unitCost, 'ซื้อเข้า', txnDate);
 
-      statusEl.className = 'status show ok'; statusEl.textContent = 'บันทึกรับของเข้าเรียบร้อย ✓';
-      document.getElementById('inv_in_qty').value = 1;
-      document.getElementById('inv_in_total').value = 0;
-      document.getElementById('inv_in_supplier').value = '';
-      document.getElementById('inv_in_note').value = '';
-      document.getElementById('inv_in_date').value = new Date().toISOString().slice(0, 10);
-      setTimeout(() => statusEl.className = 'status', 3000);
-      loadInventoryData();
+        statusEl.className = 'status show ok'; statusEl.textContent = 'บันทึกรับของเข้าเรียบร้อย ✓';
+        document.getElementById('inv_in_qty').value = 1;
+        document.getElementById('inv_in_total').value = 0;
+        document.getElementById('inv_in_supplier').value = '';
+        document.getElementById('inv_in_note').value = '';
+        document.getElementById('inv_in_date').value = new Date().toISOString().slice(0, 10);
+        setTimeout(() => statusEl.className = 'status', 3000);
+        loadInventoryData();
+      } finally {
+        saveBtn.disabled = false; saveBtn.style.opacity = ''; saveBtn.style.cursor = '';
+      }
     }
 
     // ── Stock Out ──────────────────────────────────────────────────
@@ -4526,21 +4549,28 @@
       if (!item) { statusEl.className = 'status show err'; statusEl.textContent = 'กรุณาเลือกสินค้า'; return; }
       if (qty <= 0) { statusEl.className = 'status show err'; statusEl.textContent = 'กรุณากรอกจำนวนให้ถูกต้อง'; return; }
 
+      const saveBtn = document.getElementById('inv_out_save_btn');
+      if (saveBtn.disabled) return;
+      saveBtn.disabled = true; saveBtn.style.opacity = '0.6'; saveBtn.style.cursor = 'not-allowed';
       statusEl.className = 'status show'; statusEl.textContent = 'กำลังบันทึก...';
-      const { error } = await _sb.from('inv_stock_transactions').insert({
-        item_id: itemId, branch_id: INV_BRANCH_ID, txn_type: 'stock_out',
-        quantity_delta: -Math.abs(qty), reference_type: 'service_order',
-        reference_note: note || null, performed_by: _auth.user_id
-      });
-      if (error) { statusEl.className = 'status show err'; statusEl.textContent = 'ข้อผิดพลาด: ' + error.message; return; }
+      try {
+        const { error } = await _sb.from('inv_stock_transactions').insert({
+          item_id: itemId, branch_id: INV_BRANCH_ID, txn_type: 'stock_out',
+          quantity_delta: -Math.abs(qty), reference_type: 'service_order',
+          reference_note: note || null, performed_by: _auth.user_id
+        });
+        if (error) { statusEl.className = 'status show err'; statusEl.textContent = 'ข้อผิดพลาด: ' + error.message; return; }
 
-      await invSyncLegacyStock(item, -Math.abs(qty), 0, 'ใช้งาน');
+        await invSyncLegacyStock(item, -Math.abs(qty), 0, 'ใช้งาน');
 
-      statusEl.className = 'status show ok'; statusEl.textContent = 'บันทึกการเบิกใช้งานเรียบร้อย ✓';
-      document.getElementById('inv_out_qty').value = 1;
-      document.getElementById('inv_out_note').value = '';
-      setTimeout(() => statusEl.className = 'status', 3000);
-      loadInventoryData();
+        statusEl.className = 'status show ok'; statusEl.textContent = 'บันทึกการเบิกใช้งานเรียบร้อย ✓';
+        document.getElementById('inv_out_qty').value = 1;
+        document.getElementById('inv_out_note').value = '';
+        setTimeout(() => statusEl.className = 'status', 3000);
+        loadInventoryData();
+      } finally {
+        saveBtn.disabled = false; saveBtn.style.opacity = ''; saveBtn.style.cursor = '';
+      }
     }
 
     // ── Adjustment (ปรับปรุงสต๊อกจากตรวจนับ) ─────────────────────
@@ -4555,22 +4585,29 @@
       if (qty <= 0) { statusEl.className = 'status show err'; statusEl.textContent = 'กรุณากรอกจำนวนให้ถูกต้อง'; return; }
       if (!reason) { statusEl.className = 'status show err'; statusEl.textContent = 'กรุณากรอกเหตุผล'; return; }
 
+      const saveBtn = document.getElementById('inv_adj_save_btn');
+      if (saveBtn.disabled) return;
+      saveBtn.disabled = true; saveBtn.style.opacity = '0.6'; saveBtn.style.cursor = 'not-allowed';
       const status = invCanManageStock() ? 'approved' : 'pending_approval';
       statusEl.className = 'status show'; statusEl.textContent = 'กำลังบันทึก...';
-      const { error } = await _sb.from('inv_stock_transactions').insert({
-        item_id: itemId, branch_id: INV_BRANCH_ID,
-        txn_type: direction === 'increase' ? 'adjustment_increase' : 'adjustment_decrease',
-        status, quantity_delta: direction === 'increase' ? Math.abs(qty) : -Math.abs(qty),
-        reason, performed_by: _auth.user_id
-      });
-      if (error) { statusEl.className = 'status show err'; statusEl.textContent = 'ข้อผิดพลาด: ' + error.message; return; }
+      try {
+        const { error } = await _sb.from('inv_stock_transactions').insert({
+          item_id: itemId, branch_id: INV_BRANCH_ID,
+          txn_type: direction === 'increase' ? 'adjustment_increase' : 'adjustment_decrease',
+          status, quantity_delta: direction === 'increase' ? Math.abs(qty) : -Math.abs(qty),
+          reason, performed_by: _auth.user_id
+        });
+        if (error) { statusEl.className = 'status show err'; statusEl.textContent = 'ข้อผิดพลาด: ' + error.message; return; }
 
-      statusEl.className = 'status show ok';
-      statusEl.textContent = invCanManageStock() ? 'บันทึกการปรับปรุงสต๊อกเรียบร้อย ✓' : 'ส่งคำขอปรับปรุงสต๊อกไปรออนุมัติแล้ว ✓';
-      document.getElementById('inv_adj_qty').value = 1;
-      document.getElementById('inv_adj_reason').value = '';
-      setTimeout(() => statusEl.className = 'status', 3000);
-      loadInventoryData();
+        statusEl.className = 'status show ok';
+        statusEl.textContent = invCanManageStock() ? 'บันทึกการปรับปรุงสต๊อกเรียบร้อย ✓' : 'ส่งคำขอปรับปรุงสต๊อกไปรออนุมัติแล้ว ✓';
+        document.getElementById('inv_adj_qty').value = 1;
+        document.getElementById('inv_adj_reason').value = '';
+        setTimeout(() => statusEl.className = 'status', 3000);
+        loadInventoryData();
+      } finally {
+        saveBtn.disabled = false; saveBtn.style.opacity = ''; saveBtn.style.cursor = '';
+      }
     }
 
     function invUpdateAdjHint() {
@@ -4756,36 +4793,42 @@
       const newBaseQty = newPurchaseQty * item.purchase_unit_qty;
       const newUnitCost = newBaseQty > 0 ? newTotal / newBaseQty : 0;
 
+      const saveBtn = document.getElementById('correct_txn_save_btn');
+      if (saveBtn.disabled) return;
+      saveBtn.disabled = true; saveBtn.style.opacity = '0.6'; saveBtn.style.cursor = 'not-allowed';
       errEl.style.color = ''; errEl.textContent = 'กำลังบันทึก...';
+      try {
+        // ขั้นที่ 1: หักล้างจำนวนเดิมออก — ต้องใช้ txn_type='adjustment_decrease' (ไม่ใช่ stock_in ติดลบ เพราะ
+        // DB มี check constraint บังคับ stock_in ต้องเป็นจำนวนบวกเท่านั้น) Admin/Co-Admin ได้ผลทันที
+        // เฉพาะ Manager/Staff เท่านั้นที่ต้องรออนุมัติ (แต่ role นี้ไม่มีสิทธิ์เห็นปุ่มนี้อยู่แล้ว)
+        const revStatus = invCanManageStock() ? 'approved' : 'pending_approval';
+        const { error: revErr } = await _sb.from('inv_stock_transactions').insert({
+          item_id: item.id, branch_id: d.branch_id, txn_type: 'adjustment_decrease', status: revStatus,
+          quantity_delta: -Number(d.quantity_delta), reason: `แก้ไขรายการซื้อเข้าที่กรอกผิด: ${reason}`,
+          supplier_id: d.supplier_id || null, reference_type: 'correction', corrects_txn_id: d.id,
+          reference_note: `ยกเลิกรายการที่กรอกผิด — เหตุผล: ${reason}`, performed_by: _auth.user_id
+        });
+        if (revErr) { errEl.textContent = 'แก้ไขไม่สำเร็จ (ขั้นยกเลิกรายการเดิม): ' + revErr.message; return; }
+        // ยอดเก่าใน "ต้นทุนวัสดุคลัง" (แท็บภาพรวม) อ่านจากตาราง sc_stock_transactions เดิม ไม่ใช่ inv_* —
+        // ถ้าไม่หักออกที่นี่ด้วย ยอดซื้อเดือนนั้นจะค้างเป็นตัวเลขเดิมทั้งที่จำนวนสต๊อกถูกแก้ไปแล้ว
+        if (revStatus === 'approved') { await invSyncLegacyStock(item, -Number(d.quantity_delta), Number(d.unit_cost_snapshot), 'ซื้อเข้า'); }
 
-      // ขั้นที่ 1: หักล้างจำนวนเดิมออก — ต้องใช้ txn_type='adjustment_decrease' (ไม่ใช่ stock_in ติดลบ เพราะ
-      // DB มี check constraint บังคับ stock_in ต้องเป็นจำนวนบวกเท่านั้น) Admin/Co-Admin ได้ผลทันที
-      // เฉพาะ Manager/Staff เท่านั้นที่ต้องรออนุมัติ (แต่ role นี้ไม่มีสิทธิ์เห็นปุ่มนี้อยู่แล้ว)
-      const revStatus = invCanManageStock() ? 'approved' : 'pending_approval';
-      const { error: revErr } = await _sb.from('inv_stock_transactions').insert({
-        item_id: item.id, branch_id: d.branch_id, txn_type: 'adjustment_decrease', status: revStatus,
-        quantity_delta: -Number(d.quantity_delta), reason: `แก้ไขรายการซื้อเข้าที่กรอกผิด: ${reason}`,
-        supplier_id: d.supplier_id || null, reference_type: 'correction', corrects_txn_id: d.id,
-        reference_note: `ยกเลิกรายการที่กรอกผิด — เหตุผล: ${reason}`, performed_by: _auth.user_id
-      });
-      if (revErr) { errEl.textContent = 'แก้ไขไม่สำเร็จ (ขั้นยกเลิกรายการเดิม): ' + revErr.message; return; }
-      // ยอดเก่าใน "ต้นทุนวัสดุคลัง" (แท็บภาพรวม) อ่านจากตาราง sc_stock_transactions เดิม ไม่ใช่ inv_* —
-      // ถ้าไม่หักออกที่นี่ด้วย ยอดซื้อเดือนนั้นจะค้างเป็นตัวเลขเดิมทั้งที่จำนวนสต๊อกถูกแก้ไปแล้ว
-      if (revStatus === 'approved') { await invSyncLegacyStock(item, -Number(d.quantity_delta), Number(d.unit_cost_snapshot), 'ซื้อเข้า'); }
+        // ขั้นที่ 2: บันทึกรายการที่แก้ไขแล้วเป็นรายการซื้อเข้าใหม่ (stock_in ปกติ ใช้ทันที ไม่ต้องรออนุมัติ
+        // เหมือนการรับของเข้าคลังทั่วไปที่ Co-Admin ทำได้อยู่แล้ว)
+        const { error: newErr } = await _sb.from('inv_stock_transactions').insert({
+          item_id: item.id, branch_id: d.branch_id, txn_type: 'stock_in',
+          quantity_delta: newBaseQty, unit_cost_snapshot: newUnitCost,
+          supplier_id: newSupplier, reference_type: 'correction', corrects_txn_id: d.id,
+          reference_note: `แก้ไขจากรายการเดิม — เหตุผล: ${reason}`, performed_by: _auth.user_id
+        });
+        if (newErr) { errEl.textContent = 'ยกเลิกรายการเดิมสำเร็จแล้ว แต่บันทึกรายการที่แก้ไขไม่สำเร็จ: ' + newErr.message + ' (กรุณาแจ้ง Admin ตรวจสอบยอดคงเหลือ)'; return; }
+        await invSyncLegacyStock(item, newBaseQty, newUnitCost, 'ซื้อเข้า');
 
-      // ขั้นที่ 2: บันทึกรายการที่แก้ไขแล้วเป็นรายการซื้อเข้าใหม่ (stock_in ปกติ ใช้ทันที ไม่ต้องรออนุมัติ
-      // เหมือนการรับของเข้าคลังทั่วไปที่ Co-Admin ทำได้อยู่แล้ว)
-      const { error: newErr } = await _sb.from('inv_stock_transactions').insert({
-        item_id: item.id, branch_id: d.branch_id, txn_type: 'stock_in',
-        quantity_delta: newBaseQty, unit_cost_snapshot: newUnitCost,
-        supplier_id: newSupplier, reference_type: 'correction', corrects_txn_id: d.id,
-        reference_note: `แก้ไขจากรายการเดิม — เหตุผล: ${reason}`, performed_by: _auth.user_id
-      });
-      if (newErr) { errEl.textContent = 'ยกเลิกรายการเดิมสำเร็จแล้ว แต่บันทึกรายการที่แก้ไขไม่สำเร็จ: ' + newErr.message + ' (กรุณาแจ้ง Admin ตรวจสอบยอดคงเหลือ)'; return; }
-      await invSyncLegacyStock(item, newBaseQty, newUnitCost, 'ซื้อเข้า');
-
-      document.getElementById('correct_txn_modal_overlay').classList.add('hidden');
-      loadInventoryData();
+        document.getElementById('correct_txn_modal_overlay').classList.add('hidden');
+        loadInventoryData();
+      } finally {
+        saveBtn.disabled = false; saveBtn.style.opacity = ''; saveBtn.style.cursor = '';
+      }
     }
 
     // ── ลบรายการซื้อเข้าที่กรอกซ้ำ/ผิดออกทั้งหมด (ไม่ใช่แก้เป็นค่าใหม่ แค่ต้องการให้จำนวน+ยอดเงินหายไป)
@@ -4820,23 +4863,29 @@
       const reason = document.getElementById('void_txn_reason').value.trim();
       if (!reason) { errEl.textContent = 'กรุณาระบุเหตุผลที่ลบรายการนี้ (จำเป็นสำหรับตรวจสอบย้อนหลัง)'; return; }
 
+      const saveBtn = document.getElementById('void_txn_save_btn');
+      if (saveBtn.disabled) return;
+      saveBtn.disabled = true; saveBtn.style.opacity = '0.6'; saveBtn.style.cursor = 'not-allowed';
       errEl.style.color = ''; errEl.textContent = 'กำลังบันทึก...';
+      try {
+        // ต้องใช้ txn_type='adjustment_decrease' (ไม่ใช่ stock_in ติดลบ เพราะ DB บังคับ stock_in ต้องเป็นบวก
+        // เท่านั้น) Admin/Co-Admin ได้ผลทันที
+        const status = invCanManageStock() ? 'approved' : 'pending_approval';
+        const { error } = await _sb.from('inv_stock_transactions').insert({
+          item_id: item.id, branch_id: d.branch_id, txn_type: 'adjustment_decrease', status,
+          quantity_delta: -Number(d.quantity_delta), reason: `ลบรายการซื้อเข้าที่กรอกซ้ำ/ผิด: ${reason}`,
+          supplier_id: d.supplier_id || null, reference_type: 'correction', corrects_txn_id: d.id,
+          reference_note: `ลบรายการที่กรอกซ้ำ/ผิด — เหตุผล: ${reason}`, performed_by: _auth.user_id
+        });
+        if (error) { errEl.textContent = 'ลบไม่สำเร็จ: ' + error.message; return; }
+        // หักยอด "ต้นทุนวัสดุคลัง" ในแท็บภาพรวมออกด้วย (อ่านจาก sc_stock_transactions เดิม แยกจาก inv_*)
+        if (status === 'approved') { await invSyncLegacyStock(item, -Number(d.quantity_delta), Number(d.unit_cost_snapshot), 'ซื้อเข้า'); }
 
-      // ต้องใช้ txn_type='adjustment_decrease' (ไม่ใช่ stock_in ติดลบ เพราะ DB บังคับ stock_in ต้องเป็นบวก
-      // เท่านั้น) Admin/Co-Admin ได้ผลทันที
-      const status = invCanManageStock() ? 'approved' : 'pending_approval';
-      const { error } = await _sb.from('inv_stock_transactions').insert({
-        item_id: item.id, branch_id: d.branch_id, txn_type: 'adjustment_decrease', status,
-        quantity_delta: -Number(d.quantity_delta), reason: `ลบรายการซื้อเข้าที่กรอกซ้ำ/ผิด: ${reason}`,
-        supplier_id: d.supplier_id || null, reference_type: 'correction', corrects_txn_id: d.id,
-        reference_note: `ลบรายการที่กรอกซ้ำ/ผิด — เหตุผล: ${reason}`, performed_by: _auth.user_id
-      });
-      if (error) { errEl.textContent = 'ลบไม่สำเร็จ: ' + error.message; return; }
-      // หักยอด "ต้นทุนวัสดุคลัง" ในแท็บภาพรวมออกด้วย (อ่านจาก sc_stock_transactions เดิม แยกจาก inv_*)
-      if (status === 'approved') { await invSyncLegacyStock(item, -Number(d.quantity_delta), Number(d.unit_cost_snapshot), 'ซื้อเข้า'); }
-
-      document.getElementById('void_txn_modal_overlay').classList.add('hidden');
-      loadInventoryData();
+        document.getElementById('void_txn_modal_overlay').classList.add('hidden');
+        loadInventoryData();
+      } finally {
+        saveBtn.disabled = false; saveBtn.style.opacity = ''; saveBtn.style.cursor = '';
+      }
     }
 
     // ── Telegram settings (admin/co-admin, write-only secret pattern) ─────
