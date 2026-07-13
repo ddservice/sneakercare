@@ -1464,7 +1464,7 @@
             <i class="ti ti-scale"></i> กำไรสุทธิ
           </div>
           <div style="font-size:22px; font-weight:800; color:#fff" id="sum_profit">0.00</div>
-          <div style="font-size:11px; color:#bae6fd; margin-top:2px">บาท</div>
+          <div style="font-size:11px; color:#bae6fd; margin-top:2px">บาท (คำนวณจากเงินที่ได้รับจริงในช่วงนี้)</div>
         </div>
 
       </div>
@@ -2818,6 +2818,7 @@
     let expenseSaved = [];
     let opexSaved = [];
     let paymentsSaved = []; // AR: payment receipts {sale_date, received_date, amount, method, received_by}
+    let paymentsInRangeSaved = []; // จาก sc_payments จริง filter ด้วย received_date ในช่วงที่กำลังดู (ใช้คำนวณกำไรสุทธิแบบเงินสด)
 
     const _PAYMENTS_KEY = 'sneaker_payments';
     function _loadPayments() {
@@ -3233,11 +3234,20 @@
             .then(opexRes => {
               _sb.from('sc_stock_transactions').select('*').gte('date', df).lte('date', dt).order('id')
                 .then(txRes => {
+                  // received_date คือวันที่รับเงินจริง — filter ตามนี้ (ไม่ใช่ sale_date) เพื่อให้เงินที่
+                  // รับในช่วงนี้นับเข้าช่วงนี้เสมอ แม้ยอดขายต้นเรื่องจะเป็นเดือนอื่นก็ตาม
+                  _sb.from('sc_payments').select('*').gte('received_date', df).lte('received_date', dt)
+                    .then(paymentsRes => {
                   clearTimeout(_loadTimeout);
 
                   if (salesRes.error) { console.error('[E] sc_sales:', salesRes.error); }
                   if (opexRes.error)  { console.error('[E] sc_opex:',  opexRes.error);  }
                   if (txRes.error)    { console.error('[E] sc_stock_transactions:', txRes.error); }
+                  if (paymentsRes.error) { console.error('[E] sc_payments:', paymentsRes.error); }
+
+                  paymentsInRangeSaved = (paymentsRes.data || []).map(r => ({
+                    received_date: r.received_date, amount: Number(r.amount) || 0
+                  }));
 
                   // ── Build saleSaved ──────────────────────────────────
                   // NOTE: DB cash_amount = UI transfer_amount, DB transfer_amount = UI cash_amount (columns are swapped historically)
@@ -3321,6 +3331,7 @@
                   });
                   _loadDraft(todayStr());
                 });
+                })
             });
         });
     }
@@ -3504,29 +3515,32 @@
         console.warn('[DEBUG] All sales were filtered out! First record date:', saleSaved[0]?.date, '→ iso:', _isoDate(saleSaved[0]?.date || ''), 'df=', df, 'dt=', dt);
       }
 
-      // Combine service + rental into total revenue
+      // Combine service + rental into total revenue (ยอดขายเต็มจำนวนแบบตั้งบัญชี — โชว์ไว้ดูภาพรวมยอดขาย
+      // เฉยๆ ไม่ได้ใช้คำนวณกำไรสุทธิอีกต่อไป)
       totalRevenue = serviceRevenue + rentalIncomeAmt;
 
       const grandExpenses = stockInAmt + dailyOtherAmt + opexFixedAmt + staffSalaryAmt + taxAmt;
-      const netProfit = totalRevenue - grandExpenses;
 
-      // ── AR: cash collected vs outstanding ──────────────────────
+      // ── เงินสดรับจริงแบบไม่ข้ามเดือน (cash basis) — ใช้คำนวณ "กำไรสุทธิ" แทนยอดขายเต็มจำนวน ──────
+      // นับเงินที่รับจริงในช่วงที่เลือก 2 ทาง:
+      // 1) ส่วนที่รับตอนบันทึกยอดขายเลย (นับเข้าวันที่ขายเอง เพราะรับเงินวันเดียวกันจริง)
+      // 2) เงินที่มารับเพิ่มทีหลังผ่าน "รับชำระเงิน" (sc_payments) นับตาม received_date (วันที่รับเงินจริง)
+      //    ไม่ใช่วันที่ของยอดขายเดิม — ถ้าขายเดือนก่อนแต่มารับเงินเดือนนี้ จะนับรายได้เข้าเดือนนี้ ไม่ข้าม
+      //    ย้อนกลับไปเดือนที่ขาย (paymentsInRangeSaved โหลดจาก Supabase กรอง received_date ใน loadMonthlyData)
       let totalCashCollected = 0;
       let totalOutstanding = 0;
       filteredSales.forEach(s => {
         const pStatus = s.payment_status || 'ชำระครบ';
-        const extraPay = _getReceivedForDate(s.date);
-        let received = 0;
-        if (pStatus === 'ชำระครบ') {
-          received = s.total_amount;
-        } else {
-          received = (s.received_amount || 0) + extraPay;
-        }
-        totalCashCollected += received;
-        totalOutstanding += Math.max(s.total_amount - received, 0);
+        const receivedAtSaleTime = pStatus === 'ชำระครบ' ? s.total_amount : Math.min(s.received_amount || 0, s.total_amount);
+        totalCashCollected += receivedAtSaleTime;
+        // ยอดค้างชำระจริง ณ ตอนนี้ ต้องหักเงินที่มารับทีหลังด้วย (ไม่จำกัดแค่ช่วงที่กำลังดู) จึงยังอ้างอิง
+        // _getReceivedForDate (ข้อมูล local) สำหรับตัวเลขนี้โดยเฉพาะ — ไม่กระทบการคำนวณกำไรสุทธิด้านบน
+        const laterCollected = _getReceivedForDate(s.date);
+        totalOutstanding += Math.max(s.total_amount - receivedAtSaleTime - laterCollected, 0);
       });
-      // Also add payments collected for dates outside filter range that belong to filtered sales
-      // (already included via _getReceivedForDate above)
+      paymentsInRangeSaved.forEach(p => { totalCashCollected += Number(p.amount) || 0; });
+
+      const netProfit = totalCashCollected + rentalIncomeAmt - grandExpenses;
 
       // Print KPIs
       const fc2 = v => v.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -4096,14 +4110,23 @@
         }
       }
 
-      // Save payment to Supabase (background)
+      // Save payment to Supabase — received_date คือวันที่รับเงินจริง (แยกจาก sale_date) ใช้คำนวณ
+      // "กำไรสุทธิ" แบบเงินสด (นับตามเดือนที่รับเงินจริง ไม่ใช่เดือนที่เกิดยอดขาย)
       _sb.from('sc_payments').insert({
-        sale_date:    _isoDate(saleDateThai),
-        amount:       amount,
-        pay_method:   method,
-        notes:        '',
-        recorded_by:  _auth.display_name
+        sale_date:     _isoDate(saleDateThai),
+        received_date: dateVal,
+        amount:        amount,
+        pay_method:    method,
+        notes:         '',
+        recorded_by:   _auth.display_name
       }).catch(err => { console.warn('Payment sync failed:', err); });
+
+      // อัปเดตยอดที่แสดงอยู่ทันที ถ้าวันที่รับเงินอยู่ในช่วงที่กำลังดูอยู่
+      const df = document.getElementById('sum_date_from').value;
+      const dt = document.getElementById('sum_date_to').value;
+      if ((!df || dateVal >= df) && (!dt || dateVal <= dt)) {
+        paymentsInRangeSaved.push({ received_date: dateVal, amount });
+      }
 
       closeCollectModal();
       renderSaleHistoryList();
