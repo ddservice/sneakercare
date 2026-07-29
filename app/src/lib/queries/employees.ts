@@ -10,6 +10,8 @@ export interface Employee {
   bank: string;
   account: string;
   status: 'Active' | 'Inactive';
+  /** อยู่ระหว่างทดลองงาน ยังไม่ขึ้นทะเบียนประกันสังคม — ระบบจะไม่หักประกันสังคม (5%) ให้ตอนคำนวณเงินเดือน */
+  sso_exempt: boolean;
 }
 
 const KEY = ['sc_employees'];
@@ -41,6 +43,7 @@ export function useSaveEmployees() {
         account: emp.account || '',
         status: emp.status || 'Active',
         nickname: emp.nickname || '',
+        sso_exempt: emp.sso_exempt || false,
         last_updated: new Date().toISOString(),
       }));
       const { error } = await supabase.from('sc_employees').insert(rows);

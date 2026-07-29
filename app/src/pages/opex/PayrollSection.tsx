@@ -66,10 +66,10 @@ function EmployeePanel({
   onPrint: () => void;
 }) {
   const commAmt = computeCommission(monthSales, draft.commPct);
-  const sso = computeSso(emp.salary);
+  const sso = computeSso(draft.baseSal, emp.sso_exempt);
   const wht = computeWht(commAmt);
   const deductTotal = sumDeductions(draft.deductItems);
-  const net = computeNet(emp.salary, commAmt, draft.diligence, draft.ot, deductTotal);
+  const net = computeNet(draft.baseSal, commAmt, draft.diligence, draft.ot, deductTotal, emp.sso_exempt);
 
   return (
     <div className="init-stock-fieldset">
@@ -77,8 +77,11 @@ function EmployeePanel({
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10 }}>
         <label>
-          เงินเดือน
-          <input type="number" value={emp.salary} readOnly />
+          เงินเดือน (เดือนนี้)
+          <input type="number" min={0} value={draft.baseSal} onChange={(e) => onChange({ ...draft, baseSal: +e.target.value })} />
+          {draft.baseSal !== emp.salary && (
+            <span className="poc-note">ต่างจากเงินเดือนฐานที่ตั้งไว้ ({fc(emp.salary)} ฿) เฉพาะเดือนนี้เท่านั้น</span>
+          )}
         </label>
         <label>
           ค่าคอมมิชชัน (%)
@@ -97,7 +100,10 @@ function EmployeePanel({
         </label>
       </div>
 
-      <p className="poc-note">ประกันสังคม (ลูกจ้าง 5%): {fc(sso)} ฿ — ภาษีหัก ณ ที่จ่าย 3% (คอมมิชชัน): {fc(wht)} ฿</p>
+      <p className="poc-note">
+        ประกันสังคม (ลูกจ้าง 5%): {emp.sso_exempt ? 'ยกเว้น (ทดลองงาน)' : `${fc(sso)} ฿`}
+        {' — '}ภาษีหัก ณ ที่จ่าย 3% (คอมมิชชัน): {fc(wht)} ฿
+      </p>
 
       <div>
         {draft.deductItems.map((item, i) => (
@@ -142,7 +148,7 @@ export default function PayrollSection() {
   useEffect(() => {
     if (!opexRows || !activeEmployees.length) return;
     const next: Record<string, EmployeePayrollDraft> = {};
-    activeEmployees.forEach((emp) => { next[emp.name] = loadEmployeeDraft(opexRows, emp.name); });
+    activeEmployees.forEach((emp) => { next[emp.name] = loadEmployeeDraft(opexRows, emp.name, emp.salary); });
     setDrafts(next);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [opexRows, employees, monthKey]);
@@ -153,9 +159,9 @@ export default function PayrollSection() {
       await save.mutateAsync({
         monthKey,
         employees: activeEmployees.map((emp) => {
-          const d = drafts[emp.name] || emptyDraft();
+          const d = drafts[emp.name] || emptyDraft(emp.salary);
           const commAmt = computeCommission(monthSalesTotal, d.commPct);
-          return { employee: emp, commPct: d.commPct, commAmt, diligence: d.diligence, ot: d.ot, deductItems: d.deductItems };
+          return { employee: emp, baseSal: d.baseSal, commPct: d.commPct, commAmt, diligence: d.diligence, ot: d.ot, deductItems: d.deductItems };
         }),
         recordedBy: auth?.displayName || auth?.username || 'Staff',
         username: auth?.username || '', role: auth?.role || '',
@@ -168,14 +174,14 @@ export default function PayrollSection() {
   };
 
   const doPrint = (emp: Employee) => {
-    const d = drafts[emp.name] || emptyDraft();
+    const d = drafts[emp.name] || emptyDraft(emp.salary);
     const commAmt = computeCommission(monthSalesTotal, d.commPct);
     const deductTotal = sumDeductions(d.deductItems);
-    const net = computeNet(emp.salary, commAmt, d.diligence, d.ot, deductTotal);
+    const net = computeNet(d.baseSal, commAmt, d.diligence, d.ot, deductTotal, emp.sso_exempt);
     printPayslip({
       employeeId: emp.id, employeeName: emp.name, bank: emp.bank, account: emp.account, monthKey,
-      baseSal: emp.salary, comm: commAmt, commPct: d.commPct, diligence: d.diligence, ot: d.ot,
-      sso: computeSso(emp.salary), wht: computeWht(commAmt), deductItems: d.deductItems, net,
+      baseSal: d.baseSal, comm: commAmt, commPct: d.commPct, diligence: d.diligence, ot: d.ot,
+      sso: computeSso(d.baseSal, emp.sso_exempt), wht: computeWht(commAmt), deductItems: d.deductItems, net,
       biz: biz ?? { name: 'Sneaker Care Shop', phone: '', address: '', tax_id: '', logo_url: '', price_s: 200, price_m: 400, price_l: 600, price_xl: 800 },
       payerName: auth?.fullName || auth?.displayName || auth?.username || biz?.name || 'Sneaker Care Shop',
     });
@@ -198,7 +204,7 @@ export default function PayrollSection() {
             <EmployeePanel
               key={emp.name}
               emp={emp}
-              draft={drafts[emp.name] || emptyDraft()}
+              draft={drafts[emp.name] || emptyDraft(emp.salary)}
               monthSales={monthSalesTotal}
               monthKey={monthKey}
               onChange={(d) => setDrafts((prev) => ({ ...prev, [emp.name]: d }))}

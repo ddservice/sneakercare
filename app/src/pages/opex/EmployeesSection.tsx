@@ -3,6 +3,7 @@ import { type Employee, useEmployees, useSaveEmployees } from '../../lib/queries
 
 const emptyRow = (): Employee => ({
   name: '', nickname: '', salary: 12000, position: 'พนักงานซักรองเท้า', bank: 'กสิกรไทย', account: '', status: 'Active',
+  sso_exempt: false,
 });
 
 export default function EmployeesSection() {
@@ -74,6 +75,13 @@ export default function EmployeesSection() {
               <option value="Active">Active</option>
               <option value="Inactive">Inactive</option>
             </select>
+          </label>
+          <label style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <input
+              type="checkbox" style={{ width: 'auto' }}
+              checked={r.sso_exempt} onChange={(e) => updateRow(i, { sso_exempt: e.target.checked })}
+            />
+            อยู่ระหว่างทดลองงาน — ยังไม่หักประกันสังคม
           </label>
           <button type="button" onClick={() => removeRow(i)}>ลบ</button>
         </div>

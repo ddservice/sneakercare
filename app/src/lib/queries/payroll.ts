@@ -12,6 +12,9 @@ export interface DeductItem {
 }
 
 export interface EmployeePayrollDraft {
+  /** เงินเดือนฐานของเดือนนี้ — ปกติเท่ากับ emp.salary แต่แก้ไขต่อรอบได้ (เช่น พนักงานทดลองงานที่จ่าย
+   *  ไม่เท่าอัตราเต็ม) โดยไม่กระทบเงินเดือนฐานถาวรในทะเบียนพนักงาน */
+  baseSal: number;
   commPct: number;
   diligence: number;
   ot: number;
@@ -28,7 +31,8 @@ export function usePayrollMonth(monthKey: string) {
   return useOpexMonth(monthKey);
 }
 
-export function loadEmployeeDraft(rows: OpexRow[], empName: string): EmployeePayrollDraft {
+export function loadEmployeeDraft(rows: OpexRow[], empName: string, defaultSalary: number): EmployeePayrollDraft {
+  const baseSal = getAmt(rows, `empd_base_sal_${empName}`) ?? defaultSalary;
   const commPct = getAmt(rows, `empd_comm_pct_${empName}`) ?? 0;
   const diligence = getAmt(rows, `empd_diligence_${empName}`) ?? 0;
   const ot = getAmt(rows, `empd_ot_${empName}`) ?? 0;
@@ -37,12 +41,12 @@ export function loadEmployeeDraft(rows: OpexRow[], empName: string): EmployeePay
   if (json) {
     try { deductItems = JSON.parse(json) || []; } catch { deductItems = []; }
   }
-  return { commPct, diligence, ot, deductItems };
+  return { baseSal, commPct, diligence, ot, deductItems };
 }
 
 export const PCT_OPTIONS = [0, 1, 1.5, 2, 2.5, 3];
 
-export const emptyDraft = (): EmployeePayrollDraft => ({ commPct: 0, diligence: 0, ot: 0, deductItems: [] });
+export const emptyDraft = (baseSal: number): EmployeePayrollDraft => ({ baseSal, commPct: 0, diligence: 0, ot: 0, deductItems: [] });
 
 export function computeCommission(monthSales: number, commPct: number): number {
   return commPct > 0 ? Math.round((monthSales * commPct) / 100) : 0;
@@ -50,22 +54,23 @@ export function computeCommission(monthSales: number, commPct: number): number {
 export function sumDeductions(items: DeductItem[]): number {
   return items.reduce((s, it) => s + (it.amount || 0), 0);
 }
-export function computeSso(salary: number): number {
-  return Math.round(Math.min(salary, 15000) * 0.05);
+export function computeSso(salary: number, ssoExempt = false): number {
+  return ssoExempt ? 0 : Math.round(Math.min(salary, 15000) * 0.05);
 }
 export function computeWht(commAmt: number): number {
   return Math.round(commAmt * 0.03);
 }
 export function computeNet(
-  salary: number, commAmt: number, diligence: number, ot: number, deductTotal: number,
+  salary: number, commAmt: number, diligence: number, ot: number, deductTotal: number, ssoExempt = false,
 ): number {
-  const sso = computeSso(salary);
+  const sso = computeSso(salary, ssoExempt);
   const wht = computeWht(commAmt);
   return salary + commAmt + diligence + ot - sso - wht - deductTotal;
 }
 
 export interface EmployeePayrollInput {
   employee: Employee;
+  baseSal: number;
   commPct: number;
   commAmt: number;
   diligence: number;
@@ -105,16 +110,17 @@ export function useSavePayroll() {
       let totalCommRaw = 0;
       let totalSsoEmp = 0;
 
-      input.employees.forEach(({ employee: emp, commPct, commAmt, diligence, ot, deductItems }) => {
+      input.employees.forEach(({ employee: emp, baseSal, commPct, commAmt, diligence, ot, deductItems }) => {
         const n = emp.name;
         const deductTotal = sumDeductions(deductItems);
-        const net = computeNet(emp.salary, commAmt, diligence, ot, deductTotal);
+        const net = computeNet(baseSal, commAmt, diligence, ot, deductTotal, emp.sso_exempt);
         const wht = computeWht(commAmt);
-        const sso = computeSso(emp.salary);
+        const sso = computeSso(baseSal, emp.sso_exempt);
         totalCommRaw += commAmt;
         totalSsoEmp += sso;
 
         push('ค่าแรงพนักงาน', 'emp_' + n, `เงินจ่ายพนักงาน: ${n}`, net, 'บัญชีร้าน');
+        push('payslip_detail', 'empd_base_sal_' + n, 'empd_base_sal_' + n + ': ' + n, baseSal, '-');
         push('payslip_detail', 'empd_comm_pct_' + n, 'empd_comm_pct_' + n + ': ' + n, commPct, '-');
         push('payslip_detail', 'empd_diligence_' + n, 'empd_diligence_' + n + ': ' + n, diligence, '-');
         push('payslip_detail', 'empd_ot_' + n, 'empd_ot_' + n + ': ' + n, ot, '-');

@@ -14,6 +14,10 @@ describe('computeSso', () => {
   it('rounds to the nearest baht', () => {
     expect(computeSso(12345)).toBe(Math.round(12345 * 0.05));
   });
+
+  it('is zero when the employee is SSO-exempt (e.g. still on probation)', () => {
+    expect(computeSso(15000, true)).toBe(0);
+  });
 });
 
 describe('computeWht', () => {
@@ -44,5 +48,10 @@ describe('computeNet', () => {
     const expectedSso = computeSso(salary);
     const expectedWht = computeWht(commission);
     expect(net).toBe(salary + commission + diligence + ot - expectedSso - expectedWht - deductTotal);
+  });
+
+  it('skips the SSO deduction entirely when ssoExempt is true', () => {
+    const net = computeNet(12000, 0, 0, 0, 0, true);
+    expect(net).toBe(12000);
   });
 });
