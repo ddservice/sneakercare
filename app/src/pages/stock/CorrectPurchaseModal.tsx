@@ -4,6 +4,7 @@ import { canManageStock } from '../../lib/types';
 import { toPurchaseQty, type Item } from '../../lib/queries/items';
 import type { Supplier } from '../../lib/queries/suppliers';
 import { type PurchaseHistoryRow, useCorrectPurchase } from '../../lib/queries/purchaseHistory';
+import { todayIso } from '../../lib/format';
 
 export default function CorrectPurchaseModal({
   row,
@@ -24,6 +25,7 @@ export default function CorrectPurchaseModal({
   const [qty, setQty] = useState(origQty);
   const [total, setTotal] = useState(Number(row.total_cost || 0));
   const [supplierId, setSupplierId] = useState(row.supplier_id || '');
+  const [date, setDate] = useState(row.transaction_date || todayIso());
   const [reason, setReason] = useState('');
   const [error, setError] = useState('');
 
@@ -35,7 +37,7 @@ export default function CorrectPurchaseModal({
     try {
       await save.mutateAsync({
         original: row, item, newPurchaseQty: qty, newTotal: total,
-        newSupplierId: supplierId || null, reason: reason.trim(),
+        newSupplierId: supplierId || null, newDate: date, reason: reason.trim(),
         canManageStock: isManager, performedBy: auth!.userId,
       });
       onClose();
@@ -73,6 +75,10 @@ export default function CorrectPurchaseModal({
             <option value="">- ไม่ระบุ -</option>
             {suppliers.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
           </select>
+        </label>
+        <label>
+          วันที่ซื้อจริง
+          <input type="date" max={todayIso()} value={date} onChange={(e) => setDate(e.target.value)} />
         </label>
         <label>
           เหตุผลที่แก้ไข

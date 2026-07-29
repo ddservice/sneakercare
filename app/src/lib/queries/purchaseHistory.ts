@@ -47,6 +47,10 @@ async function insertReversalTxn({
     branch_id: original.branch_id,
     txn_type: 'adjustment_decrease',
     status,
+    // ต้องใช้วันที่ของรายการเดิมเสมอ ไม่ใช่ปล่อยให้ default เป็นวันนี้ (current_date) — ไม่งั้นการแก้ไข/ลบ
+    // รายการซื้อของเดือนก่อนๆ จะไปเบียดยอดต้นทุนวัสดุของเดือนปัจจุบันแทนที่จะหักออกจากเดือนที่ซื้อจริง
+    // (เจอบั๊กนี้จริงกับ "น้ำยาขจัดคราบสีฟ้า" ที่ซื้อจริง ก.พ. 2569 แต่ตอนแก้ไขไปโผล่เป็นยอด ก.ค. แทน)
+    transaction_date: original.transaction_date,
     quantity_delta: -Number(original.quantity_delta),
     reason: reasonText,
     supplier_id: original.supplier_id || null,
@@ -100,6 +104,7 @@ export function useCorrectPurchase() {
       newPurchaseQty,
       newTotal,
       newSupplierId,
+      newDate,
       reason,
       canManageStock,
       performedBy,
@@ -109,6 +114,7 @@ export function useCorrectPurchase() {
       newPurchaseQty: number;
       newTotal: number;
       newSupplierId: string | null;
+      newDate: string;
       reason: string;
       canManageStock: boolean;
       performedBy: string;
@@ -130,6 +136,7 @@ export function useCorrectPurchase() {
         item_id: item.id,
         branch_id: original.branch_id,
         txn_type: 'stock_in',
+        transaction_date: newDate,
         quantity_delta: newBaseQty,
         unit_cost_snapshot: newUnitCost,
         supplier_id: newSupplierId,
