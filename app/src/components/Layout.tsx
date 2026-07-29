@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { useAuth } from '../lib/AuthContext';
 import { canManageStock } from '../lib/types';
+import { useTheme } from '../lib/useTheme';
 
 const TABS = [
   { path: '/', label: 'ภาพรวม' },
@@ -15,6 +16,7 @@ export default function Layout() {
   const { auth, logout } = useAuth();
   const navigate = useNavigate();
   const [navOpen, setNavOpen] = useState(false);
+  const { theme, toggle: toggleTheme } = useTheme();
 
   const doLogout = async () => {
     await logout();
@@ -52,6 +54,15 @@ export default function Layout() {
             {auth?.role === 'admin' ? 'Admin' : auth?.role === 'co-admin' ? 'Co-Admin' : 'Manager'}
           </span>
           <span>{auth?.displayName}</span>
+          <button
+            type="button"
+            className="theme-toggle"
+            onClick={toggleTheme}
+            aria-label={theme === 'dark' ? 'สลับเป็นโหมดสว่าง' : 'สลับเป็นโหมดมืด'}
+            title={theme === 'dark' ? 'สลับเป็นโหมดสว่าง' : 'สลับเป็นโหมดมืด'}
+          >
+            {theme === 'dark' ? '☀️' : '🌙'}
+          </button>
           <button onClick={doLogout}>ออกจากระบบ</button>
         </div>
       </header>
