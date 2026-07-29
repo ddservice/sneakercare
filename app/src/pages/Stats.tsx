@@ -88,19 +88,21 @@ export default function Stats() {
         )}
       </div>
 
-      <div className="card section-gap">
-        <h2>สัดส่วนตามไซส์</h2>
-        <BreakdownBars data={sizeData} emptyText="ไม่มีข้อมูลในช่วงที่เลือก" />
-      </div>
+      <div className="stats-grid section-gap">
+        <div className="card">
+          <h2>สัดส่วนตามไซส์</h2>
+          <BreakdownBars data={sizeData} emptyText="ไม่มีข้อมูลในช่วงที่เลือก" />
+        </div>
 
-      <div className="card section-gap">
-        <h2>ยอดขายรายพนักงาน</h2>
-        <BreakdownBars data={empData} emptyText="ไม่มีข้อมูลพนักงาน" />
-      </div>
+        <div className="card">
+          <h2>ยอดขายรายพนักงาน</h2>
+          <BreakdownBars data={empData} emptyText="ไม่มีข้อมูลพนักงาน" />
+        </div>
 
-      <div className="card section-gap">
-        <h2>ช่องทางชำระเงิน</h2>
-        <BreakdownBars data={payData} emptyText="ไม่มีข้อมูล" />
+        <div className="card">
+          <h2>ช่องทางชำระเงิน</h2>
+          <BreakdownBars data={payData} emptyText="ไม่มีข้อมูล" />
+        </div>
       </div>
 
       <div className="card section-gap">
