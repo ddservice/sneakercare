@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '../../lib/AuthContext';
-import { useEmployees, type Employee } from '../../lib/queries/employees';
+import { useEmployees, useToggleSsoExempt, type Employee } from '../../lib/queries/employees';
 import { useSales } from '../../lib/queries/sales';
 import { useBizSettings } from '../../lib/queries/settings';
 import {
@@ -65,6 +65,7 @@ function EmployeePanel({
   onChange: (d: EmployeePayrollDraft) => void;
   onPrint: () => void;
 }) {
+  const toggleSso = useToggleSsoExempt();
   const commAmt = computeCommission(monthSales, draft.commPct);
   const sso = computeSso(draft.baseSal, emp.sso_exempt);
   const wht = computeWht(commAmt);
@@ -100,8 +101,17 @@ function EmployeePanel({
         </label>
       </div>
 
-      <p className="poc-note">
-        ประกันสังคม (ลูกจ้าง 5%): {emp.sso_exempt ? 'ยกเว้น (ทดลองงาน)' : `${fc(sso)} ฿`}
+      <p className="poc-note" style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+        <label style={{ display: 'inline-flex', flexDirection: 'row', alignItems: 'center', gap: 5, margin: 0, color: 'inherit', fontWeight: 400 }}>
+          <input
+            type="checkbox" style={{ width: 'auto' }}
+            checked={emp.sso_exempt}
+            disabled={toggleSso.isPending || !emp.id}
+            onChange={(e) => emp.id != null && toggleSso.mutate({ id: emp.id, ssoExempt: e.target.checked })}
+          />
+          ทดลองงาน (ไม่หักประกันสังคม)
+        </label>
+        {' — '}ประกันสังคม (ลูกจ้าง 5%): {emp.sso_exempt ? 'ยกเว้น' : `${fc(sso)} ฿`}
         {' — '}ภาษีหัก ณ ที่จ่าย 3% (คอมมิชชัน): {fc(wht)} ฿
       </p>
 

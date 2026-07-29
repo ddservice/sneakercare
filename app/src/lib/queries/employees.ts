@@ -52,3 +52,16 @@ export function useSaveEmployees() {
     onSuccess: () => qc.invalidateQueries({ queryKey: KEY }),
   });
 }
+
+/** สลับสถานะยกเว้นประกันสังคมของพนักงานคนเดียว ใช้ตอนอยู่หน้าจอเงินเดือน (ไม่ต้องไปที่หน้ารายชื่อ
+ *  พนักงานเพื่อแก้ทีละคน) — มีผลทันทีเพราะเป็นข้อเท็จจริงของพนักงาน ไม่ใช่ค่าที่ตั้งเฉพาะเดือนนั้น */
+export function useToggleSsoExempt() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, ssoExempt }: { id: number; ssoExempt: boolean }) => {
+      const { error } = await supabase.from('sc_employees').update({ sso_exempt: ssoExempt }).eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: KEY }),
+  });
+}
