@@ -57,10 +57,10 @@ export default function Overview() {
       <div className="card">
         <div className="card-head">
           <h2>ภาพรวม</h2>
-          <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-            <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} style={{ width: 140 }} />
+          <div className="date-range">
+            <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
             <span>ถึง</span>
-            <input type="date" value={to} onChange={(e) => setTo(e.target.value)} style={{ width: 140 }} />
+            <input type="date" value={to} onChange={(e) => setTo(e.target.value)} />
           </div>
         </div>
         {isLoading ? (

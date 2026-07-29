@@ -29,14 +29,6 @@ export default function Layout() {
     <div className="app-shell">
       <header className="app-topbar">
         <span className="app-title">SneakerCare</span>
-        <button
-          type="button"
-          className="nav-toggle"
-          aria-label="เปิด/ปิดเมนู"
-          onClick={() => setNavOpen((v) => !v)}
-        >
-          {navOpen ? '✕' : '☰'}
-        </button>
         <nav className={'app-tabs' + (navOpen ? ' open' : '')}>
           {TABS.map((t) => (
             <NavLink key={t.path} to={t.path} end={t.path === '/'} className={({ isActive }) => 'tab' + (isActive ? ' on' : '')} onClick={closeNav}>
@@ -48,12 +40,15 @@ export default function Layout() {
               ตั้งค่า
             </NavLink>
           )}
+          <div className="app-user">
+            <span className={'role-chip' + (auth?.role === 'admin' ? ' admin' : auth?.role === 'co-admin' ? ' co-admin' : '')}>
+              {auth?.role === 'admin' ? 'Admin' : auth?.role === 'co-admin' ? 'Co-Admin' : 'Manager'}
+            </span>
+            <span className="app-user-name">{auth?.displayName}</span>
+            <button onClick={doLogout}>ออกจากระบบ</button>
+          </div>
         </nav>
-        <div className="app-user">
-          <span className={'role-chip' + (auth?.role === 'admin' ? ' admin' : auth?.role === 'co-admin' ? ' co-admin' : '')}>
-            {auth?.role === 'admin' ? 'Admin' : auth?.role === 'co-admin' ? 'Co-Admin' : 'Manager'}
-          </span>
-          <span>{auth?.displayName}</span>
+        <div className="topbar-icons">
           <button
             type="button"
             className="theme-toggle"
@@ -63,7 +58,14 @@ export default function Layout() {
           >
             {theme === 'dark' ? '☀️' : '🌙'}
           </button>
-          <button onClick={doLogout}>ออกจากระบบ</button>
+          <button
+            type="button"
+            className="nav-toggle"
+            aria-label="เปิด/ปิดเมนู"
+            onClick={() => setNavOpen((v) => !v)}
+          >
+            {navOpen ? '✕' : '☰'}
+          </button>
         </div>
       </header>
       <main className="app-content">

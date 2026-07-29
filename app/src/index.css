@@ -221,6 +221,8 @@ label {
 }
 .app-title { font-weight: 800; font-size: 16px; letter-spacing: -0.01em; white-space: nowrap; }
 
+.topbar-icons { display: flex; gap: 6px; flex-shrink: 0; }
+
 .nav-toggle {
   display: none;
   background: none;
@@ -232,6 +234,7 @@ label {
 
 .app-tabs {
   display: flex;
+  align-items: center;
   gap: 4px;
   flex: 1;
   overflow-x: auto;
@@ -255,8 +258,8 @@ label {
 .tab.on { background: var(--primary); color: white; }
 .tab.on:hover { background: var(--primary); }
 
-.app-user { display: flex; align-items: center; gap: 10px; font-size: 13px; white-space: nowrap; }
-.app-user > span { color: var(--muted); }
+.app-user { display: flex; align-items: center; gap: 10px; font-size: 13px; white-space: nowrap; margin-left: auto; padding-left: 12px; }
+.app-user-name { color: var(--muted); }
 .app-user button { padding: 7px 12px; }
 
 .role-chip { background: var(--surface-alt); border: 1px solid var(--border); color: var(--muted); padding: 3px 10px; border-radius: 999px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; }
@@ -264,6 +267,10 @@ label {
 .role-chip.co-admin { background: var(--blue-bg); color: var(--blue); border-color: transparent; }
 
 .app-content { padding: 20px; max-width: 1100px; margin: 0 auto; width: 100%; }
+
+@media (min-width: 781px) {
+  .theme-toggle { margin-right: 4px; }
+}
 
 @media (max-width: 780px) {
   .nav-toggle { display: inline-flex; }
@@ -274,16 +281,27 @@ label {
     left: 0;
     right: 0;
     flex-direction: column;
+    align-items: stretch;
     background: var(--surface);
     border-bottom: 1px solid var(--border);
     box-shadow: var(--shadow-md);
     padding: 8px;
     overflow-x: visible;
+    max-height: calc(100svh - 56px);
+    overflow-y: auto;
   }
   .app-tabs.open { display: flex; }
-  .tab { padding: 11px 14px; }
-  .app-topbar { position: relative; flex-wrap: wrap; }
-  .app-user { margin-left: auto; }
+  .tab { padding: 12px 14px; }
+  .app-topbar { position: relative; }
+  .app-user {
+    margin-left: 0;
+    margin-top: 8px;
+    padding: 12px 10px 4px;
+    padding-left: 0;
+    border-top: 1px solid var(--border);
+    flex-wrap: wrap;
+  }
+  .app-user button { margin-left: auto; }
   .app-content { padding: 14px; }
 }
 
@@ -376,6 +394,14 @@ label {
 .init-stock-fieldset legend { font-size: 12px; font-weight: 700; color: var(--muted); padding: 0 4px; }
 
 .section-gap { margin-top: 20px; }
+
+.date-range { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.date-range input[type="date"] { width: 140px; max-width: 45vw; }
+.date-range span { color: var(--muted); font-size: 12.5px; }
+@media (max-width: 480px) {
+  .date-range { width: 100%; }
+  .date-range input[type="date"] { flex: 1 1 0; max-width: none; min-width: 0; }
+}
 
 @media (max-width: 480px) {
   .card { padding: 16px; border-radius: var(--radius-sm); }

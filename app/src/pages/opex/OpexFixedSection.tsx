@@ -127,9 +127,9 @@ export default function OpexFixedSection() {
                 <span>{fc(m.amount)} ฿ <button type="button" onClick={() => removeMisc(i)}>×</button></span>
               </div>
             ))}
-            <div style={{ display: 'flex', gap: 6 }}>
-              <input placeholder="ชื่อรายการ" value={miscName} onChange={(e) => setMiscName(e.target.value)} />
-              <input type="number" placeholder="จำนวนเงิน" min={0} value={miscAmt} onChange={(e) => setMiscAmt(+e.target.value)} style={{ maxWidth: 100 }} />
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              <input placeholder="ชื่อรายการ" value={miscName} onChange={(e) => setMiscName(e.target.value)} style={{ flex: '2 1 140px' }} />
+              <input type="number" placeholder="จำนวนเงิน" min={0} value={miscAmt} onChange={(e) => setMiscAmt(+e.target.value)} style={{ flex: '1 1 90px' }} />
               <button type="button" onClick={addMisc}>+ เพิ่มรายการ</button>
             </div>
             <p className="poc-note">รวมจิปาถะ: {fc(miscTotal)} ฿</p>

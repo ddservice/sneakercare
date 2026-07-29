@@ -122,9 +122,9 @@ export default function SaleEntryForm() {
             <span>{fc(l.price)} ฿ <button type="button" onClick={() => removeExtraLine(i)}>×</button></span>
           </div>
         ))}
-        <div style={{ display: 'flex', gap: 6 }}>
-          <input placeholder="ชื่อบริการ" value={extraName} onChange={(e) => setExtraName(e.target.value)} />
-          <input type="number" placeholder="ราคา" min={0} value={extraPrice} onChange={(e) => setExtraPrice(+e.target.value)} style={{ maxWidth: 100 }} />
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+          <input placeholder="ชื่อบริการ" value={extraName} onChange={(e) => setExtraName(e.target.value)} style={{ flex: '2 1 140px' }} />
+          <input type="number" placeholder="ราคา" min={0} value={extraPrice} onChange={(e) => setExtraPrice(+e.target.value)} style={{ flex: '1 1 90px' }} />
           <button type="button" onClick={addExtraLine}>+ เพิ่ม</button>
         </div>
       </div>

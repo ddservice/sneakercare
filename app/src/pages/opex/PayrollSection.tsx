@@ -30,7 +30,7 @@ const emptyDeduct = (): DeductItem => ({ type: 'ขาด', detail: '', minutes:
 function DeductRow({ item, onChange, onRemove }: { item: DeductItem; onChange: (i: DeductItem) => void; onRemove: () => void }) {
   const isLate = item.type === 'มาสาย';
   return (
-    <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: 6 }}>
+    <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: 6, flexWrap: 'wrap' }}>
       <select value={item.type} onChange={(e) => {
         const type = e.target.value as DeductItem['type'];
         onChange(type === 'มาสาย' ? { ...item, type } : { ...item, type, minutes: 0, rate: 0 });
