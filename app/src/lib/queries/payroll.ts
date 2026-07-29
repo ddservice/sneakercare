@@ -42,6 +42,14 @@ export function loadEmployeeDraft(rows: OpexRow[], empName: string): EmployeePay
 
 export const PCT_OPTIONS = [0, 1, 1.5, 2, 2.5, 3];
 
+export const emptyDraft = (): EmployeePayrollDraft => ({ commPct: 0, diligence: 0, ot: 0, deductItems: [] });
+
+export function computeCommission(monthSales: number, commPct: number): number {
+  return commPct > 0 ? Math.round((monthSales * commPct) / 100) : 0;
+}
+export function sumDeductions(items: DeductItem[]): number {
+  return items.reduce((s, it) => s + (it.amount || 0), 0);
+}
 export function computeSso(salary: number): number {
   return Math.round(Math.min(salary, 15000) * 0.05);
 }
@@ -99,7 +107,7 @@ export function useSavePayroll() {
 
       input.employees.forEach(({ employee: emp, commPct, commAmt, diligence, ot, deductItems }) => {
         const n = emp.name;
-        const deductTotal = deductItems.reduce((s, it) => s + (it.amount || 0), 0);
+        const deductTotal = sumDeductions(deductItems);
         const net = computeNet(emp.salary, commAmt, diligence, ot, deductTotal);
         const wht = computeWht(commAmt);
         const sso = computeSso(emp.salary);

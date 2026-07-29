@@ -4,8 +4,7 @@ import { useItems } from '../../lib/queries/items';
 import { useSuppliers } from '../../lib/queries/suppliers';
 import { useSaveStockIn } from '../../lib/queries/stockTransactions';
 import SupplierModal from './SupplierModal';
-
-const todayIso = () => new Date().toISOString().slice(0, 10);
+import { todayIso } from '../../lib/format';
 
 export default function StockInForm() {
   const { auth } = useAuth();

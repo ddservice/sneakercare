@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../supabase';
-import type { Item } from './items';
+import { toBaseQty, unitCostFromTotal, type Item } from './items';
 
 export interface PurchaseHistoryRow {
   id: string;
@@ -23,6 +23,41 @@ export interface PurchaseHistoryRow {
 export type ReductionStatus = 'pending_approval' | 'approved' | 'rejected' | undefined;
 
 const KEY = ['inv_purchase_history'];
+
+/** ธุรกรรมย้อนกลับของรายการซื้อเข้าเดิม — ห้าม UPDATE/DELETE แถวเดิมเด็ดขาด (กฎ append-only ledger ข้อ 2
+ *  ใน CLAUDE.md) ทั้งแก้ไขและลบใช้รูปแบบเดียวกันนี้ ต่างกันแค่ข้อความเหตุผล/หมายเหตุ และว่ามีรายการทดแทนตามมาหรือไม่ */
+async function insertReversalTxn({
+  original,
+  item,
+  canManageStock,
+  reasonText,
+  noteText,
+  performedBy,
+}: {
+  original: PurchaseHistoryRow;
+  item: Item;
+  canManageStock: boolean;
+  reasonText: string;
+  noteText: string;
+  performedBy: string;
+}): Promise<ReductionStatus> {
+  const status = canManageStock ? 'approved' : 'pending_approval';
+  const { error } = await supabase.from('inv_stock_transactions').insert({
+    item_id: item.id,
+    branch_id: original.branch_id,
+    txn_type: 'adjustment_decrease',
+    status,
+    quantity_delta: -Number(original.quantity_delta),
+    reason: reasonText,
+    supplier_id: original.supplier_id || null,
+    reference_type: 'correction',
+    corrects_txn_id: original.id,
+    reference_note: noteText,
+    performed_by: performedBy,
+  });
+  if (error) throw new Error(error.message);
+  return status;
+}
 
 export function usePurchaseHistory() {
   return useQuery({
@@ -78,24 +113,18 @@ export function useCorrectPurchase() {
       canManageStock: boolean;
       performedBy: string;
     }) => {
-      const newBaseQty = newPurchaseQty * item.purchase_unit_qty;
-      const newUnitCost = newBaseQty > 0 ? newTotal / newBaseQty : 0;
+      const newBaseQty = toBaseQty(item, newPurchaseQty);
+      const newUnitCost = unitCostFromTotal(newBaseQty, newTotal);
 
-      const revStatus = canManageStock ? 'approved' : 'pending_approval';
-      const { error: revErr } = await supabase.from('inv_stock_transactions').insert({
-        item_id: item.id,
-        branch_id: original.branch_id,
-        txn_type: 'adjustment_decrease',
-        status: revStatus,
-        quantity_delta: -Number(original.quantity_delta),
-        reason: `แก้ไขรายการซื้อเข้าที่กรอกผิด: ${reason}`,
-        supplier_id: original.supplier_id || null,
-        reference_type: 'correction',
-        corrects_txn_id: original.id,
-        reference_note: `ยกเลิกรายการที่กรอกผิด — เหตุผล: ${reason}`,
-        performed_by: performedBy,
-      });
-      if (revErr) throw new Error('แก้ไขไม่สำเร็จ (ขั้นยกเลิกรายการเดิม): ' + revErr.message);
+      try {
+        await insertReversalTxn({
+          original, item, canManageStock, performedBy,
+          reasonText: `แก้ไขรายการซื้อเข้าที่กรอกผิด: ${reason}`,
+          noteText: `ยกเลิกรายการที่กรอกผิด — เหตุผล: ${reason}`,
+        });
+      } catch (revErr) {
+        throw new Error('แก้ไขไม่สำเร็จ (ขั้นยกเลิกรายการเดิม): ' + (revErr instanceof Error ? revErr.message : String(revErr)));
+      }
 
       const { error: newErr } = await supabase.from('inv_stock_transactions').insert({
         item_id: item.id,
@@ -139,21 +168,15 @@ export function useVoidPurchase() {
       canManageStock: boolean;
       performedBy: string;
     }) => {
-      const status = canManageStock ? 'approved' : 'pending_approval';
-      const { error } = await supabase.from('inv_stock_transactions').insert({
-        item_id: item.id,
-        branch_id: original.branch_id,
-        txn_type: 'adjustment_decrease',
-        status,
-        quantity_delta: -Number(original.quantity_delta),
-        reason: `ลบรายการซื้อเข้าที่กรอกซ้ำ/ผิด: ${reason}`,
-        supplier_id: original.supplier_id || null,
-        reference_type: 'correction',
-        corrects_txn_id: original.id,
-        reference_note: `ลบรายการที่กรอกซ้ำ/ผิด — เหตุผล: ${reason}`,
-        performed_by: performedBy,
-      });
-      if (error) throw new Error('ลบไม่สำเร็จ: ' + error.message);
+      try {
+        await insertReversalTxn({
+          original, item, canManageStock, performedBy,
+          reasonText: `ลบรายการซื้อเข้าที่กรอกซ้ำ/ผิด: ${reason}`,
+          noteText: `ลบรายการที่กรอกซ้ำ/ผิด — เหตุผล: ${reason}`,
+        });
+      } catch (err) {
+        throw new Error('ลบไม่สำเร็จ: ' + (err instanceof Error ? err.message : String(err)));
+      }
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: KEY });

@@ -2,8 +2,7 @@ import { useState, type FormEvent } from 'react';
 import { useAuth } from '../../lib/AuthContext';
 import { type Item, useSaveItem } from '../../lib/queries/items';
 import type { Supplier } from '../../lib/queries/suppliers';
-
-const todayIso = () => new Date().toISOString().slice(0, 10);
+import { todayIso } from '../../lib/format';
 
 export default function ItemModal({
   item,

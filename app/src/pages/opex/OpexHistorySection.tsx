@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useOpexHistory } from '../../lib/queries/opexHistory';
+import { fc2 } from '../../lib/format';
 
-const fc = (v: number) => v.toLocaleString('th-TH', { minimumFractionDigits: 2 });
 const sumCat = (items: { category: string; amount: number }[], cat: string) =>
   items.filter((i) => i.category === cat).reduce((s, i) => s + i.amount, 0);
 
@@ -37,7 +37,7 @@ export default function OpexHistorySection() {
                 <legend>เดือน {h.month} — v{h.version}</legend>
                 <p className="poc-note">{h.saved_by} · {new Date(h.saved_at).toLocaleString('th-TH', { dateStyle: 'medium', timeStyle: 'short' })}</p>
                 {h.change_note && h.change_note !== '(ไม่มีหมายเหตุ)' && <p className="poc-note">หมายเหตุ: {h.change_note}</p>}
-                <p>ค่าดำเนินการ {fc(fixedAmt)} · ค่าแรง {fc(staffAmt)} · ภาษี+ปกส {fc(taxAmt)} · <strong>รวม {fc(grand)} ฿</strong></p>
+                <p>ค่าดำเนินการ {fc2(fixedAmt)} · ค่าแรง {fc2(staffAmt)} · ภาษี+ปกส {fc2(taxAmt)} · <strong>รวม {fc2(grand)} ฿</strong></p>
               </div>
             );
           })}

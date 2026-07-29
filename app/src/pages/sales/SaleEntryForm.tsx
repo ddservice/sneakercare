@@ -2,10 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '../../lib/AuthContext';
 import { useSaveSale, useSales } from '../../lib/queries/sales';
 import { useBizSettings } from '../../lib/queries/settings';
-import { findExtraServicePrice, loadExtraServicesCatalog, rememberExtraService } from '../../lib/extraServicesCatalog';
-
-const todayIso = () => new Date().toISOString().slice(0, 10);
-const fc = (v: number) => v.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+import { loadExtraServicesCatalog, rememberExtraService, type ExtraServiceCatalogEntry } from '../../lib/extraServicesCatalog';
+import { fc, todayIso } from '../../lib/format';
 
 interface ExtraLine { name: string; price: number }
 
@@ -37,6 +35,7 @@ export default function SaleEntryForm() {
   const [extraLines, setExtraLines] = useState<ExtraLine[]>([]);
   const [extraName, setExtraName] = useState('');
   const [extraPrice, setExtraPrice] = useState(0);
+  const [extraCatalog, setExtraCatalog] = useState<ExtraServiceCatalogEntry[]>(() => loadExtraServicesCatalog());
 
   const [transferAmount, setTransferAmount] = useState(0);
   const [cashAmount, setCashAmount] = useState(0);
@@ -103,14 +102,15 @@ export default function SaleEntryForm() {
     if (extraPrice <= 0) { setStatus({ text: 'กรุณาระบุราคา', ok: false }); return; }
     setExtraLines((prev) => [...prev, { name, price: extraPrice }]);
     rememberExtraService(name, extraPrice);
+    setExtraCatalog((prev) => (prev.some((s) => s.name === name) ? prev : [...prev, { name, price: extraPrice }]));
     setExtraName(''); setExtraPrice(0);
   };
   const removeExtraLine = (idx: number) => setExtraLines((prev) => prev.filter((_, i) => i !== idx));
 
   const onExtraNameChange = (name: string) => {
     setExtraName(name);
-    const knownPrice = findExtraServicePrice(name.trim());
-    if (knownPrice !== null) setExtraPrice(knownPrice);
+    const knownPrice = extraCatalog.find((s) => s.name === name.trim())?.price;
+    if (knownPrice !== undefined) setExtraPrice(knownPrice);
   };
 
   const submit = async () => {
@@ -184,7 +184,7 @@ export default function SaleEntryForm() {
           <input type="number" placeholder="ราคา" min={0} value={extraPrice} onChange={(e) => setExtraPrice(+e.target.value)} style={{ flex: '1 1 90px' }} />
           <button type="button" onClick={addExtraLine}>+ เพิ่ม</button>
           <datalist id="extra_services_datalist">
-            {loadExtraServicesCatalog().map((s) => <option key={s.name} value={s.name} />)}
+            {extraCatalog.map((s) => <option key={s.name} value={s.name} />)}
           </datalist>
         </div>
       </div>

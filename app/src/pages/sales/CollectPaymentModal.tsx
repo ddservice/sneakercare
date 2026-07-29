@@ -1,9 +1,7 @@
 import { useState } from 'react';
 import { useAuth } from '../../lib/AuthContext';
 import { useSavePayment } from '../../lib/queries/sales';
-
-const todayIso = () => new Date().toISOString().slice(0, 10);
-const fc = (v: number) => v.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+import { fc, todayIso } from '../../lib/format';
 
 export default function CollectPaymentModal({
   saleDate,

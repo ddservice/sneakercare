@@ -1,5 +1,6 @@
 import type { DeductItem } from './queries/payroll';
 import type { BizSettings } from './queries/settings';
+import { fc as f } from './format';
 
 /** ทุกค่าที่มาจากผู้ใช้ (ชื่อพนักงาน, ธนาคาร, รายละเอียดรายการหัก, ข้อมูลร้าน ฯลฯ) ต้อง escape ก่อนเสมอ
  *  ก่อนเอาไปต่อเป็น HTML string แล้วยิงเข้า document.write — ไฟล์นี้ไม่ใช่ JSX จึงไม่มี auto-escape ของ
@@ -40,6 +41,7 @@ function imgToBase64(url: string): Promise<string> {
 }
 
 export interface PayslipInput {
+  employeeId: number | undefined;
   employeeName: string;
   bank: string;
   account: string;
@@ -58,16 +60,18 @@ export interface PayslipInput {
 }
 
 export async function printPayslip(input: PayslipInput) {
-  const { employeeName, bank, account, monthKey, baseSal, comm, commPct, diligence, ot, sso, wht, deductItems, net, biz, payerName } = input;
+  const { employeeId, employeeName, bank, account, monthKey, baseSal, comm, commPct, diligence, ot, sso, wht, deductItems, net, biz, payerName } = input;
   // logoSrc มาจาก imgToBase64 เท่านั้น (data: URI ที่สร้างจากแคนวาส หรือสตริงว่าง) ไม่มีทางเป็น URL ดิบที่
   // ผู้ใช้ควบคุมได้อีกต่อไปหลังแก้ไข — แต่ escape ไว้เผื่อกันไว้อีกชั้นเพราะเป็น attribute value
   const logoSrc = biz.logo_url ? await imgToBase64(biz.logo_url) : '';
 
   const name = escapeHtml(employeeName);
   const dateStr = new Date().toLocaleDateString('th-TH', { year: 'numeric', month: 'long', day: 'numeric' });
-  const f = (v: number) => v.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const [mm, y] = monthKey.split('/');
-  const docNo = escapeHtml(`PAY-${employeeName.substring(0, 3).toUpperCase()}-${mm}-${y}`);
+  // เลขที่เอกสาร = PAY-YYYYMM-รหัสพนักงาน (3 หลัก) — เดิมใช้ 3 ตัวอักษรแรกของชื่อพนักงาน ซึ่งถ้าชื่อขึ้นต้น
+  // ด้วยคำนำหน้า "นาย"/"นาง" จะได้เลขที่ซ้ำกันทุกคนที่คำนำหน้าเดียวกัน ไม่ unique และดูไม่เป็นทางการ
+  const empCode = employeeId != null ? String(employeeId).padStart(3, '0') : '000';
+  const docNo = escapeHtml(`PAY-${y}${mm}-${empCode}`);
   const gross = baseSal + comm + diligence + ot;
 
   const deductRowsHtml = deductItems.map((it, i) => {

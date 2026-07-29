@@ -46,6 +46,18 @@ export interface InitialStockInput {
   performedBy: string;
 }
 
+/** สิ่งของนับเป็นหน่วยฐาน (base_unit) เสมอในเลดเจอร์ (inv_stock_transactions.quantity_delta) — ฟอร์มที่กรอก
+ *  เป็นหน่วยซื้อ (purchase_unit) ต้องแปลงผ่านฟังก์ชันนี้ก่อนเสมอ ห้ามคูณ/หารเองในแต่ละฟอร์ม (กฎข้อ 7 ใน CLAUDE.md) */
+export function toBaseQty(item: Pick<Item, 'purchase_unit_qty'>, purchaseQty: number): number {
+  return purchaseQty * item.purchase_unit_qty;
+}
+export function toPurchaseQty(item: Pick<Item, 'purchase_unit_qty'>, baseQty: number): number {
+  return item.purchase_unit_qty > 0 ? baseQty / item.purchase_unit_qty : 0;
+}
+export function unitCostFromTotal(baseQty: number, total: number): number {
+  return baseQty > 0 ? total / baseQty : 0;
+}
+
 const ITEMS_KEY = ['inv_items'];
 const STOCK_KEY = (branchId: string | null) => ['inv_item_stock', branchId];
 
@@ -119,8 +131,8 @@ export function useSaveItem() {
       if (error) throw error;
 
       if (initialStock && initialStock.qty > 0 && branchId) {
-        const baseQty = initialStock.qty * payload.purchase_unit_qty;
-        const unitCost = baseQty > 0 ? initialStock.total / baseQty : 0;
+        const baseQty = toBaseQty(payload, initialStock.qty);
+        const unitCost = unitCostFromTotal(baseQty, initialStock.total);
         const { error: txnErr } = await supabase.from('inv_stock_transactions').insert({
           item_id: newItem.id,
           branch_id: branchId,

@@ -18,9 +18,11 @@ export function useTelegramSettings() {
     queryKey: [...KEY, branchId],
     enabled: !!branchId,
     queryFn: async () => {
-      const { data: statusRows } = await supabase.rpc('inv_fn_integration_secret_status', { p_key: 'telegram_bot_token' });
+      const [{ data: statusRows }, { data: branch }] = await Promise.all([
+        supabase.rpc('inv_fn_integration_secret_status', { p_key: 'telegram_bot_token' }),
+        supabase.from('inv_branches').select('telegram_chat_id').eq('id', branchId).maybeSingle(),
+      ]);
       const status: SecretStatus = statusRows?.[0] || { is_set: false };
-      const { data: branch } = await supabase.from('inv_branches').select('telegram_chat_id').eq('id', branchId).maybeSingle();
       return { status, chatId: branch?.telegram_chat_id || '' };
     },
   });

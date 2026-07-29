@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { useAuth } from '../../lib/AuthContext';
 import { canManageStock } from '../../lib/types';
-import type { Item } from '../../lib/queries/items';
+import { toPurchaseQty, type Item } from '../../lib/queries/items';
 import { type PurchaseHistoryRow, useVoidPurchase } from '../../lib/queries/purchaseHistory';
 
 export default function VoidPurchaseModal({
@@ -17,7 +17,7 @@ export default function VoidPurchaseModal({
   const isManager = canManageStock(auth?.role);
   const save = useVoidPurchase();
 
-  const qty = Number(row.quantity_delta || 0) / item.purchase_unit_qty;
+  const qty = toPurchaseQty(item, Number(row.quantity_delta || 0));
   const [reason, setReason] = useState('');
   const [error, setError] = useState('');
 

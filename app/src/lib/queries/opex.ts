@@ -30,13 +30,12 @@ export const OPEX_ITEMS = [
   { key: 'internet', name: 'ค่าอินเทอร์เน็ต' },
 ] as const;
 
-export interface MiscItem { name: string; amount: number }
+export interface MiscItem { name: string; amount: number; method: string }
 
 export interface SaveOpexFixedInput {
   monthKey: string;
   fixed: Record<string, { amount: number; method: string }>;
   miscItems: MiscItem[];
-  miscMethod: string;
   recordedBy: string;
   username: string;
   role: string;
@@ -62,9 +61,11 @@ export function useSaveOpexFixed() {
         });
       });
       const miscTotal = input.miscItems.reduce((s, m) => s + m.amount, 0);
+      // แต่ละรายการจิปาถะเลือกช่องทางชำระเงินของตัวเอง (เก็บละเอียดใน misc_items_json) — แถวสรุปนี้เก็บ
+      // ไว้แค่ยอดรวมเพื่อความเข้ากันได้กับรายงานเดิมที่ query key 'misc' โดยตรง ไม่ได้สื่อความหมายช่องทางเดียวอีกต่อไป
       rows.push({
         month: input.monthKey, category: 'ค่าดำเนินการ', key: 'misc', name: 'ค่าใช้จ่ายจิปาถะอื่นๆ',
-        amount: miscTotal, pay_method: input.miscMethod, recorded_by: input.recordedBy, last_updated: new Date().toISOString(),
+        amount: miscTotal, pay_method: '-', recorded_by: input.recordedBy, last_updated: new Date().toISOString(),
       });
       if (input.miscItems.length > 0) {
         rows.push({

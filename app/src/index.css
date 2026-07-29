@@ -395,6 +395,9 @@ label {
 
 .section-gap { margin-top: 20px; }
 
+.trend-chart-scroll { overflow-x: auto; padding-bottom: 4px; }
+.trend-chart-scroll svg { display: block; }
+
 .date-range { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
 .date-range input[type="date"] { width: 140px; max-width: 45vw; }
 .date-range span { color: var(--muted); font-size: 12.5px; }

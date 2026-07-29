@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { useAuth } from '../../lib/AuthContext';
 import { canManageStock } from '../../lib/types';
-import type { Item } from '../../lib/queries/items';
+import { toPurchaseQty, type Item } from '../../lib/queries/items';
 import type { Supplier } from '../../lib/queries/suppliers';
 import { type PurchaseHistoryRow, useCorrectPurchase } from '../../lib/queries/purchaseHistory';
 
@@ -20,7 +20,7 @@ export default function CorrectPurchaseModal({
   const isManager = canManageStock(auth?.role);
   const save = useCorrectPurchase();
 
-  const origQty = Number(row.quantity_delta || 0) / item.purchase_unit_qty;
+  const origQty = toPurchaseQty(item, Number(row.quantity_delta || 0));
   const [qty, setQty] = useState(origQty);
   const [total, setTotal] = useState(Number(row.total_cost || 0));
   const [supplierId, setSupplierId] = useState(row.supplier_id || '');

@@ -1,13 +1,7 @@
 import { useState, type ReactNode } from 'react';
 import { type SaleRow, useSalePayments, useSales } from '../../lib/queries/sales';
+import { fc, firstOfMonthIso, todayIso } from '../../lib/format';
 import CollectPaymentModal from './CollectPaymentModal';
-
-const fc = (v: number) => v.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-const firstOfMonth = () => {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`;
-};
-const todayIso = () => new Date().toISOString().slice(0, 10);
 
 function statusFor(sale: SaleRow, extraReceived: number) {
   const pStatus = sale.payment_status || 'ชำระครบ';
@@ -17,7 +11,7 @@ function statusFor(sale: SaleRow, extraReceived: number) {
 }
 
 export default function SaleHistoryList() {
-  const [from, setFrom] = useState(firstOfMonth());
+  const [from, setFrom] = useState(firstOfMonthIso());
   const [to, setTo] = useState(todayIso());
   const { data: sales, isLoading } = useSales(from, to);
   const { data: payments } = useSalePayments(from, to);

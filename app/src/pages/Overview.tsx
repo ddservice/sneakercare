@@ -4,17 +4,11 @@ import { useOpexSummaryInRange } from '../lib/queries/opexSummary';
 import { useMaterialCostInRange } from '../lib/queries/materialCost';
 import { useOverviewPayments } from '../lib/queries/overviewPayments';
 import { computeOverviewTotals } from '../lib/overviewCalc';
+import { fc, firstOfMonthIso, todayIso } from '../lib/format';
 import BreakdownBars, { type BarDatum } from './stats/BreakdownBars';
 
-const fc = (v: number) => v.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-const firstOfMonth = () => {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`;
-};
-const todayIso = () => new Date().toISOString().slice(0, 10);
-
 export default function Overview() {
-  const [from, setFrom] = useState(firstOfMonth());
+  const [from, setFrom] = useState(firstOfMonthIso());
   const [to, setTo] = useState(todayIso());
 
   const { data: sales, isLoading: salesLoading } = useSales(from, to);

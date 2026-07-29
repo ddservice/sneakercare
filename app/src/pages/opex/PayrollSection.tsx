@@ -4,16 +4,13 @@ import { useEmployees, type Employee } from '../../lib/queries/employees';
 import { useSales } from '../../lib/queries/sales';
 import { useBizSettings } from '../../lib/queries/settings';
 import {
-  computeNet, computeSso, computeWht, loadEmployeeDraft, PCT_OPTIONS,
-  usePayrollMonth, useSavePayroll, type DeductItem, type EmployeePayrollDraft,
+  computeCommission, computeNet, computeSso, computeWht, emptyDraft, loadEmployeeDraft, PCT_OPTIONS,
+  sumDeductions, usePayrollMonth, useSavePayroll, type DeductItem, type EmployeePayrollDraft,
 } from '../../lib/queries/payroll';
 import { printPayslip } from '../../lib/printPayslip';
+import { currentMonthValue, fc } from '../../lib/format';
+import MonthPicker from '../../components/MonthPicker';
 
-const fc = (v: number) => v.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-const currentMonthValue = () => {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-};
 const toMonthKey = (val: string) => {
   const [y, mm] = val.split('-');
   return `${mm}/${y}`;
@@ -68,10 +65,10 @@ function EmployeePanel({
   onChange: (d: EmployeePayrollDraft) => void;
   onPrint: () => void;
 }) {
-  const commAmt = draft.commPct > 0 ? Math.round((monthSales * draft.commPct) / 100) : 0;
+  const commAmt = computeCommission(monthSales, draft.commPct);
   const sso = computeSso(emp.salary);
   const wht = computeWht(commAmt);
-  const deductTotal = draft.deductItems.reduce((s, it) => s + (it.amount || 0), 0);
+  const deductTotal = sumDeductions(draft.deductItems);
   const net = computeNet(emp.salary, commAmt, draft.diligence, draft.ot, deductTotal);
 
   return (
@@ -156,8 +153,8 @@ export default function PayrollSection() {
       await save.mutateAsync({
         monthKey,
         employees: activeEmployees.map((emp) => {
-          const d = drafts[emp.name] || { commPct: 0, diligence: 0, ot: 0, deductItems: [] };
-          const commAmt = d.commPct > 0 ? Math.round((monthSalesTotal * d.commPct) / 100) : 0;
+          const d = drafts[emp.name] || emptyDraft();
+          const commAmt = computeCommission(monthSalesTotal, d.commPct);
           return { employee: emp, commPct: d.commPct, commAmt, diligence: d.diligence, ot: d.ot, deductItems: d.deductItems };
         }),
         recordedBy: auth?.displayName || auth?.username || 'Staff',
@@ -171,12 +168,12 @@ export default function PayrollSection() {
   };
 
   const doPrint = (emp: Employee) => {
-    const d = drafts[emp.name] || { commPct: 0, diligence: 0, ot: 0, deductItems: [] };
-    const commAmt = d.commPct > 0 ? Math.round((monthSalesTotal * d.commPct) / 100) : 0;
-    const deductTotal = d.deductItems.reduce((s, it) => s + (it.amount || 0), 0);
+    const d = drafts[emp.name] || emptyDraft();
+    const commAmt = computeCommission(monthSalesTotal, d.commPct);
+    const deductTotal = sumDeductions(d.deductItems);
     const net = computeNet(emp.salary, commAmt, d.diligence, d.ot, deductTotal);
     printPayslip({
-      employeeName: emp.name, bank: emp.bank, account: emp.account, monthKey,
+      employeeId: emp.id, employeeName: emp.name, bank: emp.bank, account: emp.account, monthKey,
       baseSal: emp.salary, comm: commAmt, commPct: d.commPct, diligence: d.diligence, ot: d.ot,
       sso: computeSso(emp.salary), wht: computeWht(commAmt), deductItems: d.deductItems, net,
       biz: biz ?? { name: 'Sneaker Care Shop', phone: '', address: '', tax_id: '', logo_url: '', price_s: 200, price_m: 400, price_l: 600, price_xl: 800 },
@@ -189,7 +186,7 @@ export default function PayrollSection() {
       <h2>เงินเดือนพนักงาน</h2>
       <label>
         เดือน
-        <input type="month" value={monthVal} onChange={(e) => setMonthVal(e.target.value)} style={{ maxWidth: 180 }} />
+        <MonthPicker value={monthVal} onChange={setMonthVal} />
       </label>
       {isLoading ? (
         <p>กำลังโหลด...</p>
@@ -201,7 +198,7 @@ export default function PayrollSection() {
             <EmployeePanel
               key={emp.name}
               emp={emp}
-              draft={drafts[emp.name] || { commPct: 0, diligence: 0, ot: 0, deductItems: [] }}
+              draft={drafts[emp.name] || emptyDraft()}
               monthSales={monthSalesTotal}
               monthKey={monthKey}
               onChange={(d) => setDrafts((prev) => ({ ...prev, [emp.name]: d }))}

@@ -1,7 +1,5 @@
 import { useState } from 'react';
-import { supabase } from '../../lib/supabase';
-
-type Category = 'all' | 'sales' | 'opex';
+import { usePurgeMonthData, type PurgeCategory as Category } from '../../lib/queries/dataPurge';
 
 const CAT_LABEL: Record<Category, string> = {
   all: 'ยอดขาย + ค่าใช้จ่ายรายเดือน ทั้งหมด',
@@ -13,7 +11,7 @@ export default function DataPurgeSection() {
   const [monthInput, setMonthInput] = useState('');
   const [category, setCategory] = useState<Category>('all');
   const [status, setStatus] = useState<{ text: string; ok: boolean } | null>(null);
-  const [busy, setBusy] = useState(false);
+  const purge = usePurgeMonthData();
 
   const submit = async () => {
     if (!monthInput) { setStatus({ text: 'กรุณาระบุเดือนที่ต้องการลบ', ok: false }); return; }
@@ -26,28 +24,14 @@ export default function DataPurgeSection() {
     );
     if (!ok) return;
 
-    setBusy(true);
     setStatus({ text: 'กำลังลบข้อมูล...', ok: true });
     try {
-      const [mm, yyyy] = monthInput.split('/');
-      const firstDay = `${yyyy}-${mm.padStart(2, '0')}-01`;
-      const lastDay = new Date(Number(yyyy), Number(mm), 0).toISOString().split('T')[0];
-
-      if (category === 'all' || category === 'sales') {
-        const { error } = await supabase.from('sc_sales').delete().gte('date', firstDay).lte('date', lastDay);
-        if (error) throw error;
-      }
-      if (category === 'all' || category === 'opex') {
-        const { error } = await supabase.from('sc_opex').delete().eq('month', monthInput);
-        if (error) throw error;
-      }
+      await purge.mutateAsync({ monthInput, category });
       setStatus({ text: 'ลบข้อมูลสำเร็จเรียบร้อย ✓', ok: true });
       setMonthInput('');
       setTimeout(() => setStatus(null), 3000);
     } catch (err) {
       setStatus({ text: 'ข้อผิดพลาด: ' + (err instanceof Error ? err.message : 'ลบข้อมูลไม่สำเร็จ'), ok: false });
-    } finally {
-      setBusy(false);
     }
   };
 
@@ -73,8 +57,8 @@ export default function DataPurgeSection() {
         </select>
       </label>
       {status && <p className={status.ok ? 'poc-note' : 'form-error'}>{status.text}</p>}
-      <button type="button" onClick={submit} disabled={busy}>
-        {busy ? 'กำลังลบ...' : 'ลบข้อมูล'}
+      <button type="button" onClick={submit} disabled={purge.isPending}>
+        {purge.isPending ? 'กำลังลบ...' : 'ลบข้อมูล'}
       </button>
     </div>
   );

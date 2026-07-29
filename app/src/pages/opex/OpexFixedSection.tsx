@@ -1,12 +1,9 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '../../lib/AuthContext';
 import { type MiscItem, OPEX_ITEMS, useOpexMonth, useSaveOpexFixed } from '../../lib/queries/opex';
+import { currentMonthValue, fc2 } from '../../lib/format';
+import MonthPicker from '../../components/MonthPicker';
 
-const fc = (v: number) => v.toLocaleString('th-TH', { minimumFractionDigits: 2 });
-const currentMonthValue = () => {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-};
 const toMonthKey = (val: string) => {
   const [y, mm] = val.split('-');
   return `${mm}/${y}`;
@@ -23,9 +20,9 @@ export default function OpexFixedSection() {
 
   const [fixed, setFixed] = useState<FixedState>({});
   const [miscItems, setMiscItems] = useState<MiscItem[]>([]);
-  const [miscMethod, setMiscMethod] = useState('บัญชีร้าน');
   const [miscName, setMiscName] = useState('');
   const [miscAmt, setMiscAmt] = useState(0);
+  const [miscItemMethod, setMiscItemMethod] = useState('บัญชีร้าน');
   const [status, setStatus] = useState<{ text: string; ok: boolean } | null>(null);
 
   useEffect(() => {
@@ -35,11 +32,13 @@ export default function OpexFixedSection() {
       next[item.key] = { amount: saved?.amount ?? 0, method: saved?.pay_method || 'บัญชีร้าน' };
     });
     setFixed(next);
-    const miscSaved = opexRows?.find((o) => o.key === 'misc');
-    setMiscMethod(miscSaved?.pay_method || 'บัญชีร้าน');
     const miscJson = opexRows?.find((o) => o.key === 'misc_items_json');
     if (miscJson) {
-      try { setMiscItems(JSON.parse(miscJson.name) || []); } catch { setMiscItems([]); }
+      try {
+        const parsed = JSON.parse(miscJson.name) || [];
+        // ข้อมูลเก่าก่อนแยกช่องทางต่อรายการยังไม่มี method — ใส่ค่าเริ่มต้นให้เพื่อไม่ให้พัง
+        setMiscItems(parsed.map((m: Partial<MiscItem>) => ({ name: m.name || '', amount: m.amount || 0, method: m.method || 'บัญชีร้าน' })));
+      } catch { setMiscItems([]); }
     } else {
       setMiscItems([]);
     }
@@ -51,10 +50,12 @@ export default function OpexFixedSection() {
 
   const addMisc = () => {
     if (!miscName.trim() || miscAmt <= 0) return;
-    setMiscItems((prev) => [...prev, { name: miscName.trim(), amount: miscAmt }]);
+    setMiscItems((prev) => [...prev, { name: miscName.trim(), amount: miscAmt, method: miscItemMethod }]);
     setMiscName(''); setMiscAmt(0);
   };
   const removeMisc = (idx: number) => setMiscItems((prev) => prev.filter((_, i) => i !== idx));
+  const updateMiscMethod = (idx: number, method: string) =>
+    setMiscItems((prev) => prev.map((m, i) => (i === idx ? { ...m, method } : m)));
 
   const submit = async () => {
     const isEdit = (opexRows?.length ?? 0) > 0;
@@ -62,7 +63,7 @@ export default function OpexFixedSection() {
     setStatus({ text: 'กำลังบันทึก...', ok: true });
     try {
       await save.mutateAsync({
-        monthKey, fixed, miscItems, miscMethod,
+        monthKey, fixed, miscItems,
         recordedBy: auth?.displayName || auth?.username || 'Staff',
         username: auth?.username || '', role: auth?.role || '',
       });
@@ -78,7 +79,7 @@ export default function OpexFixedSection() {
       <h2>ค่าใช้จ่ายดำเนินการร้าน (รายเดือน)</h2>
       <label>
         เดือน
-        <input type="month" value={monthVal} onChange={(e) => setMonthVal(e.target.value)} style={{ maxWidth: 180 }} />
+        <MonthPicker value={monthVal} onChange={setMonthVal} />
       </label>
       {isLoading ? (
         <p>กำลังโหลด...</p>
@@ -117,25 +118,29 @@ export default function OpexFixedSection() {
 
           <div className="init-stock-fieldset">
             <legend>ค่าใช้จ่ายจิปาถะอื่นๆ</legend>
-            <select value={miscMethod} onChange={(e) => setMiscMethod(e.target.value)} style={{ marginBottom: 8, maxWidth: 200 }}>
-              <option value="บัญชีร้าน">บัญชีร้าน (เงินโอน)</option>
-              <option value="เงินสดร้าน">เงินสดร้าน</option>
-            </select>
             {miscItems.map((m, i) => (
-              <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, padding: '4px 0' }}>
-                <span>{m.name}</span>
-                <span>{fc(m.amount)} ฿ <button type="button" onClick={() => removeMisc(i)}>×</button></span>
+              <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 6, fontSize: 13, padding: '4px 0', flexWrap: 'wrap' }}>
+                <span style={{ flex: '1 1 120px' }}>{m.name}</span>
+                <select value={m.method} onChange={(e) => updateMiscMethod(i, e.target.value)} style={{ maxWidth: 170 }}>
+                  <option value="บัญชีร้าน">บัญชีร้าน (เงินโอน)</option>
+                  <option value="เงินสดร้าน">เงินสดร้าน</option>
+                </select>
+                <span>{fc2(m.amount)} ฿ <button type="button" onClick={() => removeMisc(i)}>×</button></span>
               </div>
             ))}
-            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 6 }}>
               <input placeholder="ชื่อรายการ" value={miscName} onChange={(e) => setMiscName(e.target.value)} style={{ flex: '2 1 140px' }} />
               <input type="number" placeholder="จำนวนเงิน" min={0} value={miscAmt} onChange={(e) => setMiscAmt(+e.target.value)} style={{ flex: '1 1 90px' }} />
+              <select value={miscItemMethod} onChange={(e) => setMiscItemMethod(e.target.value)} style={{ flex: '1 1 140px' }}>
+                <option value="บัญชีร้าน">บัญชีร้าน (เงินโอน)</option>
+                <option value="เงินสดร้าน">เงินสดร้าน</option>
+              </select>
               <button type="button" onClick={addMisc}>+ เพิ่มรายการ</button>
             </div>
-            <p className="poc-note">รวมจิปาถะ: {fc(miscTotal)} ฿</p>
+            <p className="poc-note">รวมจิปาถะ: {fc2(miscTotal)} ฿</p>
           </div>
 
-          <h3>รวมค่าใช้จ่ายดำเนินการ: {fc(grandTotal)} ฿</h3>
+          <h3>รวมค่าใช้จ่ายดำเนินการ: {fc2(grandTotal)} ฿</h3>
           {status && <p className={status.ok ? 'poc-note' : 'form-error'}>{status.text}</p>}
           <button type="button" onClick={submit} disabled={save.isPending}>
             {save.isPending ? 'กำลังบันทึก...' : 'บันทึกค่าใช้จ่ายดำเนินการ'}

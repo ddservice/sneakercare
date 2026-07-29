@@ -2,12 +2,9 @@ import { useEffect, useState } from 'react';
 import { useAuth } from '../../lib/AuthContext';
 import { useRoomsConfig } from '../../lib/queries/rooms';
 import { loadRoomReadings, useRentalIncomeMonth, useSaveRentalIncome, type RoomMonthReading } from '../../lib/queries/rentalIncome';
+import { currentMonthValue, fc2 } from '../../lib/format';
+import MonthPicker from '../../components/MonthPicker';
 
-const fc = (v: number) => v.toLocaleString('th-TH', { minimumFractionDigits: 2 });
-const currentMonthValue = () => {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-};
 const toMonthKey = (val: string) => {
   const [y, mm] = val.split('-');
   return `${mm}/${y}`;
@@ -59,7 +56,7 @@ export default function RentalIncomeSection() {
       <h2>รายรับห้องเช่า</h2>
       <label>
         เดือน
-        <input type="month" value={monthVal} onChange={(e) => setMonthVal(e.target.value)} style={{ maxWidth: 180 }} />
+        <MonthPicker value={monthVal} onChange={setMonthVal} />
       </label>
       {rooms!.map((room, i) => {
         const reading = readings[i] ?? { prev: 0, curr: 0, rent: room.rent };
@@ -68,7 +65,7 @@ export default function RentalIncomeSection() {
         const total = reading.rent + elecCost;
         return (
           <div key={i} className="init-stock-fieldset">
-            <legend>{room.name} {room.tenant && `(ผู้เช่า: ${room.tenant})`} — รวม {fc(total)} ฿</legend>
+            <legend>{room.name} {room.tenant && `(ผู้เช่า: ${room.tenant})`} — รวม {fc2(total)} ฿</legend>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 10 }}>
               <label>
                 ค่าเช่า/เดือน (฿)
@@ -86,7 +83,7 @@ export default function RentalIncomeSection() {
                   onChange={(e) => setReadings((prev) => prev.map((r, idx) => (idx === i ? { ...r, curr: +e.target.value } : r)))} />
               </label>
             </div>
-            <p className="poc-note">หน่วยที่ใช้: {units} × {room.elec_rate} ฿/หน่วย = ค่าไฟ {fc(elecCost)} ฿</p>
+            <p className="poc-note">หน่วยที่ใช้: {units} × {room.elec_rate} ฿/หน่วย = ค่าไฟ {fc2(elecCost)} ฿</p>
           </div>
         );
       })}

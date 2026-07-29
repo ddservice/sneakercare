@@ -1,7 +1,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../supabase';
 import { useBranchId } from './branch';
-import type { Item } from './items';
+import { toBaseQty, unitCostFromTotal, type Item } from './items';
 
 const invalidateStock = (qc: ReturnType<typeof useQueryClient>, branchId: string | null) => {
   qc.invalidateQueries({ queryKey: ['inv_item_stock', branchId] });
@@ -28,8 +28,8 @@ export function useSaveStockIn() {
       note: string;
       performedBy: string;
     }) => {
-      const baseQty = purchaseQty * item.purchase_unit_qty;
-      const unitCost = baseQty > 0 ? totalCost / baseQty : 0;
+      const baseQty = toBaseQty(item, purchaseQty);
+      const unitCost = unitCostFromTotal(baseQty, totalCost);
 
       const { error } = await supabase.from('inv_stock_transactions').insert({
         item_id: item.id,

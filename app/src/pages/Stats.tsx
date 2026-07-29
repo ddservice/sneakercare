@@ -1,22 +1,16 @@
 import { useState } from 'react';
 import { useSales } from '../lib/queries/sales';
 import { useBizSettings } from '../lib/queries/settings';
+import { fc0, fc2, firstOfMonthIso, todayIso } from '../lib/format';
 import BreakdownBars, { type BarDatum } from './stats/BreakdownBars';
+import DailyTrendChart, { type DailyTrendDatum } from './stats/DailyTrendChart';
 import MaterialAnalysisTable from './stats/MaterialAnalysisTable';
 
 const SIZE_COLOR = { s: '#0d9488', m: '#0284c7', l: '#7c3aed', xl: '#db2777' };
 const EMP_COLORS = ['#0d9488', '#0284c7', '#7c3aed', '#db2777', '#f59e0b', '#10b981'];
-const fc0 = (v: number) => v.toLocaleString('th-TH', { maximumFractionDigits: 0 });
-const fc2 = (v: number) => v.toLocaleString('th-TH', { minimumFractionDigits: 2 });
-
-const firstOfMonth = () => {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`;
-};
-const todayIso = () => new Date().toISOString().slice(0, 10);
 
 export default function Stats() {
-  const [from, setFrom] = useState(firstOfMonth());
+  const [from, setFrom] = useState(firstOfMonthIso());
   const [to, setTo] = useState(todayIso());
   const { data: sales, isLoading } = useSales(from, to);
   const { data: biz } = useBizSettings();
@@ -67,9 +61,9 @@ export default function Stats() {
 
   const dayMap = new Map<string, number>();
   rows.forEach((r) => { dayMap.set(r.date, (dayMap.get(r.date) || 0) + r.total_revenue); });
-  const dayData: BarDatum[] = [...dayMap.entries()]
+  const dayData: DailyTrendDatum[] = [...dayMap.entries()]
     .sort((a, b) => a[0].localeCompare(b[0]))
-    .map(([date, amt]) => ({ label: date, value: amt, sublabel: `${fc0(amt)} ฿`, color: 'var(--c-primary)' }));
+    .map(([date, amount]) => ({ date, amount }));
 
   return (
     <div>
@@ -111,7 +105,7 @@ export default function Stats() {
 
       <div className="card section-gap">
         <h2>แนวโน้มรายวัน</h2>
-        <BreakdownBars data={dayData} emptyText="ไม่มีข้อมูลในช่วงที่เลือก" />
+        <DailyTrendChart data={dayData} emptyText="ไม่มีข้อมูลในช่วงที่เลือก" />
       </div>
 
       <div className="card section-gap">
