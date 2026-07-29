@@ -1,32 +1,30 @@
-# React + TypeScript + Vite
+# SneakerCare — Frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+Vite + React + TypeScript frontend for the SneakerCare shop-management system. This is the
+production frontend — deployed automatically to `sneakercare.ddserviceth.com` on every push to
+`main` (see `../.github/workflows/deploy.yml`). It talks directly to Supabase from the browser
+using a publishable/anon key; Postgres Row Level Security is the real authorization boundary, not
+anything in this codebase.
 
-Currently, two official plugins are available:
+See `../CLAUDE.md` for full architecture notes, business rules, and incident history.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## Structure
 
-## React Compiler
-
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the Oxlint configuration
-
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
-
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+```
+src/
+  App.tsx                 routes (each tab is lazy-loaded)
+  components/             shared layout + auth guard
+  lib/                     cross-cutting utilities (Supabase client, auth, theme, Excel import, payslip printing)
+  lib/queries/             one file per data domain — React Query hooks wrapping Supabase calls
+  pages/<Tab>.tsx          one file per top-level tab (Overview, Sales, Stock, Opex, Stats, Settings)
+  pages/<tab>/<Section>.tsx  sub-components for that tab
 ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+## Commands
+
+```bash
+npm run dev      # dev server
+npm run build     # typecheck + production build
+npm test          # vitest — unit tests for business-critical calculations (payroll, cash-basis profit, Excel date parsing)
+npm run lint      # oxlint
+```

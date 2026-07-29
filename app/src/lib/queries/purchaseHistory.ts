@@ -1,6 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../supabase';
-import { syncLegacyStock } from '../legacySync';
 import type { Item } from './items';
 
 export interface PurchaseHistoryRow {
@@ -97,9 +96,6 @@ export function useCorrectPurchase() {
         performed_by: performedBy,
       });
       if (revErr) throw new Error('แก้ไขไม่สำเร็จ (ขั้นยกเลิกรายการเดิม): ' + revErr.message);
-      if (revStatus === 'approved') {
-        await syncLegacyStock(item, -Number(original.quantity_delta), Number(original.unit_cost_snapshot), 'ซื้อเข้า', undefined, performedBy);
-      }
 
       const { error: newErr } = await supabase.from('inv_stock_transactions').insert({
         item_id: item.id,
@@ -119,7 +115,6 @@ export function useCorrectPurchase() {
           ' (กรุณาแจ้ง Admin ตรวจสอบยอดคงเหลือ)',
         );
       }
-      await syncLegacyStock(item, newBaseQty, newUnitCost, 'ซื้อเข้า', undefined, performedBy);
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: KEY });
@@ -159,9 +154,6 @@ export function useVoidPurchase() {
         performed_by: performedBy,
       });
       if (error) throw new Error('ลบไม่สำเร็จ: ' + error.message);
-      if (status === 'approved') {
-        await syncLegacyStock(item, -Number(original.quantity_delta), Number(original.unit_cost_snapshot), 'ซื้อเข้า', undefined, performedBy);
-      }
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: KEY });

@@ -6,11 +6,14 @@
 ## ⚠️ อัปเดตสถาปัตยกรรมครั้งใหญ่ (2026-07-29) — อ่านก่อนอ่านหัวข้อถัดไป
 
 ทั้งระบบถูกย้ายจากไฟล์ HTML เดียวไปเป็น **Vite + React + TypeScript** (โฟลเดอร์ `app/`) ครบทั้ง 6 แท็บ
-(ภาพรวม/ยอดขาย/คลังสินค้า/ค่าใช้จ่าย+พนักงาน/สถิติ/ตั้งค่า) แล้ว **`sneakercare_dashboard.html` ไม่ใช่เว็บ
-หลักอีกต่อไป** — nginx เปลี่ยนให้ root domain (`sneakercare.ddserviceth.com`) ชี้ไปที่ `app/dist` (React)
-โดยตรง ส่วนไฟล์เดิมยังเข้าถึงได้ที่ `/legacy/` ไว้เป็น fallback ชั่วคราวเท่านั้น (ดู `deploy/nginx-sneakercare.conf`)
-ส่วน "ภาพรวมระบบ" ด้านล่างที่พูดถึง "ไฟล์ HTML เดียว...ไม่มี build step" **อธิบายเฉพาะ `/legacy/` เท่านั้น
-ไม่ใช่ระบบหลักอีกต่อไป**
+(ภาพรวม/ยอดขาย/คลังสินค้า/ค่าใช้จ่าย+พนักงาน/สถิติ/ตั้งค่า) แล้ว **`app/` คือระบบเดียวที่ใช้งานจริงตอนนี้**
+— **ปิด `/legacy/` ถาวรแล้ว (2026-07-29)** หลังจากทดสอบใช้งานจริงแล้วมั่นใจ: nginx ไม่มี location
+`/legacy/` อีกต่อไป (ดู `deploy/nginx-sneakercare.conf`), ไฟล์ `sneakercare_dashboard.html` /
+`SneakerCare_GAS.js` / `supabase_setup_v2.sql` ถูกย้ายไปเก็บที่ `legacy/` เป็นแค่ archive อ้างอิงในโค้ด
+ไม่ได้ deploy ขึ้นเซิร์ฟเวอร์อีกแล้ว, และ**ตาราง `sc_stock_status`/`sc_stock_transactions` ถูก DROP ออก
+จากฐานข้อมูลจริงแล้ว** (migration 0020 — ตรวจสอบแล้วว่าไม่มี view/trigger อ้างอิง และไม่มีโค้ดฝั่งไหนอ่าน/
+เขียนตารางนี้อีกต่อไปหลังถอด dual-write helper `syncLegacyStock`/`invSyncLegacyStock` ออกแล้ว) **ห้ามอ้างอิง
+ตาราง `sc_stock_status`/`sc_stock_transactions` ในโค้ดใหม่เด็ดขาด — ไม่มีอยู่แล้ว**
 
 **จุดสำคัญของระบบใหม่:**
 - Deploy key ที่ผูกกับ `deploy.yml` ถูกจำกัดฝั่งเซิร์ฟเวอร์ให้รันได้แค่ `git pull` เท่านั้น (ไม่มี Node บน
@@ -38,14 +41,15 @@
 - มีเทสแล้ว (`app/src/**/*.test.ts`, รันด้วย `npm test` ใน `app/`) ครอบคลุมสูตรคำนวณสำคัญ (ประกันสังคม/ภาษี
   เงินเดือน, กำไรสุทธิแบบเงินสด, แปลงวันที่ตอน import Excel) — เพิ่มเทสทุกครั้งที่แก้สูตรการเงิน
 
-## ภาพรวมระบบเดิม (`/legacy/` เท่านั้น) — สำคัญมาก อ่านก่อนแก้อะไรใน `/legacy/`
+## ภาพรวมระบบเดิม (ปิดใช้งานแล้ว — เก็บไว้แค่อ้างอิงประวัติศาสตร์ที่ `legacy/`)
 
-นี่คือ**ระบบ production จริงที่มีลูกค้า/ผู้ใช้งานจริง** ไม่ใช่ demo หรือ dev environment:
+**⚠️ ระบบนี้ปิดใช้งานถาวรแล้วตั้งแต่ 2026-07-29 — ไม่ได้ deploy อยู่บนเซิร์ฟเวอร์ ไม่มี route ใดเข้าถึงได้
+อีกต่อไป และตารางฐานข้อมูลที่มันเคยใช้ก็ถูกลบไปแล้ว** เนื้อหาด้านล่างนี้เก็บไว้เผื่อต้องขุดประวัติ/เหตุผลการ
+ออกแบบเก่าเท่านั้น ห้ามใช้เป็นข้อมูลอ้างอิงสถานะปัจจุบันของระบบเด็ดขาด (ดูหัวข้อด้านบนแทน):
 
-- **Frontend**: ไฟล์ HTML เดียว `sneakercare_dashboard.html` (~7,000+ บรรทัด) vanilla JavaScript ไม่มี
-  build step, ไม่มี framework, เรียก Supabase ตรงจาก browser ด้วย anon/publishable key — **ไม่มี backend
-  server เลย** (ยกเว้น Supabase Edge Functions ที่ deploy แยกสำหรับงานเฉพาะทาง) — **ไม่ใช่เว็บหลักอีกต่อไป
-  ดูหัวข้อด้านบน**
+- **Frontend**: ไฟล์ HTML เดียว `legacy/sneakercare_dashboard.html` (~7,000+ บรรทัด) vanilla JavaScript
+  ไม่มี build step, ไม่มี framework, เรียก Supabase ตรงจาก browser ด้วย anon/publishable key — **ไม่มี
+  backend server เลย** (ยกเว้น Supabase Edge Functions ที่ deploy แยกสำหรับงานเฉพาะทาง)
 - **Backend/DB**: Supabase project เดียวชื่อ **`SneakerCareDB`** (ref `mdlxogfkpwejnqpzhmoy`) — เคยมี
   project ทดลองอีกอันชื่อ `shoe-care-inventory` แต่**ลบทิ้งแล้ว** (2026-07-11) ไม่ต้องกังวลเรื่องนี้อีก
 - **Deploy**: auto-deploy ผ่าน GitHub Actions (`.github/workflows/deploy.yml`) — push ขึ้น `main` แล้ว

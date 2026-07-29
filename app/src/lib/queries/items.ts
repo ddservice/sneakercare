@@ -1,6 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../supabase';
-import { syncLegacyStock } from '../legacySync';
 import { useBranchId } from './branch';
 
 export interface Item {
@@ -135,7 +134,6 @@ export function useSaveItem() {
           performed_by: performedBy,
         });
         if (txnErr) throw new Error('เพิ่มสินค้าสำเร็จ แต่บันทึกสต๊อกเริ่มต้นไม่สำเร็จ: ' + txnErr.message);
-        await syncLegacyStock(payload, baseQty, unitCost, 'ซื้อเข้า', initialStock.date, performedBy);
       }
     },
     onSuccess: () => {

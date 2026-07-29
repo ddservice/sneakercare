@@ -1,6 +1,5 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../supabase';
-import { syncLegacyStock } from '../legacySync';
 import { useBranchId } from './branch';
 import type { Item } from './items';
 
@@ -45,8 +44,6 @@ export function useSaveStockIn() {
         performed_by: performedBy,
       });
       if (error) throw error;
-
-      await syncLegacyStock(item, baseQty, unitCost, 'ซื้อเข้า', txnDate, performedBy);
     },
     onSuccess: () => invalidateStock(qc, branchId),
   });
@@ -77,8 +74,6 @@ export function useSaveStockOut() {
         performed_by: performedBy,
       });
       if (error) throw error;
-
-      await syncLegacyStock(item, -Math.abs(qty), 0, 'ใช้งาน', undefined, performedBy);
     },
     onSuccess: () => invalidateStock(qc, branchId),
   });
