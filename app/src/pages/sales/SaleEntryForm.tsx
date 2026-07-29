@@ -1,12 +1,28 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '../../lib/AuthContext';
 import { useSaveSale, useSales } from '../../lib/queries/sales';
 import { useBizSettings } from '../../lib/queries/settings';
+import { findExtraServicePrice, loadExtraServicesCatalog, rememberExtraService } from '../../lib/extraServicesCatalog';
 
 const todayIso = () => new Date().toISOString().slice(0, 10);
 const fc = (v: number) => v.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 interface ExtraLine { name: string; price: number }
+
+interface SaleDraft {
+  qty: { s: number; m: number; l: number; xl: number };
+  disc: { s: number; m: number; l: number; xl: number };
+  extraLines: ExtraLine[];
+  transferAmount: number;
+  cashAmount: number;
+  paymentStatus: 'ชำระครบ' | 'ชำระบางส่วน' | 'ค้างชำระ';
+  receivedAmount: number;
+}
+
+const draftKey = (date: string) => `sale_draft_${date}`;
+const isEmptyDraft = (d: SaleDraft) =>
+  d.qty.s === 0 && d.qty.m === 0 && d.qty.l === 0 && d.qty.xl === 0 &&
+  d.extraLines.length === 0 && d.transferAmount === 0 && d.cashAmount === 0 && d.receivedAmount === 0;
 
 export default function SaleEntryForm() {
   const { auth } = useAuth();
@@ -29,6 +45,38 @@ export default function SaleEntryForm() {
 
   const [status, setStatus] = useState<{ text: string; ok: boolean } | null>(null);
 
+  // กู้คืนร่างที่กรอกค้างไว้ (กันข้อมูลหายถ้าเผลอรีเฟรชหน้า) — ทำครั้งเดียวตอนโหลดหน้าสำหรับวันที่ตั้งต้น
+  // เท่านั้น ไม่ทำซ้ำตอนสลับวันที่มือเอง เพื่อเลี่ยง race กับ effect ที่บันทึกร่างด้านล่าง
+  const hasTriedLoadRef = useRef(false);
+  const skipNextSaveRef = useRef(false);
+
+  useEffect(() => {
+    if (hasTriedLoadRef.current || existingSales === undefined) return;
+    hasTriedLoadRef.current = true;
+    if (existingSales.length > 0) return; // มีข้อมูลจริงบันทึกไว้แล้วสำหรับวันนี้ ไม่ต้องเอาร่างเก่ามาทับ
+    try {
+      const raw = localStorage.getItem(draftKey(date));
+      if (!raw) return;
+      const d: SaleDraft = JSON.parse(raw);
+      skipNextSaveRef.current = true;
+      setQty(d.qty); setDisc(d.disc); setExtraLines(d.extraLines);
+      setTransferAmount(d.transferAmount); setCashAmount(d.cashAmount);
+      setPaymentStatus(d.paymentStatus); setReceivedAmount(d.receivedAmount);
+      setStatus({ text: `กู้คืนข้อมูลที่กรอกค้างไว้ของวันที่ ${date} แล้ว`, ok: true });
+      setTimeout(() => setStatus(null), 4000);
+    } catch {
+      // ร่างเสีย/อ่านไม่ได้ ข้ามไปเงียบๆ
+    }
+  }, [existingSales, date]);
+
+  useEffect(() => {
+    if (skipNextSaveRef.current) { skipNextSaveRef.current = false; return; }
+    const draft: SaleDraft = { qty, disc, extraLines, transferAmount, cashAmount, paymentStatus, receivedAmount };
+    if (isEmptyDraft(draft)) { localStorage.removeItem(draftKey(date)); return; }
+    localStorage.setItem(draftKey(date), JSON.stringify(draft));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [date, qty, disc, extraLines, transferAmount, cashAmount, paymentStatus, receivedAmount]);
+
   const extraTotal = extraLines.reduce((s, l) => s + l.price, 0);
   const netBySize = {
     s: Math.max(qty.s * DEFAULT_PRICE.s - disc.s, 0),
@@ -50,12 +98,20 @@ export default function SaleEntryForm() {
   };
 
   const addExtraLine = () => {
-    if (!extraName.trim()) { setStatus({ text: 'กรุณาระบุชื่อบริการ', ok: false }); return; }
+    const name = extraName.trim();
+    if (!name) { setStatus({ text: 'กรุณาระบุชื่อบริการ', ok: false }); return; }
     if (extraPrice <= 0) { setStatus({ text: 'กรุณาระบุราคา', ok: false }); return; }
-    setExtraLines((prev) => [...prev, { name: extraName.trim(), price: extraPrice }]);
+    setExtraLines((prev) => [...prev, { name, price: extraPrice }]);
+    rememberExtraService(name, extraPrice);
     setExtraName(''); setExtraPrice(0);
   };
   const removeExtraLine = (idx: number) => setExtraLines((prev) => prev.filter((_, i) => i !== idx));
+
+  const onExtraNameChange = (name: string) => {
+    setExtraName(name);
+    const knownPrice = findExtraServicePrice(name.trim());
+    if (knownPrice !== null) setExtraPrice(knownPrice);
+  };
 
   const submit = async () => {
     const totalPairs = qty.s + qty.m + qty.l + qty.xl;
@@ -78,6 +134,7 @@ export default function SaleEntryForm() {
         transferAmount, cashAmount, paymentStatus, receivedAmount: received,
         recordedBy: auth?.displayName || auth?.username || 'Staff',
       });
+      localStorage.removeItem(draftKey(date));
       setStatus({ text: 'บันทึกยอดขายสำเร็จเรียบร้อย ✓', ok: true });
       setQty({ s: 0, m: 0, l: 0, xl: 0 });
       setDisc({ s: 0, m: 0, l: 0, xl: 0 });
@@ -123,9 +180,12 @@ export default function SaleEntryForm() {
           </div>
         ))}
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-          <input placeholder="ชื่อบริการ" value={extraName} onChange={(e) => setExtraName(e.target.value)} style={{ flex: '2 1 140px' }} />
+          <input placeholder="ชื่อบริการ" value={extraName} onChange={(e) => onExtraNameChange(e.target.value)} style={{ flex: '2 1 140px' }} list="extra_services_datalist" />
           <input type="number" placeholder="ราคา" min={0} value={extraPrice} onChange={(e) => setExtraPrice(+e.target.value)} style={{ flex: '1 1 90px' }} />
           <button type="button" onClick={addExtraLine}>+ เพิ่ม</button>
+          <datalist id="extra_services_datalist">
+            {loadExtraServicesCatalog().map((s) => <option key={s.name} value={s.name} />)}
+          </datalist>
         </div>
       </div>
 
