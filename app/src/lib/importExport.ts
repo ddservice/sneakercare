@@ -53,7 +53,7 @@ const asStr = (v: unknown) => (v === undefined || v === null ? '' : String(v).tr
 
 /** รับได้ทั้งข้อความ "YYYY-MM-DD" และเซลล์วันที่จริงของ Excel (เมื่อผู้ใช้พิมพ์ผ่าน date picker แทนพิมพ์
  *  ข้อความ) — คืนค่า null ถ้าแปลงเป็นวันที่ที่ถูกต้องไม่ได้เลย */
-function normalizeDate(v: unknown): string | null {
+export function normalizeDate(v: unknown): string | null {
   if (v instanceof Date && !isNaN(v.getTime())) {
     return `${v.getFullYear()}-${String(v.getMonth() + 1).padStart(2, '0')}-${String(v.getDate()).padStart(2, '0')}`;
   }

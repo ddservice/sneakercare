@@ -3,13 +3,49 @@
 คำแนะนำสำหรับ Claude Code เมื่อทำงานในโปรเจกต์นี้ — **ระบบจัดการร้าน SneakerCare (DD Service)**
 อัปเดตไฟล์นี้ทุกครั้งหลังแก้ไข/deploy อะไรใหม่ — ห้ามปล่อยให้ไฟล์นี้ล้าหลังโค้ดจริง
 
-## ภาพรวมระบบ — สำคัญมาก อ่านก่อนแก้อะไร
+## ⚠️ อัปเดตสถาปัตยกรรมครั้งใหญ่ (2026-07-29) — อ่านก่อนอ่านหัวข้อถัดไป
+
+ทั้งระบบถูกย้ายจากไฟล์ HTML เดียวไปเป็น **Vite + React + TypeScript** (โฟลเดอร์ `app/`) ครบทั้ง 6 แท็บ
+(ภาพรวม/ยอดขาย/คลังสินค้า/ค่าใช้จ่าย+พนักงาน/สถิติ/ตั้งค่า) แล้ว **`sneakercare_dashboard.html` ไม่ใช่เว็บ
+หลักอีกต่อไป** — nginx เปลี่ยนให้ root domain (`sneakercare.ddserviceth.com`) ชี้ไปที่ `app/dist` (React)
+โดยตรง ส่วนไฟล์เดิมยังเข้าถึงได้ที่ `/legacy/` ไว้เป็น fallback ชั่วคราวเท่านั้น (ดู `deploy/nginx-sneakercare.conf`)
+ส่วน "ภาพรวมระบบ" ด้านล่างที่พูดถึง "ไฟล์ HTML เดียว...ไม่มี build step" **อธิบายเฉพาะ `/legacy/` เท่านั้น
+ไม่ใช่ระบบหลักอีกต่อไป**
+
+**จุดสำคัญของระบบใหม่:**
+- Deploy key ที่ผูกกับ `deploy.yml` ถูกจำกัดฝั่งเซิร์ฟเวอร์ให้รันได้แค่ `git pull` เท่านั้น (ไม่มี Node บน
+  เซิร์ฟเวอร์) ดังนั้น CI ต้อง build แอปก่อนแล้ว **commit `app/dist` กลับเข้า `main` เอง** (job `build-app`
+  ใน `deploy.yml`) — ห้ามลบขั้นตอนนี้ออกหรือคิดว่า `.gitignore` ที่ exclude `app/dist` แปลว่าไม่ต้อง commit
+  (CI ใช้ `git add -f` เพื่อ override ignore เฉพาะตอน build เท่านั้น)
+- **แก้บั๊กสำคัญระหว่างย้าย**: หน้าภาพรวม/สถิติเดิมอ่าน "ต้นทุนวัสดุคลัง" จาก `sc_stock_transactions` (ตาราง
+  เก่า, dual-write จาก `invSyncLegacyStock`) ซึ่ง **ข้ามสินค้าที่ `purchase_unit_qty !== 1` แบบเงียบๆ** ระบบ
+  ใหม่อ่านจาก `inv_stock_transactions` (ledger จริง) ตรงๆ แทน — **ห้ามใช้คอลัมน์ `total_cost` (generated
+  column = `abs(quantity_delta)*unit_cost_snapshot`) รวมยอดตรงๆ เด็ดขาด** เพราะ `abs()` ทำให้รายการยกเลิก/
+  แก้ไข (quantity_delta ติดลบ) กลายเป็นบวกแทนที่จะหักออก ต้องคำนวณ `quantity_delta * unit_cost_snapshot` เอง
+- **`inv_stock_transactions.transaction_date` ของแถวที่ถูกสร้างก่อน migration 0015** (ก่อน ~13 ก.ค.) **ไม่
+  น่าเชื่อถือ** เพราะตอนเพิ่มคอลัมน์นี้ (`default current_date`) มันถูก backfill เป็นวันที่รัน migration ไม่ใช่
+  วันที่ซื้อจริง — เจอปัญหานี้จนต้องลบข้อมูล ledger ทั้งหมดแล้วกรอกยอด เม.ย.-ก.ค. 2026 ใหม่ (migration 0019)
+  ยืนยันกับ user แล้วว่าตรงกับความจริง — **แถวใหม่ที่สร้างหลังจากนี้ (ผ่านฟอร์ม backdate) เชื่อถือได้ปกติ**
+- **Auth site_url/redirect allowlist ถูกอัปเดตแล้ว** (ผ่าน Management API `/config/auth`) จาก
+  `http://localhost:3000` (ค่า default ที่ไม่เคยตั้ง) เป็น `https://sneakercare.ddserviceth.com` +
+  `uri_allow_list: https://sneakercare.ddserviceth.com/**` — จำเป็นสำหรับฟีเจอร์ "ลืมรหัสผ่าน" (ใช้
+  `resetPasswordForEmail` + route `/reset-password`) ถ้าไม่ตั้งค่านี้ลิงก์อีเมลจะ redirect ไป localhost
+- **`sc_users.role`**: ค่าที่ใช้จริงคือ `'admin' | 'co-admin' | 'manager'` — `'staff'` เป็นค่าเก่าที่เลิกใช้
+  แล้ว (ตอนนี้ไม่มีแถวไหนเป็น staff) สร้างผู้ใช้ใหม่ให้ใช้ `'manager'` เสมอ
+- **Token `sbp_...`** ที่ใช้รัน migration ตรงๆ ผ่าน Management API ตลอดการย้ายระบบครั้งนี้ **ควร revoke แล้ว**
+  หลังงานย้ายระบบเสร็จ (เช็คใน Supabase Dashboard > Account > Access Tokens ว่ายังอยู่ไหมก่อนใช้ pattern
+  เดิมซ้ำ)
+- มีเทสแล้ว (`app/src/**/*.test.ts`, รันด้วย `npm test` ใน `app/`) ครอบคลุมสูตรคำนวณสำคัญ (ประกันสังคม/ภาษี
+  เงินเดือน, กำไรสุทธิแบบเงินสด, แปลงวันที่ตอน import Excel) — เพิ่มเทสทุกครั้งที่แก้สูตรการเงิน
+
+## ภาพรวมระบบเดิม (`/legacy/` เท่านั้น) — สำคัญมาก อ่านก่อนแก้อะไรใน `/legacy/`
 
 นี่คือ**ระบบ production จริงที่มีลูกค้า/ผู้ใช้งานจริง** ไม่ใช่ demo หรือ dev environment:
 
 - **Frontend**: ไฟล์ HTML เดียว `sneakercare_dashboard.html` (~7,000+ บรรทัด) vanilla JavaScript ไม่มี
   build step, ไม่มี framework, เรียก Supabase ตรงจาก browser ด้วย anon/publishable key — **ไม่มี backend
-  server เลย** (ยกเว้น Supabase Edge Functions ที่ deploy แยกสำหรับงานเฉพาะทาง)
+  server เลย** (ยกเว้น Supabase Edge Functions ที่ deploy แยกสำหรับงานเฉพาะทาง) — **ไม่ใช่เว็บหลักอีกต่อไป
+  ดูหัวข้อด้านบน**
 - **Backend/DB**: Supabase project เดียวชื่อ **`SneakerCareDB`** (ref `mdlxogfkpwejnqpzhmoy`) — เคยมี
   project ทดลองอีกอันชื่อ `shoe-care-inventory` แต่**ลบทิ้งแล้ว** (2026-07-11) ไม่ต้องกังวลเรื่องนี้อีก
 - **Deploy**: auto-deploy ผ่าน GitHub Actions (`.github/workflows/deploy.yml`) — push ขึ้น `main` แล้ว

@@ -2,7 +2,7 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from '
 import { supabase } from './supabase';
 import type { AuthUser, Role } from './types';
 
-const EMAIL_DOMAIN = '@ddserviceth.com';
+export const EMAIL_DOMAIN = '@ddserviceth.com';
 
 interface AuthContextValue {
   auth: AuthUser | null;

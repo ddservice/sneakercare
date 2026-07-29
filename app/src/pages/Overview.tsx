@@ -3,6 +3,7 @@ import { useSales } from '../lib/queries/sales';
 import { useOpexSummaryInRange } from '../lib/queries/opexSummary';
 import { useMaterialCostInRange } from '../lib/queries/materialCost';
 import { useOverviewPayments } from '../lib/queries/overviewPayments';
+import { computeOverviewTotals } from '../lib/overviewCalc';
 import BreakdownBars, { type BarDatum } from './stats/BreakdownBars';
 
 const fc = (v: number) => v.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -28,22 +29,9 @@ export default function Overview() {
   const byDateAll = payments?.byDateAll ?? new Map<string, number>();
   const inRangeTotal = payments?.inRangeTotal ?? 0;
 
-  const serviceRevenue = rows.reduce((s, r) => s + r.total_revenue, 0);
-  const totalRevenue = serviceRevenue + opexSummary.rentalIncomeAmt;
-
-  let totalCashCollected = 0;
-  let totalOutstanding = 0;
-  rows.forEach((s) => {
-    const pStatus = s.payment_status || 'ชำระครบ';
-    const receivedAtSaleTime = pStatus === 'ชำระครบ' ? s.total_revenue : Math.min(s.amount_paid || 0, s.total_revenue);
-    totalCashCollected += receivedAtSaleTime;
-    const laterCollected = byDateAll.get(s.date) || 0;
-    totalOutstanding += Math.max(s.total_revenue - receivedAtSaleTime - laterCollected, 0);
-  });
-  totalCashCollected += inRangeTotal;
-
-  const grandExpenses = stockInAmt + opexSummary.opexFixedAmt + opexSummary.staffSalaryAmt + opexSummary.taxAmt;
-  const netProfit = totalCashCollected + opexSummary.rentalIncomeAmt - grandExpenses;
+  const { totalRevenue, totalOutstanding, grandExpenses, netProfit } = computeOverviewTotals(
+    rows, opexSummary, stockInAmt, byDateAll, inRangeTotal,
+  );
 
   const expenseBars: BarDatum[] = [
     { label: 'ต้นทุนวัสดุคลัง', value: stockInAmt, sublabel: `${fc(stockInAmt)} ฿`, color: '#f59e0b' },
