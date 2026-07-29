@@ -1,6 +1,21 @@
 import type { DeductItem } from './queries/payroll';
 import type { BizSettings } from './queries/settings';
 
+/** ทุกค่าที่มาจากผู้ใช้ (ชื่อพนักงาน, ธนาคาร, รายละเอียดรายการหัก, ข้อมูลร้าน ฯลฯ) ต้อง escape ก่อนเสมอ
+ *  ก่อนเอาไปต่อเป็น HTML string แล้วยิงเข้า document.write — ไฟล์นี้ไม่ใช่ JSX จึงไม่มี auto-escape ของ
+ *  React ช่วยป้องกันให้ (เจอเป็นช่องโหว่ XSS จริงจากการตรวจสอบความปลอดภัย 2026-07-29 — Co-Admin แก้ไข
+ *  ช่องธนาคาร/รายละเอียดรายการหัก/URL โลโก้ ที่ตัวเองมีสิทธิ์แก้ไขได้อยู่แล้ว ฝังสคริปต์ได้ แล้วรอให้ Admin
+ *  กดพิมพ์สลิปพนักงานคนนั้นเพื่อขโมย session — เพราะ window.open('','_blank')+document.write สืบทอด
+ *  origin เดียวกับแอป ทำให้สคริปต์ที่ฝังไว้เข้าถึง localStorage/token ของแอปได้ตรงๆ) */
+export function escapeHtml(v: unknown): string {
+  return String(v ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 function imgToBase64(url: string): Promise<string> {
   return new Promise((resolve) => {
     if (!url) { resolve(''); return; }
@@ -13,10 +28,13 @@ function imgToBase64(url: string): Promise<string> {
         c.getContext('2d')!.drawImage(img, 0, 0);
         resolve(c.toDataURL('image/png'));
       } catch {
-        resolve(url);
+        // แคนวาสถูก taint (รูปมาจากโฮสต์ที่ไม่เปิด CORS) — ห้าม fallback ไปใช้ URL ดิบเด็ดขาด เพราะเป็น
+        // ค่าที่ผู้ใช้กรอกเองได้ (biz.logo_url) ถ้าเอาไปแทรกใน HTML ตรงๆ จะแหก attribute ได้ (XSS)
+        resolve('');
       }
     };
-    img.onerror = () => resolve(url);
+    // โหลดรูปไม่สำเร็จ — ไม่แสดงโลโก้ดีกว่าเสี่ยงฉีด HTML ผ่าน URL ที่ควบคุมได้
+    img.onerror = () => resolve('');
     img.src = url + (url.includes('?') ? '&' : '?') + '_t=' + Date.now();
   });
 }
@@ -40,21 +58,35 @@ export interface PayslipInput {
 }
 
 export async function printPayslip(input: PayslipInput) {
-  const { employeeName: name, bank, account, monthKey, baseSal, comm, commPct, diligence, ot, sso, wht, deductItems, net, biz, payerName } = input;
+  const { employeeName, bank, account, monthKey, baseSal, comm, commPct, diligence, ot, sso, wht, deductItems, net, biz, payerName } = input;
+  // logoSrc มาจาก imgToBase64 เท่านั้น (data: URI ที่สร้างจากแคนวาส หรือสตริงว่าง) ไม่มีทางเป็น URL ดิบที่
+  // ผู้ใช้ควบคุมได้อีกต่อไปหลังแก้ไข — แต่ escape ไว้เผื่อกันไว้อีกชั้นเพราะเป็น attribute value
   const logoSrc = biz.logo_url ? await imgToBase64(biz.logo_url) : '';
 
+  const name = escapeHtml(employeeName);
   const dateStr = new Date().toLocaleDateString('th-TH', { year: 'numeric', month: 'long', day: 'numeric' });
   const f = (v: number) => v.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const [mm, y] = monthKey.split('/');
-  const docNo = `PAY-${name.substring(0, 3).toUpperCase()}-${mm}-${y}`;
+  const docNo = escapeHtml(`PAY-${employeeName.substring(0, 3).toUpperCase()}-${mm}-${y}`);
   const gross = baseSal + comm + diligence + ot;
 
   const deductRowsHtml = deductItems.map((it, i) => {
+    const type = escapeHtml(it.type);
+    const detail = escapeHtml(it.detail);
     const label = it.type === 'มาสาย' && it.minutes > 0
-      ? `ค่ามาสาย — ${it.detail || ''} (${it.minutes} นาที × ${it.rate} ฿/นาที)`
-      : `${it.type}${it.detail ? ' — ' + it.detail : ''}`;
+      ? `ค่ามาสาย — ${detail} (${it.minutes} นาที × ${it.rate} ฿/นาที)`
+      : `${type}${detail ? ' — ' + detail : ''}`;
     return `<tr class="tr-deduct"><td style="color:#888">${i + 2}</td><td>${label}</td><td class="td-num">( ${f(it.amount)} )</td></tr>`;
   }).join('');
+
+  const bizName = escapeHtml(biz.name);
+  const bizAddress = escapeHtml(biz.address);
+  const bizPhone = escapeHtml(biz.phone);
+  const bizTaxId = escapeHtml(biz.tax_id);
+  const bankEsc = escapeHtml(bank);
+  const accountEsc = escapeHtml(account);
+  const payerNameEsc = escapeHtml(payerName);
+  const monthKeyEsc = escapeHtml(monthKey);
 
   const html = `<!DOCTYPE html>
 <html>
@@ -109,12 +141,12 @@ export async function printPayslip(input: PayslipInput) {
 </div>
 <div class="doc-header">
   <div class="company-block">
-    ${logoSrc ? `<img src="${logoSrc}" style="height:84px; object-fit:contain; border-radius:6px; flex-shrink:0; margin-right:8px">` : ''}
+    ${logoSrc ? `<img src="${escapeHtml(logoSrc)}" style="height:84px; object-fit:contain; border-radius:6px; flex-shrink:0; margin-right:8px">` : ''}
     <div>
-      <div class="bname">${biz.name}</div>
-      ${biz.address ? `<div class="bsub">${biz.address}</div>` : ''}
-      ${biz.phone ? `<div class="bsub">โทรศัพท์: ${biz.phone}</div>` : ''}
-      ${biz.tax_id ? `<div class="bsub">เลขประจำตัวผู้เสียภาษี: ${biz.tax_id}</div>` : ''}
+      <div class="bname">${bizName}</div>
+      ${bizAddress ? `<div class="bsub">${bizAddress}</div>` : ''}
+      ${bizPhone ? `<div class="bsub">โทรศัพท์: ${bizPhone}</div>` : ''}
+      ${bizTaxId ? `<div class="bsub">เลขประจำตัวผู้เสียภาษี: ${bizTaxId}</div>` : ''}
     </div>
   </div>
   <div class="doc-meta">
@@ -129,7 +161,7 @@ export async function printPayslip(input: PayslipInput) {
   <div class="info-section-title">ข้อมูลพนักงาน (Employee Information)</div>
   <div class="info-grid">
     <div class="info-cell"><div class="info-label">ชื่อ-นามสกุลพนักงาน</div><div class="info-value">${name}</div></div>
-    <div class="info-cell"><div class="info-label">ประจำรอบเดือน</div><div class="info-value">${monthKey}</div></div>
+    <div class="info-cell"><div class="info-label">ประจำรอบเดือน</div><div class="info-value">${monthKeyEsc}</div></div>
   </div>
 </div>
 
@@ -153,14 +185,14 @@ ${bank ? `
 <div class="bank-block">
   <div class="info-section-title" style="background:#eff6ff; color:#1e40af">รายละเอียดการชำระเงินโอนบัญชี</div>
   <div style="display:flex; padding:8px 12px; font-size:12px; gap:20px">
-    <div>ธนาคาร: <strong>${bank}</strong></div>
-    <div>เลขบัญชี: <strong>${account}</strong></div>
+    <div>ธนาคาร: <strong>${bankEsc}</strong></div>
+    <div>เลขบัญชี: <strong>${accountEsc}</strong></div>
   </div>
 </div>` : ''}
 
 <div class="footer-grid">
   <div><div class="stamp-box"><div class="sign-label">ตราประทับ (ถ้ามี)</div></div></div>
-  <div><div class="sign-box"><div class="sign-label">ลงลายมือชื่อผู้จ่ายเงิน</div><div style="font-weight:600; margin-top:8px">${payerName}</div></div></div>
+  <div><div class="sign-box"><div class="sign-label">ลงลายมือชื่อผู้จ่ายเงิน</div><div style="font-weight:600; margin-top:8px">${payerNameEsc}</div></div></div>
   <div><div class="sign-box"><div class="sign-label">ลงลายมือชื่อผู้รับเงิน</div><div style="font-weight:600; margin-top:8px">${name}</div></div></div>
 </div>
 
