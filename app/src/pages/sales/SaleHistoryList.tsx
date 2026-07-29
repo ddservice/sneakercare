@@ -44,6 +44,7 @@ export default function SaleHistoryList() {
         <p className="empty-row">ยังไม่มีข้อมูลในช่วงนี้</p>
       ) : (
         <>
+          <div className="table-scroll">
           <table className="data-table">
             <thead>
               <tr>
@@ -104,6 +105,7 @@ export default function SaleHistoryList() {
               })}
             </tbody>
           </table>
+          </div>
           <p className="poc-note">
             {rows.length} วัน — {totalPairs.toLocaleString('th-TH')} คู่ — {fc(totalIncome)} ฿
             {totalOutstanding > 0 && ` — ค้าง ${fc(totalOutstanding)} ฿`}

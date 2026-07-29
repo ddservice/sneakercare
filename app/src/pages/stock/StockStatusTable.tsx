@@ -34,6 +34,7 @@ export default function StockStatusTable({ stock }: { stock: ItemStock[] }) {
         onChange={(e) => setSearch(e.target.value)}
         style={{ marginBottom: 10, maxWidth: 260 }}
       />
+      <div className="table-scroll">
       <table className="data-table">
         <thead>
           <tr>
@@ -80,6 +81,7 @@ export default function StockStatusTable({ stock }: { stock: ItemStock[] }) {
           ))}
         </tbody>
       </table>
+      </div>
     </div>
   );
 }

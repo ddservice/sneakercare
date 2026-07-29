@@ -17,6 +17,7 @@ export default function ItemsTable({
   }
 
   return (
+    <div className="table-scroll">
     <table className="data-table">
       <thead>
         <tr>
@@ -57,5 +58,6 @@ export default function ItemsTable({
         ))}
       </tbody>
     </table>
+    </div>
   );
 }

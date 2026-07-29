@@ -67,26 +67,28 @@ export default function UserManagementSection() {
       ) : !users?.length ? (
         <p className="empty-row">ไม่พบข้อมูลผู้ใช้งาน</p>
       ) : (
-        <table className="data-table">
-          <thead>
-            <tr><th>Username</th><th>ชื่อ-นามสกุล</th><th>ชื่อเรียก</th><th>สิทธิ์</th><th></th></tr>
-          </thead>
-          <tbody>
-            {users.map((u) => (
-              <tr key={u.username}>
-                <td><strong>{u.username}</strong></td>
-                <td>{u.fullname || ''}</td>
-                <td>{u.nickname || ''}</td>
-                <td><span className={'role-chip' + (u.role === 'admin' ? ' admin' : u.role === 'co-admin' ? ' co-admin' : '')}>{ROLE_LABEL[u.role] || 'Manager'}</span></td>
-                <td className="row-actions">
-                  <button onClick={() => setEditing(u)}>แก้ไข</button>
-                  <button onClick={() => resetPassword(u.username)}>เปลี่ยนรหัสผ่าน</button>
-                  <button onClick={() => doDelete(u.username)} disabled={u.username === auth?.username}>ลบ</button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <div className="table-scroll">
+          <table className="data-table">
+            <thead>
+              <tr><th>Username</th><th>ชื่อ-นามสกุล</th><th>ชื่อเรียก</th><th>สิทธิ์</th><th></th></tr>
+            </thead>
+            <tbody>
+              {users.map((u) => (
+                <tr key={u.username}>
+                  <td><strong>{u.username}</strong></td>
+                  <td>{u.fullname || ''}</td>
+                  <td>{u.nickname || ''}</td>
+                  <td><span className={'role-chip' + (u.role === 'admin' ? ' admin' : u.role === 'co-admin' ? ' co-admin' : '')}>{ROLE_LABEL[u.role] || 'Manager'}</span></td>
+                  <td className="row-actions">
+                    <button onClick={() => setEditing(u)}>แก้ไข</button>
+                    <button onClick={() => resetPassword(u.username)}>เปลี่ยนรหัสผ่าน</button>
+                    <button onClick={() => doDelete(u.username)} disabled={u.username === auth?.username}>ลบ</button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
 
       <h3>เพิ่มผู้ใช้ใหม่</h3>

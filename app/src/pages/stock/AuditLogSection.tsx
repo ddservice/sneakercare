@@ -23,6 +23,7 @@ export default function AuditLogSection() {
       ) : !rows?.length ? (
         <p className="empty-row">ยังไม่มีประวัติ</p>
       ) : (
+        <div className="table-scroll">
         <table className="data-table">
           <thead>
             <tr><th>เวลา</th><th>ประเภท</th><th>สินค้า</th><th>จำนวน</th><th>หมายเหตุ</th><th>โดย</th></tr>
@@ -45,6 +46,7 @@ export default function AuditLogSection() {
             })}
           </tbody>
         </table>
+        </div>
       )}
     </div>
   );

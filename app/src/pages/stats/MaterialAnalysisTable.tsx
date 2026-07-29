@@ -33,6 +33,7 @@ export default function MaterialAnalysisTable() {
   return (
     <div>
       {needReorder > 0 && <p className="poc-note">ต้องสั่งซื้อ {needReorder} รายการ</p>}
+      <div className="table-scroll">
       <table className="data-table">
         <thead>
           <tr>
@@ -52,6 +53,7 @@ export default function MaterialAnalysisTable() {
           ))}
         </tbody>
       </table>
+      </div>
     </div>
   );
 }

@@ -20,6 +20,7 @@ export default function SuppliersSection() {
       {isLoading ? (
         <p>กำลังโหลด...</p>
       ) : (
+        <div className="table-scroll">
         <table className="data-table">
           <thead>
             <tr>
@@ -54,6 +55,7 @@ export default function SuppliersSection() {
             ))}
           </tbody>
         </table>
+        </div>
       )}
       {modalOpen && <SupplierModal supplier={editing} onClose={() => setModalOpen(false)} />}
     </div>

@@ -16,6 +16,7 @@ export default function PendingApprovalsSection() {
       ) : !pending?.length ? (
         <p className="empty-row">ไม่มีรายการรออนุมัติ</p>
       ) : (
+        <div className="table-scroll">
         <table className="data-table">
           <thead>
             <tr>
@@ -46,6 +47,7 @@ export default function PendingApprovalsSection() {
             })}
           </tbody>
         </table>
+        </div>
       )}
     </div>
   );

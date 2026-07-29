@@ -84,6 +84,7 @@ export default function OpexFixedSection() {
         <p>กำลังโหลด...</p>
       ) : (
         <>
+          <div className="table-scroll">
           <table className="data-table">
             <thead>
               <tr><th>รายการ</th><th>ช่องทาง</th><th>จำนวนเงิน</th></tr>
@@ -112,6 +113,7 @@ export default function OpexFixedSection() {
               ))}
             </tbody>
           </table>
+          </div>
 
           <div className="init-stock-fieldset">
             <legend>ค่าใช้จ่ายจิปาถะอื่นๆ</legend>

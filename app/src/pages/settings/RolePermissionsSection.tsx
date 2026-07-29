@@ -47,6 +47,7 @@ export default function RolePermissionsSection() {
         Admin เห็นทุกอย่างเสมอ ตารางนี้คุมแค่ว่า Co-Admin / Staff จะเห็นเมนู/การ์ดไหนบ้าง — การบังคับสิทธิ์จริง
         (เขียน/อ่านข้อมูล) อยู่ที่ระดับฐานข้อมูล (RLS) เสมอ ไม่ใช่ที่ checkbox นี้
       </p>
+      <div className="table-scroll">
       <table className="data-table">
         <thead>
           <tr><th>เมนู/การ์ด</th><th>Co-Admin</th><th>Staff</th></tr>
@@ -65,6 +66,7 @@ export default function RolePermissionsSection() {
           ))}
         </tbody>
       </table>
+      </div>
       {status && <p className={status.ok ? 'poc-note' : 'form-error'}>{status.text}</p>}
       <button type="button" onClick={submit} disabled={save.isPending}>
         {save.isPending ? 'กำลังบันทึก...' : 'บันทึกสิทธิ์'}
