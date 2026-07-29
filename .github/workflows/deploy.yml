@@ -1,13 +1,44 @@
 name: Deploy to server
 
-# ทำงานทุกครั้งที่มีการ push เข้า main — SSH เข้าเซิร์ฟเวอร์แล้วสั่ง git pull
-# กุญแจ SSH ที่ใช้ถูกจำกัดฝั่งเซิร์ฟเวอร์ให้รันได้แค่คำสั่ง git pull เท่านั้น (ดู authorized_keys)
+# ทำงาน 2 ขั้นทุกครั้งที่ push เข้า main:
+#   1) build แอป React ใหม่ (app/) ใน CI แล้ว commit ผลลัพธ์ (app/dist) กลับเข้า main โดยอัตโนมัติ
+#      — ทำแบบนี้เพราะกุญแจ SSH ที่ deploy ใช้ถูกจำกัดฝั่งเซิร์ฟเวอร์ให้รันได้แค่คำสั่ง git pull เท่านั้น
+#      (ดู authorized_keys) เซิร์ฟเวอร์เองไม่มี Node/ไม่รัน build ใดๆ ทั้งสิ้น ต้อง build มาให้เสร็จก่อน
+#      แล้วปล่อยให้ git pull ธรรมดาดึงไฟล์ที่ build แล้วไปตรงๆ
+#   2) SSH เข้าเซิร์ฟเวอร์แล้วสั่ง git pull (ขั้นตอนเดิม)
 on:
   push:
     branches: [main]
 
 jobs:
+  build-app:
+    runs-on: ubuntu-latest
+    if: "!contains(github.event.head_commit.message, '[skip build]')"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install deps
+        working-directory: app
+        run: npm ci
+      - name: Build
+        working-directory: app
+        run: npm run build
+      - name: Commit built dist
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -f app/dist
+          git diff --cached --quiet && echo "no dist changes" && exit 0
+          git commit -m "chore: rebuild app/dist [skip build]"
+          git push origin main
+
   deploy:
+    needs: build-app
+    if: always()
     runs-on: ubuntu-latest
     steps:
       - name: Pull latest changes on server
