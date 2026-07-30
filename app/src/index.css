@@ -220,6 +220,11 @@ label {
   align-items: center;
   gap: 20px;
   padding: 12px 20px;
+  /* เผื่อพื้นที่ Dynamic Island/status bar บน iOS เมื่อเปิด viewport-fit=cover — ไม่มีผลกับเบราว์เซอร์อื่น
+   * เพราะ env() คืนค่า 0 เฉยๆ ถ้าไม่รองรับ */
+  padding-top: max(12px, env(safe-area-inset-top));
+  padding-left: max(20px, env(safe-area-inset-left));
+  padding-right: max(20px, env(safe-area-inset-right));
   background: var(--surface);
   border-bottom: 1px solid var(--border);
   box-shadow: var(--shadow-sm);
@@ -275,7 +280,15 @@ label {
 .role-chip.admin { background: var(--amber-bg); color: var(--amber); border-color: transparent; }
 .role-chip.co-admin { background: var(--blue-bg); color: var(--blue); border-color: transparent; }
 
-.app-content { padding: 20px; max-width: 1320px; margin: 0 auto; width: 100%; }
+.app-content {
+  padding: 20px;
+  padding-bottom: max(20px, env(safe-area-inset-bottom));
+  padding-left: max(20px, env(safe-area-inset-left));
+  padding-right: max(20px, env(safe-area-inset-right));
+  max-width: 1320px;
+  margin: 0 auto;
+  width: 100%;
+}
 
 /* Desktop / Monitor > 1024px — เพิ่มระยะขอบให้จอใหญ่ไม่รู้สึกอึดอัดชิดขอบ */
 @media (min-width: 1025px) {
@@ -316,7 +329,12 @@ label {
     flex-wrap: wrap;
   }
   .app-user button { margin-left: auto; }
-  .app-content { padding: 14px; }
+  .app-content {
+    padding: 14px;
+    padding-bottom: max(14px, env(safe-area-inset-bottom));
+    padding-left: max(14px, env(safe-area-inset-left));
+    padding-right: max(14px, env(safe-area-inset-right));
+  }
 }
 
 /* ── Card / table ────────────────────────── */
