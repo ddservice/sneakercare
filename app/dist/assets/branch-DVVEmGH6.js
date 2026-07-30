@@ -1,1 +1,0 @@
-import{n as e}from"./useMutation-96iRkApS.js";import{i as t}from"./index-Do3RuSwc.js";function n(){let{data:n}=e({queryKey:[`inv_branch_id`],queryFn:async()=>{let{data:e,error:n}=await t.from(`inv_branches`).select(`id`).eq(`is_active`,!0).limit(1).maybeSingle();if(n)throw n;return e?.id??null},staleTime:1/0});return n??null}export{n as t};
