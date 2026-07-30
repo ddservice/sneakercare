@@ -3,13 +3,14 @@ import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { useAuth } from '../lib/AuthContext';
 import { canManageStock } from '../lib/types';
 import { useTheme } from '../lib/useTheme';
+import { IconLogout, IconOpex, IconOverview, IconSales, IconSettings, IconStats, IconStock } from './Icons';
 
 const TABS = [
-  { path: '/', label: 'ภาพรวม' },
-  { path: '/sales', label: 'งานบริการ/ยอดขาย' },
-  { path: '/stock', label: 'คลังสินค้า' },
-  { path: '/opex', label: 'ค่าใช้จ่าย & พนักงาน' },
-  { path: '/stats', label: 'สถิติ' },
+  { path: '/', label: 'ภาพรวม', Icon: IconOverview },
+  { path: '/sales', label: 'งานบริการ/ยอดขาย', Icon: IconSales },
+  { path: '/stock', label: 'คลังสินค้า', Icon: IconStock },
+  { path: '/opex', label: 'ค่าใช้จ่าย & พนักงาน', Icon: IconOpex },
+  { path: '/stats', label: 'สถิติ', Icon: IconStats },
 ];
 
 export default function Layout() {
@@ -32,12 +33,14 @@ export default function Layout() {
         <nav className={'app-tabs' + (navOpen ? ' open' : '')}>
           {TABS.map((t) => (
             <NavLink key={t.path} to={t.path} end={t.path === '/'} className={({ isActive }) => 'tab' + (isActive ? ' on' : '')} onClick={closeNav}>
-              {t.label}
+              <t.Icon className="tab-icon" />
+              <span>{t.label}</span>
             </NavLink>
           ))}
           {canManageStock(auth?.role) && (
             <NavLink to="/settings" className={({ isActive }) => 'tab' + (isActive ? ' on' : '')} onClick={closeNav}>
-              ตั้งค่า
+              <IconSettings className="tab-icon" />
+              <span>ตั้งค่า</span>
             </NavLink>
           )}
           <div className="app-user">
@@ -45,7 +48,10 @@ export default function Layout() {
               {auth?.role === 'admin' ? 'Admin' : auth?.role === 'co-admin' ? 'Co-Admin' : 'Manager'}
             </span>
             <span className="app-user-name">{auth?.displayName}</span>
-            <button onClick={doLogout}>ออกจากระบบ</button>
+            <button onClick={doLogout}>
+              <IconLogout width={16} height={16} />
+              <span>ออกจากระบบ</span>
+            </button>
           </div>
         </nav>
         <div className="topbar-icons">
