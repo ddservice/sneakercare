@@ -28,6 +28,7 @@ export default function Layout() {
 
   return (
     <div className="app-shell">
+      {navOpen && <div className="nav-backdrop" onClick={closeNav} />}
       <header className="app-topbar">
         <span className="app-title">SneakerCare</span>
         <nav className={'app-tabs' + (navOpen ? ' open' : '')}>

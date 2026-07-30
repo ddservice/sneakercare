@@ -7,6 +7,7 @@ import ItemModal from './ItemModal';
 import DeleteItemModal from './DeleteItemModal';
 import ItemsTable from './ItemsTable';
 import StockStatusTable from './StockStatusTable';
+import { SkeletonRows } from '../../components/Skeleton';
 
 export default function ItemsSection() {
   const { auth } = useAuth();
@@ -23,7 +24,7 @@ export default function ItemsSection() {
     <>
       <div className="card">
         <h2>สถานะสต๊อก</h2>
-        {stockLoading ? <p>กำลังโหลด...</p> : <StockStatusTable stock={stock ?? []} />}
+        {stockLoading ? <SkeletonRows rows={5} /> : <StockStatusTable stock={stock ?? []} />}
       </div>
 
       {isAdmin && (
@@ -33,7 +34,7 @@ export default function ItemsSection() {
             <button onClick={() => setEditModal({ open: true, item: null })}>+ เพิ่มสินค้าใหม่</button>
           </div>
           {itemsLoading ? (
-            <p>กำลังโหลด...</p>
+            <SkeletonRows rows={5} />
           ) : (
             <ItemsTable
               items={items ?? []}

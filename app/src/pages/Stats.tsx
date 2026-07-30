@@ -5,6 +5,7 @@ import { fc0, fc2, firstOfMonthIso, todayIso } from '../lib/format';
 import BreakdownBars, { type BarDatum } from './stats/BreakdownBars';
 import DailyTrendChart, { type DailyTrendDatum } from './stats/DailyTrendChart';
 import MaterialAnalysisTable from './stats/MaterialAnalysisTable';
+import { SkeletonCards } from '../components/Skeleton';
 
 const SIZE_COLOR = { s: '#0d9488', m: '#0284c7', l: '#7c3aed', xl: '#db2777' };
 const EMP_COLORS = ['#0d9488', '#0284c7', '#7c3aed', '#db2777', '#f59e0b', '#10b981'];
@@ -77,7 +78,7 @@ export default function Stats() {
           </div>
         </div>
         {isLoading ? (
-          <p>กำลังโหลด...</p>
+          <SkeletonCards count={4} />
         ) : (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10 }}>
             <div className="init-stock-fieldset"><legend>รายได้รวม</legend><h3>{fc0(totalIncome)} ฿</h3></div>

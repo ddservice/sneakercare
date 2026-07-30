@@ -4,6 +4,7 @@ import { fc2 } from '../../lib/format';
 import MonthPicker from '../../components/MonthPicker';
 import { IconSearch } from '../../components/Icons';
 import SortableHeader from '../../components/SortableHeader';
+import { SkeletonRows } from '../../components/Skeleton';
 
 const sumCat = (items: { category: string; amount: number }[], cat: string) =>
   items.filter((i) => i.category === cat).reduce((s, i) => s + i.amount, 0);
@@ -69,7 +70,7 @@ export default function OpexHistorySection() {
       </label>
 
       {isLoading ? (
-        <p>กำลังโหลด...</p>
+        <SkeletonRows rows={5} />
       ) : !rows.length ? (
         <p className="empty-row">ยังไม่มีประวัติการแก้ไข</p>
       ) : (

@@ -6,6 +6,7 @@ import { useOverviewPayments } from '../lib/queries/overviewPayments';
 import { computeOverviewTotals } from '../lib/overviewCalc';
 import { fc, firstOfMonthIso, todayIso } from '../lib/format';
 import BreakdownBars, { type BarDatum } from './stats/BreakdownBars';
+import { SkeletonCards } from '../components/Skeleton';
 
 export default function Overview() {
   const [from, setFrom] = useState(firstOfMonthIso());
@@ -46,7 +47,7 @@ export default function Overview() {
           </div>
         </div>
         {isLoading ? (
-          <p>กำลังโหลด...</p>
+          <SkeletonCards count={4} />
         ) : (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 10 }}>
             <div className="init-stock-fieldset">

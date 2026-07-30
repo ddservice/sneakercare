@@ -4,6 +4,7 @@ import { fc, firstOfMonthIso, todayIso } from '../../lib/format';
 import CollectPaymentModal from './CollectPaymentModal';
 import SortableHeader from '../../components/SortableHeader';
 import { IconSearch } from '../../components/Icons';
+import { SkeletonRows } from '../../components/Skeleton';
 
 function statusFor(sale: SaleRow, extraReceived: number) {
   const pStatus = sale.payment_status || 'ชำระครบ';
@@ -71,7 +72,7 @@ export default function SaleHistoryList() {
         </div>
       </div>
       {isLoading ? (
-        <p>กำลังโหลด...</p>
+        <SkeletonRows rows={5} />
       ) : !allRows.length ? (
         <p className="empty-row">ยังไม่มีข้อมูลในช่วงนี้</p>
       ) : (
