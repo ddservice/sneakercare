@@ -76,7 +76,7 @@ function EmployeePanel({
     <div className="init-stock-fieldset">
       <legend>{emp.name} {emp.nickname && `(${emp.nickname})`} — {emp.position}</legend>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10 }}>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <label>
           เงินเดือน (เดือนนี้)
           <input type="number" min={0} value={draft.baseSal} onChange={(e) => onChange({ ...draft, baseSal: +e.target.value })} />
@@ -130,9 +130,13 @@ function EmployeePanel({
         <span className="poc-note"> รวมหัก (ไม่นับ ปกส.): {fc(deductTotal)} ฿</span>
       </div>
 
-      <h3>สุทธิที่ต้องโอน: {fc(net)} ฿ <span className="poc-note">({emp.bank || '-'} {emp.account || '-'})</span></h3>
-      <p className="poc-note">เดือน: {monthKey}</p>
-      <button type="button" onClick={onPrint}>ใบจ่ายเงิน</button>
+      <div className="bg-[var(--surface-alt)] border border-[var(--border)] rounded-lg p-4 flex flex-col sm:flex-row justify-between items-center gap-3 mt-3">
+        <div>
+          <p className="poc-note !m-0">สุทธิที่ต้องโอน ({emp.bank || '-'} {emp.account || '-'}) — เดือน {monthKey}</p>
+          <p className="text-[var(--primary)] text-xl font-bold !m-0">{fc(net)} ฿</p>
+        </div>
+        <button type="button" onClick={onPrint}>ใบจ่ายเงิน</button>
+      </div>
     </div>
   );
 }

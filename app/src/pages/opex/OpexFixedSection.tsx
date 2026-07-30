@@ -3,6 +3,7 @@ import { useAuth } from '../../lib/AuthContext';
 import { type MiscItem, OPEX_ITEMS, useOpexMonth, useSaveOpexFixed } from '../../lib/queries/opex';
 import { currentMonthValue, fc2 } from '../../lib/format';
 import MonthPicker from '../../components/MonthPicker';
+import { IconTrash } from '../../components/Icons';
 
 const toMonthKey = (val: string) => {
   const [y, mm] = val.split('-');
@@ -118,24 +119,53 @@ export default function OpexFixedSection() {
 
           <div className="init-stock-fieldset">
             <legend>ค่าใช้จ่ายจิปาถะอื่นๆ</legend>
-            {miscItems.map((m, i) => (
-              <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 6, fontSize: 13, padding: '4px 0', flexWrap: 'wrap' }}>
-                <span style={{ flex: '1 1 120px' }}>{m.name}</span>
-                <select value={m.method} onChange={(e) => updateMiscMethod(i, e.target.value)} style={{ maxWidth: 170 }}>
-                  <option value="บัญชีร้าน">บัญชีร้าน (เงินโอน)</option>
+
+            {miscItems.length > 0 && (
+              <div className="flex flex-col gap-2 mb-3">
+                {miscItems.map((m, i) => (
+                  <div key={i} className="grid grid-cols-12 gap-3 items-center text-[13px]">
+                    <span className="col-span-5 truncate">{m.name}</span>
+                    <span className="col-span-3 text-right">{fc2(m.amount)} ฿</span>
+                    <select
+                      value={m.method} onChange={(e) => updateMiscMethod(i, e.target.value)}
+                      className="col-span-3"
+                    >
+                      <option value="บัญชีร้าน">บัญชีร้าน (โอน)</option>
+                      <option value="เงินสดร้าน">เงินสดร้าน</option>
+                    </select>
+                    <button
+                      type="button" onClick={() => removeMisc(i)} aria-label="ลบรายการ"
+                      className="col-span-1 !flex !justify-center !items-center !bg-transparent !text-red-500 hover:!text-red-700 !border-0 !shadow-none !p-1"
+                    >
+                      <IconTrash width={16} height={16} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="grid grid-cols-12 gap-3 items-end mt-2">
+              <label className="col-span-12 sm:col-span-5 flex flex-col gap-1.5 !m-0">
+                ชื่อรายการ
+                <input placeholder="เช่น ค่าซ่อมอุปกรณ์" value={miscName} onChange={(e) => setMiscName(e.target.value)} />
+              </label>
+              <label className="col-span-6 sm:col-span-3 flex flex-col gap-1.5 !m-0">
+                จำนวนเงิน
+                <input type="number" placeholder="0" min={0} value={miscAmt} onChange={(e) => setMiscAmt(+e.target.value)} />
+              </label>
+              <label className="col-span-6 sm:col-span-3 flex flex-col gap-1.5 !m-0">
+                ช่องทาง
+                <select value={miscItemMethod} onChange={(e) => setMiscItemMethod(e.target.value)}>
+                  <option value="บัญชีร้าน">บัญชีร้าน (โอน)</option>
                   <option value="เงินสดร้าน">เงินสดร้าน</option>
                 </select>
-                <span>{fc2(m.amount)} ฿ <button type="button" onClick={() => removeMisc(i)}>×</button></span>
-              </div>
-            ))}
-            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 6 }}>
-              <input placeholder="ชื่อรายการ" value={miscName} onChange={(e) => setMiscName(e.target.value)} style={{ flex: '2 1 140px' }} />
-              <input type="number" placeholder="จำนวนเงิน" min={0} value={miscAmt} onChange={(e) => setMiscAmt(+e.target.value)} style={{ flex: '1 1 90px' }} />
-              <select value={miscItemMethod} onChange={(e) => setMiscItemMethod(e.target.value)} style={{ flex: '1 1 140px' }}>
-                <option value="บัญชีร้าน">บัญชีร้าน (เงินโอน)</option>
-                <option value="เงินสดร้าน">เงินสดร้าน</option>
-              </select>
-              <button type="button" onClick={addMisc}>+ เพิ่มรายการ</button>
+              </label>
+              <button
+                type="button" onClick={addMisc}
+                className="col-span-12 sm:col-span-1 !bg-indigo-50 !text-indigo-600 hover:!bg-indigo-100 !border-0 !shadow-none !px-4 !py-2.5"
+              >
+                + เพิ่ม
+              </button>
             </div>
             <p className="poc-note">รวมจิปาถะ: {fc2(miscTotal)} ฿</p>
           </div>

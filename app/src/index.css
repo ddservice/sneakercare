@@ -1,3 +1,14 @@
+@import "tailwindcss";
+
+/* ใช้ Tailwind แบบผสม (hybrid) กับ CSS เดิมของระบบ — CSS ทั้งหมดด้านล่างนี้อยู่นอก @layer จึงมี priority
+ * สูงกว่า @layer utilities ของ Tailwind เสมอตามสเปก Cascade Layers (ไม่ต้องกังวลเรื่อง preflight ของ
+ * Tailwind มาทับสไตล์เดิม) — ใช้ Tailwind utility class ได้อิสระกับ element ใหม่ (div/span) ที่ไม่มี
+ * selector เดิมชนอยู่ ส่วน element ที่มี base style เดิมอยู่แล้ว (button/input) ต้องใช้ Tailwind แบบ
+ * !important-modifier (เช่น !bg-indigo-600) ถ้าต้องการให้ทับสไตล์เดิมจริงๆ */
+@theme {
+  --font-sans: 'Prompt', -apple-system, 'Segoe UI', system-ui, Roboto, 'Helvetica Neue', sans-serif;
+}
+
 :root {
   --primary: #4f46e5;
   --primary-hover: #4338ca;
@@ -123,20 +134,14 @@ h2 { font-size: 17px; font-weight: 600; }
 h3 { font-size: 15px; font-weight: 600; }
 
 button {
+  @apply cursor-pointer rounded-lg px-4 py-2.5 font-medium text-[13.5px] shadow-sm transition-all border;
   font: inherit;
-  cursor: pointer;
-  border: 1px solid var(--primary);
   background: var(--primary);
+  border-color: var(--primary);
   color: white;
-  border-radius: var(--radius-sm);
-  padding: 9px 16px;
-  font-weight: 500;
-  font-size: 13.5px;
-  transition: background 0.15s ease, transform 0.05s ease, box-shadow 0.15s ease;
-  box-shadow: var(--shadow-sm);
 }
 button:hover:not(:disabled) { background: var(--primary-hover); border-color: var(--primary-hover); }
-button:active:not(:disabled) { transform: translateY(1px); }
+button:active:not(:disabled) { transform: scale(0.98); }
 button:disabled { opacity: 0.55; cursor: not-allowed; box-shadow: none; }
 
 /* ปุ่มรอง — ไม่ใช่ primary action (ยกเลิก, action เล็กในตาราง) */
@@ -155,15 +160,21 @@ button:disabled { opacity: 0.55; cursor: not-allowed; box-shadow: none; }
   border-color: var(--border);
 }
 
+/* ปุ่ม "เพิ่ม/สร้างใหม่" — โทนอ่อนกว่าปุ่มหลัก ให้ไม่แย่งความสนใจจากปุ่ม primary ของฟอร์ม */
+.btn-add {
+  background: var(--primary-light);
+  color: var(--primary);
+  border-color: transparent;
+  box-shadow: none;
+}
+.btn-add:hover:not(:disabled) { background: var(--primary-light); filter: brightness(0.96); }
+
 input, textarea, select {
+  @apply rounded-lg px-3 py-2.5 w-full transition-all border;
   font: inherit;
-  border: 1.5px solid var(--border);
-  border-radius: var(--radius-sm);
-  padding: 8px 11px;
-  width: 100%;
+  border-color: var(--border);
   background: var(--surface);
   color: var(--text);
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 input:focus, textarea:focus, select:focus {
   outline: none;
@@ -173,13 +184,8 @@ input:focus, textarea:focus, select:focus {
 textarea { min-height: 64px; resize: vertical; }
 
 label {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-  font-size: 13px;
-  font-weight: 600;
+  @apply flex flex-col gap-1.5 mb-3.5 text-[13px] font-semibold;
   color: var(--muted);
-  margin-bottom: 12px;
 }
 
 /* ── Login ───────────────────────────────── */
@@ -192,13 +198,10 @@ label {
   background: radial-gradient(circle at 20% 20%, var(--primary-light), transparent 55%), var(--bg);
 }
 .login-card {
+  @apply rounded-2xl p-9 w-full shadow-lg border;
   background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  padding: 36px 32px;
-  width: 100%;
+  border-color: var(--border);
   max-width: 340px;
-  box-shadow: var(--shadow-lg);
 }
 .login-card h1 { font-size: 22px; margin: 0 0 24px; text-align: center; }
 .login-error { color: var(--red); font-size: 13px; margin: 0 0 10px; }
@@ -268,7 +271,7 @@ label {
 .app-user-name { color: var(--muted); }
 .app-user button { display: inline-flex; align-items: center; gap: 6px; padding: 7px 12px; }
 
-.role-chip { background: var(--surface-alt); border: 1px solid var(--border); color: var(--muted); padding: 3px 10px; border-radius: 999px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; }
+.role-chip { @apply px-2.5 py-1 rounded-full text-[11px] font-bold uppercase tracking-wide border; background: var(--surface-alt); border-color: var(--border); color: var(--muted); }
 .role-chip.admin { background: var(--amber-bg); color: var(--amber); border-color: transparent; }
 .role-chip.co-admin { background: var(--blue-bg); color: var(--blue); border-color: transparent; }
 
@@ -318,19 +321,12 @@ label {
 
 /* ── Card / table ────────────────────────── */
 .card {
+  @apply rounded-2xl shadow-sm p-5 sm:p-6 border;
   background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  padding: 20px;
-  box-shadow: var(--shadow-sm);
+  border-color: var(--border);
 }
 .card-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 10px;
-  margin-bottom: 12px;
+  @apply flex justify-between items-center flex-wrap gap-2.5 mb-3;
 }
 .poc-note { color: var(--muted); font-size: 12.5px; margin: 8px 0 16px; line-height: 1.6; }
 
@@ -355,7 +351,7 @@ label {
 .row-actions { display: flex; gap: 6px; flex-wrap: wrap; }
 .row-actions button { font-size: 11.5px; padding: 5px 10px; }
 
-.badge { padding: 3px 10px; border-radius: 999px; font-size: 11px; font-weight: 700; display: inline-block; }
+.badge { @apply px-2.5 py-1 rounded-full text-[11px] font-bold inline-block; }
 .badge-green { background: var(--green-bg); color: var(--green); }
 .badge-red { background: var(--red-bg); color: var(--red); }
 .badge-amber { background: var(--amber-bg); color: var(--amber); }
@@ -363,43 +359,32 @@ label {
 
 /* ── Modal ───────────────────────────────── */
 .modal-overlay {
-  position: fixed; inset: 0;
+  @apply fixed inset-0 flex items-center justify-center p-4;
   background: rgba(15, 23, 42, 0.5);
   backdrop-filter: blur(2px);
-  display: flex; align-items: center; justify-content: center;
   z-index: 100;
-  padding: 16px;
 }
 .modal-card {
+  @apply rounded-2xl shadow-lg p-5 sm:p-6 w-full;
   background: var(--surface);
-  border-radius: var(--radius-lg);
-  padding: 22px;
-  width: 100%;
   max-width: 380px;
   max-height: min(90vh, 720px);
   overflow-y: auto;
-  box-shadow: var(--shadow-lg);
 }
 .modal-card h3 { margin: 0 0 16px; font-size: 16px; }
 .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
 .form-error { color: var(--red); font-size: 13px; margin: 0 0 10px; }
 
 .alert-bar {
+  @apply rounded-lg px-3.5 py-2.5 text-[13px] font-semibold mb-3 border border-transparent;
   background: var(--amber-bg);
   color: var(--amber);
-  border: 1px solid transparent;
-  border-radius: var(--radius-sm);
-  padding: 11px 14px;
-  font-size: 13px;
-  font-weight: 600;
-  margin-bottom: 12px;
 }
 
 .init-stock-fieldset {
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
+  @apply rounded-lg px-4 py-3.5 border;
   background: var(--surface-alt);
-  padding: 14px 16px;
+  border-color: var(--border);
   margin: 4px 0 14px;
 }
 .init-stock-fieldset legend { font-size: 12px; font-weight: 700; color: var(--muted); padding: 0 4px; }
