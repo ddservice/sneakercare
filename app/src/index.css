@@ -425,15 +425,29 @@ label {
 .subtab.on { color: var(--primary); border-bottom-color: var(--primary); font-weight: 600; }
 
 /* ── Sortable / filterable table header ──────────────────────────────── */
+/* .sortable-th คือ <button> ที่วางอยู่ใน <th> — ต้องล้างสไตล์ default ของปุ่มหลัก (พื้นม่วง/เงา/ขอบ/บุ๋ม)
+ * ออกให้หมดก่อน ไม่งั้นหัวตารางทั้งแถวจะกลายเป็นปุ่มสีทึบแทนที่จะเป็นตัวหนังสือหัวตารางธรรมดา */
 .sortable-th {
   display: inline-flex;
   align-items: center;
   gap: 4px;
   cursor: pointer;
   user-select: none;
-  color: inherit;
+  background: none;
+  border: none;
+  box-shadow: none;
+  padding: 0;
+  margin: 0;
+  border-radius: 0;
+  font: inherit;
+  font-weight: inherit;
+  text-transform: inherit;
+  letter-spacing: inherit;
+  color: var(--muted);
 }
-.sortable-th:hover { color: var(--text); }
+.sortable-th:hover:not(:disabled) { background: none; color: var(--text); }
+.sortable-th:active:not(:disabled) { transform: none; }
+.sortable-th.active { color: var(--primary); }
 .sortable-th .sort-icon { width: 12px; height: 12px; opacity: 0.35; transition: transform 0.15s ease, opacity 0.15s ease; }
 .sortable-th.active .sort-icon { opacity: 1; }
 .sortable-th.desc .sort-icon { transform: rotate(0deg); }
