@@ -22,6 +22,13 @@ export default function StockOutForm() {
     e.preventDefault();
     if (!item) { setStatus({ text: 'กรุณาเลือกสินค้า', ok: false }); return; }
     if (qty <= 0) { setStatus({ text: 'กรุณากรอกจำนวนให้ถูกต้อง', ok: false }); return; }
+    if (stockRow && qty > stockRow.current_qty) {
+      const ok = window.confirm(
+        `คงเหลือในคลังแค่ ${stockRow.current_qty} ${stockRow.base_unit} แต่กรอกเบิก ${qty} ${stockRow.base_unit} ` +
+        `(เกินยอดคงเหลือ) ต้องการบันทึกต่อหรือไม่?`,
+      );
+      if (!ok) return;
+    }
 
     setStatus({ text: 'กำลังบันทึก...', ok: true });
     try {
@@ -46,7 +53,10 @@ export default function StockOutForm() {
           </select>
         </label>
         {stockRow && (
-          <p className="poc-note">หน่วยเบิก: {stockRow.base_unit} (คงเหลือ {stockRow.current_qty})</p>
+          <p className={qty > stockRow.current_qty ? 'form-error' : 'poc-note'}>
+            หน่วยเบิก: {stockRow.base_unit} (คงเหลือ {stockRow.current_qty})
+            {qty > stockRow.current_qty && ' — เกินยอดคงเหลือ'}
+          </p>
         )}
         <label>
           จำนวน ({item ? item.base_unit : 'หน่วยฐาน'})
