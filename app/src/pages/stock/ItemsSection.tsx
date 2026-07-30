@@ -49,6 +49,7 @@ export default function ItemsSection() {
         <ItemModal
           item={editModal.item}
           suppliers={suppliers ?? []}
+          existingCategories={[...new Set((items ?? []).map((i) => i.category).filter(Boolean))]}
           onClose={() => setEditModal({ open: false, item: null })}
         />
       )}

@@ -3,20 +3,27 @@ import { useAuth } from '../../lib/AuthContext';
 import { type Item, useSaveItem } from '../../lib/queries/items';
 import type { Supplier } from '../../lib/queries/suppliers';
 import { todayIso } from '../../lib/format';
+import { ITEM_CATEGORIES } from '../../lib/itemCategories';
 
 const Req = () => <span style={{ color: 'var(--red)' }}>*</span>;
 
 export default function ItemModal({
   item,
   suppliers,
+  existingCategories,
   onClose,
 }: {
   item: Item | null;
   suppliers: Supplier[];
+  existingCategories: string[];
   onClose: () => void;
 }) {
   const { auth } = useAuth();
   const save = useSaveItem();
+
+  // รวมหมวดหมู่แนะนำกับหมวดหมู่ที่มีอยู่จริงในระบบ (เผื่อมีหมวดหมู่ที่เคยพิมพ์เองไว้ก่อนหน้านี้) ให้เลือกซ้ำได้
+  // ผ่าน datalist — ยังพิมพ์หมวดหมู่ใหม่เองได้เสมอ ไม่ได้บังคับเป็น dropdown ปิด
+  const categoryOptions = [...new Set([...ITEM_CATEGORIES, ...existingCategories])].sort((a, b) => a.localeCompare(b, 'th'));
 
   const [name, setName] = useState(item?.name ?? '');
   const [itemType, setItemType] = useState<Item['item_type']>(item?.item_type ?? 'consumable');
@@ -92,7 +99,10 @@ export default function ItemModal({
             </label>
             <label>
               หมวดหมู่ <Req />
-              <input value={category} onChange={(e) => setCategory(e.target.value)} />
+              <input value={category} onChange={(e) => setCategory(e.target.value)} list="item_category_datalist" placeholder="เลือกหรือพิมพ์หมวดหมู่ใหม่" />
+              <datalist id="item_category_datalist">
+                {categoryOptions.map((c) => <option key={c} value={c} />)}
+              </datalist>
             </label>
           </div>
         </fieldset>
