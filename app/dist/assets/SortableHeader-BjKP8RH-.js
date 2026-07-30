@@ -1,1 +1,0 @@
-import{b as e,r as t}from"./index-IpGFhCd1.js";var n=e();function r({label:e,sortKey:r,active:i,dir:a,onClick:o}){return(0,n.jsx)(`th`,{children:(0,n.jsxs)(`button`,{type:`button`,className:`sortable-th`+(i?` active `+a:``),onClick:()=>o(r),children:[e,(0,n.jsx)(t,{className:`sort-icon`})]})})}export{r as t};
