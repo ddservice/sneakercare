@@ -72,42 +72,43 @@ export default function ItemModal({
     <div className="modal-overlay">
       <form className="modal-card" onSubmit={submit}>
         <h3>{item ? 'แก้ไขสินค้า' : 'เพิ่มสินค้าใหม่'}</h3>
+        <p className="poc-note">ช่องที่มี <span style={{ color: 'var(--red)' }}>*</span> จำเป็นต้องกรอก ช่องอื่นไม่บังคับ</p>
         <label>
-          ชื่อสินค้า
+          ชื่อสินค้า <span style={{ color: 'var(--red)' }}>*</span>
           <input value={name} onChange={(e) => setName(e.target.value)} autoFocus />
         </label>
         <label>
-          ประเภท
+          ประเภท <span style={{ color: 'var(--red)' }}>*</span>
           <select value={itemType} onChange={(e) => setItemType(e.target.value as Item['item_type'])}>
             <option value="consumable">สิ้นเปลือง</option>
             <option value="inventory">คงคลัง</option>
           </select>
         </label>
         <label>
-          หมวดหมู่
+          หมวดหมู่ <span style={{ color: 'var(--red)' }}>*</span>
           <input value={category} onChange={(e) => setCategory(e.target.value)} />
         </label>
         <label>
-          หน่วยฐาน (ใช้ตัดสต๊อก เช่น ml, g, ชิ้น)
+          หน่วยฐาน (ใช้ตัดสต๊อก เช่น ml, g, ชิ้น) <span style={{ color: 'var(--red)' }}>*</span>
           <input value={baseUnit} onChange={(e) => setBaseUnit(e.target.value)} />
         </label>
         <label>
-          หน่วยซื้อ
+          หน่วยซื้อ <span style={{ color: 'var(--red)' }}>*</span>
           <input value={purchaseUnit} onChange={(e) => setPurchaseUnit(e.target.value)} />
         </label>
         <label>
-          1 หน่วยซื้อ = กี่หน่วยฐาน
+          1 หน่วยซื้อ = กี่หน่วยฐาน <span style={{ color: 'var(--red)' }}>*</span>
           <input type="number" min={0.001} step={0.001} value={purchaseUnitQty}
             onChange={(e) => setPurchaseUnitQty(+e.target.value)} />
         </label>
         <label>
-          จุดสั่งซื้อขั้นต่ำ (default)
+          จุดสั่งซื้อขั้นต่ำ <span className="poc-note" style={{ display: 'inline', margin: 0 }}>(ไม่บังคับ — เว้นว่างไว้ = ปิดแจ้งเตือนสต๊อกต่ำสำหรับสินค้านี้)</span>
           <input type="number" min={0} value={minStock} onChange={(e) => setMinStock(+e.target.value)} />
         </label>
 
         {!item && (
           <fieldset className="init-stock-fieldset">
-            <legend>สต๊อกเริ่มต้น (ถ้ามี)</legend>
+            <legend>สต๊อกเริ่มต้น (ไม่บังคับ — ใส่เฉพาะถ้ามีของอยู่แล้วตอนเพิ่มรายการนี้)</legend>
             <label>
               จำนวน (หน่วยซื้อ)
               <input type="number" min={0} value={initQty} onChange={(e) => setInitQty(+e.target.value)} />
