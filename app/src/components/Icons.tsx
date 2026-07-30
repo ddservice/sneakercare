@@ -78,6 +78,86 @@ export function IconSettings(props: IconProps) {
   );
 }
 
+export function IconUsers(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <circle cx="9" cy="8" r="3.2" />
+      <path d="M3.5 20c0-3.5 2.4-6 5.5-6s5.5 2.5 5.5 6" />
+      <circle cx="17.5" cy="9" r="2.4" />
+      <path d="M14.8 20c0-2.6 1.5-4.3 3.6-4.6" />
+    </svg>
+  );
+}
+
+export function IconHome(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M4 11l8-7 8 7" />
+      <path d="M6 10v9a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-9" />
+      <path d="M10 20v-6h4v6" />
+    </svg>
+  );
+}
+
+export function IconHistory(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M3 12a9 9 0 1 0 3-6.7" />
+      <polyline points="3,3 3,8 8,8" />
+      <polyline points="12,7 12,12 16,14" />
+    </svg>
+  );
+}
+
+export function IconArrowDownTray(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M12 3v12" />
+      <polyline points="7,10 12,15 17,10" />
+      <path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" />
+    </svg>
+  );
+}
+
+export function IconArrowUpTray(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M12 21V9" />
+      <polyline points="7,14 12,9 17,14" />
+      <path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" />
+    </svg>
+  );
+}
+
+export function IconEdit(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M12 20h9" />
+      <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
+    </svg>
+  );
+}
+
+export function IconClock(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <circle cx="12" cy="12" r="9" />
+      <polyline points="12,7 12,12 16,14" />
+    </svg>
+  );
+}
+
+export function IconTruck(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <rect x="1" y="7" width="13" height="10" rx="1" />
+      <path d="M14 10h4l3 3v4h-7z" />
+      <circle cx="6" cy="19" r="1.7" />
+      <circle cx="17.5" cy="19" r="1.7" />
+    </svg>
+  );
+}
+
 export function IconTrash(props: IconProps) {
   return (
     <svg {...base} {...props}>
@@ -86,6 +166,24 @@ export function IconTrash(props: IconProps) {
       <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
       <line x1="10" y1="11" x2="10" y2="17" />
       <line x1="14" y1="11" x2="14" y2="17" />
+    </svg>
+  );
+}
+
+export function IconSearch(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <circle cx="11" cy="11" r="7" />
+      <line x1="21" y1="21" x2="16.2" y2="16.2" />
+    </svg>
+  );
+}
+
+/** ลูกศรบอกทิศ sort ของหัวตาราง — หมุนด้วย CSS transform ตอน desc แทนที่จะวาดสองแบบ */
+export function IconChevronDown(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <polyline points="6,9 12,15 18,9" />
     </svg>
   );
 }
