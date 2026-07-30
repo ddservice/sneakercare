@@ -7,13 +7,24 @@ import { fc, todayIso } from '../../lib/format';
 
 interface ExtraLine { name: string; price: number }
 
+type PaymentStatus = 'ชำระครบ' | 'ชำระบางส่วน' | 'ค้างชำระ';
+
+/** สถานะการชำระคำนวณจาก "จำนวนเงินที่รับจริง" เทียบกับยอดรวมเสมอ — ไม่ให้ผู้ใช้เลือกเองแยกต่างหาก
+ *  เพื่อไม่ให้ข้อมูลสองจุดขัดแย้งกัน (เคยเกิดปัญหานี้ตอนที่ยอดโอน+สดรวมกันได้เต็มราคา แต่สถานะบอกว่า
+ *  "ชำระบางส่วน" เพราะกรอกแยกกันคนละจุด) */
+export function paymentStatusFor(received: number, total: number): PaymentStatus {
+  // เช็ค >= total ก่อนเสมอ เพราะฟอร์มว่าง (received=0, total=0) ต้องนับเป็น "ชำระครบ" ไม่ใช่ "ค้างชำระ"
+  if (received >= total) return 'ชำระครบ';
+  if (received <= 0) return 'ค้างชำระ';
+  return 'ชำระบางส่วน';
+}
+
 interface SaleDraft {
   qty: { s: number; m: number; l: number; xl: number };
   disc: { s: number; m: number; l: number; xl: number };
   extraLines: ExtraLine[];
   transferAmount: number;
   cashAmount: number;
-  paymentStatus: 'ชำระครบ' | 'ชำระบางส่วน' | 'ค้างชำระ';
   receivedAmount: number;
 }
 
@@ -39,8 +50,10 @@ export default function SaleEntryForm() {
 
   const [transferAmount, setTransferAmount] = useState(0);
   const [cashAmount, setCashAmount] = useState(0);
-  const [paymentStatus, setPaymentStatus] = useState<'ชำระครบ' | 'ชำระบางส่วน' | 'ค้างชำระ'>('ชำระครบ');
   const [receivedAmount, setReceivedAmount] = useState(0);
+  // ยังไม่มีใครแก้ "จำนวนเงินที่รับ" มือ → ให้ตามยอดรวมอัตโนมัติเสมอ (กรณีจ่ายครบตามปกติ ซึ่งเป็นส่วนใหญ่
+  // ไม่ต้องพิมพ์อะไรเพิ่ม) พอแก้เองครั้งแรกจะหยุดตามอัตโนมัติ ปล่อยให้เป็นค่าที่ผู้ใช้ตั้งใจกรอกไว้
+  const receivedTouchedRef = useRef(false);
 
   const [status, setStatus] = useState<{ text: string; ok: boolean } | null>(null);
 
@@ -60,7 +73,8 @@ export default function SaleEntryForm() {
       skipNextSaveRef.current = true;
       setQty(d.qty); setDisc(d.disc); setExtraLines(d.extraLines);
       setTransferAmount(d.transferAmount); setCashAmount(d.cashAmount);
-      setPaymentStatus(d.paymentStatus); setReceivedAmount(d.receivedAmount);
+      setReceivedAmount(d.receivedAmount);
+      receivedTouchedRef.current = true;
       setStatus({ text: `กู้คืนข้อมูลที่กรอกค้างไว้ของวันที่ ${date} แล้ว`, ok: true });
       setTimeout(() => setStatus(null), 4000);
     } catch {
@@ -70,11 +84,11 @@ export default function SaleEntryForm() {
 
   useEffect(() => {
     if (skipNextSaveRef.current) { skipNextSaveRef.current = false; return; }
-    const draft: SaleDraft = { qty, disc, extraLines, transferAmount, cashAmount, paymentStatus, receivedAmount };
+    const draft: SaleDraft = { qty, disc, extraLines, transferAmount, cashAmount, receivedAmount };
     if (isEmptyDraft(draft)) { localStorage.removeItem(draftKey(date)); return; }
     localStorage.setItem(draftKey(date), JSON.stringify(draft));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [date, qty, disc, extraLines, transferAmount, cashAmount, paymentStatus, receivedAmount]);
+  }, [date, qty, disc, extraLines, transferAmount, cashAmount, receivedAmount]);
 
   const extraTotal = extraLines.reduce((s, l) => s + l.price, 0);
   const netBySize = {
@@ -86,14 +100,32 @@ export default function SaleEntryForm() {
   const grossAmount = qty.s * DEFAULT_PRICE.s + qty.m * DEFAULT_PRICE.m + qty.l * DEFAULT_PRICE.l + qty.xl * DEFAULT_PRICE.xl + extraTotal;
   const sizeDiscountTotal = disc.s + disc.m + disc.l + disc.xl;
   const totalAmount = netBySize.s + netBySize.m + netBySize.l + netBySize.xl + extraTotal;
+  const paymentStatus = paymentStatusFor(receivedAmount, totalAmount);
+  const outstanding = Math.max(totalAmount - receivedAmount, 0);
 
+  // ยังไม่มีใครแตะ "จำนวนเงินที่รับ" มือ → ตามยอดรวมที่คำนวณจากจำนวนรองเท้า/บริการอื่นๆ เสมอ
+  useEffect(() => {
+    if (receivedTouchedRef.current) return;
+    setReceivedAmount(totalAmount);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [totalAmount]);
+
+  const onReceivedChange = (val: number) => {
+    receivedTouchedRef.current = true;
+    setReceivedAmount(val);
+    setTransferAmount((t) => {
+      const nextTransfer = Math.min(t, val);
+      setCashAmount(Math.max(val - nextTransfer, 0));
+      return nextTransfer;
+    });
+  };
   const onTransferChange = (val: number) => {
     setTransferAmount(val);
-    setCashAmount(Math.max(totalAmount - val, 0));
+    setCashAmount(Math.max(receivedAmount - val, 0));
   };
   const onCashChange = (val: number) => {
     setCashAmount(val);
-    setTransferAmount(Math.max(totalAmount - val, 0));
+    setTransferAmount(Math.max(receivedAmount - val, 0));
   };
 
   const addExtraLine = () => {
@@ -123,7 +155,6 @@ export default function SaleEntryForm() {
       const ok = window.confirm(`พบข้อมูลยอดขายของวันที่ ${date} อยู่ในระบบแล้ว คุณต้องการยืนยันการบันทึกแก้ไขเปลี่ยนแปลงข้อมูลหรือไม่?`);
       if (!ok) return;
     }
-    const received = paymentStatus === 'ชำระครบ' ? totalAmount : receivedAmount;
     setStatus({ text: 'กำลังบันทึกข้อมูล...', ok: true });
     try {
       await save.mutateAsync({
@@ -131,7 +162,7 @@ export default function SaleEntryForm() {
         extraItems: extraLines.length ? JSON.stringify(extraLines) : '',
         sizeS: qty.s, sizeM: qty.m, sizeL: qty.l, sizeXl: qty.xl,
         grossAmount, discount: sizeDiscountTotal, totalAmount,
-        transferAmount, cashAmount, paymentStatus, receivedAmount: received,
+        transferAmount, cashAmount, paymentStatus, receivedAmount,
         recordedBy: auth?.displayName || auth?.username || 'Staff',
       });
       localStorage.removeItem(draftKey(date));
@@ -139,7 +170,8 @@ export default function SaleEntryForm() {
       setQty({ s: 0, m: 0, l: 0, xl: 0 });
       setDisc({ s: 0, m: 0, l: 0, xl: 0 });
       setExtraLines([]);
-      setTransferAmount(0); setCashAmount(0); setPaymentStatus('ชำระครบ'); setReceivedAmount(0);
+      setTransferAmount(0); setCashAmount(0); setReceivedAmount(0);
+      receivedTouchedRef.current = false;
       setTimeout(() => setStatus(null), 3000);
     } catch (err) {
       setStatus({ text: 'ข้อผิดพลาด: ' + (err instanceof Error ? err.message : 'บันทึกไม่สำเร็จ'), ok: false });
@@ -195,6 +227,11 @@ export default function SaleEntryForm() {
       <h3>ยอดรวมสุทธิ: {fc(totalAmount)} ฿</h3>
 
       <label>
+        จำนวนเงินที่รับวันนี้ (บาท)
+        <input type="number" min={0} value={receivedAmount} onChange={(e) => onReceivedChange(+e.target.value)} />
+        <span className="poc-note">ค่าเริ่มต้น = ยอดรวมสุทธิ ({fc(totalAmount)} ฿) — แก้ลงได้ถ้าลูกค้าจ่ายไม่ครบ</span>
+      </label>
+      <label>
         รับเงินโอน (บาท)
         <input type="number" min={0} value={transferAmount} onChange={(e) => onTransferChange(+e.target.value)} />
       </label>
@@ -203,20 +240,10 @@ export default function SaleEntryForm() {
         <input type="number" min={0} value={cashAmount} onChange={(e) => onCashChange(+e.target.value)} />
       </label>
 
-      <label>
-        สถานะการชำระ
-        <select value={paymentStatus} onChange={(e) => setPaymentStatus(e.target.value as typeof paymentStatus)}>
-          <option value="ชำระครบ">ชำระครบ</option>
-          <option value="ชำระบางส่วน">ชำระบางส่วน</option>
-          <option value="ค้างชำระ">ค้างชำระ</option>
-        </select>
-      </label>
-      {paymentStatus !== 'ชำระครบ' && (
-        <label>
-          รับแล้วจริง (บาท)
-          <input type="number" min={0} value={receivedAmount} onChange={(e) => setReceivedAmount(+e.target.value)} />
-        </label>
-      )}
+      <p className="poc-note">
+        สถานะ: <strong>{paymentStatus}</strong>
+        {outstanding > 0 && ` — ค้างชำระ ${fc(outstanding)} ฿ (รับตอนมารับของ)`}
+      </p>
 
       {status && <p className={status.ok ? 'poc-note' : 'form-error'}>{status.text}</p>}
       <button type="button" onClick={submit} disabled={save.isPending}>
