@@ -26,6 +26,7 @@ export interface ItemStock {
   current_qty: number;
   avg_unit_cost: number;
   min_stock_level: number;
+  alert_muted: boolean;
 }
 
 export interface ItemInput {
@@ -101,6 +102,7 @@ export function useItemStock() {
             current_qty: Number(s?.current_qty || 0),
             avg_unit_cost: Number(s?.avg_unit_cost || 0),
             min_stock_level: Number(s?.min_stock_level ?? i.default_min_stock_level ?? 0),
+            alert_muted: s?.alert_muted ?? false,
           };
         });
     },
@@ -195,6 +197,22 @@ export function useUpdateMinStock() {
         p_item_id: itemId,
         p_branch_id: branchId,
         p_new_min: newMin,
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: STOCK_KEY(branchId) }),
+  });
+}
+
+export function useSetAlertMuted() {
+  const qc = useQueryClient();
+  const branchId = useBranchId();
+  return useMutation({
+    mutationFn: async ({ itemId, muted }: { itemId: string; muted: boolean }) => {
+      const { error } = await supabase.rpc('inv_fn_set_alert_muted', {
+        p_item_id: itemId,
+        p_branch_id: branchId,
+        p_muted: muted,
       });
       if (error) throw error;
     },

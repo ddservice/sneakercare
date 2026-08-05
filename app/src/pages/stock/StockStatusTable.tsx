@@ -1,9 +1,10 @@
 import { useMemo, useState } from 'react';
 import { canManageStock } from '../../lib/types';
 import { useAuth } from '../../lib/AuthContext';
-import { type ItemStock, useUpdateMinStock } from '../../lib/queries/items';
+import { type ItemStock, useSetAlertMuted, useUpdateMinStock } from '../../lib/queries/items';
 
 function statusBadge(s: ItemStock) {
+  if (s.alert_muted && s.current_qty <= s.min_stock_level) return <span className="badge badge-gray">ปิดแจ้งเตือน</span>;
   if (s.current_qty === 0) return <span className="badge badge-red">สินค้าหมด</span>;
   if (s.current_qty <= s.min_stock_level) return <span className="badge badge-amber">ใกล้หมดสต๊อก</span>;
   return <span className="badge badge-green">ปกติ</span>;
@@ -24,13 +25,28 @@ function MinStockInput({ s, canSeeCost, onSave }: { s: ItemStock; canSeeCost: bo
   );
 }
 
+function MuteAlertButton({ s, canSeeCost, onToggle }: { s: ItemStock; canSeeCost: boolean; onToggle: (nextMuted: boolean) => void }) {
+  if (!canSeeCost) return null;
+  return (
+    <button
+      type="button"
+      className={'ghost-btn-sm' + (s.alert_muted ? ' on' : '')}
+      onClick={() => onToggle(!s.alert_muted)}
+      title={s.alert_muted ? 'เปิดแจ้งเตือนสต๊อกต่ำสำหรับสินค้านี้อีกครั้ง' : 'ปิดแจ้งเตือนสต๊อกต่ำสำหรับสินค้านี้ (จะไม่ส่ง Telegram/ขึ้นแจ้งเตือนอีก จนกว่าจะเปิดใหม่)'}
+    >
+      {s.alert_muted ? 'เปิดแจ้งเตือน' : 'ไม่ต้องแจ้งเตือน'}
+    </button>
+  );
+}
+
 export default function StockStatusTable({ stock }: { stock: ItemStock[] }) {
   const { auth } = useAuth();
   const canSeeCost = canManageStock(auth?.role);
   const updateMin = useUpdateMinStock();
+  const setAlertMuted = useSetAlertMuted();
   const [search, setSearch] = useState('');
 
-  const lowStock = stock.filter((s) => s.current_qty <= s.min_stock_level);
+  const lowStock = stock.filter((s) => s.current_qty <= s.min_stock_level && !s.alert_muted);
   const rows = stock.filter(
     (s) => !search || s.name.toLowerCase().includes(search.toLowerCase()) || s.category.toLowerCase().includes(search.toLowerCase()),
   );
@@ -77,6 +93,7 @@ export default function StockStatusTable({ stock }: { stock: ItemStock[] }) {
                   {canSeeCost && <th>ต้นทุนเฉลี่ย</th>}
                   <th>จุดสั่งซื้อขั้นต่ำ</th>
                   <th>สถานะ</th>
+                  {canSeeCost && <th>แจ้งเตือน</th>}
                 </tr>
               </thead>
               <tbody>
@@ -93,6 +110,11 @@ export default function StockStatusTable({ stock }: { stock: ItemStock[] }) {
                     {canSeeCost && <td>{s.avg_unit_cost.toLocaleString('th-TH', { minimumFractionDigits: 2 })} ฿</td>}
                     <td><MinStockInput s={s} canSeeCost={canSeeCost} onSave={(val) => updateMin.mutate({ itemId: s.item_id, newMin: val })} /></td>
                     <td>{statusBadge(s)}</td>
+                    {canSeeCost && (
+                      <td>
+                        <MuteAlertButton s={s} canSeeCost={canSeeCost} onToggle={(muted) => setAlertMuted.mutate({ itemId: s.item_id, muted })} />
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>
@@ -121,6 +143,11 @@ export default function StockStatusTable({ stock }: { stock: ItemStock[] }) {
                         {canSeeCost && (
                           <div className="flex items-center gap-1.5 mt-1.5 text-xs" style={{ color: 'var(--muted)' }}>
                             ขั้นต่ำ: <MinStockInput s={s} canSeeCost={canSeeCost} onSave={(val) => updateMin.mutate({ itemId: s.item_id, newMin: val })} />
+                          </div>
+                        )}
+                        {canSeeCost && (
+                          <div className="mt-1.5">
+                            <MuteAlertButton s={s} canSeeCost={canSeeCost} onToggle={(muted) => setAlertMuted.mutate({ itemId: s.item_id, muted })} />
                           </div>
                         )}
                       </div>

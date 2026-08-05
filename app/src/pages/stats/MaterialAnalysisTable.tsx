@@ -21,8 +21,9 @@ export default function MaterialAnalysisTable() {
 
   if (isLoading) return <p>กำลังโหลด...</p>;
 
+  // สินค้าที่ปิดแจ้งเตือนไว้ (ปุ่ม "ไม่ต้องแจ้งเตือน" ในหน้าสต๊อก) ไม่ต้องนับเป็นเร่งด่วน แม้คงเหลือจะต่ำจริง
   const rows = (stock ?? [])
-    .map((s) => ({ ...s, urgency: urgencyOf(s.current_qty, s.min_stock_level) }))
+    .map((s) => ({ ...s, urgency: s.alert_muted ? 3 : urgencyOf(s.current_qty, s.min_stock_level) }))
     .sort((a, b) => a.urgency - b.urgency);
   const needReorder = rows.filter((r) => r.urgency < 3).length;
 
@@ -47,8 +48,14 @@ export default function MaterialAnalysisTable() {
               <td>{r.category}</td>
               <td>{r.current_qty} {r.base_unit}</td>
               <td>{r.min_stock_level} {r.base_unit}</td>
-              <td><span className={'badge ' + BADGE[r.urgency].cls}>{LABEL[r.urgency]}</span></td>
-              <td className="poc-note">{BADGE[r.urgency].rec}</td>
+              <td>
+                {r.alert_muted && urgencyOf(r.current_qty, r.min_stock_level) < 3 ? (
+                  <span className="badge badge-gray">ปิดแจ้งเตือน</span>
+                ) : (
+                  <span className={'badge ' + BADGE[r.urgency].cls}>{LABEL[r.urgency]}</span>
+                )}
+              </td>
+              <td className="poc-note">{r.alert_muted ? '—' : BADGE[r.urgency].rec}</td>
             </tr>
           ))}
         </tbody>

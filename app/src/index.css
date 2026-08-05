@@ -387,6 +387,7 @@ label {
 .badge-red { background: var(--red-bg); color: var(--red); }
 .badge-amber { background: var(--amber-bg); color: var(--amber); }
 .badge-blue { background: var(--blue-bg); color: var(--blue); }
+.badge-gray { background: var(--surface-alt); color: var(--muted); }
 
 /* ── Skeleton loading placeholder ─────────────────────────────────────── */
 .skeleton {
@@ -508,6 +509,27 @@ label {
 .sortable-th.active .sort-icon { opacity: 1; }
 .sortable-th.desc .sort-icon { transform: rotate(0deg); }
 .sortable-th.asc .sort-icon { transform: rotate(180deg); }
+
+/* ── ปุ่มเล็กแบบขอบบาง (เช่น ปุ่ม "ไม่ต้องแจ้งเตือน" ในตารางสต๊อก) ── */
+/* ล้างสไตล์ default ของ <button> ออกเหมือน .sortable-th ด้านบน เพื่อไม่ให้กลายเป็นปุ่มสีทึบเต็มขนาด */
+.ghost-btn-sm {
+  display: inline-block;
+  background: none;
+  border: 1px solid var(--border);
+  box-shadow: none;
+  padding: 2px 8px;
+  margin: 0;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: none;
+  letter-spacing: normal;
+  color: var(--muted);
+  cursor: pointer;
+}
+.ghost-btn-sm:hover:not(:disabled) { background: none; color: var(--text); border-color: var(--muted); }
+.ghost-btn-sm:active:not(:disabled) { transform: none; }
+.ghost-btn-sm.on { color: var(--primary); border-color: var(--primary); }
 
 .table-filter {
   position: relative;
