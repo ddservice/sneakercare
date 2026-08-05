@@ -1,1 +1,0 @@
-import{i as e,w as t}from"./index-Bw2oawC6.js";var n=t();function r({label:t,sortKey:r,active:i,dir:a,onClick:o}){return(0,n.jsx)(`th`,{children:(0,n.jsxs)(`button`,{type:`button`,className:`sortable-th`+(i?` active `+a:``),onClick:()=>o(r),children:[t,(0,n.jsx)(e,{className:`sort-icon`})]})})}export{r as t};
