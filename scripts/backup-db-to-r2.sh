@@ -1,0 +1,92 @@
+#!/usr/bin/env bash
+# สำรองข้อมูล Postgres ของ Supabase project นี้ (shoe-care-inventory) แบบ logical dump ทุกวัน
+# แล้วอัปโหลดไป Cloudflare R2 เป็น off-site disaster recovery
+#
+# ทำไมต้องมีสคริปต์นี้: project อยู่บน Supabase Free plan ซึ่ง "ไม่มี" automated backup/PITR ให้เลย
+# (ฟีเจอร์นี้เริ่มที่ Pro plan ขึ้นไป) ถ้าไม่มีอะไรสำรองแยกไว้เอง ข้อมูลทั้งหมดจะไม่มีการกู้คืนใดๆ เลย
+# ถ้าเกิดปัญหาที่ฝั่ง Supabase หรือมีคนลบข้อมูลผิดพลาด
+#
+# รันบน VPS (เครื่องเดียวกับที่รัน PM2/Nginx ของแอปนี้) ผ่าน cron ไม่ใช่ Supabase pg_cron เพราะต้องมี
+# process ภายนอกที่ pg_dump ได้จริงและอัปโหลดไฟล์ไปที่อื่นได้ — pg_cron รันแค่ SQL ในตัว DB เอง ทำแบบนี้ไม่ได้
+#
+# ── ติดตั้งครั้งแรก (ทำเองบน VPS ผมเข้าไม่ถึงเครื่องนี้) ──────────────────────────
+#   1. ติดตั้ง postgresql-client ให้ major version ตรงกับ Postgres ของ Supabase (ปัจจุบัน 17):
+#        sudo apt install postgresql-client-17
+#      เช็ค `SHOW server_version;` ที่ SQL Editor ของ dashboard project shoe-care-inventory ถ้าเปลี่ยนเวอร์ชัน
+#   2. ติดตั้ง AWS CLI (ใช้ยิง R2 เพราะ R2 คุย S3 API ได้): sudo apt install awscli
+#   3. สร้างไฟล์ /etc/rrs-backup.env (chmod 600, เจ้าของเป็น user ที่รัน cron เท่านั้น) ใส่:
+#        SUPABASE_DB_URL=postgresql://postgres:<password>@<host>:5432/postgres   # ดูข้อ 4
+#        R2_ACCOUNT_ID=xxxxxxxx
+#        R2_ACCESS_KEY_ID=xxxxxxxx
+#        R2_SECRET_ACCESS_KEY=xxxxxxxx
+#        R2_BUCKET=rrs-db-backups
+#        TELEGRAM_BOT_TOKEN=xxxxxxxx        # ใช้ bot เดิมกับที่แจ้งเตือนสต๊อกต่ำก็ได้ (คนละ chat_id)
+#        TELEGRAM_OPS_CHAT_ID=xxxxxxxx      # แชทที่ Admin/ผู้ดูแลระบบเห็น ไม่ใช่กลุ่มพนักงานหน้าร้าน
+#        BACKUP_RETENTION_DAYS=14
+#        LOCAL_BACKUP_DIR=/var/backups/rrs   # ไม่บังคับ ค่า default เป็นค่านี้อยู่แล้ว ห้ามชี้เข้าโฟลเดอร์โปรเจกต์
+#   4. เอา connection string จาก Supabase dashboard → Project Settings → Database → Connection string
+#      → เลือกแบบ "Session" หรือ direct connection (ไม่ใช่ Transaction pooler พอร์ต 6543) เพราะ pg_dump
+#      ต้องการ session ที่คงที่ตลอดการ dump — transaction-mode pooler ตัด session กลางคันได้ ทำให้ dump เพี้ยน
+#   5. สร้าง R2 bucket ในหน้า Cloudflare dashboard เอง (ผมสร้างให้ไม่ได้ ไม่มีสิทธิ์เข้าบัญชี Cloudflare)
+#      แนะนำตั้ง lifecycle rule ในบักเก็ตให้ลบไฟล์เก่ากว่า 30-90 วันอัตโนมัติ กัน bucket โตไม่หยุด
+#   6. ทดสอบรันมือก่อนตั้ง cron: chmod +x scripts/backup-db-to-r2.sh && bash scripts/backup-db-to-r2.sh
+#   7. เพิ่ม cron (crontab -e) รันตี 3 ทุกวัน:
+#        0 3 * * * /usr/bin/env bash -c 'set -a; source /etc/rrs-backup.env; set +a; /path/to/RRS/scripts/backup-db-to-r2.sh' >> /var/log/rrs-backup.log 2>&1
+#
+# ── การกู้คืน (ทดสอบเป็นระยะ อย่าเก็บไว้เฉยๆ โดยไม่เคยลองกู้) ───────────────────────
+#   pg_restore --clean --if-exists --no-owner -d "$SUPABASE_DB_URL" backup-YYYYmmdd_HHMMSS.dump
+#   แนะนำทดสอบกู้ใส่ project Supabase ใหม่ที่แยกต่างหาก อย่ากู้ทับ project จริงตอนทดสอบ
+
+set -euo pipefail
+
+: "${SUPABASE_DB_URL:?ต้องตั้งค่า SUPABASE_DB_URL}"
+: "${R2_ACCOUNT_ID:?ต้องตั้งค่า R2_ACCOUNT_ID}"
+: "${R2_ACCESS_KEY_ID:?ต้องตั้งค่า R2_ACCESS_KEY_ID}"
+: "${R2_SECRET_ACCESS_KEY:?ต้องตั้งค่า R2_SECRET_ACCESS_KEY}"
+: "${R2_BUCKET:?ต้องตั้งค่า R2_BUCKET}"
+
+RETENTION_DAYS="${BACKUP_RETENTION_DAYS:-14}"
+STAMP="$(date -u +%Y%m%d_%H%M%S)"
+WORKDIR="$(mktemp -d)"
+DUMP_FILE="${WORKDIR}/rrs-backup-${STAMP}.dump"
+R2_ENDPOINT="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
+
+cleanup() {
+  rm -rf "$WORKDIR"
+}
+trap cleanup EXIT
+
+notify_failure() {
+  local message="$1"
+  if [[ -n "${TELEGRAM_BOT_TOKEN:-}" && -n "${TELEGRAM_OPS_CHAT_ID:-}" ]]; then
+    curl -fsS -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+      -d "chat_id=${TELEGRAM_OPS_CHAT_ID}" \
+      -d "text=⚠️ RRS DB backup ล้มเหลว (${STAMP} UTC): ${message}" \
+      >/dev/null || true
+  fi
+}
+trap 'notify_failure "ดูรายละเอียดที่ /var/log/rrs-backup.log บน VPS"' ERR
+
+echo "[$(date -u +%FT%TZ)] เริ่ม pg_dump -> ${DUMP_FILE}"
+pg_dump --format=custom --no-owner --no-privileges --file="$DUMP_FILE" "$SUPABASE_DB_URL"
+
+DUMP_SIZE="$(du -h "$DUMP_FILE" | cut -f1)"
+echo "[$(date -u +%FT%TZ)] pg_dump เสร็จ ขนาดไฟล์ ${DUMP_SIZE}"
+
+echo "[$(date -u +%FT%TZ)] อัปโหลดไป R2 bucket ${R2_BUCKET}"
+AWS_ACCESS_KEY_ID="$R2_ACCESS_KEY_ID" \
+AWS_SECRET_ACCESS_KEY="$R2_SECRET_ACCESS_KEY" \
+aws s3 cp "$DUMP_FILE" "s3://${R2_BUCKET}/daily/rrs-backup-${STAMP}.dump" \
+  --endpoint-url "$R2_ENDPOINT" \
+  --only-show-errors
+
+echo "[$(date -u +%FT%TZ)] อัปโหลดสำเร็จ"
+
+# เก็บสำเนาล่าสุดไว้บน VPS ด้วย (กู้เร็วกว่าดาวน์โหลดจาก R2) แยกไว้นอก working tree ของ repo โดยตั้งใจ
+# (ห้ามเก็บในโฟลเดอร์โปรเจกต์ จะได้ไม่เสี่ยงหลุดเข้า git โดยไม่ตั้งใจ) ลบไฟล์เก่ากว่า RETENTION_DAYS วันทิ้ง
+LOCAL_BACKUP_DIR="${LOCAL_BACKUP_DIR:-/var/backups/rrs}"
+mkdir -p "$LOCAL_BACKUP_DIR"
+cp "$DUMP_FILE" "${LOCAL_BACKUP_DIR}/rrs-backup-${STAMP}.dump"
+find "$LOCAL_BACKUP_DIR" -name 'rrs-backup-*.dump' -mtime "+${RETENTION_DAYS}" -delete
+
+echo "[$(date -u +%FT%TZ)] เสร็จสมบูรณ์"

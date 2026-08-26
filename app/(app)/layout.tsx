@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { requireProfile } from "@/lib/auth";
-import { createClient } from "@/lib/supabase/server";
-import { getSelectedBranchId } from "@/lib/branch";
+import { getSelectedBranchId, getActiveBranches } from "@/lib/branch";
 import { navItemsFor, ROLE_LABEL } from "@/lib/permissions";
 import { Button } from "@/components/ui/button";
 import { logout } from "@/app/actions/auth";
@@ -10,15 +9,10 @@ import { BranchPicker } from "@/components/branch-picker";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const profile = await requireProfile();
-  const supabase = await createClient();
   const selectedBranchId = await getSelectedBranchId(profile);
 
   let branchName = "ทุกสาขา";
-  const { data: branches } = await supabase
-    .from("branches")
-    .select("id, name")
-    .eq("is_active", true)
-    .order("name");
+  const branches = await getActiveBranches();
 
   if (selectedBranchId) {
     branchName = branches?.find((branch) => branch.id === selectedBranchId)?.name ?? branchName;

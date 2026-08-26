@@ -1,5 +1,6 @@
 import { requireProfile, requireAdmin } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import { getActiveBranches } from "@/lib/branch";
 import { ROLE_LABEL } from "@/lib/permissions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -11,12 +12,12 @@ export default async function AdminUsersPage() {
   requireAdmin(profile);
 
   const supabase = await createClient();
-  const [{ data: users }, { data: branches }] = await Promise.all([
+  const [{ data: users }, branches] = await Promise.all([
     supabase
       .from("profiles")
       .select("id, username, display_name, role, branch_id, is_active")
       .order("display_name"),
-    supabase.from("branches").select("id, name").eq("is_active", true).order("name"),
+    getActiveBranches(),
   ]);
 
   const branchName = new Map((branches ?? []).map((branch) => [branch.id, branch.name]));

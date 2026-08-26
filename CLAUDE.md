@@ -114,6 +114,12 @@ CLAUDE.md                 คู่มือนี้ — อัปเดตท�
 - `npm start` — production server ฟังที่ `127.0.0.1` (ให้อยู่หลัง Nginx บน VPS)
 - `supabase db push` — apply migrations ไปยัง Supabase project (ต้อง `supabase link` ก่อน)
 - `supabase db diff` — ตรวจสอบ schema drift ก่อน commit migration ใหม่
+- `supabase test db` — รัน pgTAP test ใน `supabase/tests/database/` (ต้องมี Docker Desktop เปิดอยู่ในเครื่อง
+  — CLI จะสร้าง local Postgres ชั่วคราวมารัน migration ทั้งหมดแล้วรัน test) ครอบคลุมต้นทุนถัวเฉลี่ยเคลื่อนที่,
+  `fn_approve_adjustment` (role check + กันอนุมัติซ้ำ + กัน silent no-op ตอนไม่มี item_stock), และ
+  staff-safe cost views คืน 0 แถวจริง
+- `bash scripts/backup-db-to-r2.sh` — สำรอง DB แบบ `pg_dump` แล้วอัปโหลดไป Cloudflare R2 (อ่านรายละเอียด/
+  ตัวแปร env ที่ต้องตั้งในคอมเมนต์บนสุดของไฟล์) รันบน VPS ผ่าน cron ทุกวัน ไม่ใช่ผ่าน Supabase
 - `npm run migrate:legacy -- --branch-id <uuid> --performed-by <admin-uuid> --stock ./import/SC_Stock_Status.csv --dry-run`
   — นำเข้า CSV จาก Google Sheets (ดูหัวข้อใน `scripts/migrate-from-legacy.mjs`) ห้าม copy รหัสผ่านจากระบบเดิม
   วางไฟล์ CSV ไว้ที่ `/import` (gitignored) อย่า commit ข้อมูลร้าน
@@ -137,6 +143,22 @@ of root directory`) เพราะเทียบ UNC path กับ drive-lett
 - **สิทธิ์ 3 ระดับ (admin / co_admin / staff) เพียงพอ** ไม่ทำเมทริกซ์ปรับสิทธิ์สดจากหน้าเว็บ
   เพราะจะชนกับ RLS — แผนที่สิทธิ์อยู่ที่ `lib/permissions.ts` และโชว์ใน Settings เป็นปุ่มอ่านอย่างเดียว
   แยก **มองเห็น** กับ **กรอก/แก้ไข** แล้ว (สินค้า: ทุกคนดูได้ แก้ได้เฉพาะ Admin)
+- **ไม่เปิด Supavisor transaction pooler / ไม่ต่อ Postgres ตรงจากแอป** — แอปทั้งหมดคุยกับ Supabase ผ่าน
+  `@supabase/supabase-js` (PostgREST เหนือ HTTPS) ไม่มี connection string (`pg`/`postgres`/ORM ตรง) อยู่ใน
+  โค้ดแอปเลยสักจุด (`low-stock-alert` เองก็ใช้ supabase-js เหมือนกัน) การเปิด pooler mode ที่ dashboard จึง
+  ไม่ช่วยลด connection overhead ของแอปนี้ตามที่มักเข้าใจกัน — ปรับ mode ได้เฉพาะตอนมีอะไรต่อ Postgres ตรง
+  (เช่น `pg_dump` ใน `scripts/backup-db-to-r2.sh` ซึ่งต้องใช้ **Session/direct connection เท่านั้น** ห้ามใช้
+  transaction-mode pooler เพราะ `pg_dump` ต้องการ session คงที่ตลอดการ dump)
+- **ไม่ทำ cross-request in-memory cache แบบ custom (`unstable_cache`/Map เอง) สำหรับ query ที่ผ่าน
+  Supabase client ปกติ** เพราะทุก query วิ่งผ่าน RLS ที่ผูกกับ session ของผู้ใช้ (`fn_current_role()`/
+  `fn_current_branch()` อ่านจาก `auth.uid()`) — client ที่ใช้ (`lib/supabase/server.ts`) ต้องเรียก `cookies()`
+  เสมอ ซึ่ง `unstable_cache` ของ Next.js ห้ามเรียก `cookies()`/`headers()` ข้างในอยู่แล้ว แคชข้ามผู้ใช้แบบนี้
+  เสี่ยงข้อมูลรั่วข้าม role/สาขาโดยไม่ตั้งใจด้วย ที่ทำได้และปลอดภัยคือ React `cache()` ระดับ "ต่อ request เดียว"
+  (`requireProfile` ใน `lib/auth.ts`, `getActiveBranches` ใน `lib/branch.ts`) ซึ่งไม่มีความเสี่ยงข้อมูลเก่าข้าม
+  request เลย เพราะ cache reset ทุกครั้งที่มี request ใหม่
+- **สำรองข้อมูลนอก Supabase ไปที่ Cloudflare R2 ทุกวัน** (ตัดสินใจแล้ว 2026-08-26) เพราะ project อยู่บน
+  Free plan ที่ไม่มี automated backup/PITR ให้เลย — ใช้ `pg_dump` รันผ่าน cron บน VPS (ไม่ใช่ `pg_cron` ของ
+  Supabase เพราะต้องมี process ภายนอกอัปโหลดไฟล์ได้) ดู `scripts/backup-db-to-r2.sh`
 
 ## สถานะที่ทำแล้ว (อัปเดต 2026-08-26)
 
@@ -152,6 +174,16 @@ of root directory`) เพราะเทียบ UNC path กับ drive-lett
   hijacking — error "Security Definer View" อีก 4 รายการ (`v_inventory_value`, `v_monthly_cogs`,
   `v_top_consumed_items_30d`, `v_low_stock`) เป็นดีไซน์ตั้งใจตามข้อ 5 ด้านบน ไม่ต้องแก้ ให้ dismiss ใน
   dashboard ได้เลย
+- แก้บั๊ก `fn_approve_adjustment` 2 จุด (`0006`, `0007`): (1) ไม่ lock แถวก่อน update ทำให้กดอนุมัติ/ปฏิเสธ
+  รายการเดียวกันพร้อมกันสองครั้งนับสต๊อกซ้ำได้ (2) อนุมัติปรับปรุงสต๊อกของ item ที่ยังไม่เคยมี `item_stock`
+  ที่สาขานั้นมาก่อน จะผ่านเงียบๆ โดยไม่มีผลอะไรกับยอดจริงเลย — พร้อมเพิ่ม pgTAP test ครอบคลุมไว้ที่
+  `supabase/tests/database/` (รันด้วย `supabase test db`)
+- แก้ `createStockIn` ไม่กัน `NaN` (ยอดจ่ายกรอกผิดรูปแบบเคยหลุดเข้า `unit_cost_snapshot` ได้) และแก้ปุ่ม
+  อนุมัติ/ปฏิเสธ + เปิด-ปิดสินค้าที่เคย throw error แบบเงียบไม่มี toast แจ้ง (`app/actions/stock.ts`,
+  `pending-list.tsx`, `toggle-active-button.tsx`)
+- ลดโค้ดซ้ำใน `app/actions/stock.ts` (logic ตรวจสิทธิ์สาขาที่ซ้ำกัน 5 จุด) และ dedupe query รายชื่อสาขาที่
+  `(app)/layout.tsx` กับ `/admin/users` เคย query ซ้ำกันทุก request ด้วย React `cache()` (`getActiveBranches`
+  ใน `lib/branch.ts`)
 
 ## งานที่จงใจยังไม่ทำ
 

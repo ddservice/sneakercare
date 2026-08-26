@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { requireProfile, requireModuleWrite } from "@/lib/auth";
+import { requireProfile, requireModuleWrite, type Profile } from "@/lib/auth";
 import { assertWritableBranch } from "@/lib/branch";
 import { canRecordWaste, canWrite } from "@/lib/permissions";
 
@@ -14,21 +14,29 @@ function revalidateStock(paths: string[]) {
   for (const path of paths) revalidatePath(path);
 }
 
+// รวมจุดตรวจ "ทำรายการของสาขาไหน มีสิทธิ์ไหม" ที่ทุก action ด้านล่างต้องเช็คเหมือนกันทุกครั้ง
+// (branch_id จากฟอร์ม/ของ Admin ก็ได้ ไม่งั้น fallback เป็นสาขาประจำของผู้ใช้) ไว้ที่เดียว กันหลุดจุดใดจุดหนึ่ง
+function resolveBranch(profile: Profile, formData: FormData): { branchId: string } | { error: string } {
+  const branchId = String(formData.get("branch_id") ?? profile.branch_id ?? "");
+  const branchError = assertWritableBranch(profile, branchId);
+  return branchError ? { error: branchError } : { branchId };
+}
+
 export async function createStockOut(_prev: StockActionState, formData: FormData): Promise<StockActionState> {
   const profile = await requireProfile();
   requireModuleWrite(profile, "stock-out");
   const supabase = await createClient();
 
   const itemId = String(formData.get("item_id") ?? "");
-  const branchId = String(formData.get("branch_id") ?? profile.branch_id ?? "");
   const qty = Number(formData.get("qty"));
   const referenceNote = String(formData.get("reference_note") ?? "").trim();
 
   if (!itemId || !qty || qty <= 0) {
     return { error: "กรุณาเลือกสินค้าและกรอกจำนวนให้ถูกต้อง" };
   }
-  const branchError = assertWritableBranch(profile, branchId);
-  if (branchError) return { error: branchError };
+  const branch = resolveBranch(profile, formData);
+  if ("error" in branch) return branch;
+  const { branchId } = branch;
 
   const { error } = await supabase.from("stock_transactions").insert({
     item_id: itemId,
@@ -54,7 +62,6 @@ export async function createStockIn(_prev: StockActionState, formData: FormData)
   const supabase = await createClient();
 
   const itemId = String(formData.get("item_id") ?? "");
-  const branchId = String(formData.get("branch_id") ?? profile.branch_id ?? "");
   const purchaseQty = Number(formData.get("purchase_qty"));
   const totalCost = Number(formData.get("total_cost"));
   const referenceNote = String(formData.get("reference_note") ?? "").trim();
@@ -62,8 +69,9 @@ export async function createStockIn(_prev: StockActionState, formData: FormData)
   if (!itemId || !Number.isFinite(purchaseQty) || purchaseQty <= 0 || !Number.isFinite(totalCost) || totalCost < 0) {
     return { error: "กรุณาเลือกสินค้าและกรอกจำนวน/ยอดที่จ่ายให้ถูกต้อง" };
   }
-  const branchError = assertWritableBranch(profile, branchId);
-  if (branchError) return { error: branchError };
+  const branch = resolveBranch(profile, formData);
+  if ("error" in branch) return branch;
+  const { branchId } = branch;
 
   const { data: item, error: itemError } = await supabase
     .from("items")
@@ -103,7 +111,6 @@ export async function createAdjustment(_prev: StockActionState, formData: FormDa
   const supabase = await createClient();
 
   const itemId = String(formData.get("item_id") ?? "");
-  const branchId = String(formData.get("branch_id") ?? profile.branch_id ?? "");
   const direction = String(formData.get("direction") ?? "");
   const qty = Number(formData.get("qty"));
   const reason = String(formData.get("reason") ?? "").trim();
@@ -114,8 +121,9 @@ export async function createAdjustment(_prev: StockActionState, formData: FormDa
   if (direction !== "increase" && direction !== "decrease") {
     return { error: "กรุณาเลือกทิศทางการปรับปรุง" };
   }
-  const branchError = assertWritableBranch(profile, branchId);
-  if (branchError) return { error: branchError };
+  const branch = resolveBranch(profile, formData);
+  if ("error" in branch) return branch;
+  const { branchId } = branch;
 
   const { error } = await supabase.from("stock_transactions").insert({
     item_id: itemId,
@@ -143,15 +151,15 @@ export async function createWaste(_prev: StockActionState, formData: FormData): 
   const supabase = await createClient();
 
   const itemId = String(formData.get("item_id") ?? "");
-  const branchId = String(formData.get("branch_id") ?? profile.branch_id ?? "");
   const qty = Number(formData.get("qty"));
   const reason = String(formData.get("reason") ?? "").trim();
 
   if (!itemId || !qty || qty <= 0 || !reason) {
     return { error: "กรุณาเลือกสินค้า กรอกจำนวน และเหตุผล" };
   }
-  const branchError = assertWritableBranch(profile, branchId);
-  if (branchError) return { error: branchError };
+  const branch = resolveBranch(profile, formData);
+  if ("error" in branch) return branch;
+  const { branchId } = branch;
 
   const { error } = await supabase.from("stock_transactions").insert({
     item_id: itemId,
@@ -178,14 +186,14 @@ export async function setMinStockLevel(_prev: StockActionState, formData: FormDa
   }
 
   const itemId = String(formData.get("item_id") ?? "");
-  const branchId = String(formData.get("branch_id") ?? profile.branch_id ?? "");
   const min = Number(formData.get("min_stock_level"));
 
   if (!itemId || Number.isNaN(min) || min < 0) {
     return { error: "กรุณากรอกจุดสั่งซื้อขั้นต่ำให้ถูกต้อง" };
   }
-  const branchError = assertWritableBranch(profile, branchId);
-  if (branchError) return { error: branchError };
+  const branch = resolveBranch(profile, formData);
+  if ("error" in branch) return branch;
+  const { branchId } = branch;
 
   const supabase = await createClient();
   const { error } = await supabase.rpc("fn_set_min_stock_level", {
