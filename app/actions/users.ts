@@ -49,7 +49,7 @@ export async function inviteUser(_prev: UserActionState, formData: FormData): Pr
     username,
     display_name: displayName,
     role,
-    branch_id: role === "admin" ? branchId : branchId,
+    branch_id: branchId,
     is_active: true,
   });
 
@@ -79,8 +79,8 @@ export async function updateUser(_prev: UserActionState, formData: FormData): Pr
   if (role !== "admin" && !branchId) {
     return { error: "Co-Admin และ Staff ต้องผูกกับสาขา" };
   }
-  if (id === profile.id && !isActive) {
-    return { error: "ไม่สามารถปิดใช้งานบัญชีตัวเองได้" };
+  if (id === profile.id && (!isActive || role !== "admin")) {
+    return { error: "ไม่สามารถปิดใช้งานหรือลดสิทธิ์บัญชีตัวเองได้" };
   }
 
   const supabase = await createClient();
@@ -89,7 +89,7 @@ export async function updateUser(_prev: UserActionState, formData: FormData): Pr
     .update({
       display_name: displayName,
       role,
-      branch_id: role === "admin" ? branchId : branchId,
+      branch_id: branchId,
       is_active: isActive,
       updated_at: new Date().toISOString(),
     })
