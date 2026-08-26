@@ -256,10 +256,17 @@ feature_key ยกเว้น `card_user_mgmt`**
 ```bash
 export SUPABASE_ACCESS_TOKEN="<personal access token>"
 npx --yes supabase link --project-ref mdlxogfkpwejnqpzhmoy
+npx --yes supabase migration list --linked   # ← ทำก่อน push ทุกครั้ง ห้ามข้าม (ดูเหตุการณ์ 2026-08-26)
 npx --yes supabase db push --linked --yes
 ```
 (access token เป็นของ session-specific ไม่ persist ระหว่าง session ต้องขอผู้ใช้สร้างใหม่ทุกครั้งที่เริ่ม
 session ใหม่ผ่าน supabase.com/dashboard/account/tokens — เตือนให้ revoke ทิ้งหลังใช้เสร็จด้วยทุกครั้ง)
+
+**⚠️ เช็ค `migration list` ก่อน push ทุกครั้งเด็ดขาด** — ถ้าคอลัมน์ `remote` ว่างเปล่าสำหรับ migration ที่รู้อยู่
+แล้วว่า apply จริงไปแล้ว (เช่น ผ่าน Management API ตรงๆ ไม่ผ่าน CLI) **ห้ามสั่ง `db push` ต่อทันที** — ให้
+`supabase migration repair <version> --status applied --linked` ให้ตรงกับความจริงก่อน ไม่งั้น `db push` จะ
+รัน migration นั้นซ้ำ ซึ่งถ้าไฟล์นั้นมี `delete`/`drop`/reset logic (เช่น 0019) จะเกิดเหตุการณ์แบบ 2026-08-26
+ทันที (ดูด้านล่าง)
 
 ## เหตุการณ์สำคัญที่เคยเกิด (กันไม่ให้พลาดซ้ำ)
 
@@ -319,6 +326,40 @@ session ใหม่ผ่าน supabase.com/dashboard/account/tokens — เ�
   แต่ไม่เคยมีแถวใน `sc_stock_status` เลย (ซื้อครั้งเดียวไม่เคยมีรายการเบิกใช้งานนับแต่นั้น) **วิธีเช็คที่ครบ
   กว่าคือ `select distinct item_name from sc_stock_transactions` เทียบกับ `inv_items.name` ทั้งคู่ ไม่ใช่แค่
   เทียบกับ `sc_stock_status`**
+
+- **2026-08-26**: แก้ Supabase Security Advisor ตามที่ user ส่งภาพ error มา — พบว่า `inv_v_low_stock`,
+  `inv_v_inventory_value`, `inv_v_top_consumed_items_30d`, `inv_v_monthly_cogs` ไม่เคยตั้ง `security_invoker`
+  เลยตั้งแต่สร้าง (default ของ Postgres = SECURITY DEFINER) ทำให้ bypass RLS ของ `inv_stock_transactions`/
+  `inv_item_stock` ไปเลย — manager/staff ที่ถูก RLS กันไม่ให้เห็นต้นทุนอยู่แล้ว (migration 0008) ยังเรียก REST
+  API ของ view พวกนี้ตรงๆ แล้วเห็นต้นทุน/COGS/มูลค่าคลังได้อยู่ดี (หน้าเว็บไม่เคยเรียก view นี้เองก็จริง แต่
+  API เปิดให้เรียกได้เสมอถ้า role เดายิงตรง) และ `inv_notification_log` เป็นตารางเดียวใน repo ที่ไม่เคย
+  `enable row level security` เลย — แก้ด้วย `0026_fix_security_advisor_findings.sql` (เพิ่ม
+  `security_invoker = true` ให้ 4 view โดยไม่แก้ query เลย + เปิด RLS แบบ deny-all ให้ notification_log)
+
+  **⚠️ ระหว่างแก้เกิดอุบัติเหตุข้อมูลหายจริง ต้องกู้คืน — อ่านให้ครบก่อนรัน `db push` ครั้งต่อไป**: สั่ง
+  `db push` โดยไม่เช็ค `migration list` ก่อน ทำให้เจอว่า remote `schema_migrations` ไม่เคยบันทึกว่า 0019-0025
+  ถูก apply (ของจริง apply ผ่าน Management API ตรงๆ ตอนย้ายระบบ ไม่ผ่าน CLI) CLI เลยรัน 0019 ซ้ำ ซึ่งไฟล์นั้น
+  มี `delete from inv_stock_transactions; delete from inv_item_stock;` แล้ว insert ข้อมูลย้อนหลังชุดเก่ากลับ
+  เข้าไปแทน (ไฟล์นี้ถูกออกแบบให้รันครั้งเดียวตอน 29 ก.ค. เท่านั้น) **ผลคือลบประวัติการเคลื่อนไหวสต๊อกจริงตั้งแต่
+  29 ก.ค. ถึง 26 ส.ค. (104 รายการ) ทิ้งไปทั้งหมด** เหลือแค่ 18 แถวเก่าที่ 0019 insert ซ้ำ (id ใหม่) และสร้าง
+  รายการสินค้า "ไส้กรองน้ำ" ซ้ำเพิ่มอีก 1 แถว (0019 มีขั้นตอน insert สินค้าใหม่แบบไม่กันซ้ำด้วย) push หยุดเองที่
+  0025 (column ชนกับของเดิม) ก่อนจะไปถึง 0026 แต่ 0019-0024 รันซ้ำสำเร็จไปแล้วก่อนหน้านั้น
+
+  **กู้คืนได้ทัน เพราะ `inv_audit_logs` (AFTER INSERT trigger, แก้/ลบไม่ได้แม้แต่ Admin) เก็บ snapshot เต็มทุก
+  คอลัมน์ของทุกแถวที่เคย insert ไว้ครบ** — reconstruct 104 รายการจริงจาก `after_data` (กรอง `performed_at`
+  ระหว่างตอนที่ 0019 รันครั้งแรกจริง 29 ก.ค. ถึงก่อนรันซ้ำวันนี้) insert กลับตามลำดับเวลาเดิมเป๊ะให้ trigger
+  คำนวณต้นทุนถัวเฉลี่ยใหม่ถูกต้อง ดู `0027_recover_stock_ledger_after_accidental_reset_rerun.sql` (มี
+  query ตรวจสอบก่อนกู้ทั้งหมดอยู่ในคอมเมนต์ท้ายไฟล์ — เช็คว่าไม่มีแถวไหน `status='pending_approval'` ที่
+  audit snapshot จะไม่ตรงกับสถานะจริงปัจจุบัน, ไม่มี `transaction_date` ว่าง, `item_id` ทุกแถวยังอยู่จริง,
+  `corrects_txn_id` ไม่มี dangling reference ก่อนรันจริง) กู้คืนสำเร็จ 100% (104/104 แถว, 46 item_stock
+  ตรงกับจำนวนสินค้าที่มีประวัติจริง, ไม่มี current_qty ติดลบ) แล้วใช้ `supabase migration repair 0025 0026
+  0027 --status applied --linked` sync ตาราง tracking ให้ตรงกับความจริงกันไม่ให้เกิดซ้ำ
+
+  **บทเรียนสำคัญที่สุด**: project นี้เคย apply migration ผ่าน Management API ตรงๆ นอกเหนือจาก CLI มาก่อน
+  (ตามที่บันทึกไว้ในหัวข้อ Migrations ด้านบนอยู่แล้ว) ทำให้ remote tracking table กับ migration file ในโฟลเดอร์
+  ไม่ตรงกันได้แบบไม่มีใครรู้ตัว **ต้อง `supabase migration list --linked` เช็คทุกครั้งก่อน `db push` โดยไม่มี
+  ข้อยกเว้น** โดยเฉพาะกับ migration ที่มี `delete`/`drop`/reset logic ซึ่งไม่ idempotent เลย ถ้าเจอ column
+  `remote` ว่างสำหรับ migration ที่มั่นใจว่า apply ไปแล้วจริง ให้ `migration repair` ก่อนเสมอ ห้าม push ตรงๆ
 
 ## คำสั่งที่ใช้บ่อย
 
