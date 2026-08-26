@@ -361,6 +361,16 @@ session ใหม่ผ่าน supabase.com/dashboard/account/tokens — เ�
   ข้อยกเว้น** โดยเฉพาะกับ migration ที่มี `delete`/`drop`/reset logic ซึ่งไม่ idempotent เลย ถ้าเจอ column
   `remote` ว่างสำหรับ migration ที่มั่นใจว่า apply ไปแล้วจริง ให้ `migration repair` ก่อนเสมอ ห้าม push ตรงๆ
 
+- **2026-08-26**: แก้ Security Advisor warnings เพิ่ม (`0028_harden_function_search_path.sql`) — pin
+  `search_path` ให้ฟังก์ชัน `SECURITY DEFINER` ทั้ง 9 ตัวที่มีในระบบ กัน search_path hijacking ไม่แก้ logic
+  เลย
+- **2026-08-26**: เพิ่ม `scripts/backup-db-to-r2.sh` — สำรอง DB ทั้งฐาน (`sc_*` + `inv_*`) แบบ `pg_dump`
+  รายวันไป Cloudflare R2 เพราะ project นี้เป็น Free plan ไม่มี automated backup/PITR เลย (เหตุผลจากเหตุการณ์
+  ด้านบนโดยตรง — ครั้งนั้นรอดเพราะ audit log บังเอิญครอบคลุมพอดี ตาราง `sc_*` เดิมไม่มี audit log แบบนี้เลย
+  ถ้าเกิดเหตุการณ์ทำนองเดียวกันกับตารางนั้นจะกู้คืนไม่ได้) รันบนเซิร์ฟเวอร์ผ่าน cron ยังไม่ได้ตั้ง cron จริง —
+  ต้องตั้งค่า `/etc/sneakercare-backup.env` + สร้าง R2 bucket + เพิ่ม crontab เองตามขั้นตอนในคอมเมนต์บนสุด
+  ของไฟล์สคริปต์
+
 ## คำสั่งที่ใช้บ่อย
 
 ```bash
