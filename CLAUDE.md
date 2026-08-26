@@ -371,6 +371,30 @@ session ใหม่ผ่าน supabase.com/dashboard/account/tokens — เ�
   ต้องตั้งค่า `/etc/sneakercare-backup.env` + สร้าง R2 bucket + เพิ่ม crontab เองตามขั้นตอนในคอมเมนต์บนสุด
   ของไฟล์สคริปต์
 
+- **2026-08-26**: **ผลข้างเคียงจากการกู้ ledger ตอนเช้า (เหตุการณ์ด้านบน) — `alert_muted` ของทุกสินค้าที่เคย
+  ปิดแจ้งเตือนไว้หายไปเงียบๆ กลับเป็น false หมด** สาเหตุ: migration 0027 ลบ `inv_item_stock` ทั้งตารางแล้วให้
+  trigger `inv_fn_apply_stock_transaction` คำนวณใหม่จากการ replay ledger — แต่ `alert_muted` (คอลัมน์เพิ่ม
+  ใน 0025) ไม่มีตัวแทนอยู่ใน ledger เลย เพราะเป็นค่าที่ set ตรงผ่าน `inv_fn_set_alert_muted` (UPDATE) ไม่ใช่
+  ผลจาก stock_transaction ไหนๆ แถวใหม่ที่ trigger สร้างเลยได้ค่า default (false) หมด **กู้ค่าที่หายไปคืนไม่ได้
+  เลย เพราะตอนนั้น `inv_item_stock` ไม่มี audit trigger** ผู้ใช้ต้องตั้งค่า "ไม่ต้องแจ้งเตือน" ใหม่เองทุกตัวที่
+  เคยปิดไว้ — แก้กันไม่ให้เกิดซ้ำแล้วด้วย `0029_audit_item_stock.sql` (เพิ่ม audit trigger ให้ตารางนี้เหมือน
+  ตารางอื่น) **บทเรียน: ก่อนจะ `delete`/reset ตารางไหนเพื่อ "คำนวณใหม่จาก source of truth" ต้องเช็คก่อนเสมอว่า
+  มีคอลัมน์ไหนในตารางนั้นที่ **ไม่ได้** derive จาก source of truth นั้นบ้าง (เช่น flag/setting ที่ set ตรง)
+  ไม่งั้นจะหายไปเงียบๆ แบบนี้อีก**
+
+- **2026-08-26**: เปลี่ยน cron แจ้งเตือนสต๊อกต่ำจากทุก 30 นาที เป็นวันละครั้งตอน 9 โมงเช้า (`0 2 * * *` UTC
+  = 09:00 ไทย) ตามที่ user ขอ (`0030_low_stock_alert_daily_9am.sql`) — job เดิมชื่อ
+  `inv-low-stock-alert-30min` ถูก unschedule แล้วสร้างใหม่ชื่อ `inv-low-stock-alert-daily-9am-th`
+  edge function/dedup logic เดิมไม่ต้องแก้อะไร (เช็ค "แจ้งไปแล้ววันนี้หรือยัง" ยังใช้เป็น safety net ได้ปกติ)
+
+  **เจอเพิ่มระหว่างเช็ค `cron.job`**: มี job ค้างอีกตัวชื่อ `low-stock-alert-30min` (คนละชื่อ ไม่มี prefix
+  `inv-`) ยิง HTTP ไปที่ `https://tecrcoienazmtbynuqpg.supabase.co/functions/v1/low-stock-alert` ทุก 30
+  นาทีมาตลอด — นั่นคือโฮสต์ของ project ทดลอง "shoe-care-inventory" ที่ลบทิ้งไปแล้วตั้งแต่ 2026-07-11 (resolve
+  DNS ไม่ได้แล้วจริง) เดาว่าเคยมีคน setup cron ผิด project ตอนทดลอง Next.js rewrite ค้างไว้ ไม่กระทบอะไร
+  (ยิงไม่ถึงปลายทางเลยสักครั้ง) แต่เป็นขยะค้าง ลบไปแล้วด้วย `0031_remove_dead_cross_project_cron_job.sql`
+  **ถ้าเจอ error/พฤติกรรมแปลกๆ เกี่ยวกับ cron/pg_net อีกในอนาคต ให้เช็ค `select * from cron.job;` ทั้งหมดก่อน
+  เสมอ ไม่ใช่เช็คแค่ job ที่คิดว่ารู้จัก — เผื่อมี job แปลกปลอมค้างจากที่อื่นแบบนี้อีก**
+
 ## คำสั่งที่ใช้บ่อย
 
 ```bash
