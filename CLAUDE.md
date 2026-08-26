@@ -408,6 +408,31 @@ session ใหม่ผ่าน supabase.com/dashboard/account/tokens — เ�
   admin/co-admin, role อื่นได้ `[]` เปล่าๆ จาก RLS เงียบๆ ไม่ error) **ห้ามรวมกลับเป็น `select('*')` เดียว
   เหมือนเดิมเด็ดขาด** ยืนยันแล้วว่า build ผ่าน, co-admin ยังเห็นข้อมูลครบ 46 แถวเหมือนเดิมทั้งสองทาง
 
+  **⚠️ บทเรียนสำคัญเรื่องวิธีตรวจสอบ RLS**: ตอนแรกใช้ `supabase db query --linked` + `set_config('request.jwt.claims', ...)`
+  เพื่อจำลอง role ต่างๆ ตรวจ RLS — **วิธีนี้ใช้ไม่ได้จริง เพราะ `db query` ต่อผ่าน Management API ด้วย role
+  ที่ bypass RLS เสมอ ไม่ว่าจะตั้ง `request.jwt.claims` เป็นอะไรก็ตาม** (พิสูจน์แล้ว: manager จำลองผ่าน
+  `db query` เห็น `inv_item_stock` ครบทุกแถวทั้งที่ RLS ควรบล็อก) ใช้ได้แค่ตรวจ metadata/policy text/view
+  definition เท่านั้น (สิ่งที่จริงไม่ว่า role ไหนยิง) **ห้ามใช้ `db query` เป็นหลักฐานว่า RLS "ทำงานจริง" กับ
+  role ใดๆ เด็ดขาด** วิธีตรวจที่ถูกต้องคือสร้าง user จริงชั่วคราวผ่าน `admin.auth.admin.createUser()`
+  (service_role key) → `signInWithPassword()` เอา JWT จริง → ยิงผ่าน `@supabase/supabase-js` ปกติ (เหมือน
+  แอปจริงทำ) → ลบ user ทิ้งหลังเสร็จ — วิธีนี้ใช้ยืนยัน 0026/0032 แล้วว่าทำงานถูกต้องจริงกับทั้ง manager และ
+  co-admin (ก่อนหน้านี้ "ยืนยันแล้ว" หลายจุดในไฟล์นี้ที่อ้างอิงแค่ `db query` ควรถือว่าเป็นแค่ตรวจ SQL/policy
+  text ถูกต้อง ไม่ใช่หลักฐานว่า enforcement จริงทำงานถูกต้อง 100%)
+
+- **2026-08-26**: พบระหว่างเขียน pgTAP test ให้ `inv_fn_approve_adjustment` ว่ามีบั๊กเดียวกันเป๊ะกับที่เจอและ
+  แก้ไปแล้วในโปรเจกต์ RRS (Next.js rewrite ที่ทำคู่ขนานกันตอนเช้าของวันนี้) 2 จุด: (1) ไม่ `for update` ก่อน
+  update ทำให้กด approve/reject รายการเดียวกันพร้อมกันสองครั้งนับสต๊อกซ้ำได้ (2) UPDATE `inv_item_stock`
+  ตรงๆ โดยไม่เช็คว่ามีแถวอยู่ก่อน ทำให้อนุมัติปรับลดของ item ที่ไม่เคยมี `inv_item_stock` ที่สาขานั้นผ่านเงียบๆ
+  โดยไม่มีผลอะไรกับยอดจริงเลย แก้ด้วย `0033_fix_approve_adjustment_race_and_missing_item_stock.sql`
+  ยืนยันแล้วผ่าน `db query` (ใช้ได้สำหรับกรณีนี้เพราะทดสอบ error/success ของ business logic ไม่ใช่ RLS)
+
+- **2026-08-26**: เพิ่ม pgTAP test suite ที่ `supabase/tests/database/` (5 ไฟล์: moving average cost,
+  alert_muted ต้องรอดจาก stock_in ซ้ำ [regression ของเหตุการณ์ด้านบน], RLS ของ `inv_item_stock`/
+  `inv_v_item_stock`, `inv_fn_approve_adjustment` [role/branch check + idempotency + upsert guard],
+  staff-safe views) รันด้วย `supabase test db` (ต้อง Docker Desktop) เขียนโดยตรวจ fixture pattern
+  (`auth.users`/`sc_users` insert) กับฐานข้อมูลจริงในทรานแซกชันที่ rollback ก่อนทุกไฟล์ เพื่อความมั่นใจสูงสุด
+  เท่าที่ทำได้โดยไม่มี Docker ในเครื่องที่เขียน
+
 ## คำสั่งที่ใช้บ่อย
 
 ```bash
