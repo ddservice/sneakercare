@@ -14,7 +14,7 @@
 
 - Frontend: Next.js (App Router, TypeScript) + Tailwind CSS + shadcn/ui
 - Backend/DB: Supabase (PostgreSQL + Auth + Row Level Security + Edge Functions)
-- Hosting: Vercel (frontend) + Supabase Cloud
+- Hosting: **VPS** (PM2 + Nginx + Let's Encrypt, เครื่องเดียวกับเว็บร้านอื่น) + Supabase Cloud — **ไม่ใช้ Vercel**
 
 ## Supabase project ที่ใช้งานจริง
 
@@ -26,6 +26,11 @@
 - Edge Function `low-stock-alert` deploy แล้ว และมี `pg_cron` (ดู `supabase/migrations/0002_schedule_low_stock_alert.sql`)
   เรียกทุก 30 นาที โดยดึง service_role key จาก `supabase.vault` (ไม่มี secret อยู่ในไฟล์ migration ที่ commit)
 - มี branch แรกในระบบแล้ว: "SneakerCare สาขาหลัก" และมี Admin account เดียว (เชิญผ่านอีเมลแล้ว)
+- **⚠️ พบ schema แปลกปลอม prefix `inv_` (`inv_v_inventory_value`, `inv_notification_log`, ...) ใน
+  `SneakerCareDB` (2026-08-26)** — ไม่ได้มาจาก migration ใน repo นี้ (ไม่มีที่ไหนอ้าง prefix `inv_`) และไม่มีใคร
+  ในทีมตั้งใจสร้าง ยังไม่ได้ลบเพราะเป็น production ที่มีข้อมูลขายจริง ต้องตรวจสอบผ่าน dashboard ของ
+  `SneakerCareDB` เอง (list ตาราง/view ที่ขึ้นต้น `inv_%`, เช็คว่าไม่มี FK ไปโยง `sc_*`) ก่อน drop ด้วยมือ —
+  งานนี้ยังค้างอยู่
 
 ## กฎทางธุรกิจที่ต้องไม่ละเมิด (Non-negotiable business rules)
 
@@ -106,6 +111,7 @@ CLAUDE.md                 คู่มือนี้ — อัปเดตท�
 
 - `npm run dev` — รัน Next.js dev server (บังคับ `--webpack` ไว้ใน package.json แล้ว)
 - `npm run build` — production build (บังคับ `--webpack` เช่นกัน)
+- `npm start` — production server ฟังที่ `127.0.0.1` (ให้อยู่หลัง Nginx บน VPS)
 - `supabase db push` — apply migrations ไปยัง Supabase project (ต้อง `supabase link` ก่อน)
 - `supabase db diff` — ตรวจสอบ schema drift ก่อน commit migration ใหม่
 - `npm run migrate:legacy -- --branch-id <uuid> --performed-by <admin-uuid> --stock ./import/SC_Stock_Status.csv --dry-run`
@@ -119,6 +125,7 @@ of root directory`) เพราะเทียบ UNC path กับ drive-lett
 
 ## สิ่งที่ตัดสินใจแล้ว
 
+- **Hosting = VPS ไม่ใช่ Vercel** (ตัดสินใจแล้ว 2026-08-14) — PM2 + Nginx บนเครื่องเดียวกับเว็บร้านอื่น พอร์ตต้องไม่ชน service อื่น (เช็ค `ss -tlnp` บนเซิร์ฟเวอร์ก่อน)
 - **Supabase project มีอยู่แล้ว** ใช้เป็น backend/DB หลักตามแผน ไม่ต้องประเมิน PocketBase/ทางเลือกอื่นซ้ำ
 - **ช่องทางแจ้งเตือนสต๊อกต่ำ = Telegram Bot API ส่งเข้ากลุ่มพนักงาน** (ไม่ใช่ LINE, ไม่ใช่แชทส่วนตัว)
   ดู `docs/architecture.md` §2.1
@@ -131,7 +138,7 @@ of root directory`) เพราะเทียบ UNC path กับ drive-lett
   เพราะจะชนกับ RLS — แผนที่สิทธิ์อยู่ที่ `lib/permissions.ts` และโชว์ใน Settings เป็นปุ่มอ่านอย่างเดียว
   แยก **มองเห็น** กับ **กรอก/แก้ไข** แล้ว (สินค้า: ทุกคนดูได้ แก้ได้เฉพาะ Admin)
 
-## สถานะที่ทำแล้ว (อัปเดต 2026-08-14)
+## สถานะที่ทำแล้ว (อัปเดต 2026-08-26)
 
 - หน้าเว็บหลัก: แดชบอร์ด, เบิกใช้งาน (+แท็บของเสีย), รับของเข้า, ปรับปรุงสต๊อก, ประวัติ, รายงาน,
   สินค้า, ผู้ใช้, Audit Log, ตั้งค่า (Telegram + แผนที่สิทธิ์)
@@ -139,6 +146,12 @@ of root directory`) เพราะเทียบ UNC path กับ drive-lett
 - แก้จุดสั่งซื้อขั้นต่ำต่อสาขาจากแดชบอร์ด ผ่าน `fn_set_min_stock_level()`
 - เชิญผู้ใช้ / เปลี่ยนบทบาท / ผูกสาขา / ปิดใช้งาน ที่ `/admin/users`
 - สคริปต์นำเข้า CSV ระบบเดิม: `scripts/migrate-from-legacy.mjs`
+- แก้ Supabase Security Advisor errors/warnings (`0004_notification_log_rls.sql`,
+  `0005_harden_function_search_path.sql`): เปิด RLS ที่หลุดไปบน `notification_log` (deny-all เหมือน
+  `integration_secrets`) และ pin `search_path` ให้ฟังก์ชัน `SECURITY DEFINER` ทั้ง 8 ตัว กัน search_path
+  hijacking — error "Security Definer View" อีก 4 รายการ (`v_inventory_value`, `v_monthly_cogs`,
+  `v_top_consumed_items_30d`, `v_low_stock`) เป็นดีไซน์ตั้งใจตามข้อ 5 ด้านบน ไม่ต้องแก้ ให้ dismiss ใน
+  dashboard ได้เลย
 
 ## งานที่จงใจยังไม่ทำ
 
