@@ -59,7 +59,7 @@ export async function createStockIn(_prev: StockActionState, formData: FormData)
   const totalCost = Number(formData.get("total_cost"));
   const referenceNote = String(formData.get("reference_note") ?? "").trim();
 
-  if (!itemId || !purchaseQty || purchaseQty <= 0 || totalCost < 0) {
+  if (!itemId || !Number.isFinite(purchaseQty) || purchaseQty <= 0 || !Number.isFinite(totalCost) || totalCost < 0) {
     return { error: "กรุณาเลือกสินค้าและกรอกจำนวน/ยอดที่จ่ายให้ถูกต้อง" };
   }
   const branchError = assertWritableBranch(profile, branchId);

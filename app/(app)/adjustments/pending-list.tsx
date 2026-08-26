@@ -1,6 +1,7 @@
 "use client";
 
 import { useTransition } from "react";
+import { toast } from "sonner";
 import { approveAdjustment } from "@/app/actions/stock";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -18,6 +19,14 @@ type PendingRow = {
 
 export function PendingAdjustmentsList({ rows }: { rows: PendingRow[] }) {
   const [isPending, startTransition] = useTransition();
+
+  function handleApprove(id: string, approve: boolean) {
+    startTransition(() => {
+      approveAdjustment(id, approve).catch((err) => {
+        toast.error(err instanceof Error ? err.message : "เกิดข้อผิดพลาด");
+      });
+    });
+  }
 
   if (rows.length === 0) {
     return <p className="text-sm text-muted-foreground">ไม่มีรายการรออนุมัติ</p>;
@@ -51,7 +60,7 @@ export function PendingAdjustmentsList({ rows }: { rows: PendingRow[] }) {
               <Button
                 size="sm"
                 disabled={isPending}
-                onClick={() => startTransition(() => approveAdjustment(row.id, true))}
+                onClick={() => handleApprove(row.id, true)}
               >
                 อนุมัติ
               </Button>
@@ -59,7 +68,7 @@ export function PendingAdjustmentsList({ rows }: { rows: PendingRow[] }) {
                 size="sm"
                 variant="outline"
                 disabled={isPending}
-                onClick={() => startTransition(() => approveAdjustment(row.id, false))}
+                onClick={() => handleApprove(row.id, false)}
               >
                 ปฏิเสธ
               </Button>
