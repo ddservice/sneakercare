@@ -395,6 +395,19 @@ session ใหม่ผ่าน supabase.com/dashboard/account/tokens — เ�
   **ถ้าเจอ error/พฤติกรรมแปลกๆ เกี่ยวกับ cron/pg_net อีกในอนาคต ให้เช็ค `select * from cron.job;` ทั้งหมดก่อน
   เสมอ ไม่ใช่เช็คแค่ job ที่คิดว่ารู้จัก — เผื่อมี job แปลกปลอมค้างจากที่อื่นแบบนี้อีก**
 
+- **2026-08-26**: พบว่า `inv_p_item_stock_select` (RLS ของ `inv_item_stock`) เดิมเช็คแค่ "อยู่สาขาเดียวกัน
+  ไหม" ไม่เช็ค role เลย ทำให้ manager/staff SELECT ตรงได้ทั้งแถวรวม `avg_unit_cost` — และ `useItemStock()`
+  ฝั่งแอปก็ `select('*')` ตรงๆ ด้วย แปลว่าต้นทุนถูกโหลดลง browser ของ manager/staff ทุกคนอยู่แล้วในการใช้งาน
+  ปกติ (เปิด devtools ธรรมดาก็เห็น ไม่ต้องเจาะระบบ) ทั้งที่หน้าเว็บซ่อนคอลัมน์นี้แค่ระดับ UI (`canSeeCost`) —
+  แก้ด้วย `0032_hide_item_stock_cost_from_manager_staff.sql`: จำกัด SELECT ตรงบน `inv_item_stock` เหลือ
+  admin (ทุกสาขา) + co-admin (เฉพาะสาขาตัวเอง) เหมือน `inv_stock_transactions` (0008) แล้วเพิ่ม
+  `inv_v_item_stock` (view ไม่มีต้นทุน, **ตั้งใจเป็น security_invoker=false ห้ามแก้เป็น true** เพราะต้องการ
+  ให้เห็นได้กว้างกว่า RLS ใหม่ของตารางฐาน ไม่ใช่แคบกว่า) ให้ทุก role เห็น current_qty/min_stock_level/
+  alert_muted ได้ปกติ — ฝั่งแอปแก้ `useItemStock()` (`app/src/lib/queries/items.ts`) ให้ query 2 ทางแล้ว
+  merge ฝั่ง client: view ปลอดภัย (ได้เสมอ) + `inv_item_stock` ตรงๆ สำหรับ `avg_unit_cost` (ได้จริงเฉพาะ
+  admin/co-admin, role อื่นได้ `[]` เปล่าๆ จาก RLS เงียบๆ ไม่ error) **ห้ามรวมกลับเป็น `select('*')` เดียว
+  เหมือนเดิมเด็ดขาด** ยืนยันแล้วว่า build ผ่าน, co-admin ยังเห็นข้อมูลครบ 46 แถวเหมือนเดิมทั้งสองทาง
+
 ## คำสั่งที่ใช้บ่อย
 
 ```bash

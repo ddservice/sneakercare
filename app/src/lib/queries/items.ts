@@ -81,12 +81,17 @@ export function useItemStock() {
     queryKey: STOCK_KEY(branchId),
     enabled: !!branchId && !!itemsQuery.data,
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('inv_item_stock')
-        .select('*')
-        .eq('branch_id', branchId);
+      // inv_v_item_stock (qty/min-stock/mute) ทุก role เห็นได้ — inv_item_stock ตรงๆ (มี avg_unit_cost)
+      // ถูก RLS จำกัดเหลือ admin/co-admin แล้ว (migration 0032) role อื่นจะได้ [] เปล่าๆ กลับมาเฉยๆ ไม่ error
+      // ห้ามรวมสองคำสั่งนี้เป็น select('*') จาก inv_item_stock ตรงเดียวเหมือนเดิม เพราะจะทำให้ avg_unit_cost
+      // หลุดไปอยู่ใน response ของ manager/staff อีกครั้ง (ซึ่งคือปัญหาที่เพิ่งแก้ไป)
+      const [{ data, error }, { data: costRows }] = await Promise.all([
+        supabase.from('inv_v_item_stock').select('*').eq('branch_id', branchId),
+        supabase.from('inv_item_stock').select('item_id, avg_unit_cost').eq('branch_id', branchId),
+      ]);
       if (error) throw error;
       const byItem = new Map(data.map((s) => [s.item_id, s]));
+      const costByItem = new Map((costRows ?? []).map((c) => [c.item_id, Number(c.avg_unit_cost)]));
       return (itemsQuery.data || [])
         .filter((i) => i.is_active)
         .map((i): ItemStock => {
@@ -100,7 +105,7 @@ export function useItemStock() {
             purchase_unit: i.purchase_unit,
             purchase_unit_qty: i.purchase_unit_qty,
             current_qty: Number(s?.current_qty || 0),
-            avg_unit_cost: Number(s?.avg_unit_cost || 0),
+            avg_unit_cost: costByItem.get(i.id) ?? 0,
             min_stock_level: Number(s?.min_stock_level ?? i.default_min_stock_level ?? 0),
             alert_muted: s?.alert_muted ?? false,
           };
