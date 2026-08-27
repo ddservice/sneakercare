@@ -81,7 +81,7 @@ echo "[$(date -u +%FT%TZ)] pg_dump เสร็จ ขนาดไฟล์ ${DU
 echo "[$(date -u +%FT%TZ)] อัปโหลดไป R2 bucket ${R2_BUCKET}"
 AWS_ACCESS_KEY_ID="$R2_ACCESS_KEY_ID" \
 AWS_SECRET_ACCESS_KEY="$R2_SECRET_ACCESS_KEY" \
-aws s3 cp "$DUMP_FILE" "s3://${R2_BUCKET}/daily/sneakercare-backup-${STAMP}.dump" \
+aws s3 cp "$DUMP_FILE" "s3://${R2_BUCKET}/sneakercaredb/sneakercare-backup-${STAMP}.dump" \
   --endpoint-url "$R2_ENDPOINT" \
   --only-show-errors
 
