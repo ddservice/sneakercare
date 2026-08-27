@@ -433,6 +433,24 @@ session ใหม่ผ่าน supabase.com/dashboard/account/tokens — เ�
   (`auth.users`/`sc_users` insert) กับฐานข้อมูลจริงในทรานแซกชันที่ rollback ก่อนทุกไฟล์ เพื่อความมั่นใจสูงสุด
   เท่าที่ทำได้โดยไม่มี Docker ในเครื่องที่เขียน
 
+- **2026-08-27**: ไล่ `select * from pg_policies where schemaname='public'` ทั้งตารางในระบบ (หลังจากพบว่า
+  `sc_users` มี policy เก่าชื่อ `auth_all_users` ค้างอยู่ใน `legacy/supabase_setup_v2.sql` ที่เปิดให้ทุกคน
+  แก้ role ตัวเองเป็น admin ได้ — เช็คจริงแล้วโล่งใจว่ามีคนแก้เป็น `sc_users_admin_all`/`sc_users_update_own`
+  ที่ถูกต้องไปแล้วก่อนหน้านี้ ไม่รู้ตอนไหน ไม่มี migration บันทึกไว้) **แต่เจออีก 4 ตารางที่ยังเป็น pattern
+  เดียวกับที่เคยพบใน `sc_stock_transactions` เมื่อ 2026-07-10 (`FOR ALL USING(true)` เปิดให้ authenticated
+  ทุกคนทำได้ทุกอย่าง) และไม่เคยถูกแก้เลย**:
+  - `sc_employees` (เงินเดือน+เลขบัญชีธนาคารพนักงานทุกคน — manager/staff อ่าน/แก้/ลบเงินเดือนใครก็ได้ตรงๆ
+    ผ่าน API มาตลอด) — ล็อกเหลือ admin/co-admin ทั้งตาราง
+  - `sc_payments` — ลบประวัติรับเงินทิ้งได้ตรงๆ (ซ่อนเงินขาดได้) ล็อกแค่ DELETE เหลือ admin/co-admin
+    (insert/update/select ยังเปิดเหมือนเดิม เพราะ staff ต้องกดรับชำระเงินจริงระหว่างทำงาน)
+  - `sc_expenses`, `profiles` — grep ทั้ง `app/src` แล้วไม่มีโค้ดไหนอ้างถึงเลย (ตรงกับที่บันทึกไว้แล้วว่า
+    `profiles` เป็นตารางเก่าที่เลิกใช้) ล็อก deny-all ไปก่อน
+  - แก้ด้วย `0034_lock_down_remaining_open_legacy_tables.sql` **ยืนยันด้วยวิธี real JWT ตามบทเรียนด้านบน
+    ทุกจุด** (manager: `sc_employees` select/update ได้ 0 แถวจริง [เช็ค count ยืนยันแล้ว ไม่ใช่แค่ไม่มี
+    error], `sc_payments` insert ยังทำได้ปกติ, delete ได้ 0 แถวจริง — admin: เห็น/แก้/ลบได้ปกติทุกจุด)
+  - **บทเรียน**: การแก้ช่องโหว่ RLS ทีละตารางตามที่เจอ report/incident ไม่พอ **ต้องไล่ `pg_policies` ทั้ง
+    schema เป็นระยะ** ไม่ใช่รอให้มีคนแจ้งหรือมีเหตุการณ์ก่อนถึงจะไปเช็คตารางนั้นทีละตัว
+
 ## คำสั่งที่ใช้บ่อย
 
 ```bash
