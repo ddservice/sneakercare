@@ -476,6 +476,17 @@ session ใหม่ผ่าน supabase.com/dashboard/account/tokens — เ�
     `profiles`, `sc_expenses`) — ตรงตามดีไซน์ตั้งใจ (deny-all ไม่มี policy เลยแปลว่าไม่มีใครเข้าถึงได้เลย
     แม้แต่ admin ผ่าน API — ถูกต้องแล้วสำหรับตารางที่ไม่มีใครใช้/เก็บ secret) ไม่ต้องแก้
 
+- **2026-08-27**: ปิดเรื่อง audit trail ของ `sc_opex`/`sc_payments`/`sc_sales` แล้ว — เลือกทางที่ไม่กระทบ
+  workflow พนักงานเลย (ไม่จำกัด insert/update ที่ staff ใช้งานจริงอยู่) คือเพิ่ม audit log แทน
+  (`0036_audit_log_legacy_financial_tables.sql`) ผูก trigger `after insert or update or delete` เข้ากับ
+  `inv_fn_write_audit_log()`/`inv_audit_logs` **ตัวเดิมที่ inv_* ใช้อยู่แล้ว** (ฟังก์ชันนี้ generic ใช้
+  `TG_TABLE_NAME`/`to_jsonb(new/old)` ไม่ผูกกับ `inv_*` โดยเฉพาะ ไม่ต้องสร้างตาราง/ฟังก์ชันคู่ขนานใหม่)
+  SELECT ของ `inv_audit_logs` จำกัด admin/co-admin อยู่แล้ว (`inv_p_audit_logs_select`) เหมาะสมพอดีสำหรับ
+  ดูประวัติการเงินย้อนหลังด้วยโดยไม่ต้องแก้ policy เพิ่ม — ทดสอบแล้วว่า insert/update ถูกบันทึก before/after
+  ครบถูกต้อง (**ตอนนี้ทุกตารางใน public schema มี audit trail แล้ว ยกเว้น `sc_users`/`sc_employees` ที่ยัง
+  ไม่มี** — ถ้าจะทำต่อในอนาคต 2 ตารางนี้เป็นตัวถัดไปที่ควรทำ โดยเฉพาะ `sc_users` ที่เคยมีเหตุการณ์ profile
+  หายแบบกู้คืนไม่ได้มาแล้วครั้งหนึ่ง 2026-07-11)
+
 ## คำสั่งที่ใช้บ่อย
 
 ```bash
