@@ -503,8 +503,16 @@ session ใหม่ผ่าน supabase.com/dashboard/account/tokens — เ�
      นี้ไม่มี sudo ไปสร้างไฟล์ใน `/etc/` ได้) — เนื้อหาไม่ commit เข้า git (มี DB password จริง)
   5. ทดสอบ end-to-end ผ่านครบแล้ว: `pg_dump` (456K) → อัปโหลด R2 bucket `ddservicedb` prefix
      `sneakercaredb/` → เก็บสำเนา local → cron entry ที่ `crontab -l` เช็คแล้วรันตรงตามที่ตั้งใจ (exit 0)
-     **ยังไม่ได้ตั้ง Telegram alert สำหรับแจ้งเตือนถ้า backup ล้มเหลว** (`TELEGRAM_BOT_TOKEN`/
-     `TELEGRAM_OPS_CHAT_ID` ในไฟล์ config ปล่อยว่างไว้ก่อน) ถ้าจะเปิดทีหลังแค่เติมสองค่านี้ในไฟล์เดิม
+  6. **Telegram alert ตั้งเสร็จแล้วด้วย (2026-08-27)** — ใช้ bot `@SneakerCareStockBot` ตัวเดิม (ดึง token
+     คืนจาก DB ไม่ได้เพราะ `inv_integration_secrets` เป็น write-only ทางเดียวตามดีไซน์ ต้องไปเอาจาก
+     @BotFather → `/mybots` แทน) ส่งเข้ากลุ่ม **"SneakerCare Team" เดิม** (chat_id `-5034072774` —
+     ตั้งใจเลือกใช้กลุ่มเดิมเพื่อความง่าย ทั้งที่โดยหลักการควรแยกไปแชท Admin ต่างหากเพื่อไม่ให้พนักงานเห็น
+     noise เรื่อง technical) ทดสอบส่งข้อความจริงผ่านแล้ว (`ok: true`)
+  7. **R2 lifecycle rule ยังไม่ได้ตั้ง** — ลองยิง S3 API `PutBucketLifecycleConfiguration` ตรงๆ ด้วย
+     R2 credentials ที่มีแล้ว โดน 403 เพราะ token scope เป็นแค่ "Object Read & Write" ไม่ใช่
+     "Admin Read & Write" ต้องตั้งเองที่ Cloudflare dashboard → R2 → bucket `ddservicedb` → Settings →
+     Object lifecycle rules → prefix `sneakercaredb/` (บักเก็ตนี้ใช้ร่วมกับโปรเจกต์อื่นด้วย เช่น
+     `Mikrotikapi-db/` ต้องระบุ prefix ให้ชัดกันลบผิดโปรเจกต์)
 
 ## คำสั่งที่ใช้บ่อย
 
