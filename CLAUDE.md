@@ -487,6 +487,25 @@ session ใหม่ผ่าน supabase.com/dashboard/account/tokens — เ�
   ไม่มี** — ถ้าจะทำต่อในอนาคต 2 ตารางนี้เป็นตัวถัดไปที่ควรทำ โดยเฉพาะ `sc_users` ที่เคยมีเหตุการณ์ profile
   หายแบบกู้คืนไม่ได้มาแล้วครั้งหนึ่ง 2026-07-11)
 
+- **2026-08-27**: ตั้ง `scripts/backup-db-to-r2.sh` รันจริงบนเซิร์ฟเวอร์สำเร็จแล้ว (cron ทุกวันตี 3) เจอ
+  ปัญหาจริงหลายจุดที่แก้ไปแล้วและบันทึกไว้ในคอมเมนต์บนของสคริปต์เองด้วย (สำคัญ อ่านก่อนแก้สคริปต์นี้อีก):
+  1. **เซิร์ฟเวอร์ไม่มี IPv6 เลย** และ "Direct connection" ของ Supabase (host `db.xxx.supabase.co`) resolve
+     เป็น IPv6 อย่างเดียว ต้องใช้ **"Session pooler"** (host `aws-*.pooler.supabase.com`) แทนเสมอสำหรับ
+     เซิร์ฟเวอร์ที่ไม่มี IPv6 — เช็คด้วย `ip -6 addr show scope global` ถ้าว่างเปล่าคือไม่มี IPv6
+  2. Ubuntu 24.04 มีแค่ `postgresql-client-16` ใน repo default ต้องเพิ่ม PGDG repo ก่อนถึงจะลง v17 ได้
+     (ตรงกับ server ที่เป็น Postgres 17.6) — และหลังลงแล้ว **`pg_dump` เปล่าบน PATH ยังชี้ไป v16 เดิม**
+     (`update-alternatives` ไม่สลับ default ให้อัตโนมัติ) สคริปต์แก้แล้วโดยเรียก
+     `/usr/lib/postgresql/17/bin/pg_dump` ตรงๆ (override ได้ผ่าน `PG_DUMP_BIN`)
+  3. User ที่รัน cron (`ddservice`) ไม่มี passwordless sudo — `LOCAL_BACKUP_DIR` เปลี่ยนจาก `/var/backups/`
+     เป็น `$HOME/backups/sneakercare` และ log ของ cron job ก็ต้องชี้เข้า home directory เหมือนกัน
+     (`~/sneakercare-backup.log`) ไม่ใช่ `/var/log/` ตรงๆ
+  4. config จริงเก็บไว้ที่ `/home/ddservice/sneakercare-backup.env` (ไม่ใช่ `/etc/` ตามแผนเดิม เพราะ user
+     นี้ไม่มี sudo ไปสร้างไฟล์ใน `/etc/` ได้) — เนื้อหาไม่ commit เข้า git (มี DB password จริง)
+  5. ทดสอบ end-to-end ผ่านครบแล้ว: `pg_dump` (456K) → อัปโหลด R2 bucket `ddservicedb` prefix
+     `sneakercaredb/` → เก็บสำเนา local → cron entry ที่ `crontab -l` เช็คแล้วรันตรงตามที่ตั้งใจ (exit 0)
+     **ยังไม่ได้ตั้ง Telegram alert สำหรับแจ้งเตือนถ้า backup ล้มเหลว** (`TELEGRAM_BOT_TOKEN`/
+     `TELEGRAM_OPS_CHAT_ID` ในไฟล์ config ปล่อยว่างไว้ก่อน) ถ้าจะเปิดทีหลังแค่เติมสองค่านี้ในไฟล์เดิม
+
 ## คำสั่งที่ใช้บ่อย
 
 ```bash
