@@ -451,6 +451,31 @@ session ใหม่ผ่าน supabase.com/dashboard/account/tokens — เ�
   - **บทเรียน**: การแก้ช่องโหว่ RLS ทีละตารางตามที่เจอ report/incident ไม่พอ **ต้องไล่ `pg_policies` ทั้ง
     schema เป็นระยะ** ไม่ใช่รอให้มีคนแจ้งหรือมีเหตุการณ์ก่อนถึงจะไปเช็คตารางนั้นทีละตัว
 
+- **2026-08-27**: ตาม Security Advisor เพิ่ม (39 warnings + 4 suggestions ที่ยังไม่เคยเห็นรายละเอียด) พบว่า
+  ฟังก์ชัน `SECURITY DEFINER` ทั้ง 10 ตัว GRANT EXECUTE ให้ `public`/`anon`/`authenticated` มาตั้งแต่สร้าง
+  (ค่า default ของ Postgres) **คนที่ไม่ได้ login เลยเรียก RPC พวกนี้ตรงๆ ได้** (ฟังก์ชันเองปฏิเสธอยู่แล้ว
+  เพราะ role check ภายในคืน null ให้ anon เสมอ แต่ไม่ควรเปิดพื้นผิวโดยไม่จำเป็น) แก้ด้วย
+  `0035_revoke_unnecessary_function_execute_grants.sql`: revoke จาก public/anon ทั้ง 10 ตัว เหลือ
+  authenticated + service_role เท่านั้น และ revoke `inv_fn_apply_stock_transaction()`/
+  `inv_fn_write_audit_log()` (trigger function ล้วน ไม่ควรมีใครเรียกตรงเลย) จาก authenticated ด้วย —
+  ยืนยันแล้วด้วย real JWT ว่า trigger ยังทำงานปกติ (Postgres ไม่เช็ค EXECUTE ตอน trigger ทำงานอัตโนมัติ
+  เช็คแค่ตอนเรียกเป็น RPC ตรงๆ) และ anon/authenticated เรียก RPC พวกนี้ตรงไม่ได้แล้วจริง
+
+  **ที่เหลือใน Security Advisor ตรวจแล้วว่าไม่ต้องแก้/เป็นดีไซน์ตั้งใจ**:
+  - "RLS Policy Always True" x6 (`sc_opex`/`sc_payments`/`sc_sales` INSERT/UPDATE) — ตั้งใจเปิดไว้เพราะ
+    staff ต้องกรอกข้อมูลขาย/รับเงิน/ค่าใช้จ่ายระหว่างทำงานปกติ (ตรงตามที่ 0004/0012/0034 ออกแบบไว้) **แต่
+    เช็คแล้วพบว่าทั้ง 3 ตารางนี้ไม่มี audit trigger เลยสักตัว** (ต่างจาก `inv_*` ที่มี `inv_audit_logs`)
+    แปลว่า manager/staff แก้ยอดขาย/ยอดรับเงิน/ค่าใช้จ่ายย้อนหลังได้โดยไม่มีร่องรอยว่าใครแก้อะไรจากอะไรเป็น
+    อะไร — **ยังไม่ได้แก้ เพราะเป็นการตัดสินใจเชิงธุรกิจ** (จะจำกัด UPDATE ให้แคบลง หรือเพิ่ม audit
+    trigger แบบเดียวกับ `inv_*` ก็ได้) ต้องคุยกับ user ก่อนว่าจะเลือกทางไหน
+  - "Public Bucket Allows Listing" (`storage.branding`) — bucket โลโก้ที่ตั้งใจให้ public เห็นอยู่แล้ว
+    ความเสี่ยงต่ำ ไม่มีข้อมูลอ่อนไหว ไม่จำเป็นต้องแก้
+  - "Leaked Password Protection Disabled" — ตั้งค่าใน Auth ที่ dashboard โดยตรง ไม่ใช่ migration
+    เช็คก่อนว่า plan ปัจจุบัน (Free) เปิดใช้ฟีเจอร์นี้ได้ไหม ถ้าได้แนะนำให้เปิด
+  - 4 suggestions "RLS Enabled No Policy" (`inv_integration_secrets`, `inv_notification_log`,
+    `profiles`, `sc_expenses`) — ตรงตามดีไซน์ตั้งใจ (deny-all ไม่มี policy เลยแปลว่าไม่มีใครเข้าถึงได้เลย
+    แม้แต่ admin ผ่าน API — ถูกต้องแล้วสำหรับตารางที่ไม่มีใครใช้/เก็บ secret) ไม่ต้องแก้
+
 ## คำสั่งที่ใช้บ่อย
 
 ```bash
