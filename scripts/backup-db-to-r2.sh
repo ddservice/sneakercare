@@ -106,7 +106,9 @@ echo "[$(date -u +%FT%TZ)] อัปโหลดสำเร็จ"
 
 # เก็บสำเนาล่าสุดไว้บนเซิร์ฟเวอร์ด้วย (กู้เร็วกว่าดาวน์โหลดจาก R2) แยกไว้นอก /var/www/sneakercare/ โดยตั้งใจ
 # (deploy.yml ทำ git pull ในโฟลเดอร์นั้นทุกครั้งที่ push ขึ้น main ห้ามเก็บไฟล์ backup ปนไว้ในนั้น)
-LOCAL_BACKUP_DIR="${LOCAL_BACKUP_DIR:-/var/backups/sneakercare}"
+# default อยู่ใต้ home ของ user ที่รัน cron เอง (ไม่ใช่ /var/backups/) เพราะ user นี้ไม่มี passwordless sudo
+# ไป mkdir ใน /var/backups/ ตรงๆ ไม่ได้ — เจอปัญหานี้จริงตอน setup ครั้งแรก (2026-08-27)
+LOCAL_BACKUP_DIR="${LOCAL_BACKUP_DIR:-$HOME/backups/sneakercare}"
 mkdir -p "$LOCAL_BACKUP_DIR"
 cp "$DUMP_FILE" "${LOCAL_BACKUP_DIR}/sneakercare-backup-${STAMP}.dump"
 find "$LOCAL_BACKUP_DIR" -name 'sneakercare-backup-*.dump' -mtime "+${RETENTION_DAYS}" -delete
