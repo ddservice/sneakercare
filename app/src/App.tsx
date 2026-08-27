@@ -1,5 +1,5 @@
 import { lazy, Suspense } from 'react';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClient, QueryClientProvider, MutationCache } from '@tanstack/react-query';
 import { BrowserRouter, Route, Routes } from 'react-router-dom';
 import RequireAuth from './components/RequireAuth';
 import Layout from './components/Layout';
@@ -15,7 +15,20 @@ const Opex = lazy(() => import('./pages/Opex'));
 const Stats = lazy(() => import('./pages/Stats'));
 const Settings = lazy(() => import('./pages/Settings'));
 
-const queryClient = new QueryClient();
+// พบว่า mutation ส่วนใหญ่ในแอปนี้ (toggle ปุ่มเล็กๆ อย่างเปิด/ปิดแจ้งเตือน, แก้จุดสั่งซื้อขั้นต่ำ,
+// ยกเว้นประกันสังคม ฯลฯ) เรียก .mutate() เปล่าๆ ไม่มี onError/try-catch เลย — ถ้า request ล้มเหลว (เช่น
+// เน็ตหลุด, RLS บล็อก) ผู้ใช้จะไม่เห็นอะไรเลย ปุ่มแค่ไม่เปลี่ยนสถานะเงียบๆ ทั้งที่ไม่มี toast library ในแอปนี้
+// ใช้ MutationCache แบบ global แทน ครอบคลุมทุก mutation ในแอปโดยไม่ต้องแก้ทีละไฟล์ — mutation ไหนมี error
+// handling ของตัวเองอยู่แล้ว (เช่น การบันทึกเงินเดือนใน PayrollSection.tsx) จะเห็น alert นี้เพิ่มมาด้วย
+// เป็น safety net ซ้อน ไม่ใช่ปัญหา เพราะ error ที่มี handling อยู่แล้วเกิดไม่บ่อยอยู่แล้ว
+const queryClient = new QueryClient({
+  mutationCache: new MutationCache({
+    onError: (error) => {
+      const message = error instanceof Error ? error.message : 'เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้ง';
+      window.alert(`บันทึกไม่สำเร็จ: ${message}`);
+    },
+  }),
+});
 
 export default function App() {
   return (
