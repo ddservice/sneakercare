@@ -42,7 +42,7 @@ export default async function InventoryHubPage() {
   }
 
   // 3. Fetch current stock items list
-  let itemsQuery = supabase.from("v_staff_stock").select("*").order("name");
+  let itemsQuery = supabase.from("v_item_stock").select("*").order("name");
   if (selectedBranchId) itemsQuery = itemsQuery.eq("branch_id", selectedBranchId);
   const { data: stockItems } = await itemsQuery;
 

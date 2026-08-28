@@ -142,7 +142,12 @@ export async function updateOrderStatus(orderId: string, status: "received" | "i
   const profile = await requireProfile();
   const supabase = await createClient();
 
-  const updatePayload: Record<string, unknown> = {
+  const updatePayload: {
+    status: "received" | "in_progress" | "ready" | "delivered" | "cancelled";
+    updated_at: string;
+    completed_at?: string;
+    delivered_at?: string;
+  } = {
     status,
     updated_at: new Date().toISOString(),
   };
