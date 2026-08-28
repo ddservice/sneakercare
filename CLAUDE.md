@@ -4,8 +4,20 @@
 
 ## ภาพรวมโปรเจกต์
 
-ระบบนี้แทนที่ระบบเดิมที่เขียนด้วย Google Apps Script + Google Sheets + HTML ไฟล์เดียว (เก็บไว้ที่ `legacy/`
-เพื่ออ้างอิงตอน migrate ข้อมูลเท่านั้น — **ห้ามแก้ไขหรือรันไฟล์ใน `legacy/` เป็นระบบ production**)
+ระบบนี้กำลังทยอยแทนที่ระบบเดิมที่เขียนด้วย Google Apps Script + Google Sheets + HTML ไฟล์เดียว (อยู่ที่ `legacy/`)
+
+**สถานะจริงของ `legacy/` (แก้ให้ตรงความจริง 2026-08-28):** ส่วน**คลังสินค้า**ย้ายมาระบบใหม่แล้ว แต่ส่วน
+**การเงิน/ยอดขาย/กำไร/ค่าใช้จ่าย/payroll** (แท็บภาพรวมใน `legacy/sneakercare_dashboard.html`) **ยังใช้งาน
+จริงอยู่ทุกวัน** เพราะระบบใหม่ยังไม่มีหน้าพวกนี้ (ดู "งานที่จงใจยังไม่ทำ") ดังนั้น:
+- `legacy/sneakercare_dashboard.html` = **production ที่ยังมีชีวิต** แก้ได้เมื่อเจอบั๊กที่กระทบตัวเลขเงิน
+  แต่ต้องแก้อย่างระวังและอธิบายเหตุผลไว้ในคอมเมนต์เสมอ
+- `legacy/SneakerCare_GAS.js`, `legacy/sneakercare_gas_backend.js` = โค้ดฝั่ง Apps Script ที่ deploy อยู่จริง
+  **ห้ามแก้จาก repo นี้** เพราะ repo ไม่ใช่ source of truth ของมัน (ตัวจริงอยู่ในโปรเจกต์ Apps Script)
+- เมื่อระบบใหม่มีหน้าการเงินครบแล้ว ค่อยกลับมาปิดสวิตช์ทั้งโฟลเดอร์นี้เป็น "อ้างอิงอย่างเดียว"
+
+⚠️ **ตัวเลขในแท็บภาพรวมของ legacy มี fallback ที่ "เดา" จาก config ปัจจุบัน** เมื่อเดือนที่เลือกยังบันทึก
+opex ไม่ครบ (ค่าเช่าห้อง + ประกันสังคม) — ตั้งแต่ 2026-08-28 fallback พวกนี้จะขึ้นแถบเตือน "ประมาณการ"
+สีเหลืองใต้การ์ดกำไรสุทธิแล้ว **ห้ามลบแถบเตือนนี้ออก** เคยทำให้ยอดกำไรสุทธิผิดไป 250 บาทโดยไม่มีใครรู้มาแล้ว
 
 อ่านบริบทการตัดสินใจทั้งหมดที่ `docs/architecture.md` ก่อนเริ่มงานทุกครั้งที่ไม่แน่ใจว่า "ทำไมถึงออกแบบแบบนี้"
 และดู schema เต็มที่ `docs/database-schema.sql`
@@ -111,6 +123,9 @@ CLAUDE.md                 คู่มือนี้ — อัปเดตท�
 
 - `npm run dev` — รัน Next.js dev server (บังคับ `--webpack` ไว้ใน package.json แล้ว)
 - `npm run build` — production build (บังคับ `--webpack` เช่นกัน)
+- `npm run typecheck` — `tsc --noEmit` ใช้เช็คเร็วๆ ระหว่าง dev ไม่ต้องรอ build เต็ม
+  ⚠️ ถ้าเจอ error ใน `.next/types/validator.ts` แปลว่า `.next` ค้างจาก build เก่า ไม่ใช่โค้ดเราผิด —
+  รัน `npm run build` ใหม่ให้ regenerate แล้วค่อย typecheck (ใน CI ไม่เจอปัญหานี้เพราะ `.next` ยังไม่มี)
 - `npm start` — production server ฟังที่ `127.0.0.1` (ให้อยู่หลัง Nginx บน VPS)
 - `supabase db push` — apply migrations ไปยัง Supabase project (ต้อง `supabase link` ก่อน)
 - `supabase db diff` — ตรวจสอบ schema drift ก่อน commit migration ใหม่
@@ -184,6 +199,28 @@ of root directory`) เพราะเทียบ UNC path กับ drive-lett
 - ลดโค้ดซ้ำใน `app/actions/stock.ts` (logic ตรวจสิทธิ์สาขาที่ซ้ำกัน 5 จุด) และ dedupe query รายชื่อสาขาที่
   `(app)/layout.tsx` กับ `/admin/users` เคย query ซ้ำกันทุก request ด้วย React `cache()` (`getActiveBranches`
   ใน `lib/branch.ts`)
+
+## เพิ่มเติม 2026-08-28
+
+- **CI (`.github/workflows/ci.yml`)** — ก่อนหน้านี้ไม่มีอะไรรัน test/lint/build อัตโนมัติเลย ทั้งที่มี pgTAP
+  ครอบกฎธุรกิจสำคัญอยู่แล้ว มี 2 job: `web` (lint → typecheck → build ด้วย env ปลอม) และ `database`
+  (`supabase start` → `supabase test db`) — env ใน job `web` เป็นค่าปลอมโดยตั้งใจ เพราะทุกหน้าที่ query
+  ข้อมูลเป็น dynamic route (เรียก `cookies()` ผ่าน `requireProfile()`) จึงไม่มีการต่อ DB จริงตอน build
+  **ถ้าวันหนึ่ง build พังเพราะต่อ DB ไม่ได้ = มีหน้าที่กลายเป็น static ไปแล้ว ให้แก้หน้านั้น ห้ามเอา secret จริงใส่ CI**
+- **แบ่งหน้า (pagination) ที่ประวัติกับ Audit Log** (`lib/pagination.ts`, `components/pagination.tsx`) —
+  ของเดิมใช้ `.limit(100)` ตายตัวโดยไม่บอกผู้ใช้ พอข้อมูลเกิน 100 แถวจะตัดของเก่าทิ้งเงียบๆ อันตรายที่สุด
+  คือ Audit Log ที่ออกแบบมาเพื่อตรวจสอบย้อนหลังแต่ย้อนได้แค่ 100 แถว ตอนนี้ใช้ `.range()` +
+  `count: "exact"` แสดงช่วงที่กำลังดูและจำนวนทั้งหมด หน้าละ 50
+- **หน้ารายงานเพิ่มตัวกรองช่วงเดือน + ดาวน์โหลด CSV** (`lib/reports.ts`, `app/(app)/reports/export/route.ts`) —
+  ตรรกะช่วงเดือนกับ query อยู่ที่ `lib/reports.ts` ที่เดียว **ห้ามเขียน query ซ้ำในฝั่ง route** เพราะตัวเลข
+  บนจอกับในไฟล์ CSV ต้องมาจากชุดเดียวกันเสมอ · route export บังคับสิทธิ์ชุดเดียวกับหน้าเว็บและใช้
+  client ปกติที่ผูกคุกกี้ผู้ใช้ **ห้ามเปลี่ยนไปใช้ admin client (service_role) เด็ดขาด** จะพัง RLS ทั้งหมด ·
+  CSV ใส่ BOM เพราะ Excel บน Windows อ่าน UTF-8 ไร้ BOM เป็น ANSI แล้วภาษาไทยกลายเป็นตัวขยะ
+- **`scripts/inspect-inv-schema.sql`** — สคริปต์ **อ่านอย่างเดียว** สำหรับสะสาง schema แปลกปลอม `inv_`
+  ใน `SneakerCareDB` รันใน SQL Editor ของ **โปรเจกต์นั้น** (ห้าม `supabase link` ไป) ตรวจ 6 ส่วน: รายการ
+  object, สถิติการใช้งาน, **FK ที่โยงกับตารางอื่น**, object ที่พึ่งพา `inv_*`, จำนวนแถวจริง, function ที่เกี่ยวข้อง
+  คำสั่ง drop คอมเมนต์ไว้ท้ายไฟล์พร้อม checklist — **ห้าม drop แบบ loop ตาม pattern และห้ามใช้ `cascade`**
+  → **งานนี้ยังค้าง รอรันสคริปต์แล้วตัดสินใจ**
 
 ## งานที่จงใจยังไม่ทำ
 
