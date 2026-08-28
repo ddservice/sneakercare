@@ -94,15 +94,23 @@ opex ไม่ครบ (ค่าเช่าห้อง + ประกัน�
 ```
 /app                      Next.js pages: dashboard, stock-in, stock-out, history, adjustments, reports, admin
 /app/actions              Server Actions (stock, users, settings, auth, branch)
-/components               shared UI components (shadcn/ui)
+/app/(app)/reports/export CSV download route (บังคับสิทธิ์เดียวกับหน้า /reports)
+/components               shared UI components (shadcn/ui) + pagination.tsx
 /lib/permissions.ts       แผนที่สิทธิ์มองเห็น vs กรอก/แก้ไข ต่อเมนู (ต้องสอดคล้อง RLS)
+/lib/pagination.ts        ตัวช่วยแบ่งหน้า (pure — มีเทสต์)
+/lib/reports-range.ts     ตรรกะช่วงเดือน + CSV (pure ไม่มี server-only — มีเทสต์)
+/lib/reports.ts           query ของหน้ารายงาน (server-only)
 /lib/supabase             browser client / server client / admin (service_role) client
-/scripts                  one-time tools เช่น migrate-from-legacy.mjs
+/scripts                  เครื่องมือ: migrate-from-legacy.mjs, backup-db-to-r2.sh,
+                          verify-backup.sh, inspect-inv-schema.sql, test-*.mjs
 /supabase/migrations      SQL migrations (เริ่มจาก 0001_init.sql — ห้ามแก้ไฟล์ที่ apply แล้ว)
 /supabase/functions       Edge Functions เช่น low-stock-alert (รันตาม cron)
-/legacy                   ระบบเดิม (Google Apps Script) — อ้างอิง migration เท่านั้น
+/supabase/tests/database  pgTAP tests (รันด้วย supabase test db)
+/.github/workflows/ci.yml CI: lint, typecheck, test:legacy, test:reports, build, pgTAP
+/legacy                   ระบบเดิม — ⚠️ หน้าการเงินยังเป็น production ที่ใช้จริง (ดูหัวข้อภาพรวม)
 docs/architecture.md      เหตุผลการออกแบบทั้งหมด
 docs/database-schema.sql  schema เริ่มต้น (ดู migrations สำหรับของที่เพิ่มทีหลัง)
+HANDOFF.md                งานค้าง + คำสั่งสำหรับ agent ตัวถัดไป
 CLAUDE.md                 คู่มือนี้ — อัปเดตทุกครั้งที่จบงานใหญ่
 ```
 
@@ -209,6 +217,16 @@ of root directory`) เพราะเทียบ UNC path กับ drive-lett
 
 ## เพิ่มเติม 2026-08-28
 
+- **แถบเตือน "ประมาณการ" ในหน้าภาพรวมของ legacy** (`legacy/sneakercare_dashboard.html`) — ต้นเรื่อง
+  ของงานรอบนี้: ยอดกำไรสุทธิผิดไป 250 บาทโดยไม่มีอะไรบอก เพราะหน้านั้นเดา 2 ค่าจาก config ปัจจุบัน
+  เมื่อช่วงเวลาที่เลือกยังบันทึก opex ไม่ครบ (ค่าเช่าห้องจาก `_roomsConfig`, ประกันสังคมจากช่องเงินเดือน
+  ในฟอร์ม) **จงใจไม่ลบ fallback ทิ้ง** เพราะลบแล้วรายรับค่าเช่าจะกลายเป็น 0 = ผิดเงียบอีกแบบ
+  แต่ทำให้มองเห็นแทน: badge "ประมาณการ" ใต้การ์ดกำไรสุทธิ + แถบเหลืองบอกว่าตัวไหนถูกเดาและต้องทำอะไร
+  ต่อ · มีเทสต์กันไว้แล้ว (`npm run test:legacy`) **ห้ามลบแถบเตือนนี้**
+- **เทสต์ JS 2 ชุด รันได้โดยไม่ต้องต่อ Supabase/ล็อกอิน/Docker** — `scripts/test-legacy-estimate-banner.mjs`
+  (ดึงฟังก์ชันจาก HTML จริงมารันบน DOM ปลอม — จงใจไม่ copy โค้ดมาเขียนใหม่ เพราะนั่นจะทดสอบแค่สำเนา)
+  และ `scripts/test-reports-range.mjs` (46 ข้อ ครอบขอบเดือน/CSV/เลขหน้า) ทั้งคู่ใช้ type stripping
+  ของ Node ≥22.6 อ่าน `.ts` ตรงๆ ไม่ต้องมี build step และไม่มี test framework
 - **CI (`.github/workflows/ci.yml`)** — ก่อนหน้านี้ไม่มีอะไรรัน test/lint/build อัตโนมัติเลย ทั้งที่มี pgTAP
   ครอบกฎธุรกิจสำคัญอยู่แล้ว มี 2 job: `web` (lint → typecheck → build ด้วย env ปลอม) และ `database`
   (`supabase start` → `supabase test db`) — env ใน job `web` เป็นค่าปลอมโดยตั้งใจ เพราะทุกหน้าที่ query
@@ -245,6 +263,22 @@ of root directory`) เพราะเทียบ UNC path กับ drive-lett
   ทำให้ "เงียบ" แยกไม่ออกระหว่าง *สำรองสำเร็จ* กับ *cron ตายไปแล้วจึงไม่มีอะไรรันและไม่มีอะไร fail*
   พอมีข้อความทุกวัน ความเงียบจึงกลายเป็นสัญญาณผิดปกติที่คนสังเกตได้เอง **ห้ามถอดการแจ้งเตือนตอนสำเร็จออก**
   ด้วยเหตุผลว่า "รก" — มันคือ heartbeat ไม่ใช่ log
+
+## งานค้าง ณ 2026-08-28 (รายละเอียดเต็ม + คำสั่งสำหรับ agent อยู่ที่ `HANDOFF.md`)
+
+เรียงตามความสำคัญ **ข้อ 1-3 ทำแทนกันไม่ได้ ต้องใช้สิทธิ์/ข้อมูลที่มีแต่เจ้าของโปรเจกต์**
+
+1. **Push ขึ้น remote** — repo นี้ยัง**ไม่มี remote เลย** (`git remote -v` ว่าง) มี 9 commits ค้างอยู่
+   เฉพาะบนเครื่องนี้เครื่องเดียว ไม่มีสำเนาที่อื่น · branch ชื่อ `master` ไม่ใช่ `main`
+2. **Deploy ขึ้น VPS** — รอบล่าสุด**ไม่มี migration ใหม่** จึงเป็น code-only ไม่ต้อง `supabase db push`
+   · หลัง deploy ต้องแก้ crontab ให้ต่อ `&& scripts/verify-backup.sh` ท้ายคำสั่ง backup
+3. **สะสาง schema `inv_` ใน `SneakerCareDB`** — รัน `scripts/inspect-inv-schema.sql` (อ่านอย่างเดียว)
+   ใน SQL Editor ของโปรเจกต์นั้น **ห้าม `supabase link` ไป** แล้วค่อยตัดสินใจ drop ตาม checklist ท้ายไฟล์
+4. **ยังไม่เคยเห็นด้วยตาบนเบราว์เซอร์**: แถบเตือน "ประมาณการ", ปุ่มดาวน์โหลด CSV, ปุ่มแบ่งหน้า —
+   logic ผ่านเทสต์หมดแล้ว แต่ CSS/layout ยังไม่มีใครตรวจ
+5. **`verify-backup.sh --deep` ยังไม่เคยรันจริง** (เครื่อง dev ไม่มี Docker/pg_restore) ครั้งแรกบน VPS
+   ให้รันด้วยมือก่อน อย่าเพิ่งใส่ cron
+6. **CI ยังไม่เคยรันจริง** เพราะยังไม่มี remote — จะเริ่มทำงานหลังข้อ 1
 
 ## งานที่จงใจยังไม่ทำ
 
