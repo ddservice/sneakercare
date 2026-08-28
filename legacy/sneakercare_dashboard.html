@@ -1046,9 +1046,16 @@
             <i class="ti ti-scale"></i> กำไรสุทธิ
           </div>
           <div style="font-size:22px; font-weight:800; color:#fff" id="sum_profit">0.00</div>
-          <div style="font-size:11px; color:#bae6fd; margin-top:2px">บาท</div>
+          <div style="font-size:11px; color:#bae6fd; margin-top:2px" id="sum_profit_sub">บาท</div>
         </div>
 
+      </div>
+
+      <!-- Warns when any figure above was estimated from CURRENT config instead of
+           the opex actually saved for the selected period (see _estimateNotes) -->
+      <div id="sum_estimate_warning"
+        style="display:none; margin:-4px 0 14px; padding:10px 14px; border-radius:10px;
+               background:#fffbeb; border:1.5px solid #fde68a; color:#92400e; font-size:12px; line-height:1.6">
       </div>
 
       <!-- Shoe sizes breakdowns -->
@@ -2754,6 +2761,14 @@
         }
       });
 
+      // Notes for figures below that had to be GUESSED from current config because the
+      // selected period has no saved opex. These make the profit card show a visible
+      // "ประมาณการ" warning — a guessed profit must never look like a measured one.
+      // (own formatter: fc2 below is a `const` declared later in this function, so it is
+      //  still in the temporal dead zone here and cannot be called yet)
+      const _fmt2 = v => v.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      const _estimateNotes = [];
+
       // Fallback: if no rental_income saved in opex for this period, read base rent from _roomsConfig
       const hasRentalOpex = activeOpexLogs.some(o => o.category === 'rental_income');
       if (!hasRentalOpex && Array.isArray(_roomsConfig) && _roomsConfig.length > 0) {
@@ -2762,6 +2777,9 @@
         if (configRental > 0) {
           rentalIncomeAmt = configRental * selectedMonths.length;
           console.log('[DEBUG] rental fallback from config:', configRental, '× months:', selectedMonths.length, '=', rentalIncomeAmt);
+          _estimateNotes.push('<b>รายรับค่าเช่าห้อง</b> คิดจากค่าเช่าที่ตั้งไว้<u>ปัจจุบัน</u> ('
+            + _fmt2(configRental) + ' ฿/เดือน × ' + selectedMonths.length + ' เดือน) เพราะช่วงเวลานี้ยังไม่ได้บันทึกค่าเช่าไว้ใน SC_Opex'
+            + ' — ถ้าตอนนั้นค่าเช่าหรือผู้เช่าไม่เหมือนตอนนี้ ตัวเลขจะคลาดเคลื่อน');
         }
       }
 
@@ -2771,6 +2789,7 @@
       const ssoAlreadySaved = activeOpexLogs.some(o => o.category === 'ภาษี' &&
         (o.key === 'sso_employee' || o.key === 'sso_employer'));
       if (hasStaffSaved && !ssoAlreadySaved) {
+        let ssoEstimated = 0;
         employeesList.forEach(emp => {
           if (emp.status === "Inactive") return;
           const sal = +document.getElementById(`slip_sal_${emp.name}`)?.value || emp.salary || 0;
@@ -2778,8 +2797,15 @@
             const ssoBase = Math.min(sal, 15000);
             const ssoEmp = Math.round(ssoBase * 0.05);
             taxAmt += ssoEmp * 2; // employee + employer portions
+            ssoEstimated += ssoEmp * 2;
           }
         });
+        if (ssoEstimated > 0) {
+          console.log('[DEBUG] SSO fallback from current salaries:', ssoEstimated);
+          _estimateNotes.push('<b>ประกันสังคม</b> ประเมินจากเงินเดือน<u>ปัจจุบัน</u>ในฟอร์ม ('
+            + _fmt2(ssoEstimated) + ' ฿) เพราะช่วงเวลานี้บันทึกค่าแรงไว้แล้วแต่ไม่มีแถว sso_employee/sso_employer'
+            + ' — ถ้าตอนนั้นเงินเดือนหรือจำนวนพนักงานไม่เหมือนตอนนี้ ตัวเลขจะคลาดเคลื่อน');
+        }
       }
 
       console.log('[DEBUG] updateSummaryData result: filteredSales=', filteredSales.length,
@@ -2846,6 +2872,27 @@
       if (profitEl) {
         profitEl.textContent = fc2(netProfit);
         profitEl.className = 'kpi-val ' + (netProfit >= 0 ? 'green' : 'red');
+      }
+
+      // Mark the profit figure as estimated whenever any input above was guessed from
+      // current config rather than read from what was actually saved for this period.
+      const profitSub = document.getElementById('sum_profit_sub');
+      if (profitSub) {
+        profitSub.innerHTML = _estimateNotes.length
+          ? 'บาท &nbsp;<span style="background:#fef3c7;color:#92400e;font-size:10px;padding:1px 6px;border-radius:10px;font-weight:700">ประมาณการ</span>'
+          : 'บาท';
+      }
+      const estWarnEl = document.getElementById('sum_estimate_warning');
+      if (estWarnEl) {
+        if (_estimateNotes.length) {
+          estWarnEl.innerHTML = '<b>⚠ ตัวเลขนี้เป็นการประมาณการ ไม่ใช่ยอดจริงของช่วงเวลาที่เลือก</b><br>'
+            + _estimateNotes.map(n => '• ' + n).join('<br>')
+            + '<br><span style="opacity:.85">วิธีแก้ให้ได้ยอดจริง: ไปแท็บค่าใช้จ่าย เลือกเดือนที่ต้องการ แล้วกดบันทึกข้อมูลให้ครบก่อน</span>';
+          estWarnEl.style.display = '';
+        } else {
+          estWarnEl.innerHTML = '';
+          estWarnEl.style.display = 'none';
+        }
       }
 
       // Breakdown table
