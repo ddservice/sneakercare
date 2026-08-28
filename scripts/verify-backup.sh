@@ -43,22 +43,21 @@ fi
 
 LOCAL_BACKUP_DIR="${LOCAL_BACKUP_DIR:-/var/backups/rrs}"
 
-# ทุกตารางใน supabase/migrations/ — ตรวจรายชื่อได้ด้วย:
-#   grep -rhoiE '^create table (if not exists )?(public\.)?[a-z_]+' supabase/migrations/*.sql \
-#     | sed -E 's/.*[ .]//' | sort -u
-# เพิ่ม migration ที่สร้างตารางใหม่เมื่อไหร่ ให้เติมชื่อที่นี่ด้วย — ถ้าลืม สคริปต์นี้จะไม่รู้ว่า
-# ตารางนั้นหายไปจาก backup ซึ่งเป็นบั๊กประเภทเดียวกับที่สคริปต์นี้มีไว้ดักพอดี
+# รายชื่อตารางหลักของ SneakerCareDB (ทั้ง inv_* ของคลังสินค้า, sc_* ของยอดขาย และ profiles)
+# ตรวจสอบว่ามีข้อมูลจริงอยู่ใน dump
 EXPECTED_TABLES=(
-  app_settings
-  audit_logs
-  branches
-  integration_secrets
-  item_stock
-  items
-  notification_log
+  inv_audit_logs
+  inv_branches
+  inv_integration_secrets
+  inv_item_stock
+  inv_items
+  inv_notification_log
+  inv_stock_transactions
+  inv_suppliers
   profiles
-  stock_transactions
-  suppliers
+  sc_sales
+  sc_payments
+  sc_users
 )
 
 # ขนาดต่ำสุดที่ยังพอสมเหตุสมผล — ไฟล์ที่เล็กกว่านี้แปลว่า dump ขาดกลางคันแทบแน่นอน
