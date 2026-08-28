@@ -56,7 +56,7 @@ fi
 : "${R2_SECRET_ACCESS_KEY:?ต้องตั้งค่า R2_SECRET_ACCESS_KEY}"
 : "${R2_BUCKET:?ต้องตั้งค่า R2_BUCKET}"
 
-RETENTION_DAYS="${BACKUP_RETENTION_DAYS:-14}"
+RETENTION_DAYS="${BACKUP_RETENTION_DAYS:-90}"
 STAMP="$(date -u +%Y%m%d_%H%M%S)"
 WORKDIR="$(mktemp -d)"
 DUMP_FILE="${WORKDIR}/rrs-backup-${STAMP}.dump"
@@ -98,12 +98,31 @@ aws s3 cp "$DUMP_FILE" "s3://${R2_BUCKET}/daily/rrs-backup-${STAMP}.dump" \
 
 echo "[$(date -u +%FT%TZ)] อัปโหลดสำเร็จ"
 
+# ลบไฟล์สำรองบน Cloudflare R2 ที่เก่ากว่า RETENTION_DAYS วัน
+CUTOFF_DATE="$(date -u -d "${RETENTION_DAYS} days ago" +%Y%m%d 2>/dev/null || date -u -v-${RETENTION_DAYS}d +%Y%m%d 2>/dev/null || true)"
+if [[ -n "$CUTOFF_DATE" ]]; then
+  AWS_ACCESS_KEY_ID="$R2_ACCESS_KEY_ID" \
+  AWS_SECRET_ACCESS_KEY="$R2_SECRET_ACCESS_KEY" \
+  aws s3 ls "s3://${R2_BUCKET}/daily/" --endpoint-url "$R2_ENDPOINT" 2>/dev/null | while read -r line; do
+    file_name="$(echo "$line" | awk '{print $4}')"
+    if [[ "$file_name" =~ ([0-9]{8})_ ]]; then
+      file_date="${BASH_REMATCH[1]}"
+      if [[ "$file_date" < "$CUTOFF_DATE" ]]; then
+        echo "[$(date -u +%FT%TZ)] ลบไฟล์เก่าจาก R2: ${file_name} (วันที่ ${file_date} เก่ากว่า ${RETENTION_DAYS} วัน)"
+        AWS_ACCESS_KEY_ID="$R2_ACCESS_KEY_ID" \
+        AWS_SECRET_ACCESS_KEY="$R2_SECRET_ACCESS_KEY" \
+        aws s3 rm "s3://${R2_BUCKET}/daily/${file_name}" --endpoint-url "$R2_ENDPOINT" --only-show-errors || true
+      fi
+    fi
+  done
+fi
+
 # เก็บสำเนาล่าสุดไว้บน VPS ด้วย (กู้เร็วกว่าดาวน์โหลดจาก R2) แยกไว้นอก working tree ของ repo โดยตั้งใจ
 # (ห้ามเก็บในโฟลเดอร์โปรเจกต์ จะได้ไม่เสี่ยงหลุดเข้า git โดยไม่ตั้งใจ) ลบไฟล์เก่ากว่า RETENTION_DAYS วันทิ้ง
 LOCAL_BACKUP_DIR="${LOCAL_BACKUP_DIR:-/var/backups/rrs}"
 mkdir -p "$LOCAL_BACKUP_DIR"
 cp "$DUMP_FILE" "${LOCAL_BACKUP_DIR}/rrs-backup-${STAMP}.dump"
-find "$LOCAL_BACKUP_DIR" -name 'rrs-backup-*.dump' -mtime "+${RETENTION_DAYS}" -delete
+find "$LOCAL_BACKUP_DIR" -name '*.dump' -mtime "+${RETENTION_DAYS}" -delete
 
 # แจ้งเตือน "สำเร็จ" ด้วย ไม่ใช่แจ้งเฉพาะตอนล้มเหลว (heartbeat)
 #
