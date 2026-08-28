@@ -10,7 +10,8 @@
     "typecheck": "tsc --noEmit",
     "test:legacy": "node scripts/test-legacy-estimate-banner.mjs",
     "test:reports": "node --no-warnings=MODULE_TYPELESS_PACKAGE_JSON scripts/test-reports-range.mjs",
-    "migrate:legacy": "node --env-file=.env.local scripts/migrate-from-legacy.mjs"
+    "migrate:legacy": "node --env-file=.env.local scripts/migrate-from-legacy.mjs",
+    "deploy": "node scripts/deploy-vps.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",
