@@ -270,8 +270,9 @@ of root directory`) เพราะเทียบ UNC path กับ drive-lett
 เรียงตามความสำคัญ:
 
 1. **[เสร็จแล้ว] Push ขึ้น remote** — เชื่อม remote `origin` (`https://github.com/ddservice/sneakercare.git`) และ push branch `master` เรียบร้อยแล้ว
-2. **[เสร็จแล้ว] Deploy ขึ้น VPS** — deploy ไปที่ `/var/www/sneakercare` รัน PM2 บนพอร์ต 3003 และแก้ crontab เรียบร้อยแล้ว (เหลือเพียงอัปเดต DB URL ใน `sneakercare-backup.env` และ reload Nginx)
-3. **[ตรวจสอบแล้ว] สะสาง schema `inv_` ใน `SneakerCareDB`** — รัน `scripts/inspect-inv-schema.sql` แล้วพบว่า `sc_users` ผูก FK กับ `inv_branches` และมีข้อมูล 47 items / 110 transactions จึงห้าม DROP เด็ดขาด (บันทึกข้อควรระวังไว้แล้ว)
+2. **[เสร็จแล้ว] Deploy ขึ้น VPS** — deploy ไปที่ `/var/www/sneakercare` รัน PM2 บนพอร์ต 3003
+3. **[เสร็จแล้ว] สำรองข้อมูล & ตรวจสอบ (Backup & Verify)** — อัปเดต credentials ของ `SneakerCareDB` บน VPS, รัน `backup-db-to-r2.sh` และ `verify-backup.sh` ผ่านฉลุย (✅ ไฟล์กู้คืนได้ โครงสร้าง ข้อมูลทุกตาราง และ auth.users ครบ 100%)
+4. **[ตรวจสอบแล้ว] สะสาง schema `inv_` ใน `SneakerCareDB`** — รัน `scripts/inspect-inv-schema.sql` แล้วพบว่า `sc_users` ผูก FK กับ `inv_branches` และมีข้อมูล 47 items / 110 transactions จึงห้าม DROP เด็ดขาด (บันทึกข้อควรระวังไว้แล้ว)
 4. **ยังไม่เคยเห็นด้วยตาบนเบราว์เซอร์**: แถบเตือน "ประมาณการ", ปุ่มดาวน์โหลด CSV, ปุ่มแบ่งหน้า —
    logic ผ่านเทสต์หมดแล้ว แต่ CSS/layout ยังไม่มีใครตรวจ
 5. **`verify-backup.sh --deep` ยังไม่เคยรันจริง** (ต้องมี Docker + pg_restore) ครั้งแรกบน VPS
