@@ -1,22 +1,23 @@
 import type { Metadata } from "next";
-import { Plus_Jakarta_Sans, Prompt } from "next/font/google";
+import { Inter, IBM_Plex_Sans_Thai } from "next/font/google";
 import "./globals.css";
 
-const jakarta = Plus_Jakarta_Sans({
-  variable: "--font-sans",
+const inter = Inter({
+  variable: "--font-inter",
   subsets: ["latin"],
-  weight: ["400", "500", "600", "700", "800"],
+  display: "swap",
 });
 
-const prompt = Prompt({
+const ibmPlexSansThai = IBM_Plex_Sans_Thai({
   variable: "--font-thai",
   subsets: ["thai", "latin"],
   weight: ["300", "400", "500", "600", "700"],
+  display: "swap",
 });
 
 export const metadata: Metadata = {
-  title: "Sneaker Care — Smart Management Dashboard",
-  description: "ระบบบริหารจัดการร้านซักรองเท้า ยอดขาย (POS) และควบคุมคลังสินค้าอัจฉริยะ",
+  title: "SNEAKER CARE — Service & Inventory System",
+  description: "ระบบบริหารจัดการร้านซักรองเท้าและคลังสินค้า",
 };
 
 export default function RootLayout({
@@ -27,9 +28,11 @@ export default function RootLayout({
   return (
     <html
       lang="th"
-      className={`${jakarta.variable} ${prompt.variable} h-full antialiased`}
+      className={`${inter.variable} ${ibmPlexSansThai.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col font-sans bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100">{children}</body>
+      <body className="min-h-full flex flex-col font-sans bg-[#0f172a] text-slate-100 antialiased selection:bg-teal-500 selection:text-white">
+        {children}
+      </body>
     </html>
   );
 }
