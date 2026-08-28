@@ -37,11 +37,15 @@ export const requireProfile = cache(async (): Promise<Profile> => {
     redirect("/login");
   }
 
+  const rawRole = String(profile.role ?? "staff").toLowerCase().replace("-", "_");
+  const role: "admin" | "co_admin" | "staff" =
+    rawRole === "admin" ? "admin" : rawRole === "co_admin" ? "co_admin" : "staff";
+
   return {
     id: profile.id,
     username: profile.username,
-    display_name: profile.display_name,
-    role: profile.role,
+    display_name: profile.display_name || profile.username || "ผู้ใช้",
+    role,
     branch_id: profile.branch_id,
   };
 });
