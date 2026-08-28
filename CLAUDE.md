@@ -269,15 +269,14 @@ of root directory`) เพราะเทียบ UNC path กับ drive-lett
 เรียงตามความสำคัญ:
 
 1. **[เสร็จแล้ว] Push ขึ้น remote** — เชื่อม remote `origin` (`https://github.com/ddservice/sneakercare.git`) และ push branch `master` เรียบร้อยแล้ว
-2. **Deploy ขึ้น VPS** — รอบล่าสุด**ไม่มี migration ใหม่** จึงเป็น code-only ไม่ต้อง `supabase db push`
-   · หลัง deploy ต้องแก้ crontab ให้ต่อ `&& scripts/verify-backup.sh` ท้ายคำสั่ง backup
+2. **[เสร็จแล้ว] Deploy ขึ้น VPS** — deploy ไปที่ `/var/www/sneakercare` รัน PM2 บนพอร์ต 3003 และแก้ crontab เรียบร้อยแล้ว (เหลือเพียงอัปเดต DB URL ใน `sneakercare-backup.env` และ reload Nginx)
 3. **สะสาง schema `inv_` ใน `SneakerCareDB`** — รัน `scripts/inspect-inv-schema.sql` (อ่านอย่างเดียว)
    ใน SQL Editor ของโปรเจกต์นั้น **ห้าม `supabase link` ไป** แล้วค่อยตัดสินใจ drop ตาม checklist ท้ายไฟล์
 4. **ยังไม่เคยเห็นด้วยตาบนเบราว์เซอร์**: แถบเตือน "ประมาณการ", ปุ่มดาวน์โหลด CSV, ปุ่มแบ่งหน้า —
    logic ผ่านเทสต์หมดแล้ว แต่ CSS/layout ยังไม่มีใครตรวจ
-5. **`verify-backup.sh --deep` ยังไม่เคยรันจริง** (เครื่อง dev ไม่มี Docker/pg_restore) ครั้งแรกบน VPS
+5. **`verify-backup.sh --deep` ยังไม่เคยรันจริง** (ต้องมี Docker + pg_restore) ครั้งแรกบน VPS
    ให้รันด้วยมือก่อน อย่าเพิ่งใส่ cron
-6. **CI workflow** — push ขึ้น GitHub แล้ว รอติดตามผล CI บน GitHub Actions
+6. **รัน pgTAP tests (`supabase test db`)** — ทดสอบ DB trigger/RLS (ต้องเปิด Docker Desktop)
 
 ## งานที่จงใจยังไม่ทำ
 
