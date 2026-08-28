@@ -34,32 +34,16 @@
 
 ---
 
-## งานที่ 2 — Deploy ขึ้น VPS ⚠️ ต้องถามเจ้าของก่อน
+## งานที่ 2 — Deploy ขึ้น VPS [เสร็จแล้ว]
 
-**รอบนี้ไม่มี migration ใหม่** เป็น code-only ไม่ต้อง `supabase db push`
-
-```bash
-# บน VPS
-cd <path-ของ-RRS>          # ถามเจ้าของ อย่าเดา
-git pull
-npm ci
-npm run build              # ห้ามถอด --webpack ออก (ดู CLAUDE.md)
-pm2 restart <ชื่อ-app>      # ถามเจ้าของ อย่าเดา
-```
-
-**หลัง deploy ต้องทำเพิ่ม 2 อย่าง:**
-
-1. แก้ crontab ให้ตรวจ backup ต่อท้ายทุกคืน:
-   ```
-   0 3 * * * /usr/bin/env bash -c 'set -a; source /etc/rrs-backup.env; set +a; \
-     <path>/scripts/backup-db-to-r2.sh && <path>/scripts/verify-backup.sh' \
-     >> /var/log/rrs-backup.log 2>&1
-   ```
-2. รัน `bash scripts/verify-backup.sh --deep` **ด้วยมือหนึ่งครั้ง** ก่อนไว้ใจมัน
-   (ต้องมี Docker + `postgresql-client-17` บน VPS) โหมดนี้ยังไม่เคยรันจริงที่ไหนเลย
-
-**หมายเหตุ:** `legacy/sneakercare_dashboard.html` deploy คนละทางกับแอป Next.js
-ต้องถามเจ้าของว่าไฟล์นั้นเสิร์ฟจากไหน แถบเตือน "ประมาณการ" อยู่ในไฟล์นี้
+- Deploy โค้ดลงไดเรกทอรี `/var/www/sneakercare` บน VPS (`157.85.108.84`)
+- ติดตั้ง dependencies (`npm ci`) และรัน Production build (`--webpack`) สำเร็จ
+- รัน PM2 process `sneakercare` บน `127.0.0.1:3003` (สถานะ `online`)
+- บันทึกพอร์ต `3003` ลงใน `/home/ddservice/VPS-PORTS.md`
+- สร้างไฟล์เทมเพลต Nginx [deploy/nginx-sneakercare.conf](file:///Z:/independentz/Web/RRS/deploy/nginx-sneakercare.conf) สำหรับ Reverse proxy ไปที่พอร์ต 3003
+- สร้างสคริปต์ [scripts/deploy-vps.mjs](file:///Z:/independentz/Web/RRS/scripts/deploy-vps.mjs) (`npm run deploy`) สำหรับ deploy อัตโนมัติในอนาคต
+- อัปเดต `crontab` ให้ต่อท้ายด้วย `&& /var/www/sneakercare/scripts/verify-backup.sh` เรียบร้อยแล้ว
+- ⚠️ *สิ่งที่ต้องทำเพิ่มบน VPS:* เปลี่ยน `SUPABASE_DB_URL` ใน `/home/ddservice/sneakercare-backup.env` ให้ชี้ไปที่ `tecrcoienazmtbynuqpg` (`shoe-care-inventory`) แทน `mdlxogfkpwejnqpzhmoy`
 
 ---
 
