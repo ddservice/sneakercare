@@ -124,6 +124,10 @@ CLAUDE.md                 คู่มือนี้ — อัปเดตท�
 - `npm run dev` — รัน Next.js dev server (บังคับ `--webpack` ไว้ใน package.json แล้ว)
 - `npm run build` — production build (บังคับ `--webpack` เช่นกัน)
 - `npm run typecheck` — `tsc --noEmit` ใช้เช็คเร็วๆ ระหว่าง dev ไม่ต้องรอ build เต็ม
+- `npm run test:legacy` — ตรวจว่าแถบเตือน "ประมาณการ" ในหน้าภาพรวมของ legacy ยังทำงาน
+  (ดึงฟังก์ชันจาก HTML จริงมารันบน DOM ปลอมใน Node — ไม่ต้องเปิดเบราว์เซอร์)
+- `npm run test:reports` — ตรรกะช่วงเดือน/CSV/เลขหน้า (`lib/reports-range.ts`, `lib/pagination.ts`)
+  ทั้งสองตัวไม่ต้องต่อ Supabase ไม่ต้องล็อกอิน จึงรันใน CI ได้
   ⚠️ ถ้าเจอ error ใน `.next/types/validator.ts` แปลว่า `.next` ค้างจาก build เก่า ไม่ใช่โค้ดเราผิด —
   รัน `npm run build` ใหม่ให้ regenerate แล้วค่อย typecheck (ใน CI ไม่เจอปัญหานี้เพราะ `.next` ยังไม่มี)
 - `npm start` — production server ฟังที่ `127.0.0.1` (ให้อยู่หลัง Nginx บน VPS)
@@ -214,11 +218,15 @@ of root directory`) เพราะเทียบ UNC path กับ drive-lett
   ของเดิมใช้ `.limit(100)` ตายตัวโดยไม่บอกผู้ใช้ พอข้อมูลเกิน 100 แถวจะตัดของเก่าทิ้งเงียบๆ อันตรายที่สุด
   คือ Audit Log ที่ออกแบบมาเพื่อตรวจสอบย้อนหลังแต่ย้อนได้แค่ 100 แถว ตอนนี้ใช้ `.range()` +
   `count: "exact"` แสดงช่วงที่กำลังดูและจำนวนทั้งหมด หน้าละ 50
-- **หน้ารายงานเพิ่มตัวกรองช่วงเดือน + ดาวน์โหลด CSV** (`lib/reports.ts`, `app/(app)/reports/export/route.ts`) —
-  ตรรกะช่วงเดือนกับ query อยู่ที่ `lib/reports.ts` ที่เดียว **ห้ามเขียน query ซ้ำในฝั่ง route** เพราะตัวเลข
-  บนจอกับในไฟล์ CSV ต้องมาจากชุดเดียวกันเสมอ · route export บังคับสิทธิ์ชุดเดียวกับหน้าเว็บและใช้
-  client ปกติที่ผูกคุกกี้ผู้ใช้ **ห้ามเปลี่ยนไปใช้ admin client (service_role) เด็ดขาด** จะพัง RLS ทั้งหมด ·
-  CSV ใส่ BOM เพราะ Excel บน Windows อ่าน UTF-8 ไร้ BOM เป็น ANSI แล้วภาษาไทยกลายเป็นตัวขยะ
+- **หน้ารายงานเพิ่มตัวกรองช่วงเดือน + ดาวน์โหลด CSV** (`lib/reports.ts`, `lib/reports-range.ts`,
+  `app/(app)/reports/export/route.ts`) — query อยู่ที่ `lib/reports.ts` ที่เดียว **ห้ามเขียน query ซ้ำใน
+  ฝั่ง route** เพราะตัวเลขบนจอกับในไฟล์ CSV ต้องมาจากชุดเดียวกันเสมอ · route export บังคับสิทธิ์ชุด
+  เดียวกับหน้าเว็บและใช้ client ปกติที่ผูกคุกกี้ผู้ใช้ **ห้ามเปลี่ยนไปใช้ admin client (service_role)
+  เด็ดขาด** จะพัง RLS ทั้งหมด · CSV ใส่ BOM เพราะ Excel บน Windows อ่าน UTF-8 ไร้ BOM เป็น ANSI
+  แล้วภาษาไทยกลายเป็นตัวขยะ
+  - **`lib/reports-range.ts` แยกไว้ไม่มี `server-only`โดยตั้งใจ** เพื่อให้เขียนเทสต์ได้ ส่วนที่พลาดง่าย
+    ที่สุดคือขอบเดือน — ใช้ `[gte, lt)` โดย `lt` = ต้นเดือนถัดจาก `to` **ห้ามเปลี่ยนเป็น `lte`
+    กับต้นเดือน `to`** เพราะจะได้ข้อมูลแค่วันที่ 1 ของเดือนสุดท้ายแทนที่จะได้ทั้งเดือน
 - **`scripts/inspect-inv-schema.sql`** — สคริปต์ **อ่านอย่างเดียว** สำหรับสะสาง schema แปลกปลอม `inv_`
   ใน `SneakerCareDB` รันใน SQL Editor ของ **โปรเจกต์นั้น** (ห้าม `supabase link` ไป) ตรวจ 6 ส่วน: รายการ
   object, สถิติการใช้งาน, **FK ที่โยงกับตารางอื่น**, object ที่พึ่งพา `inv_*`, จำนวนแถวจริง, function ที่เกี่ยวข้อง

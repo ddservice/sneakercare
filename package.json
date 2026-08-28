@@ -9,6 +9,7 @@
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
     "test:legacy": "node scripts/test-legacy-estimate-banner.mjs",
+    "test:reports": "node --no-warnings=MODULE_TYPELESS_PACKAGE_JSON scripts/test-reports-range.mjs",
     "migrate:legacy": "node --env-file=.env.local scripts/migrate-from-legacy.mjs"
   },
   "dependencies": {

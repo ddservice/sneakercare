@@ -40,6 +40,10 @@ jobs:
       - name: Legacy estimate-warning guard
         run: npm run test:legacy
 
+      # ตรรกะช่วงเดือน/CSV/เลขหน้า — ทดสอบได้โดยไม่ต้องต่อ Supabase และไม่ต้องล็อกอิน
+      - name: Reports & pagination logic
+        run: npm run test:reports
+
       # ค่า env ด้านล่างเป็นค่าปลอมโดยตั้งใจ — ตอน build ไม่มีการต่อ Supabase จริงสักจุด
       # (ทุกหน้าเรียก cookies() ผ่าน requireProfile() จึงเป็น dynamic route ทั้งหมด ไม่มี
       # prerender ที่ต้อง query จริง) ถ้าวันหนึ่ง build เริ่มพังเพราะต่อ DB ไม่ได้ แปลว่ามีหน้า
