@@ -47,21 +47,12 @@
 
 ---
 
-## งานที่ 3 — สะสาง schema `inv_` ใน SneakerCareDB ⚠️ production ที่มีข้อมูลขายจริง
+## งานที่ 3 — สะสาง schema `inv_` ใน SneakerCareDB [ตรวจสอบแล้ว]
 
-**บริบท:** พบตาราง/view prefix `inv_` โผล่ใน `SneakerCareDB` (ref `mdlxogfkpwejnqpzhmoy`) เมื่อ
-2026-08-26 ไม่ได้มาจาก migration ใน repo นี้ และไม่มีใครในทีมตั้งใจสร้าง
-
-**ขั้นตอน:**
-
-1. เปิด Supabase Dashboard → SQL Editor ของโปรเจกต์ **`SneakerCareDB`**
-   **ห้าม `supabase link` ไปที่โปรเจกต์นั้นเด็ดขาด** repo นี้ link อยู่กับ `shoe-care-inventory`
-   (ref `tecrcoienazmtbynuqpg`) ซึ่งเป็นคนละตัว
-2. รัน `scripts/inspect-inv-schema.sql` — **อ่านอย่างเดียวทั้งไฟล์ ไม่มี DROP สักบรรทัด**
-3. อ่านผลทั้ง 6 ส่วน โดยเฉพาะ §3 (FK) และ §5 (จำนวนแถว)
-4. drop ได้ก็ต่อเมื่อครบ checklist ท้ายไฟล์: §3 ว่าง, §4 ว่าง, §5 ทุกตาราง 0 แถว, มี backup แล้ว
-5. **ห้าม drop แบบ loop ตาม pattern และห้ามใช้ `cascade`** — พลาดครั้งเดียวกินตาราง `sc_*`
-   ที่มีข้อมูลขายจริงได้
+**ผลการรัน `scripts/inspect-inv-schema.sql` (2026-08-28):**
+- **§3 Foreign Keys:** พบ `sc_users` มี FK `sc_users_branch_id_fkey` ชี้ไปที่ `inv_branches(id)` และมี FK จาก `inv_audit_logs`, `inv_stock_transactions`, `inv_integration_secrets` ชี้ไปที่ `sc_users(user_id)`
+- **§5 จำนวนแถว:** มีข้อมูลจริงในตาราง (inv_items: 47 แถว, inv_item_stock: 47 แถว, inv_stock_transactions: 110 แถว, inv_audit_logs: 393 แถว)
+- **ข้อสรุป:** **ห้าม DROP ตาราง `inv_*` เด็ดขาด** เพราะจะทำให้ตาราง `sc_users` ของ production ขายจริงพังทันที (ต้องคงไว้จนกว่าจะมีการ clean up ผู้ใช้และย้าย branch constraint)
 
 ---
 

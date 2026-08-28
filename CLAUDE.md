@@ -38,11 +38,12 @@ opex ไม่ครบ (ค่าเช่าห้อง + ประกัน�
 - Edge Function `low-stock-alert` deploy แล้ว และมี `pg_cron` (ดู `supabase/migrations/0002_schedule_low_stock_alert.sql`)
   เรียกทุก 30 นาที โดยดึง service_role key จาก `supabase.vault` (ไม่มี secret อยู่ในไฟล์ migration ที่ commit)
 - มี branch แรกในระบบแล้ว: "SneakerCare สาขาหลัก" และมี Admin account เดียว (เชิญผ่านอีเมลแล้ว)
-- **⚠️ พบ schema แปลกปลอม prefix `inv_` (`inv_v_inventory_value`, `inv_notification_log`, ...) ใน
-  `SneakerCareDB` (2026-08-26)** — ไม่ได้มาจาก migration ใน repo นี้ (ไม่มีที่ไหนอ้าง prefix `inv_`) และไม่มีใคร
-  ในทีมตั้งใจสร้าง ยังไม่ได้ลบเพราะเป็น production ที่มีข้อมูลขายจริง ต้องตรวจสอบผ่าน dashboard ของ
-  `SneakerCareDB` เอง (list ตาราง/view ที่ขึ้นต้น `inv_%`, เช็คว่าไม่มี FK ไปโยง `sc_*`) ก่อน drop ด้วยมือ —
-  งานนี้ยังค้างอยู่
+- **⚠️ ผลการตรวจสอบ schema `inv_` ใน `SneakerCareDB` (2026-08-28):** รัน `inspect-inv-schema.sql` แล้วพบว่า
+  (1) `sc_users` มี FK `sc_users_branch_id_fkey` โยงไป `inv_branches(id)`
+  (2) มี FK จาก `inv_audit_logs`, `inv_stock_transactions`, `inv_integration_secrets` โยงไป `sc_users(user_id)`
+  (3) ตาราง `inv_*` มีข้อมูลจริง (items 47 แถว, stock_transactions 110 แถว, audit_logs 393 แถว)
+  **ข้อสรุป: ห้าม DROP ตาราง `inv_*` แบบสุ่มสี่สุ่มห้า หรือ CASCADE เด็ดขาด เพราะจะกระทบ `sc_users`**
+  หากจะลบในอนาคต ต้อง drop constraint `sc_users_branch_id_fkey` ก่อน และย้ายข้อมูล/สำรองข้อมูลให้ครบถ้วนก่อนเท่านั้น
 
 ## กฎทางธุรกิจที่ต้องไม่ละเมิด (Non-negotiable business rules)
 
@@ -270,8 +271,7 @@ of root directory`) เพราะเทียบ UNC path กับ drive-lett
 
 1. **[เสร็จแล้ว] Push ขึ้น remote** — เชื่อม remote `origin` (`https://github.com/ddservice/sneakercare.git`) และ push branch `master` เรียบร้อยแล้ว
 2. **[เสร็จแล้ว] Deploy ขึ้น VPS** — deploy ไปที่ `/var/www/sneakercare` รัน PM2 บนพอร์ต 3003 และแก้ crontab เรียบร้อยแล้ว (เหลือเพียงอัปเดต DB URL ใน `sneakercare-backup.env` และ reload Nginx)
-3. **สะสาง schema `inv_` ใน `SneakerCareDB`** — รัน `scripts/inspect-inv-schema.sql` (อ่านอย่างเดียว)
-   ใน SQL Editor ของโปรเจกต์นั้น **ห้าม `supabase link` ไป** แล้วค่อยตัดสินใจ drop ตาม checklist ท้ายไฟล์
+3. **[ตรวจสอบแล้ว] สะสาง schema `inv_` ใน `SneakerCareDB`** — รัน `scripts/inspect-inv-schema.sql` แล้วพบว่า `sc_users` ผูก FK กับ `inv_branches` และมีข้อมูล 47 items / 110 transactions จึงห้าม DROP เด็ดขาด (บันทึกข้อควรระวังไว้แล้ว)
 4. **ยังไม่เคยเห็นด้วยตาบนเบราว์เซอร์**: แถบเตือน "ประมาณการ", ปุ่มดาวน์โหลด CSV, ปุ่มแบ่งหน้า —
    logic ผ่านเทสต์หมดแล้ว แต่ CSS/layout ยังไม่มีใครตรวจ
 5. **`verify-backup.sh --deep` ยังไม่เคยรันจริง** (ต้องมี Docker + pg_restore) ครั้งแรกบน VPS
