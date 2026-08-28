@@ -1,15 +1,9 @@
 import type { Metadata } from "next";
-import { Inter, IBM_Plex_Sans_Thai } from "next/font/google";
+import { IBM_Plex_Sans_Thai } from "next/font/google";
 import "./globals.css";
 
-const inter = Inter({
-  variable: "--font-inter",
-  subsets: ["latin"],
-  display: "swap",
-});
-
 const ibmPlexSansThai = IBM_Plex_Sans_Thai({
-  variable: "--font-thai",
+  variable: "--font-ibm-plex",
   subsets: ["thai", "latin"],
   weight: ["300", "400", "500", "600", "700"],
   display: "swap",
@@ -28,9 +22,9 @@ export default function RootLayout({
   return (
     <html
       lang="th"
-      className={`${inter.variable} ${ibmPlexSansThai.variable} h-full antialiased`}
+      className={`${ibmPlexSansThai.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col font-sans bg-[#0f172a] text-slate-100 antialiased selection:bg-teal-500 selection:text-white">
+      <body className="min-h-full flex flex-col font-sans bg-slate-50 text-slate-900 antialiased selection:bg-teal-600 selection:text-white">
         {children}
       </body>
     </html>
