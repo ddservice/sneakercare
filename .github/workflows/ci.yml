@@ -1,0 +1,73 @@
+name: CI
+
+# ทำไมต้องมี: repo นี้มี pgTAP test ที่ครอบคลุมกฎธุรกิจสำคัญ (ต้นทุนถัวเฉลี่ยเคลื่อนที่,
+# fn_approve_adjustment, staff-safe cost views) แต่ก่อนหน้านี้ไม่มีอะไรรันให้อัตโนมัติเลย —
+# เทสต์ที่ไม่มีใครรันคือเทสต์ที่พังโดยไม่มีใครรู้ โดยเฉพาะชุด staff-safe views ที่กันไม่ให้
+# Staff เห็นข้อมูลต้นทุน ซึ่งถ้าพังเงียบๆ = ข้อมูลรั่วจริง ไม่ใช่แค่ test แดง
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  web:
+    name: Lint / Typecheck / Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - name: ESLint
+        run: npm run lint
+
+      - name: TypeScript
+        run: npm run typecheck
+
+      # ค่า env ด้านล่างเป็นค่าปลอมโดยตั้งใจ — ตอน build ไม่มีการต่อ Supabase จริงสักจุด
+      # (ทุกหน้าเรียก cookies() ผ่าน requireProfile() จึงเป็น dynamic route ทั้งหมด ไม่มี
+      # prerender ที่ต้อง query จริง) ถ้าวันหนึ่ง build เริ่มพังเพราะต่อ DB ไม่ได้ แปลว่ามีหน้า
+      # ที่กลายเป็น static ไปแล้ว — นั่นคือบั๊กที่ต้องแก้ ไม่ใช่เอา secret จริงมาใส่ CI
+      #
+      # หมายเหตุ: --webpack ที่บังคับไว้ใน package.json มีไว้แก้ปัญหา UNC path บนเครื่อง dev
+      # ของทีม บน Linux runner ไม่จำเป็นแต่ก็ไม่เสียหาย จึงใช้ script เดิมเพื่อให้ CI กับเครื่อง
+      # dev รัน build ตัวเดียวกันจริงๆ
+      - name: Build
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder-anon-key
+          NEXT_PUBLIC_SITE_URL: http://localhost:3000
+        run: npm run build
+
+  database:
+    name: pgTAP migrations & tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      # `supabase start` ยก stack ท้องถิ่นขึ้นใน Docker แล้วรัน migration ใน supabase/migrations
+      # ตามลำดับให้ก่อน — จึงจับได้ทั้ง migration ที่เขียนผิดและ business rule ที่พัง
+      - name: Start local Supabase
+        run: supabase start
+
+      - name: Run pgTAP tests
+        run: supabase test db
+
+      - name: Stop local Supabase
+        if: always()
+        run: supabase stop --no-backup

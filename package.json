@@ -5,8 +5,9 @@
   "scripts": {
     "dev": "next dev --webpack",
     "build": "next build --webpack",
-    "start": "next start",
+    "start": "next start --hostname 127.0.0.1",
     "lint": "eslint",
+    "typecheck": "tsc --noEmit",
     "migrate:legacy": "node --env-file=.env.local scripts/migrate-from-legacy.mjs"
   },
   "dependencies": {
