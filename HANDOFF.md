@@ -8,44 +8,29 @@
 ---
 
 ## สถานะปัจจุบัน
-
-- branch `master` (ไม่ใช่ `main`) · working tree สะอาด · **9 commits ยังไม่ถูก push ไปไหนเลย**
+ 
+- branch `master` · tracking `origin/master` (`https://github.com/ddservice/sneakercare.git`) · push สำเร็จแล้ว
 - ผ่านหมดแล้วบนเครื่อง dev: `npm run lint`, `npm run typecheck`, `npm run build`,
   `npm run test:legacy`, `npm run test:reports`
-- **ยังไม่เคยรัน**: `supabase test db` (ต้องมี Docker), CI (ยังไม่มี remote),
+- **ยังไม่เคยรัน**: `supabase test db` (ต้องมี Docker),
   `scripts/verify-backup.sh --deep` (ต้องมี Docker + pg_restore)
-
+ 
 ## กฎเหล็กสำหรับคนทำต่อ
-
-1. **ห้าม push/deploy/แตะ production โดยไม่ถามเจ้าของก่อน** งานข้อ 1-3 ด้านล่างเป็นงานที่ต้องมี
-   สิทธิ์หรือข้อมูลเฉพาะ ถ้าไม่มีให้บอกตรงๆ ว่าทำไม่ได้ **ห้ามเดา URL, เดา path บนเซิร์ฟเวอร์,
-   หรือสร้าง remote ขึ้นมาเอง**
+ 
+1. **ห้าม push/deploy/แตะ production โดยไม่ถามเจ้าของก่อน** งานข้อ 2-3 ด้านล่างเป็นงานที่ต้องมี
+   สิทธิ์หรือข้อมูลเฉพาะ ถ้าไม่มีให้บอกตรงๆ ว่าทำไม่ได้ **ห้ามเดา path บนเซิร์ฟเวอร์**
 2. **ห้ามแก้ไฟล์ใน `supabase/migrations/` ที่ apply ไปแล้ว** เพิ่มไฟล์ใหม่ตามลำดับเวลาเท่านั้น
 3. **ห้ามลบแถบเตือน "ประมาณการ"** ใน `legacy/sneakercare_dashboard.html` และห้ามถอดการแจ้งเตือน
    ตอนสำเร็จออกจาก `scripts/backup-db-to-r2.sh` — ทั้งสองอย่างมีเหตุผลอยู่ใน `CLAUDE.md`
 4. **ห้ามใส่ค่า secret จริงลง CI** ค่าใน workflow เป็น placeholder โดยตั้งใจ
 5. งานที่ยังไม่ได้ตรวจ ให้บอกว่ายังไม่ได้ตรวจ **ห้ามรายงานว่าเสร็จแล้วถ้ายังไม่ได้รันจริง**
-
+ 
 ---
-
-## งานที่ 1 — Push ขึ้น remote ⚠️ ต้องถามเจ้าของก่อน
-
-**ทำไมด่วน:** 9 commits นี้อยู่บนดิสก์เครื่องเดียว ไม่มีสำเนาที่ไหนเลย
-
-```bash
-git remote -v          # ตอนนี้ว่าง
-git log --oneline -9   # ดูว่ามีอะไรค้างอยู่
-```
-
-ต้องได้ **URL ของ remote จากเจ้าของ** ก่อน แล้วค่อย:
-
-```bash
-git remote add origin <URL-ที่เจ้าของให้>
-git push -u origin master
-```
-
-⚠️ ถ้าสร้าง repo ใหม่บน GitHub ที่ default branch เป็น `main` จะได้ 2 branch แยกกัน
-ให้ตั้ง default เป็น `master` หรือ rename ก่อน push — **ถามเจ้าของว่าจะเอาแบบไหน อย่าตัดสินใจเอง**
+ 
+## งานที่ 1 — Push ขึ้น remote [เสร็จแล้ว]
+ 
+- เชื่อม `origin` ไปที่ `https://github.com/ddservice/sneakercare.git`
+- Push branch `master` ขึ้น remote เรียบร้อยแล้ว
 
 ---
 

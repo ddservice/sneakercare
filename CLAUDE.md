@@ -266,10 +266,9 @@ of root directory`) เพราะเทียบ UNC path กับ drive-lett
 
 ## งานค้าง ณ 2026-08-28 (รายละเอียดเต็ม + คำสั่งสำหรับ agent อยู่ที่ `HANDOFF.md`)
 
-เรียงตามความสำคัญ **ข้อ 1-3 ทำแทนกันไม่ได้ ต้องใช้สิทธิ์/ข้อมูลที่มีแต่เจ้าของโปรเจกต์**
+เรียงตามความสำคัญ:
 
-1. **Push ขึ้น remote** — repo นี้ยัง**ไม่มี remote เลย** (`git remote -v` ว่าง) มี 9 commits ค้างอยู่
-   เฉพาะบนเครื่องนี้เครื่องเดียว ไม่มีสำเนาที่อื่น · branch ชื่อ `master` ไม่ใช่ `main`
+1. **[เสร็จแล้ว] Push ขึ้น remote** — เชื่อม remote `origin` (`https://github.com/ddservice/sneakercare.git`) และ push branch `master` เรียบร้อยแล้ว
 2. **Deploy ขึ้น VPS** — รอบล่าสุด**ไม่มี migration ใหม่** จึงเป็น code-only ไม่ต้อง `supabase db push`
    · หลัง deploy ต้องแก้ crontab ให้ต่อ `&& scripts/verify-backup.sh` ท้ายคำสั่ง backup
 3. **สะสาง schema `inv_` ใน `SneakerCareDB`** — รัน `scripts/inspect-inv-schema.sql` (อ่านอย่างเดียว)
@@ -278,7 +277,7 @@ of root directory`) เพราะเทียบ UNC path กับ drive-lett
    logic ผ่านเทสต์หมดแล้ว แต่ CSS/layout ยังไม่มีใครตรวจ
 5. **`verify-backup.sh --deep` ยังไม่เคยรันจริง** (เครื่อง dev ไม่มี Docker/pg_restore) ครั้งแรกบน VPS
    ให้รันด้วยมือก่อน อย่าเพิ่งใส่ cron
-6. **CI ยังไม่เคยรันจริง** เพราะยังไม่มี remote — จะเริ่มทำงานหลังข้อ 1
+6. **CI workflow** — push ขึ้น GitHub แล้ว รอติดตามผล CI บน GitHub Actions
 
 ## งานที่จงใจยังไม่ทำ
 
