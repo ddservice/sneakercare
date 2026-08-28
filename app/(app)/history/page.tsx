@@ -7,6 +7,8 @@ import type { StockTxnType } from "@/lib/supabase/database.types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Pagination } from "@/components/pagination";
+import { DEFAULT_PAGE_SIZE, pageInfo, parsePage, rangeFor } from "@/lib/pagination";
 
 function statusLabel(status: string) {
   if (status === "pending_approval") return "รออนุมัติ";
@@ -14,21 +16,31 @@ function statusLabel(status: string) {
   return "อนุมัติแล้ว";
 }
 
-export default async function HistoryPage() {
+export default async function HistoryPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string }>;
+}) {
   const profile = await requireProfile();
   requireModuleView(profile, "history");
   const branchId = await getSelectedBranchId(profile);
   const showCost = canSeeCost(profile.role);
   const supabase = await createClient();
-  const { data: rows } = showCost
+
+  const page = parsePage((await searchParams).page);
+  const { from, to } = rangeFor(page);
+
+  // สองสาขานี้ต่างกันแค่ view ที่ยิงกับคอลัมน์ต้นทุน — Staff ต้องไม่แตะ v_*_cost เด็ดขาด
+  const { data: rows, count } = showCost
     ? await (async () => {
         let q = supabase
           .from("v_stock_transactions_cost")
           .select(
-            "id, created_at, txn_type, status, quantity_delta, total_cost, reference_note, reason, item_name, branch_name, performed_by_name, branch_id"
+            "id, created_at, txn_type, status, quantity_delta, total_cost, reference_note, reason, item_name, branch_name, performed_by_name, branch_id",
+            { count: "exact" }
           )
           .order("created_at", { ascending: false })
-          .limit(100);
+          .range(from, to);
         if (branchId) q = q.eq("branch_id", branchId);
         return q;
       })()
@@ -36,18 +48,21 @@ export default async function HistoryPage() {
         let q = supabase
           .from("v_stock_transactions")
           .select(
-            "id, created_at, txn_type, status, quantity_delta, reference_note, reason, item_name, branch_name, performed_by_name, branch_id"
+            "id, created_at, txn_type, status, quantity_delta, reference_note, reason, item_name, branch_name, performed_by_name, branch_id",
+            { count: "exact" }
           )
           .order("created_at", { ascending: false })
-          .limit(100);
+          .range(from, to);
         if (branchId) q = q.eq("branch_id", branchId);
         return q;
       })();
 
+  const info = pageInfo(page, DEFAULT_PAGE_SIZE, count ?? null, rows?.length ?? 0);
+
   return (
     <Card>
       <CardHeader>
-        <CardTitle>ประวัติเบิก-รับ-ปรับสต๊อก (100 รายการล่าสุด)</CardTitle>
+        <CardTitle>ประวัติเบิก-รับ-ปรับสต๊อก</CardTitle>
       </CardHeader>
       <CardContent>
         <Table>
@@ -96,12 +111,13 @@ export default async function HistoryPage() {
             {(!rows || rows.length === 0) && (
               <TableRow>
                 <TableCell colSpan={showCost ? (branchId ? 8 : 9) : branchId ? 7 : 8} className="text-center text-muted-foreground">
-                  ยังไม่มีรายการ
+                  {page > 1 ? "ไม่มีรายการในหน้านี้แล้ว" : "ยังไม่มีรายการ"}
                 </TableCell>
               </TableRow>
             )}
           </TableBody>
         </Table>
+        <Pagination info={info} basePath="/history" />
       </CardContent>
     </Card>
   );

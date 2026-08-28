@@ -3,6 +3,8 @@ import { createClient } from "@/lib/supabase/server";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Pagination } from "@/components/pagination";
+import { DEFAULT_PAGE_SIZE, pageInfo, parsePage, rangeFor } from "@/lib/pagination";
 
 function summarize(data: Record<string, unknown> | null): string {
   if (!data) return "—";
@@ -14,16 +16,28 @@ function summarize(data: Record<string, unknown> | null): string {
   return parts.join(" · ") || "—";
 }
 
-export default async function AuditLogPage() {
+export default async function AuditLogPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string }>;
+}) {
   const profile = await requireProfile();
   requireModuleView(profile, "audit");
   const supabase = await createClient();
 
-  const { data: rows } = await supabase
+  const page = parsePage((await searchParams).page);
+  const { from, to } = rangeFor(page);
+
+  const { data: rows, count } = await supabase
     .from("audit_logs")
-    .select("id, table_name, record_id, action, performed_at, performed_by, before_data, after_data, reason")
+    .select(
+      "id, table_name, record_id, action, performed_at, performed_by, before_data, after_data, reason",
+      { count: "exact" }
+    )
     .order("performed_at", { ascending: false })
-    .limit(100);
+    .range(from, to);
+
+  const info = pageInfo(page, DEFAULT_PAGE_SIZE, count ?? null, rows?.length ?? 0);
 
   const actorIds = [...new Set((rows ?? []).map((row) => row.performed_by).filter(Boolean))] as string[];
   const { data: actors } = actorIds.length
@@ -69,12 +83,13 @@ export default async function AuditLogPage() {
             {(!rows || rows.length === 0) && (
               <TableRow>
                 <TableCell colSpan={5} className="text-center text-muted-foreground">
-                  ยังไม่มีบันทึก
+                  {page > 1 ? "ไม่มีบันทึกในหน้านี้แล้ว" : "ยังไม่มีบันทึก"}
                 </TableCell>
               </TableRow>
             )}
           </TableBody>
         </Table>
+        <Pagination info={info} basePath="/admin/audit" />
       </CardContent>
     </Card>
   );
