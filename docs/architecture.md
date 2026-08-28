@@ -23,11 +23,11 @@ Google Sheets + Apps Script + HTML/JS ไฟล์เดียว ซึ่ง�
 
 | ชั้น | เทคโนโลยี | เหตุผล |
 |---|---|---|
-| Frontend | **Next.js 14+ (App Router, TypeScript) + Tailwind CSS + shadcn/ui** | UI แบบ Minimal ปรับ responsive ให้ใช้บนแท็บเล็ต/PC ง่าย, deploy ฟรีบน Vercel |
+| Frontend | **Next.js 14+ (App Router, TypeScript) + Tailwind CSS + shadcn/ui** | UI แบบ Minimal ปรับ responsive ให้ใช้บนแท็บเล็ต/PC ง่าย รันบน VPS หลัง Nginx |
 | Backend/DB | **Supabase (PostgreSQL + Auth + Row Level Security + Storage + Edge Functions)** | RLS บังคับ RBAC ที่ชั้นฐานข้อมูลจริง, Transaction/Trigger ป้องกัน race condition, Free tier เพียงพอสำหรับร้านขนาดเล็ก-กลาง, มี Auth พร้อมใช้ไม่ต้องเขียน token ระบบเอง |
 | Audit trail | Postgres trigger + `REVOKE UPDATE, DELETE` บนตาราง `audit_logs` และ `stock_transactions` | บังคับ immutability ที่ชั้น DB จริง ไม่ใช่แค่ซ่อนปุ่มในหน้าเว็บ |
 | แจ้งเตือนสต๊อกต่ำ | **Telegram Bot API (sendMessage)** ผ่าน Supabase Edge Function ที่รันตาม cron (`pg_cron` หรือ Supabase Scheduled Edge Function) | ตัดสินใจแล้ว (2026-07-10) — ใช้ Telegram แทน LINE เพราะ ⚠️ **LINE Notify ถูกยกเลิกให้บริการแล้วตั้งแต่ 31 มี.ค. 2025** และ LINE Messaging API ต้องขอสร้าง LINE Official Account ก่อน ส่วน Telegram Bot สร้างผ่าน `@BotFather` ได้ทันที ไม่มี business verification และไม่จำกัดจำนวนข้อความ/เดือน Email (Resend) ยังคงเป็นช่องทางสำรอง |
-| Hosting | Vercel (frontend) + Supabase Cloud (DB/Auth) | ต้นทุนต่ำ ดูแลง่าย ไม่ต้องมี DevOps เอง |
+| Hosting | VPS (PM2 + Nginx + Let's Encrypt) + Supabase Cloud (DB/Auth) | เครื่องเดียวกับเว็บร้านอื่น — ไม่ใช้ Vercel |
 
 ### 2.1 การแจ้งเตือนสต๊อกต่ำผ่าน Telegram — ขั้นตอนตั้งค่า
 

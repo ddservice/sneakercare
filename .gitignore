@@ -37,9 +37,6 @@ yarn-error.log*
 # CSV ที่ export จากระบบเดิมสำหรับสคริปต์ migrate — ห้าม commit ข้อมูลร้าน
 /import/
 
-# vercel
-.vercel
-
 # Supabase CLI local state (project ref / versions) — ห้าม commit
 supabase/.temp/
 

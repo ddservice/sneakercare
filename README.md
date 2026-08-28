@@ -1,36 +1,30 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# ระบบบริหารจัดการคลังสินค้า
 
-## Getting Started
+คลังสินค้าสำหรับร้านบริการทำความสะอาด/ซ่อมแซมรองเท้า — แทนระบบเดิมที่เป็น Google Apps Script + Sheets
 
-First, run the development server:
+- Frontend: Next.js (App Router) + Tailwind CSS + shadcn/ui
+- Backend: Supabase (PostgreSQL + Auth + RLS + Edge Functions)
+- Hosting: VPS (PM2 + Nginx) + Supabase Cloud — ไม่ใช้ Vercel
+
+บริบทการออกแบบอยู่ที่ `docs/architecture.md` คู่มือพัฒนาอยู่ที่ `CLAUDE.md`
+
+## พัฒนาบนเครื่อง
+
+คัดลอก `.env.example` เป็น `.env.local` แล้วใส่ค่าจาก Supabase Project Settings → API
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+เปิด [http://localhost:3000](http://localhost:3000) — หน้าแรกจะพาไป `/dashboard` (ต้อง login)
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+บนเครื่องที่ repo อยู่บน mapped network drive ต้องคง flag `--webpack` ใน `dev`/`build` ไว้ (Turbopack resolve path ผิดบน UNC)
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Production (VPS)
 
-## Learn More
+รันด้วย `npm start` หลัง Nginx — ฟังแค่ `127.0.0.1` ไม่เปิดพอร์ตออกเน็ตตรง
 
-To learn more about Next.js, take a look at the following resources:
+อัปเดตบนเซิร์ฟเวอร์แบบเดียวกับเว็บร้านอื่น: `git pull` → `npm run build` → `pm2 restart`
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+ตั้ง `NEXT_PUBLIC_SITE_URL` บน VPS เป็นโดเมนจริง (ใช้กับลิงก์ในอีเมลเชิญผู้ใช้)
