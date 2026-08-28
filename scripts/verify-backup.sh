@@ -36,6 +36,11 @@
 
 set -euo pipefail
 
+# ถ้ามี PostgreSQL 17 client ติดตั้งไว้ ให้ดึงขึ้นมาใช้ก่อน (กัน version mismatch error)
+if [[ -d "/usr/lib/postgresql/17/bin" ]]; then
+  export PATH="/usr/lib/postgresql/17/bin:${PATH}"
+fi
+
 LOCAL_BACKUP_DIR="${LOCAL_BACKUP_DIR:-/var/backups/rrs}"
 
 # ทุกตารางใน supabase/migrations/ — ตรวจรายชื่อได้ด้วย:

@@ -45,6 +45,11 @@
 
 set -euo pipefail
 
+# ถ้ามี PostgreSQL 17 client ติดตั้งไว้ ให้ดึงขึ้นมาใช้ก่อน (กัน version mismatch error)
+if [[ -d "/usr/lib/postgresql/17/bin" ]]; then
+  export PATH="/usr/lib/postgresql/17/bin:${PATH}"
+fi
+
 : "${SUPABASE_DB_URL:?ต้องตั้งค่า SUPABASE_DB_URL}"
 : "${R2_ACCOUNT_ID:?ต้องตั้งค่า R2_ACCOUNT_ID}"
 : "${R2_ACCESS_KEY_ID:?ต้องตั้งค่า R2_ACCESS_KEY_ID}"
