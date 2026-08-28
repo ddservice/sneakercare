@@ -12,6 +12,10 @@ export const ROLE_LABEL: Record<Role, string> = {
 
 export type ModuleKey =
   | "dashboard"
+  | "pos"
+  | "inventory"
+  | "expenses"
+  | "statistics"
   | "stock-out"
   | "stock-in"
   | "adjustments"
@@ -26,6 +30,8 @@ export type AppModule = {
   key: ModuleKey;
   href: string;
   label: string;
+  icon?: string;
+  isMainTab?: boolean;
   viewRoles: readonly Role[];
   writeRoles: readonly Role[];
   note?: string;
@@ -33,14 +39,57 @@ export type AppModule = {
 
 // สิทธิ์นี้ต้องสอดคล้องกับ RLS / staff-safe views — UI เป็นด่านซ่อนปุ่มเท่านั้น
 export const APP_MODULES: readonly AppModule[] = [
+  // ── 6 MAIN TABS (เหมือนระบบเดิม แต่เป็นมืออาชีพ) ──
   {
     key: "dashboard",
     href: "/dashboard",
-    label: "แดชบอร์ด",
+    label: "ภาพรวม",
+    isMainTab: true,
     viewRoles: ["admin", "co_admin", "staff"],
     writeRoles: ["admin", "co_admin"],
-    note: "Staff ไม่เห็นมูลค่าคลัง — Co-Admin/Admin แก้จุดสั่งซื้อขั้นต่ำได้",
   },
+  {
+    key: "pos",
+    href: "/pos",
+    label: "งานบริการ/ยอดขาย",
+    isMainTab: true,
+    viewRoles: ["admin", "co_admin", "staff"],
+    writeRoles: ["admin", "co_admin", "staff"],
+  },
+  {
+    key: "inventory",
+    href: "/inventory",
+    label: "คลังสินค้า",
+    isMainTab: true,
+    viewRoles: ["admin", "co_admin", "staff"],
+    writeRoles: ["admin", "co_admin", "staff"],
+  },
+  {
+    key: "expenses",
+    href: "/expenses",
+    label: "ค่าใช้จ่าย & พนักงาน",
+    isMainTab: true,
+    viewRoles: ["admin", "co_admin"],
+    writeRoles: ["admin", "co_admin"],
+  },
+  {
+    key: "statistics",
+    href: "/statistics",
+    label: "สถิติ",
+    isMainTab: true,
+    viewRoles: ["admin", "co_admin"],
+    writeRoles: [],
+  },
+  {
+    key: "settings",
+    href: "/settings",
+    label: "ตั้งค่า",
+    isMainTab: true,
+    viewRoles: ["admin"],
+    writeRoles: ["admin"],
+  },
+
+  // ── INVENTORY & ADMIN SUB-MODULES ──
   {
     key: "stock-out",
     href: "/stock-out",
@@ -104,13 +153,6 @@ export const APP_MODULES: readonly AppModule[] = [
     writeRoles: [],
     note: "อ่านอย่างเดียว แม้แต่ Admin ก็แก้/ลบไม่ได้",
   },
-  {
-    key: "settings",
-    href: "/admin/settings",
-    label: "ตั้งค่า",
-    viewRoles: ["admin"],
-    writeRoles: ["admin"],
-  },
 ];
 
 export function getModule(key: ModuleKey): AppModule {
@@ -133,6 +175,10 @@ export function canSeeCost(role: Role): boolean {
 
 export function canRecordWaste(role: Role): boolean {
   return role === "admin" || role === "co_admin";
+}
+
+export function mainNavItemsFor(role: Role): readonly AppModule[] {
+  return APP_MODULES.filter((item) => item.isMainTab && item.viewRoles.includes(role));
 }
 
 export function navItemsFor(role: Role): readonly AppModule[] {

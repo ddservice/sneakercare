@@ -246,6 +246,115 @@ export interface Database {
         Update: never;
         Relationships: [];
       };
+      customers: {
+        Row: {
+          id: string;
+          phone: string;
+          name: string;
+          note: string | null;
+          branch_id: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: Partial<Database["public"]["Tables"]["customers"]["Row"]> & {
+          phone: string;
+          name: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["customers"]["Row"]>;
+        Relationships: [];
+      };
+      services: {
+        Row: {
+          id: string;
+          name: string;
+          category: string;
+          base_price: number;
+          description: string | null;
+          is_active: boolean;
+          created_at: string;
+        };
+        Insert: Partial<Database["public"]["Tables"]["services"]["Row"]> & {
+          name: string;
+          base_price: number;
+        };
+        Update: Partial<Database["public"]["Tables"]["services"]["Row"]>;
+        Relationships: [];
+      };
+      service_orders: {
+        Row: {
+          id: string;
+          order_no: string;
+          branch_id: string | null;
+          customer_id: string | null;
+          customer_name: string;
+          customer_phone: string;
+          shoe_brand: string | null;
+          shoe_model: string | null;
+          shoe_color: string | null;
+          shoe_size: string;
+          status: "received" | "in_progress" | "ready" | "delivered" | "cancelled";
+          payment_method: "cash" | "transfer" | "credit" | "unpaid";
+          gross_amount: number;
+          discount_amount: number;
+          net_amount: number;
+          cash_amount: number;
+          transfer_amount: number;
+          is_paid: boolean;
+          notes: string | null;
+          received_by: string | null;
+          received_at: string;
+          completed_at: string | null;
+          delivered_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: Partial<Database["public"]["Tables"]["service_orders"]["Row"]> & {
+          order_no: string;
+          customer_name: string;
+          customer_phone: string;
+          net_amount: number;
+        };
+        Update: Partial<Database["public"]["Tables"]["service_orders"]["Row"]>;
+        Relationships: [];
+      };
+      service_order_items: {
+        Row: {
+          id: string;
+          order_id: string;
+          service_id: string | null;
+          service_name: string;
+          price: number;
+          quantity: number;
+          created_at: string;
+        };
+        Insert: Partial<Database["public"]["Tables"]["service_order_items"]["Row"]> & {
+          order_id: string;
+          service_name: string;
+          price: number;
+        };
+        Update: Partial<Database["public"]["Tables"]["service_order_items"]["Row"]>;
+        Relationships: [];
+      };
+      expenses: {
+        Row: {
+          id: string;
+          branch_id: string | null;
+          category: string;
+          title: string;
+          amount: number;
+          expense_date: string;
+          note: string | null;
+          created_by: string | null;
+          created_at: string;
+        };
+        Insert: Partial<Database["public"]["Tables"]["expenses"]["Row"]> & {
+          category: string;
+          title: string;
+          amount: number;
+        };
+        Update: Partial<Database["public"]["Tables"]["expenses"]["Row"]>;
+        Relationships: [];
+      };
     };
     Views: {
       v_low_stock: {
