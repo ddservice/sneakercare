@@ -30,12 +30,18 @@
 #   5. สร้าง R2 bucket ในหน้า Cloudflare dashboard เอง (ผมสร้างให้ไม่ได้ ไม่มีสิทธิ์เข้าบัญชี Cloudflare)
 #      แนะนำตั้ง lifecycle rule ในบักเก็ตให้ลบไฟล์เก่ากว่า 30-90 วันอัตโนมัติ กัน bucket โตไม่หยุด
 #   6. ทดสอบรันมือก่อนตั้ง cron: chmod +x scripts/backup-db-to-r2.sh && bash scripts/backup-db-to-r2.sh
-#   7. เพิ่ม cron (crontab -e) รันตี 3 ทุกวัน:
-#        0 3 * * * /usr/bin/env bash -c 'set -a; source /etc/rrs-backup.env; set +a; /path/to/RRS/scripts/backup-db-to-r2.sh' >> /var/log/rrs-backup.log 2>&1
+#   7. เพิ่ม cron (crontab -e) รันตี 3 ทุกวัน แล้ว **ตรวจไฟล์ต่อทันที** ด้วย verify-backup.sh:
+#        0 3 * * * /usr/bin/env bash -c 'set -a; source /etc/rrs-backup.env; set +a; \
+#          /path/to/RRS/scripts/backup-db-to-r2.sh && /path/to/RRS/scripts/verify-backup.sh' \
+#          >> /var/log/rrs-backup.log 2>&1
 #
-# ── การกู้คืน (ทดสอบเป็นระยะ อย่าเก็บไว้เฉยๆ โดยไม่เคยลองกู้) ───────────────────────
+# ── การกู้คืน ─────────────────────────────────────────────────────────────────────
 #   pg_restore --clean --if-exists --no-owner -d "$SUPABASE_DB_URL" backup-YYYYmmdd_HHMMSS.dump
 #   แนะนำทดสอบกู้ใส่ project Supabase ใหม่ที่แยกต่างหาก อย่ากู้ทับ project จริงตอนทดสอบ
+#
+#   ⚠️ อย่าเชื่อว่าไฟล์กู้ได้เพียงเพราะสร้างไฟล์สำเร็จ — ใช้ `scripts/verify-backup.sh` ตรวจ
+#   (ต่อท้าย cron ตามข้อ 7 แล้ว) และรัน `scripts/verify-backup.sh --deep` ด้วยมือเป็นระยะ
+#   เพื่อกู้ลง Postgres ชั่วคราวใน Docker จริงๆ แล้วนับแถว
 
 set -euo pipefail
 
@@ -56,14 +62,19 @@ cleanup() {
 }
 trap cleanup EXIT
 
-notify_failure() {
+notify() {
   local message="$1"
   if [[ -n "${TELEGRAM_BOT_TOKEN:-}" && -n "${TELEGRAM_OPS_CHAT_ID:-}" ]]; then
+    # --data-urlencode กัน message ที่มีขึ้นบรรทัดใหม่/อักขระพิเศษทำ request เพี้ยน
     curl -fsS -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
       -d "chat_id=${TELEGRAM_OPS_CHAT_ID}" \
-      -d "text=⚠️ RRS DB backup ล้มเหลว (${STAMP} UTC): ${message}" \
+      --data-urlencode "text=${message}" \
       >/dev/null || true
   fi
+}
+
+notify_failure() {
+  notify "⚠️ RRS DB backup ล้มเหลว (${STAMP} UTC): $1"
 }
 trap 'notify_failure "ดูรายละเอียดที่ /var/log/rrs-backup.log บน VPS"' ERR
 
@@ -88,5 +99,16 @@ LOCAL_BACKUP_DIR="${LOCAL_BACKUP_DIR:-/var/backups/rrs}"
 mkdir -p "$LOCAL_BACKUP_DIR"
 cp "$DUMP_FILE" "${LOCAL_BACKUP_DIR}/rrs-backup-${STAMP}.dump"
 find "$LOCAL_BACKUP_DIR" -name 'rrs-backup-*.dump' -mtime "+${RETENTION_DAYS}" -delete
+
+# แจ้งเตือน "สำเร็จ" ด้วย ไม่ใช่แจ้งเฉพาะตอนล้มเหลว (heartbeat)
+#
+# ทำไม: เดิมสคริปต์เงียบสนิทเวลาทำงานปกติ ซึ่งแปลว่า "เงียบ" มีได้ 2 ความหมายที่แยกกันไม่ออกเลย
+# คือ (ก) สำรองสำเร็จทุกวัน กับ (ข) cron ตายไปแล้ว/ไฟล์ env พัง จึงไม่มีอะไรรันและไม่มีอะไรให้ fail
+# ด้วยซ้ำ — กรณี (ข) จะไม่มีใครรู้จนถึงวันที่ต้องใช้ backup จริง ซึ่งสายไปแล้ว
+# พอมีข้อความทุกวัน ความเงียบจึงกลายเป็นสัญญาณผิดปกติที่คนสังเกตได้เอง
+notify "💾 RRS DB backup สำเร็จ
+📅 ${STAMP} UTC
+📦 rrs-backup-${STAMP}.dump (${DUMP_SIZE})
+☁️ Cloudflare R2 (${R2_BUCKET}) & 💾 VPS ${LOCAL_BACKUP_DIR}"
 
 echo "[$(date -u +%FT%TZ)] เสร็จสมบูรณ์"
