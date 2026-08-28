@@ -8,6 +8,7 @@
     "start": "next start --hostname 127.0.0.1",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
+    "test:legacy": "node scripts/test-legacy-estimate-banner.mjs",
     "migrate:legacy": "node --env-file=.env.local scripts/migrate-from-legacy.mjs"
   },
   "dependencies": {
