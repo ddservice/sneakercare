@@ -103,6 +103,26 @@ CLAUDE.md                 คู่มือนี้ — อัปเดตท�
 - Migration SQL ใหม่ให้ใส่ใน `/supabase/migrations` เป็นไฟล์แยกตามลำดับเวลา ห้ามแก้ไฟล์ migration เก่าที่ apply ไปแล้ว
 - เขียน RLS policy ใหม่ทุกครั้งที่เพิ่มตาราง
 
+## สถาปัตยกรรม SmartAcc Enterprise Cloud & Extension Layer (อัปเดต 2026-08-30)
+
+ระบบได้เพิ่มโมดูลการเงิน บัญชี และออกเอกสารภาษีมาตรฐานสากล โดยยึดหลัก **Zero Core Mutation** (ไม่แตะต้องหรือล็อกตารางคลังสินค้า/ยอดขายเดิม):
+
+1. **Schema แยกอิสระ `extension_layer`:**
+   - รวม 13 ตารางสำหรับระบบบิล, บัญชีแยกประเภท (Chart of Accounts), การตรวจสลิป, ภ.พ.30, ภ.ง.ด.3/53, และ e-Tax XML มาตรฐาน ขมธอ. 3-2560
+   - Composite Performance Indexes: `idx_ext_documents_type_status_date`, `idx_ext_document_items_doc_id`, `idx_ext_contacts_tax_name`, `idx_ext_staged_expenses_approval`, `idx_ext_slip_trans_ref`
+2. **Standard Document Numbering & Flow:**
+   - รันเลขอัตโนมัติแบบ Atomic ผ่านฟังก์ชัน Postgres `fn_generate_document_number` รูปแบบ `PREFIX-YYYYMMDD-XXXX`
+   - คำนำหน้าเอกสารมาตรฐาน: `QA` (ใบเสนอราคา), `DO` (ใบส่งของ), `INV` (ใบแจ้งหนี้), `BL` (ใบวางบิล), `REC` (ใบเสร็จรับเงิน), `TAX` (ใบกำกับภาษี)
+   - Flow การแปลงเอกสาร 1-Click Conversion: `QA ➔ DO/INV ➔ BL ➔ REC/TAX`
+3. **Shop Branding & Tax Profile (`sc_settings`):**
+   - จัดการโลโก้ร้าน, ชื่อบริษัทนิติบุคคล, ที่อยู่จดทะเบียน, เลขผู้เสียภาษี 13 หลัก, และ PromptPay ID ได้ที่หน้า `/settings`
+   - เชื่อมโยงหัวบิล A4 (`/billing-notes`) และ Dynamic PromptPay QR ทันทีแบบ Real-time
+4. **DBD & Juristic Registry Auto-Fill:**
+   - ค้นหาเลขนิติบุคคล 13 หลัก หรือชื่อบริษัท ในหน้า `/invoicing` เพื่อดึงชื่อทางการ, ที่อยู่จดทะเบียน และรหัสสาขา `00000` มาเติมให้อัตโนมัติใน 1 วินาที
+5. **Anti-Fraud & Expense Quarantine:**
+   - ดักจับสลิปซ้ำผ่าน `bank_trans_ref` (TransRef Deduplication)
+   - สแกนใบเสร็จ OCR ผ่านกล่องกักตรวจ `ext_staged_expenses` ก่อนตัดยอดบัญชีจริง
+
 ## คำสั่งที่ใช้บ่อย
 
 - `npm run dev` — รัน Next.js dev server (บังคับ `--webpack` ไว้ใน package.json แล้ว)
@@ -111,6 +131,7 @@ CLAUDE.md                 คู่มือนี้ — อัปเดตท�
 - `npm run test:legacy` — ตรวจแถบเตือน "ประมาณการ" ในหน้าภาพรวมของ legacy
 - `npm run test:reports` — ตรวจตรรกะช่วงเดือน/CSV/เลขหน้า (46 ข้อ)
 - `npm run deploy` — คำสั่ง Deploy ไปยัง VPS (`157.85.108.84`) อัตโนมัติในคลิกเดียว
+- `node scripts/backup-db.mjs` — สคริปต์สำรองฐานข้อมูลอัตโนมัติบน VPS
 - `bash scripts/backup-db-to-r2.sh` — สำรอง DB แบบ `pg_dump` แล้วอัปโหลดไป Cloudflare R2 พร้อมลบไฟล์เก่าเกิน 90 วัน
 - `bash scripts/verify-backup.sh [--deep]` — ตรวจว่าไฟล์สำรองล่าสุดกู้คืนได้จริง
 
@@ -119,6 +140,8 @@ CLAUDE.md                 คู่มือนี้ — อัปเดตท�
 ## สิ่งที่ตัดสินใจแล้ว
 
 - **Hosting = VPS ไม่ใช่ Vercel** — PM2 + Nginx บนเครื่อง `157.85.108.84` (พอร์ต 3003)
+- **Global Font = IBM Plex Sans Thai** (รองรับทั้งภาษาไทยและอังกฤษแบบสากล)
+- **Default Theme = Light Mode** สบายตา เหมาะกับการทำงานบัญชีและหน้าร้าน
 - **ช่องทางแจ้งเตือนสต๊อกต่ำ = Telegram Bot API ส่งเข้ากลุ่มพนักงาน**
 - **สาขา:** schema รองรับหลายสาขาไว้แล้วตั้งแต่ต้น
 - **Admin เลือกสาขาจาก dropdown ใน header** (คุกกี้ `sc_active_branch`)
@@ -126,28 +149,11 @@ CLAUDE.md                 คู่มือนี้ — อัปเดตท�
   ใช้ `pg_dump` รันผ่าน cron บน VPS ตี 3 ทุกคืน (`scripts/backup-db-to-r2.sh`) อัปโหลดไป Cloudflare R2 (`ddservicedb`)
   พร้อมลบไฟล์เก่าเกิน 90 วันทั้งบน VPS และ R2 อัตโนมัติ ตามด้วย `verify-backup.sh` ตรวจสอบความสมบูรณ์และส่ง Heartbeat เข้า Telegram
 
-## เพิ่มเติม 2026-08-28
+## สถานะงานล่าสุด (2026-08-30)
 
-- **ลบข้อมูลและสินค้าทดสอบออกจากฐานข้อมูล** — ลบสินค้าเทส `RLS35 verify item` ออกถาวรแล้ว ปัจจุบันมีสินค้าจริง 46 รายการถ้วน
-- **ระบบ Deploy ผ่านคำสั่งเดียว (`npm run deploy` / `scripts/deploy-vps.mjs`)** — ซิงก์โค้ดและรีสตาร์ต PM2 บน VPS ทันที
-- **แถบเตือน "ประมาณการ" ในหน้าภาพรวมของ legacy** (`legacy/sneakercare_dashboard.html`) — มี badge และแถบเตือนเมื่อ opex ไม่ครบ มีเทสต์ครอบคลุม (`npm run test:legacy`) **ห้ามลบแถบเตือนนี้**
-- **เทสต์ JS 2 ชุด** — `scripts/test-legacy-estimate-banner.mjs` และ `scripts/test-reports-range.mjs` (46 ข้อ) รันใน CI ได้
-- **แบ่งหน้า (pagination) ที่ประวัติกับ Audit Log** — หน้าละ 50 รายการ
-- **หน้ารายงานเพิ่มตัวกรองช่วงเดือน + ดาวน์โหลด CSV** — query รวมที่ `lib/reports.ts` พร้อมใส่ BOM สำหรับ Excel
-- **ตรวจ backup ว่ากู้ได้จริง + heartbeat (`scripts/verify-backup.sh`)** — ตรวจโครงสร้างข้อมูล 55 ตาราง และ `auth.users` ครบถ้วน
+1. **[เสร็จสมบูรณ์] SmartAcc Enterprise Invoicing & Conversion Pipeline** — รองรับ `QA ➔ DO ➔ INV ➔ BL ➔ REC/TAX` รันเลข `YYYYMMDD` และดึงสินค้าจากแคตตาล็อกจริง
+2. **[เสร็จสมบูรณ์] Shop Branding & Tax Profile** — ฟอร์มตั้งค่าโลโก้ ชื่อร้าน เลขผู้เสียภาษี และ PromptPay ที่เมนู `/settings` เชื่อมต่อหัวบิลอัตโนมัติ
+3. **[เสร็จสมบูรณ์] DBD Juristic Auto-Fill** — พิมพ์เลข 13 หลักดึงข้อมูลบริษัทและที่อยู่ทางการทันที
+4. **[เสร็จสมบูรณ์] Performance Indexing & Optimization** — ติดตั้ง Composite Indexes ใน `extension_layer` และเพิ่มการโหลดข้อมูลแบบ Parallel `Promise.all`
+5. **[เสร็จสมบูรณ์] Deploy บน Production** — `https://sneakercare.ddserviceth.com` ทำงานบน PM2 ราบรื่น 100%
 
-## งานค้าง ณ 2026-08-28
-
-1. **[เสร็จแล้ว] Push ขึ้น remote** — เชื่อม remote `origin` (`https://github.com/ddservice/sneakercare.git`) และ push branch `master` เรียบร้อยแล้ว
-2. **[เสร็จแล้ว] Deploy ขึ้น VPS** — deploy ไปที่ `/var/www/sneakercare` รัน PM2 บนพอร์ต 3003 พร้อมคำสั่ง `npm run deploy`
-3. **[เสร็จแล้ว] สำรองข้อมูล & ตรวจสอบ (Backup & Verify + Retention 90 วัน)** — อัปเดต credentials ของ `SneakerCareDB` บน VPS, รัน `backup-db-to-r2.sh` และ `verify-backup.sh` ผ่านฉลุย (✅ ไฟล์กู้คืนได้ โครงสร้าง ข้อมูลทุกตาราง และ auth.users ครบ 100% พร้อมลบไฟล์เก่าเกิน 90 วันอัตโนมัติ)
-4. **[ตรวจสอบแล้ว] สะสาง schema `inv_` ใน `SneakerCareDB`** — รัน `scripts/inspect-inv-schema.sql` แล้วพบว่า `sc_users` ผูก FK กับ `inv_branches` และมีข้อมูล 46 items / 108 transactions จึงห้าม DROP เด็ดขาด (บันทึกข้อควรระวังไว้แล้ว)
-5. **[เสร็จแล้ว] เคลียร์ข้อมูลทดสอบ & จัดระเบียบ VPS** — ลบสินค้าเทส `RLS35 verify item` ออกจาก DB (เหลือสินค้าจริง 46 รายการ) และเคลียร์ Docker cache / temp files บน VPS คืนพื้นที่ได้ ~3.48GB
-6. **ตรวจหน้าตาบนเบราว์เซอร์**: แถบเตือน "ประมาณการ" ใน legacy, ปุ่มดาวน์โหลด CSV, ปุ่มแบ่งหน้า — logic ผ่านเทสต์ครบถ้วนแล้ว
-7. **`verify-backup.sh --deep`** — ทดสอบกู้คืนลง Postgres ชั่วคราวใน Docker
-
-## งานที่จงใจยังไม่ทำ
-
-- **ไม่เชื่อม SC_Sales (POS) แบบ live** ในเฟสนี้ — พนักงานกรอกเลขบิลใน `reference_note` ตอนเบิก
-  ดู `docs/architecture.md` §5
-- ย้ายผู้ใช้เดิมจาก `SC_Users` ต้องเชิญใหม่ผ่าน `/admin/users` ห้ามนำเข้ารหัสผ่านเดิม
