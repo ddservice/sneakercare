@@ -1,6 +1,7 @@
 import { requireProfile } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { thaiBahtText } from "@/lib/smartacc/baht-text";
+import { fetchShopProfile } from "@/app/actions/shop-settings";
 import { Button } from "@/components/ui/button";
 import { Printer, ArrowLeft, Layers, Plus } from "lucide-react";
 import Link from "next/link";
@@ -9,12 +10,15 @@ export default async function BillingNotesPage() {
   await requireProfile();
   const supabase = createAdminClient();
 
-  const { data: documents } = await (supabase as any)
-    .schema("extension_layer")
-    .from("ext_documents")
-    .select("*, ext_contacts(*), ext_document_items(*)")
-    .eq("doc_type", "BILLING_NOTE")
-    .order("created_at", { ascending: false });
+  const [{ data: documents }, shopProfile] = await Promise.all([
+    (supabase as any)
+      .schema("extension_layer")
+      .from("ext_documents")
+      .select("*, ext_contacts(*), ext_document_items(*)")
+      .eq("doc_type", "BILLING_NOTE")
+      .order("created_at", { ascending: false }),
+    fetchShopProfile(),
+  ]);
 
   const currentDoc = documents?.[0];
 
@@ -74,18 +78,27 @@ export default async function BillingNotesPage() {
 
       {/* ── A4 Billing Note Render Template ── */}
       <div className="max-w-[210mm] mx-auto bg-white border border-slate-200 shadow-sm p-8 rounded-lg text-slate-800 text-xs font-sans">
-        {/* Header */}
+        {/* Header with Shop Logo & Details */}
         <div className="flex justify-between items-start border-b border-slate-300 pb-4 mb-4">
-          <div className="w-2/3 pr-4">
-            <h1 className="text-base font-bold text-slate-900">
-              บริษัท สนีกเกอร์ แคร์ อินเตอร์เนชั่นแนล จำกัด (สำนักงานใหญ่)
-            </h1>
-            <p className="text-[11px] text-slate-600 mt-0.5">
-              123/45 ถนนสุขุมวิท แขวงคลองเตย เขตคลองเตย กรุงเทพมหานคร 10110
-            </p>
-            <p className="text-[11px] text-slate-600">
-              เลขประจำตัวผู้เสียภาษี: <span className="font-medium text-slate-900">0105558000000</span> | โทร: 02-123-4567
-            </p>
+          <div className="w-2/3 pr-4 flex items-start gap-3.5">
+            {shopProfile.logoUrl && (
+              <img
+                src={shopProfile.logoUrl}
+                alt="Logo"
+                className="h-16 w-16 object-contain rounded border border-slate-200 p-1 shrink-0"
+              />
+            )}
+            <div>
+              <h1 className="text-base font-bold text-slate-900">
+                {shopProfile.name}
+              </h1>
+              <p className="text-[11px] text-slate-600 mt-0.5">
+                {shopProfile.address}
+              </p>
+              <p className="text-[11px] text-slate-600">
+                เลขประจำตัวผู้เสียภาษี: <span className="font-medium text-slate-900">{shopProfile.taxId}</span> {shopProfile.phone ? `| โทร: ${shopProfile.phone}` : ""}
+              </p>
+            </div>
           </div>
           <div className="w-1/3 text-right">
             <h2 className="text-xl font-black text-teal-900">ใบวางบิล</h2>
@@ -146,14 +159,14 @@ export default async function BillingNotesPage() {
 
         {/* Remarks */}
         <div className="border border-dashed border-slate-300 rounded p-2.5 mb-8 text-[10px] text-slate-600">
-          <p><strong>การชำระเงิน:</strong> โอนเงินเข้าบัญชี หรือชำระผ่าน PromptPay QR</p>
+          <p><strong>การชำระเงิน:</strong> โอนเงินเข้าบัญชี หรือชำระผ่าน PromptPay QR ({shopProfile.promptPayId || shopProfile.taxId})</p>
           <p><strong>หมายเหตุ:</strong> กรุณาส่งสลิปหลักฐานการโอนเงินเพื่อตัดยอดบัญชี</p>
         </div>
 
         {/* Signatures */}
         <div className="grid grid-cols-2 gap-8 text-[11px]">
           <div className="border border-slate-300 rounded p-3 text-center">
-            <p className="font-semibold text-slate-800 mb-8">ในนาม บริษัท สนีกเกอร์ แคร์ อินเตอร์เนชั่นแนล จำกัด</p>
+            <p className="font-semibold text-slate-800 mb-8">ในนาม {shopProfile.name}</p>
             <div className="border-b border-slate-400 w-3/4 mx-auto mb-1.5"></div>
             <p className="text-slate-600">(........................................................)</p>
             <p className="text-slate-500">ผู้วางบิล</p>

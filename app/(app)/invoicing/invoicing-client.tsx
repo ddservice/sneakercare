@@ -42,14 +42,18 @@ export type PendingDeliveryOrder = {
   ext_contacts?: { company_name?: string } | null;
 };
 
+import type { ShopProfile } from "@/app/actions/shop-settings";
+
 export function InvoicingClient({
   pendingDOs,
   catalog,
   existingDocs,
+  shopProfile,
 }: {
   pendingDOs: PendingDeliveryOrder[];
   catalog: CatalogItem[];
   existingDocs: any[];
+  shopProfile?: ShopProfile;
 }) {
   const [docType, setDocType] = useState<DocumentType>("INVOICE");
   const [isPending, startTransition] = useTransition();
@@ -69,7 +73,9 @@ export function InvoicingClient({
   );
   const [creditTermDays, setCreditTermDays] = useState(30);
   const [notes, setNotes] = useState("");
-  const [promptPayTarget, setPromptPayTarget] = useState("");
+  const [promptPayTarget, setPromptPayTarget] = useState(
+    shopProfile?.promptPayId || shopProfile?.taxId || ""
+  );
 
   // Line items - Start clean, no dummy items
   const [items, setItems] = useState<DocumentItemInput[]>([]);

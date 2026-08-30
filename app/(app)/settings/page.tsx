@@ -15,15 +15,18 @@ import {
 import { TelegramTokenForm } from "../admin/settings/telegram-token-form";
 import { BranchChatIdForm } from "../admin/settings/branch-chat-id-form";
 import { PermissionMatrix } from "../admin/settings/permission-matrix";
+import { fetchShopProfile } from "@/app/actions/shop-settings";
+import { ShopProfileForm } from "./shop-profile-form";
 
 export default async function SettingsPage() {
   const profile = await requireProfile();
   requireAdmin(profile);
 
   const supabase = await createClient();
-  const [{ data: statusRows }, { data: branches }] = await Promise.all([
+  const [{ data: statusRows }, { data: branches }, shopProfile] = await Promise.all([
     supabase.rpc("fn_integration_secret_status", { p_key: "telegram_bot_token" }),
     supabase.from("branches").select("id, name, telegram_chat_id").eq("is_active", true).order("name"),
+    fetchShopProfile(),
   ]);
 
   const status = statusRows?.[0] ?? { is_set: false, value_suffix: null, updated_at: null };
@@ -31,18 +34,21 @@ export default async function SettingsPage() {
   return (
     <div className="space-y-8">
       {/* ── Header Banner ── */}
-      <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl bg-gradient-to-r from-slate-800 via-slate-900 to-teal-950 p-6 text-white shadow-md">
+      <div className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-slate-200 bg-white p-6 shadow-xs">
         <div className="space-y-1">
-          <div className="inline-flex items-center gap-2 rounded-full bg-teal-500/20 px-3 py-1 text-xs font-semibold text-teal-200 ring-1 ring-teal-400/30">
+          <div className="inline-flex items-center gap-1.5 rounded-md bg-teal-50 px-2.5 py-0.5 text-xs font-semibold text-teal-800 border border-teal-200">
             <Settings className="h-3.5 w-3.5" />
             System Administration
           </div>
-          <h2 className="text-2xl font-bold tracking-tight">ตั้งค่าระบบ & สิทธิ์การใช้งาน</h2>
-          <p className="text-sm text-slate-300">
-            จัดการบัญชีผู้ใช้ สิทธิ์ความปลอดภัย บอทแจ้งเตือนสต๊อกต่ำ และการตั้งค่าสาขา
+          <h2 className="text-2xl font-bold tracking-tight text-slate-900">ตั้งค่าระบบ & ข้อมูลร้านค้า</h2>
+          <p className="text-xs text-slate-500">
+            จัดการข้อมูลร้าน หัวบิลเอกสาร โลโก้ เลขผู้เสียภาษี บัญชีผู้ใช้ และการแจ้งเตือน
           </p>
         </div>
       </div>
+
+      {/* ── Shop Branding & Tax Profile Form ── */}
+      <ShopProfileForm initialProfile={shopProfile} />
 
       {/* ── Quick Admin Links ── */}
       <div className="grid gap-4 sm:grid-cols-3">
