@@ -1,9 +1,8 @@
 import { requireProfile } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { thaiBahtText } from "@/lib/smartacc/baht-text";
-import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Printer, ArrowLeft, FileText } from "lucide-react";
+import { Printer, ArrowLeft, Layers, Plus } from "lucide-react";
 import Link from "next/link";
 
 export default async function BillingNotesPage() {
@@ -17,30 +16,40 @@ export default async function BillingNotesPage() {
     .eq("doc_type", "BILLING_NOTE")
     .order("created_at", { ascending: false });
 
-  const currentDoc = documents?.[0] || {
-    doc_number: "BN-202608-0001",
-    issue_date: "2026-08-30",
-    due_date: "2026-09-30",
-    credit_term_days: 30,
-    grand_total: 4030.0,
-    ext_contacts: {
-      company_name: "บริษัท ตัวอย่างทดสอบ วางบิล จำกัด",
-      address: "88/9 หมู่ 5 ถนนสุเทพ ตำบลสุเทพ อำเภอเมือง จังหวัดเชียงใหม่ 50200",
-      tax_id: "0505562000000",
-    },
-    ext_document_items: [
-      {
-        item_name: "อ้างอิงใบส่งของ DO-202608-0001 (บริการซักรองเท้า 5 คู่)",
-        total_line_amount: 3250.0,
-      },
-      {
-        item_name: "อ้างอิงใบส่งของ DO-202608-0002 (น้ำยาทำความสะอาด 2 ขวด)",
-        total_line_amount: 780.0,
-      },
-    ],
-  };
+  const currentDoc = documents?.[0];
 
-  const totalTextThai = thaiBahtText(currentDoc.grand_total);
+  if (!currentDoc) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <Link
+            href="/invoicing"
+            className="inline-flex items-center gap-1 text-xs font-semibold text-teal-800 hover:text-teal-900"
+          >
+            <ArrowLeft className="h-4 w-4" /> กลับหน้าออกเอกสาร
+          </Link>
+        </div>
+        <div className="max-w-xl mx-auto rounded-xl border border-slate-200 bg-white p-12 text-center space-y-4 shadow-xs">
+          <div className="mx-auto w-12 h-12 rounded-full bg-teal-50 flex items-center justify-center text-teal-700">
+            <Layers className="h-6 w-6" />
+          </div>
+          <div className="space-y-1">
+            <h3 className="text-base font-bold text-slate-900">ยังไม่มีใบวางบิล (Billing Note) ในระบบ</h3>
+            <p className="text-xs text-slate-500">
+              คุณสามารถสร้างใบวางบิลใหม่ หรือรวมใบส่งของ (DO) มารวมวางบิลได้ที่หน้า "ออกเอกสาร & วางบิล"
+            </p>
+          </div>
+          <Link href="/invoicing">
+            <Button className="bg-teal-700 hover:bg-teal-800 text-white text-xs gap-1.5 h-9">
+              <Plus className="h-4 w-4" /> ไปที่หน้าออกเอกสาร & วางบิล
+            </Button>
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  const totalTextThai = thaiBahtText(Number(currentDoc.grand_total || 0));
 
   return (
     <div className="space-y-6">
@@ -82,7 +91,7 @@ export default async function BillingNotesPage() {
             <h2 className="text-xl font-black text-teal-900">ใบวางบิล</h2>
             <p className="text-[10px] font-bold text-slate-400 tracking-wider">BILLING NOTE</p>
             <div className="mt-1 text-[11px] space-y-0.5">
-              <p><span className="text-slate-500">เลขที่:</span> <strong className="text-slate-900">{currentDoc.doc_number}</strong></p>
+              <p><span className="text-slate-500">เลขที่:</span> <strong className="text-slate-900 font-mono">{currentDoc.doc_number}</strong></p>
               <p><span className="text-slate-500">วันที่:</span> {currentDoc.issue_date}</p>
               <p><span className="text-slate-500">ครบกำหนด:</span> <strong className="text-rose-600">{currentDoc.due_date}</strong></p>
             </div>
@@ -119,8 +128,8 @@ export default async function BillingNotesPage() {
               <tr key={index}>
                 <td className="p-2 text-center text-slate-500">{index + 1}</td>
                 <td className="p-2 font-medium text-slate-900">{item.item_name}</td>
-                <td className="p-2 text-right text-slate-600">฿{item.total_line_amount?.toLocaleString("th-TH", { minimumFractionDigits: 2 })}</td>
-                <td className="p-2 text-right font-bold text-teal-900">฿{item.total_line_amount?.toLocaleString("th-TH", { minimumFractionDigits: 2 })}</td>
+                <td className="p-2 text-right text-slate-600">฿{Number(item.total_line_amount || 0).toLocaleString("th-TH", { minimumFractionDigits: 2 })}</td>
+                <td className="p-2 text-right font-bold text-teal-900">฿{Number(item.total_line_amount || 0).toLocaleString("th-TH", { minimumFractionDigits: 2 })}</td>
               </tr>
             ))}
           </tbody>
@@ -131,7 +140,7 @@ export default async function BillingNotesPage() {
           <div>จำนวนเงินรวม (ตัวอักษร): <span className="font-bold text-slate-900">{totalTextThai}</span></div>
           <div className="text-right">
             <span className="text-slate-600">ยอดรวมค้างชำระสุทธิ: </span>
-            <span className="text-sm font-extrabold text-teal-900">฿{currentDoc.grand_total?.toLocaleString("th-TH", { minimumFractionDigits: 2 })}</span>
+            <span className="text-sm font-extrabold text-teal-900">฿{Number(currentDoc.grand_total || 0).toLocaleString("th-TH", { minimumFractionDigits: 2 })}</span>
           </div>
         </div>
 

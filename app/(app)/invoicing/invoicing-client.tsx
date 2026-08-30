@@ -3,9 +3,10 @@
 import { useState, useTransition } from "react";
 import {
   createSmartAccDocument,
-  lookupDbdCompany,
+  convertDocument,
   type CreateDocumentPayload,
   type DocumentItemInput,
+  type CatalogItem,
 } from "@/app/actions/smartacc-documents";
 import { DOC_TYPE_CONFIG, type DocumentType } from "@/lib/smartacc/types";
 import { thaiBahtText } from "@/lib/smartacc/baht-text";
@@ -24,9 +25,11 @@ import {
   QrCode,
   Printer,
   CheckCircle2,
-  Calendar,
   Layers,
   ArrowRight,
+  Sparkles,
+  History,
+  Repeat,
 } from "lucide-react";
 
 export type PendingDeliveryOrder = {
@@ -41,20 +44,23 @@ export type PendingDeliveryOrder = {
 
 export function InvoicingClient({
   pendingDOs,
+  catalog,
+  existingDocs,
 }: {
   pendingDOs: PendingDeliveryOrder[];
+  catalog: CatalogItem[];
+  existingDocs: any[];
 }) {
   const [docType, setDocType] = useState<DocumentType>("INVOICE");
   const [isPending, startTransition] = useTransition();
 
-  // Contact / Juristic State
+  // Contact / Customer State
   const [companyName, setCompanyName] = useState("");
   const [taxId, setTaxId] = useState("");
   const [branchCode, setBranchCode] = useState("00000");
   const [address, setAddress] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
-  const [isSearchingDbd, setIsSearchingDbd] = useState(false);
 
   // Document meta
   const [issueDate, setIssueDate] = useState(new Date().toISOString().slice(0, 10));
@@ -63,25 +69,10 @@ export function InvoicingClient({
   );
   const [creditTermDays, setCreditTermDays] = useState(30);
   const [notes, setNotes] = useState("");
-  const [promptPayTarget, setPromptPayTarget] = useState("0105558000000");
+  const [promptPayTarget, setPromptPayTarget] = useState("");
 
-  // Line items
-  const [items, setItems] = useState<DocumentItemInput[]>([
-    {
-      itemName: "บริการซักทำความสะอาดรองเท้าพรีเมียม (Sneaker Deep Clean)",
-      quantity: 5,
-      unitPrice: 650,
-      discount: 0,
-      totalLineAmount: 3250,
-    },
-    {
-      itemName: "น้ำยาทำความสะอาดรองเท้าสูตรพิเศษ (Sneaker Cleaner 500ml)",
-      quantity: 2,
-      unitPrice: 390,
-      discount: 0,
-      totalLineAmount: 780,
-    },
-  ]);
+  // Line items - Start clean, no dummy items
+  const [items, setItems] = useState<DocumentItemInput[]>([]);
 
   // Selected DOs for Billing Note
   const [selectedDoIds, setSelectedDoIds] = useState<string[]>([]);
@@ -92,35 +83,31 @@ export function InvoicingClient({
     shareToken?: string;
   } | null>(null);
 
+  // Active view tab
+  const [activeView, setActiveView] = useState<"create" | "history">("create");
+
   // Calculations
   const subtotal = items.reduce((sum, it) => sum + it.totalLineAmount, 0);
-  const vatRate = docType === "QUOTATION" || docType === "DO" ? 0 : 7.0;
+  const isTaxApplicable = ["INVOICE", "BILLING_NOTE", "TAX_INVOICE", "RECEIPT"].includes(docType);
+  const vatRate = isTaxApplicable ? 7.0 : 0.0;
   const vatAmount = subtotal * (vatRate / 100);
   const grandTotal = subtotal + vatAmount;
 
-  async function handleDbdSearch() {
-    if (!taxId && !companyName) {
-      toast.error("กรุณากรอกเลขประจำตัวผู้เสียภาษี 13 หลัก หรือชื่อบริษัท");
-      return;
-    }
-    setIsSearchingDbd(true);
-    try {
-      const result = await lookupDbdCompany(taxId || companyName);
-      if (result) {
-        setCompanyName(result.companyName);
-        setTaxId(result.taxId);
-        setBranchCode(result.branchCode);
-        setAddress(result.address);
-        toast.success("ดึงข้อมูลนิติบุคคลสำเร็จ");
-      } else {
-        toast.error("ไม่พบข้อมูลนิติบุคคลในฐานข้อมูล DBD");
-      }
-    } finally {
-      setIsSearchingDbd(false);
-    }
+  function handleAddCatalogItem(catItem: CatalogItem) {
+    setItems([
+      ...items,
+      {
+        itemName: catItem.name,
+        quantity: 1,
+        unitPrice: catItem.price,
+        discount: 0,
+        totalLineAmount: catItem.price,
+      },
+    ]);
+    toast.success(`เพิ่ม "${catItem.name}" เรียบร้อย`);
   }
 
-  function handleAddItem() {
+  function handleAddBlankItem() {
     setItems([
       ...items,
       {
@@ -204,9 +191,26 @@ export function InvoicingClient({
         if (res.success) {
           toast.success(`สร้างเอกสาร ${res.docNumber} สำเร็จ`);
           setCreatedDoc({ docNumber: res.docNumber, shareToken: res.shareToken });
+          setItems([]);
+          setCompanyName("");
+          setTaxId("");
+          setAddress("");
         }
       } catch (err: any) {
         toast.error(err.message || "เกิดข้อผิดพลาดในการสร้างเอกสาร");
+      }
+    });
+  }
+
+  async function handleConvert(docId: string, targetType: DocumentType) {
+    startTransition(async () => {
+      try {
+        const res = await convertDocument(docId, targetType);
+        if (res.success) {
+          toast.success(`แปลงเอกสารเป็น ${res.docNumber} (${DOC_TYPE_CONFIG[targetType].labelTh}) เรียบร้อย`);
+        }
+      } catch (err: any) {
+        toast.error(err.message || "เกิดข้อผิดพลาดในการแปลงเอกสาร");
       }
     });
   }
@@ -218,361 +222,478 @@ export function InvoicingClient({
         <div className="space-y-1">
           <div className="inline-flex items-center gap-1.5 rounded-md bg-teal-50 px-2.5 py-0.5 text-xs font-semibold text-teal-800 border border-teal-200">
             <FileText className="h-3.5 w-3.5" />
-            Fast Invoicing & Smart Billing
+            Standard Document & Invoicing Pipeline
           </div>
           <h2 className="text-2xl font-bold tracking-tight text-slate-900">
-            ออกเอกสาร & ใบวางบิลอัจฉริยะ
+            ระบบออกเอกสาร & การเชื่อมโยงเอกสาร (Flow)
           </h2>
           <p className="text-xs text-slate-500">
-            สร้างใบเสนอราคา ใบส่งของ ใบแจ้งหนี้ ใบวางบิล และใบกำกับภาษี พร้อม PromptPay QR และ e-Tax
+            ใบเสนอราคา (QA) ➔ ใบส่งของ (DO) ➔ ใบแจ้งหนี้ (INV) ➔ ใบวางบิล (BL) ➔ ใบเสร็จ/ใบกำกับภาษี (REC/TAX)
           </p>
         </div>
 
-        {/* Document Type Pills */}
-        <div className="flex flex-wrap gap-1.5 rounded-lg border border-slate-200 bg-slate-50 p-1">
-          {(Object.keys(DOC_TYPE_CONFIG) as DocumentType[]).map((type) => (
-            <button
-              key={type}
-              onClick={() => setDocType(type)}
-              className={`rounded-md px-3 py-1 text-xs font-semibold transition-all ${
-                docType === type
-                  ? "bg-teal-700 text-white shadow-xs"
-                  : "text-slate-600 hover:bg-slate-200"
-              }`}
-            >
-              {DOC_TYPE_CONFIG[type].prefix} : {DOC_TYPE_CONFIG[type].labelTh}
-            </button>
-          ))}
+        {/* View Switcher */}
+        <div className="flex gap-2">
+          <Button
+            size="sm"
+            variant={activeView === "create" ? "default" : "outline"}
+            onClick={() => setActiveView("create")}
+            className={`text-xs gap-1.5 h-9 ${activeView === "create" ? "bg-teal-700 hover:bg-teal-800 text-white" : ""}`}
+          >
+            <Plus className="h-3.5 w-3.5" /> ออกเอกสารใหม่
+          </Button>
+          <Button
+            size="sm"
+            variant={activeView === "history" ? "default" : "outline"}
+            onClick={() => setActiveView("history")}
+            className={`text-xs gap-1.5 h-9 ${activeView === "history" ? "bg-teal-700 hover:bg-teal-800 text-white" : ""}`}
+          >
+            <History className="h-3.5 w-3.5" /> ประวัติเอกสารทั้งหมด ({existingDocs.length})
+          </Button>
         </div>
       </div>
 
-      {/* ── Main Form Grid ── */}
-      <div className="grid gap-8 lg:grid-cols-12">
-        {/* ── Left Column: Form Builder (7 cols) ── */}
-        <div className="lg:col-span-7 space-y-6">
-          {/* Customer / Juristic Card */}
-          <Card className="border-slate-200 shadow-xs">
-            <CardHeader className="border-b border-slate-100 pb-3">
-              <CardTitle className="text-sm font-bold flex items-center gap-2">
-                <Building2 className="h-4 w-4 text-teal-700" />
-                ข้อมูลลูกค้า & นิติบุคคล
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-5 space-y-4">
-              {/* DBD Search Bar */}
-              <div className="space-y-1.5">
-                <Label className="text-xs font-semibold text-slate-700">
-                  ค้นหาข้อมูลนิติบุคคลจาก DBD (เลข 13 หลัก หรือ ชื่อบริษัท)
-                </Label>
-                <div className="flex gap-2">
-                  <div className="relative flex-1">
-                    <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
-                    <Input
-                      value={taxId}
-                      onChange={(e) => setTaxId(e.target.value)}
-                      placeholder="เช่น 0105558000000 หรือ ชื่อบริษัท"
-                      className="pl-9 text-xs h-9"
-                    />
+      {activeView === "create" ? (
+        <>
+          {/* Document Type Selector */}
+          <div className="flex flex-wrap gap-2 rounded-xl border border-slate-200 bg-white p-3 shadow-xs">
+            {(Object.keys(DOC_TYPE_CONFIG) as DocumentType[]).map((type) => (
+              <button
+                key={type}
+                onClick={() => setDocType(type)}
+                className={`rounded-lg px-4 py-2 text-xs font-bold transition-all flex items-center gap-1.5 ${
+                  docType === type
+                    ? "bg-teal-700 text-white shadow-xs"
+                    : "text-slate-600 bg-slate-50 hover:bg-slate-100 border border-slate-200"
+                }`}
+              >
+                <span className="font-mono">{DOC_TYPE_CONFIG[type].prefix}</span>
+                <span>:</span>
+                <span>{DOC_TYPE_CONFIG[type].labelTh}</span>
+              </button>
+            ))}
+          </div>
+
+          {/* ── Main Form Grid ── */}
+          <div className="grid gap-8 lg:grid-cols-12">
+            {/* ── Left Column: Form Builder (7 cols) ── */}
+            <div className="lg:col-span-7 space-y-6">
+              {/* Customer Info Card */}
+              <Card className="border-slate-200 shadow-xs">
+                <CardHeader className="border-b border-slate-100 pb-3">
+                  <CardTitle className="text-sm font-bold flex items-center gap-2">
+                    <Building2 className="h-4 w-4 text-teal-700" />
+                    ข้อมูลลูกค้า / คู่ค้า
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="p-5 space-y-4">
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="space-y-1.5 sm:col-span-2">
+                      <Label className="text-xs font-semibold text-slate-700">
+                        ชื่อลูกค้า / นิติบุคคล <span className="text-rose-500">*</span>
+                      </Label>
+                      <Input
+                        value={companyName}
+                        onChange={(e) => setCompanyName(e.target.value)}
+                        placeholder="เช่น บจก. สยาม ฟุตแวร์ หรือ คุณสมชาย ใจดี"
+                        className="text-xs h-9"
+                        required
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs font-semibold text-slate-700">
+                        เลขประจำตัวผู้เสียภาษี (Tax ID 13 หลัก)
+                      </Label>
+                      <Input
+                        value={taxId}
+                        onChange={(e) => setTaxId(e.target.value)}
+                        placeholder="เลข 13 หลัก"
+                        className="text-xs h-9"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs font-semibold text-slate-700">
+                        รหัสสาขา (Branch Code)
+                      </Label>
+                      <Input
+                        value={branchCode}
+                        onChange={(e) => setBranchCode(e.target.value)}
+                        placeholder="00000 (สำนักงานใหญ่)"
+                        className="text-xs h-9"
+                      />
+                    </div>
+                    <div className="space-y-1.5 sm:col-span-2">
+                      <Label className="text-xs font-semibold text-slate-700">ที่อยู่</Label>
+                      <Input
+                        value={address}
+                        onChange={(e) => setAddress(e.target.value)}
+                        placeholder="ที่อยู่สำหรับออกเอกสาร"
+                        className="text-xs h-9"
+                      />
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Real Catalog Quick Add */}
+              <Card className="border-slate-200 bg-slate-50/50 shadow-xs">
+                <CardHeader className="border-b border-slate-200 pb-3">
+                  <CardTitle className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                    <Sparkles className="h-3.5 w-3.5 text-teal-700" />
+                    เลือกรายการบริการ / สินค้าจากระบบ (Catalog)
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="p-3">
+                  <div className="flex flex-wrap gap-1.5">
+                    {catalog.map((cat) => (
+                      <button
+                        key={cat.id}
+                        type="button"
+                        onClick={() => handleAddCatalogItem(cat)}
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-800 shadow-xs hover:border-teal-600 hover:bg-teal-50/50 transition-all text-left"
+                      >
+                        <span className="font-medium">{cat.name}</span>
+                        {cat.price > 0 && (
+                          <span className="font-mono font-bold text-teal-800">
+                            ฿{cat.price.toLocaleString()}
+                          </span>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* DO Picker Section for Billing Notes */}
+              {docType === "BILLING_NOTE" && (
+                <Card className="border-teal-200 bg-teal-50/40 shadow-xs">
+                  <CardHeader className="border-b border-teal-100 pb-3">
+                    <CardTitle className="text-sm font-bold text-teal-900 flex items-center gap-2">
+                      <Layers className="h-4 w-4 text-teal-700" />
+                      DO-Picker: เลือกใบส่งของ / ใบแจ้งหนี้ที่ค้างชำระมารวมวางบิล
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="p-4">
+                    {pendingDOs.length === 0 ? (
+                      <p className="text-xs text-slate-500 text-center py-3">
+                        ไม่มีใบส่งของหรือใบแจ้งหนี้ที่ค้างชำระในระบบ
+                      </p>
+                    ) : (
+                      <div className="space-y-2 max-h-48 overflow-y-auto">
+                        {pendingDOs.map((doItem) => (
+                          <div
+                            key={doItem.id}
+                            onClick={() => handleToggleDo(doItem)}
+                            className={`flex items-center justify-between p-2.5 rounded-lg border text-xs cursor-pointer transition-all ${
+                              selectedDoIds.includes(doItem.id)
+                                ? "border-teal-600 bg-teal-100/80 font-semibold"
+                                : "border-slate-200 bg-white hover:bg-slate-50"
+                            }`}
+                          >
+                            <div className="flex items-center gap-2">
+                              <input
+                                type="checkbox"
+                                checked={selectedDoIds.includes(doItem.id)}
+                                onChange={() => {}}
+                                className="rounded text-teal-700"
+                              />
+                              <div>
+                                <span className="font-bold text-teal-800">{doItem.doc_number}</span>
+                                <span className="text-slate-500 ml-2">({doItem.issue_date})</span>
+                              </div>
+                            </div>
+                            <div className="font-mono font-bold text-slate-900">
+                              ฿{doItem.grand_total.toLocaleString()}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Line Items Table */}
+              <Card className="border-slate-200 shadow-xs">
+                <CardHeader className="border-b border-slate-100 pb-3 flex flex-row items-center justify-between">
+                  <div>
+                    <CardTitle className="text-sm font-bold">รายการสินค้า / บริการ</CardTitle>
+                    <CardDescription className="text-xs">
+                      ระบุจำนวนและราคาต่อหน่วย
+                    </CardDescription>
                   </div>
                   <Button
                     type="button"
                     size="sm"
-                    onClick={handleDbdSearch}
-                    disabled={isSearchingDbd}
-                    className="bg-teal-700 text-white text-xs h-9 hover:bg-teal-800"
+                    variant="outline"
+                    onClick={handleAddBlankItem}
+                    className="text-xs gap-1 h-8"
                   >
-                    {isSearchingDbd ? "กำลังค้นหา..." : "ค้นหา DBD"}
+                    <Plus className="h-3.5 w-3.5" /> เพิ่มแถวเอง
                   </Button>
-                </div>
-              </div>
+                </CardHeader>
+                <CardContent className="p-0">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-xs">
+                      <thead className="border-b border-slate-100 bg-slate-50 text-slate-600 uppercase font-semibold">
+                        <tr>
+                          <th className="px-3 py-2.5">รายการ</th>
+                          <th className="px-3 py-2.5 text-center w-20">จำนวน</th>
+                          <th className="px-3 py-2.5 text-right w-28">ราคา/หน่วย</th>
+                          <th className="px-3 py-2.5 text-right w-28">ยอดรวม</th>
+                          <th className="px-2 py-2.5 text-center w-10"></th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {items.length === 0 ? (
+                          <tr>
+                            <td colSpan={5} className="p-6 text-center text-slate-400">
+                              ยังไม่มีรายการ กดเลือกจากรายการบริการด้านบน หรือกด "เพิ่มแถวเอง"
+                            </td>
+                          </tr>
+                        ) : (
+                          items.map((item, idx) => (
+                            <tr key={idx}>
+                              <td className="p-2">
+                                <Input
+                                  value={item.itemName}
+                                  onChange={(e) => handleUpdateItem(idx, "itemName", e.target.value)}
+                                  placeholder="ชื่อสินค้าหรือบริการ"
+                                  className="text-xs h-8"
+                                />
+                              </td>
+                              <td className="p-2">
+                                <Input
+                                  type="number"
+                                  min="1"
+                                  value={item.quantity}
+                                  onChange={(e) => handleUpdateItem(idx, "quantity", e.target.value)}
+                                  className="text-xs h-8 text-center"
+                                />
+                              </td>
+                              <td className="p-2">
+                                <Input
+                                  type="number"
+                                  step="0.01"
+                                  value={item.unitPrice}
+                                  onChange={(e) => handleUpdateItem(idx, "unitPrice", e.target.value)}
+                                  className="text-xs h-8 text-right font-mono"
+                                />
+                              </td>
+                              <td className="p-2 text-right font-mono font-bold text-slate-800">
+                                {item.totalLineAmount.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+                              </td>
+                              <td className="p-2 text-center">
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveItem(idx)}
+                                  className="text-slate-400 hover:text-rose-600"
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </button>
+                              </td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
 
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div className="space-y-1.5 sm:col-span-2">
-                  <Label className="text-xs font-semibold text-slate-700">
-                    ชื่อลูกค้า / บริษัท <span className="text-rose-500">*</span>
-                  </Label>
-                  <Input
-                    value={companyName}
-                    onChange={(e) => setCompanyName(e.target.value)}
-                    placeholder="บริษัท สนีกเกอร์ แคร์ จำกัด หรือชื่อลูกค้า"
-                    className="text-xs h-9"
-                    required
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-semibold text-slate-700">
-                    เลขประจำตัวผู้เสียภาษี (Tax ID)
-                  </Label>
-                  <Input
-                    value={taxId}
-                    onChange={(e) => setTaxId(e.target.value)}
-                    placeholder="เลข 13 หลัก"
-                    className="text-xs h-9"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-semibold text-slate-700">
-                    รหัสสาขา (Branch Code)
-                  </Label>
-                  <Input
-                    value={branchCode}
-                    onChange={(e) => setBranchCode(e.target.value)}
-                    placeholder="00000 (สำนักงานใหญ่)"
-                    className="text-xs h-9"
-                  />
-                </div>
-                <div className="space-y-1.5 sm:col-span-2">
-                  <Label className="text-xs font-semibold text-slate-700">ที่อยู่ออกใบกำกับภาษี</Label>
-                  <Input
-                    value={address}
-                    onChange={(e) => setAddress(e.target.value)}
-                    placeholder="เลขที่ อาคาร ถนน ตำบล อำเภอ จังหวัด รหัสไปรษณีย์"
-                    className="text-xs h-9"
-                  />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+            {/* ── Right Column: Summary & Numbering Preview (5 cols) ── */}
+            <div className="lg:col-span-5 space-y-6">
+              <Card className="border-slate-200 bg-slate-50/50 shadow-xs">
+                <CardHeader className="border-b border-slate-200 pb-3">
+                  <CardTitle className="text-sm font-bold flex items-center justify-between">
+                    <span>สรุปเอกสาร (Summary)</span>
+                    <Badge variant="outline" className="text-teal-800 bg-teal-50 border-teal-200 font-mono">
+                      {DOC_TYPE_CONFIG[docType].prefix}-{issueDate.replace(/-/g, "")}-XXXX
+                    </Badge>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="p-5 space-y-4">
+                  <div className="grid grid-cols-2 gap-3 text-xs">
+                    <div className="space-y-1">
+                      <Label className="text-[11px] font-semibold text-slate-600">วันที่เอกสาร</Label>
+                      <Input
+                        type="date"
+                        value={issueDate}
+                        onChange={(e) => setIssueDate(e.target.value)}
+                        className="text-xs h-8"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-[11px] font-semibold text-slate-600">ครบกำหนดชำระ</Label>
+                      <Input
+                        type="date"
+                        value={dueDate}
+                        onChange={(e) => setDueDate(e.target.value)}
+                        className="text-xs h-8"
+                      />
+                    </div>
+                  </div>
 
-          {/* DO Picker Section for Billing Notes */}
-          {docType === "BILLING_NOTE" && (
-            <Card className="border-teal-200 bg-teal-50/40 shadow-xs">
-              <CardHeader className="border-b border-teal-100 pb-3">
-                <CardTitle className="text-sm font-bold text-teal-900 flex items-center gap-2">
-                  <Layers className="h-4 w-4 text-teal-700" />
-                  DO-Picker: เลือกใบส่งของ / ใบแจ้งหนี้ที่ค้างชำระมารวมวางบิล
-                </CardTitle>
-                <CardDescription className="text-xs">
-                  เลือกใบส่งของที่ส่งมอบแล้วเพื่อรวมยอดวางบิลในใบเดียว
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="p-4">
-                {pendingDOs.length === 0 ? (
-                  <p className="text-xs text-slate-500 text-center py-3">
-                    ไม่พบใบส่งของหรือใบแจ้งหนี้ที่ค้างชำระในระบบ
-                  </p>
-                ) : (
-                  <div className="space-y-2 max-h-48 overflow-y-auto">
-                    {pendingDOs.map((doItem) => (
-                      <div
-                        key={doItem.id}
-                        onClick={() => handleToggleDo(doItem)}
-                        className={`flex items-center justify-between p-2.5 rounded-lg border text-xs cursor-pointer transition-all ${
-                          selectedDoIds.includes(doItem.id)
-                            ? "border-teal-600 bg-teal-100/80 font-semibold"
-                            : "border-slate-200 bg-white hover:bg-slate-50"
-                        }`}
-                      >
-                        <div className="flex items-center gap-2">
-                          <input
-                            type="checkbox"
-                            checked={selectedDoIds.includes(doItem.id)}
-                            onChange={() => {}}
-                            className="rounded text-teal-700"
-                          />
-                          <div>
-                            <span className="font-bold text-teal-800">{doItem.doc_number}</span>
-                            <span className="text-slate-500 ml-2">({doItem.issue_date})</span>
-                          </div>
-                        </div>
-                        <div className="font-mono font-bold text-slate-900">
-                          ฿{doItem.grand_total.toLocaleString()}
-                        </div>
+                  {/* Monetary Aggregation */}
+                  <div className="space-y-2 border-t border-slate-200 pt-3 text-xs">
+                    <div className="flex justify-between text-slate-600">
+                      <span>มูลค่ารวม (Subtotal):</span>
+                      <span className="font-mono font-bold">{subtotal.toLocaleString("th-TH", { minimumFractionDigits: 2 })} ฿</span>
+                    </div>
+                    {vatRate > 0 && (
+                      <div className="flex justify-between text-slate-600">
+                        <span>ภาษีมูลค่าเพิ่ม (VAT 7%):</span>
+                        <span className="font-mono font-bold text-teal-700">+{vatAmount.toLocaleString("th-TH", { minimumFractionDigits: 2 })} ฿</span>
                       </div>
-                    ))}
+                    )}
+                    <div className="flex justify-between text-sm font-bold text-slate-900 border-t border-slate-200 pt-2">
+                      <span>ยอดสุทธิ (Grand Total):</span>
+                      <span className="font-mono text-teal-800 text-base">฿{grandTotal.toLocaleString("th-TH", { minimumFractionDigits: 2 })}</span>
+                    </div>
+                    {grandTotal > 0 && (
+                      <div className="text-[11px] text-slate-500 text-right italic">
+                        ({thaiBahtText(grandTotal)})
+                      </div>
+                    )}
                   </div>
-                )}
-              </CardContent>
-            </Card>
-          )}
 
-          {/* Line Items Table */}
-          <Card className="border-slate-200 shadow-xs">
-            <CardHeader className="border-b border-slate-100 pb-3 flex flex-row items-center justify-between">
-              <div>
-                <CardTitle className="text-sm font-bold">รายการสินค้า / บริการ</CardTitle>
-                <CardDescription className="text-xs">
-                  ระบุรายละเอียด จำนวน และราคาต่อหน่วย
-                </CardDescription>
-              </div>
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                onClick={handleAddItem}
-                className="text-xs gap-1 h-8"
-              >
-                <Plus className="h-3.5 w-3.5" /> เพิ่มแถว
-              </Button>
-            </CardHeader>
-            <CardContent className="p-0">
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs">
-                  <thead className="border-b border-slate-100 bg-slate-50 text-slate-600 uppercase font-semibold">
+                  {/* Dynamic PromptPay Target */}
+                  <div className="rounded-xl border border-slate-200 bg-white p-4 space-y-2">
+                    <div className="flex items-center gap-1.5 text-xs font-bold text-slate-800">
+                      <QrCode className="h-4 w-4 text-teal-700" />
+                      <span>PromptPay Dynamic QR</span>
+                    </div>
+                    <Input
+                      value={promptPayTarget}
+                      onChange={(e) => setPromptPayTarget(e.target.value)}
+                      placeholder="เบอร์โทร หรือ เลขประจำตัวผู้เสียภาษี 13 หลัก"
+                      className="h-8 text-xs font-mono"
+                    />
+                  </div>
+
+                  {/* Action Button */}
+                  <Button
+                    type="button"
+                    disabled={isPending}
+                    onClick={handleCreateDocument}
+                    className="w-full h-11 bg-teal-700 hover:bg-teal-800 text-white font-bold text-sm shadow-xs"
+                  >
+                    {isPending ? "กำลังบันทึกเอกสาร..." : `ออกเอกสาร ${DOC_TYPE_CONFIG[docType].labelTh}`}
+                  </Button>
+
+                  {createdDoc && (
+                    <div className="p-3 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs space-y-2">
+                      <div className="flex items-center gap-1.5 font-bold">
+                        <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                        <span>ออกเอกสารเลขที่ {createdDoc.docNumber} สำเร็จ!</span>
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+          </div>
+        </>
+      ) : (
+        /* ── HISTORY & CONVERSION PIPELINE VIEW ── */
+        <Card className="border-slate-200 shadow-xs">
+          <CardHeader className="border-b border-slate-100 pb-3 flex flex-row items-center justify-between">
+            <div>
+              <CardTitle className="text-sm font-bold">รายการเอกสารทั้งหมดในระบบ</CardTitle>
+              <CardDescription className="text-xs">
+                สามารถกดแปลงเอกสาร (Convert) ตามสายงานได้ทันที
+              </CardDescription>
+            </div>
+          </CardHeader>
+          <CardContent className="p-0">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead className="border-b border-slate-100 bg-slate-50 text-slate-600 uppercase font-semibold">
+                  <tr>
+                    <th className="px-4 py-3">เลขที่เอกสาร</th>
+                    <th className="px-4 py-3">ประเภท</th>
+                    <th className="px-4 py-3">ลูกค้า</th>
+                    <th className="px-4 py-3">วันที่</th>
+                    <th className="px-4 py-3 text-right">ยอดสุทธิ</th>
+                    <th className="px-4 py-3 text-center">สถานะ</th>
+                    <th className="px-4 py-3 text-center">แปลงเอกสารต่อไป</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {existingDocs.length === 0 ? (
                     <tr>
-                      <th className="px-3 py-2.5">รายการ</th>
-                      <th className="px-3 py-2.5 text-center w-20">จำนวน</th>
-                      <th className="px-3 py-2.5 text-right w-28">ราคา/หน่วย</th>
-                      <th className="px-3 py-2.5 text-right w-28">ยอดรวม</th>
-                      <th className="px-2 py-2.5 text-center w-10"></th>
+                      <td colSpan={7} className="p-8 text-center text-slate-400">
+                        ยังไม่มีเอกสารในระบบ สามารถกด "ออกเอกสารใหม่" เพื่อเริ่มต้น
+                      </td>
                     </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {items.map((item, idx) => (
-                      <tr key={idx}>
-                        <td className="p-2">
-                          <Input
-                            value={item.itemName}
-                            onChange={(e) => handleUpdateItem(idx, "itemName", e.target.value)}
-                            placeholder="ชื่อสินค้าหรือบริการ"
-                            className="text-xs h-8"
-                          />
-                        </td>
-                        <td className="p-2">
-                          <Input
-                            type="number"
-                            min="1"
-                            value={item.quantity}
-                            onChange={(e) => handleUpdateItem(idx, "quantity", e.target.value)}
-                            className="text-xs h-8 text-center"
-                          />
-                        </td>
-                        <td className="p-2">
-                          <Input
-                            type="number"
-                            step="0.01"
-                            value={item.unitPrice}
-                            onChange={(e) => handleUpdateItem(idx, "unitPrice", e.target.value)}
-                            className="text-xs h-8 text-right font-mono"
-                          />
-                        </td>
-                        <td className="p-2 text-right font-mono font-bold text-slate-800">
-                          {item.totalLineAmount.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
-                        </td>
-                        <td className="p-2 text-center">
-                          <button
-                            type="button"
-                            onClick={() => handleRemoveItem(idx)}
-                            className="text-slate-400 hover:text-rose-600"
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* ── Right Column: Document Summary Slip & Action (5 cols) ── */}
-        <div className="lg:col-span-5 space-y-6">
-          <Card className="border-slate-200 bg-slate-50/50 shadow-xs">
-            <CardHeader className="border-b border-slate-200 pb-3">
-              <CardTitle className="text-sm font-bold flex items-center justify-between">
-                <span>สรุปเอกสาร (Preview)</span>
-                <Badge variant="outline" className="text-teal-800 bg-teal-50 border-teal-200">
-                  {DOC_TYPE_CONFIG[docType].labelTh}
-                </Badge>
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-5 space-y-4">
-              {/* Document Meta Inputs */}
-              <div className="grid grid-cols-2 gap-3 text-xs">
-                <div className="space-y-1">
-                  <Label className="text-[11px] font-semibold text-slate-600">วันที่เอกสาร</Label>
-                  <Input
-                    type="date"
-                    value={issueDate}
-                    onChange={(e) => setIssueDate(e.target.value)}
-                    className="text-xs h-8"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-[11px] font-semibold text-slate-600">ครบกำหนดชำระ</Label>
-                  <Input
-                    type="date"
-                    value={dueDate}
-                    onChange={(e) => setDueDate(e.target.value)}
-                    className="text-xs h-8"
-                  />
-                </div>
-              </div>
-
-              {/* Monetary Aggregation */}
-              <div className="space-y-2 border-t border-slate-200 pt-3 text-xs">
-                <div className="flex justify-between text-slate-600">
-                  <span>มูลค่ารวม (Subtotal):</span>
-                  <span className="font-mono font-bold">{subtotal.toLocaleString("th-TH", { minimumFractionDigits: 2 })} ฿</span>
-                </div>
-                {vatRate > 0 && (
-                  <div className="flex justify-between text-slate-600">
-                    <span>ภาษีมูลค่าเพิ่ม (VAT 7%):</span>
-                    <span className="font-mono font-bold text-teal-700">+{vatAmount.toLocaleString("th-TH", { minimumFractionDigits: 2 })} ฿</span>
-                  </div>
-                )}
-                <div className="flex justify-between text-sm font-bold text-slate-900 border-t border-slate-200 pt-2">
-                  <span>ยอดสุทธิ (Grand Total):</span>
-                  <span className="font-mono text-teal-800 text-base">฿{grandTotal.toLocaleString("th-TH", { minimumFractionDigits: 2 })}</span>
-                </div>
-                <div className="text-[11px] text-slate-500 text-right italic">
-                  ({thaiBahtText(grandTotal)})
-                </div>
-              </div>
-
-              {/* Dynamic PromptPay QR Box */}
-              <div className="rounded-xl border border-slate-200 bg-white p-4 text-center space-y-2">
-                <div className="flex items-center justify-center gap-1.5 text-xs font-bold text-slate-800">
-                  <QrCode className="h-4 w-4 text-teal-700" />
-                  <span>Dynamic PromptPay QR (EMVCo)</span>
-                </div>
-                <p className="text-[11px] text-slate-500">
-                  ระบบจะสร้าง QR Code พร้อมยอดเงิน <strong className="text-teal-800">฿{grandTotal.toLocaleString()}</strong> ฝังในบิลโดยอัตโนมัติ
-                </p>
-                <div className="flex items-center justify-center gap-2 pt-1">
-                  <Label className="text-[11px] text-slate-500">เบอร์/Tax ID PromptPay:</Label>
-                  <Input
-                    value={promptPayTarget}
-                    onChange={(e) => setPromptPayTarget(e.target.value)}
-                    className="h-7 w-36 text-xs text-center font-mono"
-                  />
-                </div>
-              </div>
-
-              {/* Action Button */}
-              <Button
-                type="button"
-                disabled={isPending}
-                onClick={handleCreateDocument}
-                className="w-full h-11 bg-teal-700 hover:bg-teal-800 text-white font-bold text-sm shadow-xs"
-              >
-                {isPending ? "กำลังบันทึกเอกสาร..." : `ออกเอกสาร ${DOC_TYPE_CONFIG[docType].labelTh}`}
-              </Button>
-
-              {createdDoc && (
-                <div className="p-3 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs space-y-2">
-                  <div className="flex items-center gap-1.5 font-bold">
-                    <CheckCircle2 className="h-4 w-4 text-emerald-600" />
-                    <span>ออกเอกสารเลขที่ {createdDoc.docNumber} เรียบร้อยแล้ว!</span>
-                  </div>
-                  <div className="flex gap-2">
-                    <Button
-                      size="sm"
-                      onClick={() => window.print()}
-                      variant="outline"
-                      className="text-xs h-7 gap-1 border-emerald-300"
-                    >
-                      <Printer className="h-3.5 w-3.5" /> พิมพ์เอกสาร (PDF)
-                    </Button>
-                  </div>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-      </div>
+                  ) : (
+                    existingDocs.map((doc) => {
+                      const nextTypes = DOC_TYPE_CONFIG[doc.doc_type as DocumentType]?.nextTypes || [];
+                      return (
+                        <tr key={doc.id} className="hover:bg-slate-50">
+                          <td className="px-4 py-3">
+                            <span className="font-mono font-bold text-teal-800">{doc.doc_number}</span>
+                            {doc.ref_parent_doc_number && (
+                              <div className="text-[10px] text-slate-400 font-mono">
+                                แปลงจาก: {doc.ref_parent_doc_number}
+                              </div>
+                            )}
+                          </td>
+                          <td className="px-4 py-3">
+                            <Badge variant="outline" className="text-[10px]">
+                              {DOC_TYPE_CONFIG[doc.doc_type as DocumentType]?.labelTh || doc.doc_type}
+                            </Badge>
+                          </td>
+                          <td className="px-4 py-3 font-medium text-slate-800">
+                            {doc.ext_contacts?.company_name || "-"}
+                          </td>
+                          <td className="px-4 py-3 font-mono text-slate-500">
+                            {doc.issue_date}
+                          </td>
+                          <td className="px-4 py-3 text-right font-mono font-bold text-slate-900">
+                            ฿{Number(doc.grand_total).toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+                          </td>
+                          <td className="px-4 py-3 text-center">
+                            <Badge
+                              variant="secondary"
+                              className={`text-[10px] ${
+                                doc.status === "PAID"
+                                  ? "bg-emerald-100 text-emerald-800"
+                                  : doc.status === "CONVERTED"
+                                  ? "bg-blue-100 text-blue-800"
+                                  : "bg-slate-100 text-slate-800"
+                              }`}
+                            >
+                              {doc.status}
+                            </Badge>
+                          </td>
+                          <td className="px-4 py-3 text-center">
+                            <div className="flex items-center justify-center gap-1">
+                              {nextTypes.map((nxt) => (
+                                <Button
+                                  key={nxt}
+                                  size="sm"
+                                  variant="outline"
+                                  disabled={isPending || doc.status === "CONVERTED"}
+                                  onClick={() => handleConvert(doc.id, nxt)}
+                                  className="h-6 text-[10px] gap-1 px-2 border-teal-200 text-teal-800 hover:bg-teal-50"
+                                >
+                                  <Repeat className="h-2.5 w-2.5" /> ➔ {DOC_TYPE_CONFIG[nxt].prefix}
+                                </Button>
+                              ))}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }

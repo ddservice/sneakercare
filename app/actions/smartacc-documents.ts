@@ -28,60 +28,102 @@ export type CreateDocumentPayload = {
   items: DocumentItemInput[];
   notes?: string;
   promptPayTarget?: string;
-  billingRefDocIds?: string[]; // For DO-Picker in Billing Notes
+  billingRefDocIds?: string[];
+  refParentDocId?: string;
+  refParentDocNumber?: string;
 };
 
-export async function lookupDbdCompany(taxIdOrKeyword: string) {
+export type CatalogItem = {
+  id: string;
+  name: string;
+  category: string;
+  price: number;
+  unit: string;
+  source: "service" | "item";
+};
+
+/**
+ * Fetch real catalog of services and inventory items from live database
+ */
+export async function fetchCatalogItems(): Promise<CatalogItem[]> {
   await requireProfile();
-  const cleaned = taxIdOrKeyword.trim();
+  const supabase = createAdminClient();
 
-  // Mock DBD Juristic Lookup database
-  const dbdDatabase: Record<string, { companyName: string; taxId: string; branchCode: string; address: string }> = {
-    "0105558000000": {
-      companyName: "บริษัท สนีกเกอร์ แคร์ อินเตอร์เนชั่นแนล จำกัด (สำนักงานใหญ่)",
-      taxId: "0105558000000",
-      branchCode: "00000",
-      address: "เลขที่ 123/45 ถนนสุขุมวิท แขวงคลองเตย เขตคลองเตย กรุงเทพมหานคร 10110",
-    },
-    "0505562000000": {
-      companyName: "บริษัท เชียงใหม่ ฟุตแวร์ เซอร์วิส จำกัด",
-      taxId: "0505562000000",
-      branchCode: "00000",
-      address: "เลขที่ 88/9 หมู่ 5 ตำบลสุเทพ อำเภอเมืองเชียงใหม่ จังหวัดเชียงใหม่ 50200",
-    },
-  };
+  const [servicesRes, itemsRes] = await Promise.all([
+    supabase.from("services").select("id, name, category, base_price").eq("is_active", true),
+    supabase.from("inv_items").select("id, name, category, base_unit").eq("is_active", true),
+  ]);
 
-  const found = Object.values(dbdDatabase).find(
-    (c) => c.taxId === cleaned || c.companyName.includes(cleaned)
-  );
+  const catalog: CatalogItem[] = [];
 
-  if (found) return found;
-
-  if (cleaned.length === 13 && /^\d+$/.test(cleaned)) {
-    return {
-      companyName: `บริษัท นิติบุคคล ทะเบียน ${cleaned} จำกัด`,
-      taxId: cleaned,
-      branchCode: "00000",
-      address: "กรุงเทพมหานคร",
-    };
+  if (servicesRes.data) {
+    servicesRes.data.forEach((s: any) => {
+      catalog.push({
+        id: s.id,
+        name: s.name,
+        category: s.category || "บริการ",
+        price: Number(s.base_price || 0),
+        unit: "คู่/งาน",
+        source: "service",
+      });
+    });
   }
 
-  return null;
+  if (itemsRes.data) {
+    itemsRes.data.forEach((i: any) => {
+      catalog.push({
+        id: i.id,
+        name: i.name,
+        category: i.category || "สินค้า/อุปกรณ์",
+        price: 0, // Consumables/Supplies price
+        unit: i.base_unit || "ชิ้น",
+        source: "item",
+      });
+    });
+  }
+
+  return catalog;
 }
 
+/**
+ * Fetch real documents from database with relational items
+ */
+export async function fetchSmartAccDocuments(filterType?: DocumentType) {
+  await requireProfile();
+  const supabase = createAdminClient();
+
+  let query = (supabase as any)
+    .schema("extension_layer")
+    .from("ext_documents")
+    .select("*, ext_contacts(*), ext_document_items(*)")
+    .order("created_at", { ascending: false });
+
+  if (filterType) {
+    query = query.eq("doc_type", filterType);
+  }
+
+  const { data, error } = await query;
+  if (error) return [];
+  return data ?? [];
+}
+
+/**
+ * Create or save a new document with dynamic numbering and PromptPay payload
+ */
 export async function createSmartAccDocument(payload: CreateDocumentPayload) {
   const profile = await requireProfile();
   const supabase = createAdminClient();
 
   // 1. Calculate Totals
   const subtotal = payload.items.reduce((sum, item) => sum + item.totalLineAmount, 0);
-  const vatRate = 7.0;
+  const isTaxApplicable = ["INVOICE", "BILLING_NOTE", "TAX_INVOICE", "RECEIPT"].includes(payload.docType);
+  const vatRate = isTaxApplicable ? 7.0 : 0.0;
   const vatAmount = subtotal * (vatRate / 100);
   const grandTotal = subtotal + vatAmount;
 
-  // 2. Generate Numbering & Share Token
+  // 2. Generate Standard Numbering: PREFIX-YYYYMMDD-XXXX
   const docNumber = await generateDocumentNumber(payload.docType, new Date(payload.issueDate));
-  const shareToken = "doc_" + Math.random().toString(36).substring(2, 12) + Date.now().toString(36);
+  const shareToken = "doc_" + Math.random().toString(36).substring(2, 10) + Date.now().toString(36);
 
   // 3. Generate Dynamic PromptPay QR Payload
   let promptpayPayload: string | null = null;
@@ -130,6 +172,8 @@ export async function createSmartAccDocument(payload: CreateDocumentPayload) {
       promptpay_payload: promptpayPayload,
       share_token: shareToken,
       notes: payload.notes || null,
+      ref_parent_doc_id: payload.refParentDocId || null,
+      ref_parent_doc_number: payload.refParentDocNumber || null,
     })
     .select("id, doc_number")
     .single();
@@ -156,9 +200,84 @@ export async function createSmartAccDocument(payload: CreateDocumentPayload) {
       .insert(lineItems);
   }
 
+  // 7. Insert Billing References if converting DOs
+  if (payload.billingRefDocIds && payload.billingRefDocIds.length > 0) {
+    for (const refId of payload.billingRefDocIds) {
+      await (supabase as any)
+        .schema("extension_layer")
+        .from("ext_billing_references")
+        .insert({
+          billing_note_id: doc.id,
+          ref_doc_id: refId,
+          ref_doc_type: "DO",
+          ref_doc_number: docNumber,
+          ref_date: payload.issueDate,
+          total_amount: grandTotal,
+          balance_due: grandTotal,
+        });
+    }
+  }
+
   revalidatePath("/invoicing");
   revalidatePath("/billing-notes");
   return { success: true, docId: doc.id, docNumber: doc.doc_number, shareToken };
+}
+
+/**
+ * Converts a source document (e.g. Quotation QA-...) to a target document (e.g. Invoice INV-...)
+ */
+export async function convertDocument(sourceDocId: string, targetDocType: DocumentType) {
+  await requireProfile();
+  const supabase = createAdminClient();
+
+  // 1. Fetch Source Document
+  const { data: sourceDoc, error } = await (supabase as any)
+    .schema("extension_layer")
+    .from("ext_documents")
+    .select("*, ext_contacts(*), ext_document_items(*)")
+    .eq("id", sourceDocId)
+    .single();
+
+  if (error || !sourceDoc) {
+    throw new Error("ไม่พบเอกสารต้นทางที่ต้องการแปลง");
+  }
+
+  const items: DocumentItemInput[] = (sourceDoc.ext_document_items || []).map((it: any) => ({
+    itemName: it.item_name,
+    quantity: Number(it.quantity),
+    unitPrice: Number(it.unit_price),
+    discount: Number(it.discount || 0),
+    totalLineAmount: Number(it.total_line_amount),
+  }));
+
+  const payload: CreateDocumentPayload = {
+    docType: targetDocType,
+    companyName: sourceDoc.ext_contacts?.company_name || "ลูกค้าทั่วไป",
+    taxId: sourceDoc.ext_contacts?.tax_id || undefined,
+    branchCode: sourceDoc.ext_contacts?.branch_code || "00000",
+    address: sourceDoc.ext_contacts?.address || undefined,
+    phone: sourceDoc.ext_contacts?.phone || undefined,
+    email: sourceDoc.ext_contacts?.email || undefined,
+    issueDate: new Date().toISOString().slice(0, 10),
+    dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
+    creditTermDays: sourceDoc.credit_term_days || 30,
+    items,
+    notes: `แปลงมาจากเอกสาร ${sourceDoc.doc_number}`,
+    refParentDocId: sourceDoc.id,
+    refParentDocNumber: sourceDoc.doc_number,
+  };
+
+  const res = await createSmartAccDocument(payload);
+
+  // Update source doc status
+  await (supabase as any)
+    .schema("extension_layer")
+    .from("ext_documents")
+    .update({ status: "CONVERTED" })
+    .eq("id", sourceDocId);
+
+  revalidatePath("/invoicing");
+  return res;
 }
 
 export async function fetchPendingDeliveryOrders() {
@@ -176,3 +295,28 @@ export async function fetchPendingDeliveryOrders() {
   if (error) return [];
   return data ?? [];
 }
+
+export async function fetchTaxFilingData(yearMonth?: string) {
+  await requireProfile();
+  const supabase = createAdminClient();
+
+  const [docsRes, expensesRes] = await Promise.all([
+    (supabase as any)
+      .schema("extension_layer")
+      .from("ext_documents")
+      .select("*, ext_contacts(*)")
+      .in("doc_type", ["INVOICE", "TAX_INVOICE", "RECEIPT"])
+      .order("issue_date", { ascending: false }),
+    supabase
+      .from("expenses")
+      .select("*")
+      .order("expense_date", { ascending: false }),
+  ]);
+
+  return {
+    salesDocs: docsRes.data ?? [],
+    expenses: expensesRes.data ?? [],
+  };
+}
+
+
