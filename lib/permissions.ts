@@ -13,8 +13,11 @@ export const ROLE_LABEL: Record<Role, string> = {
 export type ModuleKey =
   | "dashboard"
   | "pos"
+  | "invoicing"
   | "inventory"
   | "expenses"
+  | "expenses-ocr"
+  | "tax-filing"
   | "statistics"
   | "stock-out"
   | "stock-in"
@@ -37,9 +40,9 @@ export type AppModule = {
   note?: string;
 };
 
-// สิทธิ์นี้ต้องสอดคล้องกับ RLS / staff-safe views — UI เป็นด่านซ่อนปุ่มเท่านั้น
+// สิทธิ์นี้สอดคล้องกับ RLS / staff-safe views — UI เป็นด่านซ่อนปุ่มเท่านั้น
 export const APP_MODULES: readonly AppModule[] = [
-  // ── 6 MAIN TABS (เหมือนระบบเดิม แต่เป็นมืออาชีพ) ──
+  // ── MAIN TABS ──
   {
     key: "dashboard",
     href: "/dashboard",
@@ -57,6 +60,14 @@ export const APP_MODULES: readonly AppModule[] = [
     writeRoles: ["admin", "co_admin", "staff"],
   },
   {
+    key: "invoicing",
+    href: "/invoicing",
+    label: "ออกเอกสาร & วางบิล",
+    isMainTab: true,
+    viewRoles: ["admin", "co_admin"],
+    writeRoles: ["admin", "co_admin"],
+  },
+  {
     key: "inventory",
     href: "/inventory",
     label: "คลังสินค้า",
@@ -71,6 +82,22 @@ export const APP_MODULES: readonly AppModule[] = [
     isMainTab: true,
     viewRoles: ["admin", "co_admin"],
     writeRoles: ["admin", "co_admin"],
+  },
+  {
+    key: "expenses-ocr",
+    href: "/expenses-ocr",
+    label: "สแกนใบเสร็จ & สลิป",
+    isMainTab: true,
+    viewRoles: ["admin", "co_admin", "staff"],
+    writeRoles: ["admin", "co_admin", "staff"],
+  },
+  {
+    key: "tax-filing",
+    href: "/tax-filing",
+    label: "ภาษี & e-Tax",
+    isMainTab: true,
+    viewRoles: ["admin"],
+    writeRoles: ["admin"],
   },
   {
     key: "statistics",
@@ -120,7 +147,7 @@ export const APP_MODULES: readonly AppModule[] = [
     label: "ประวัติ",
     viewRoles: ["admin", "co_admin", "staff"],
     writeRoles: [],
-    note: "Staff เห็นจำนวนอย่างเดียว ไม่เห็นต้นทุน",
+    note: "ตาราง append-only แก้/ลบไม่ได้ — Staff ซ่อนคอลัมน์ต้นทุน",
   },
   {
     key: "reports",
@@ -128,7 +155,7 @@ export const APP_MODULES: readonly AppModule[] = [
     label: "รายงาน",
     viewRoles: ["admin", "co_admin"],
     writeRoles: [],
-    note: "มี COGS — Staff เข้าไม่ได้",
+    note: "COGS / สรุปมูลค่าเบิกใช้ — Staff เข้าไม่ได้",
   },
   {
     key: "items",
@@ -136,7 +163,7 @@ export const APP_MODULES: readonly AppModule[] = [
     label: "สินค้า",
     viewRoles: ["admin", "co_admin", "staff"],
     writeRoles: ["admin"],
-    note: "แคตตาล็อกกลางแก้ได้เฉพาะ Admin เพราะกระทบทุกสาขา",
+    note: "Staff/Co-Admin ดูเพื่อเลือกเบิกได้ แต่แก้ราคา/เพิ่มตัวใหม่ไม่ได้",
   },
   {
     key: "users",
@@ -149,38 +176,42 @@ export const APP_MODULES: readonly AppModule[] = [
     key: "audit",
     href: "/admin/audit",
     label: "Audit Log",
-    viewRoles: ["admin", "co_admin"],
+    viewRoles: ["admin"],
     writeRoles: [],
-    note: "อ่านอย่างเดียว แม้แต่ Admin ก็แก้/ลบไม่ได้",
+    note: "อ่านอย่างเดียว ลบไม่ได้เด็ดขาด (มี trigger ดัก)",
   },
-];
-
-export function getModule(key: ModuleKey): AppModule {
-  const mod = APP_MODULES.find((item) => item.key === key);
-  if (!mod) throw new Error(`Unknown module: ${key}`);
-  return mod;
-}
+] as const;
 
 export function canView(role: Role, key: ModuleKey): boolean {
-  return getModule(key).viewRoles.includes(role);
+  const mod = APP_MODULES.find((m) => m.key === key);
+  if (!mod) return false;
+  return (mod.viewRoles as readonly string[]).includes(role);
 }
 
 export function canWrite(role: Role, key: ModuleKey): boolean {
-  return getModule(key).writeRoles.includes(role);
+  const mod = APP_MODULES.find((m) => m.key === key);
+  if (!mod) return false;
+  return (mod.writeRoles as readonly string[]).includes(role);
+}
+
+export function visibleModulesFor(role: Role): readonly AppModule[] {
+  return APP_MODULES.filter((m) => (m.viewRoles as readonly string[]).includes(role));
+}
+
+export function mainNavItemsFor(role: Role): readonly AppModule[] {
+  return APP_MODULES.filter(
+    (m) => m.isMainTab && (m.viewRoles as readonly string[]).includes(role)
+  );
 }
 
 export function canSeeCost(role: Role): boolean {
   return role === "admin" || role === "co_admin";
 }
 
-export function canRecordWaste(role: Role): boolean {
+export function canManageUsers(role: Role): boolean {
+  return role === "admin";
+}
+
+export function canEditMinStock(role: Role): boolean {
   return role === "admin" || role === "co_admin";
-}
-
-export function mainNavItemsFor(role: Role): readonly AppModule[] {
-  return APP_MODULES.filter((item) => item.isMainTab && item.viewRoles.includes(role));
-}
-
-export function navItemsFor(role: Role): readonly AppModule[] {
-  return APP_MODULES.filter((item) => item.viewRoles.includes(role));
 }
