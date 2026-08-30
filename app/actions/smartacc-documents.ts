@@ -51,7 +51,7 @@ export async function fetchCatalogItems(): Promise<CatalogItem[]> {
 
   const [servicesRes, itemsRes] = await Promise.all([
     supabase.from("services").select("id, name, category, base_price").eq("is_active", true),
-    supabase.from("inv_items").select("id, name, category, base_unit").eq("is_active", true),
+    supabase.from("items").select("id, name, category, base_unit"),
   ]);
 
   const catalog: CatalogItem[] = [];
