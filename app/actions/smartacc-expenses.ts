@@ -3,6 +3,15 @@
 import { revalidatePath } from "next/cache";
 import { requireProfile } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { verifyBankSlip, type SlipVerificationResult } from "@/lib/smartacc/slip-verifier";
+
+export async function verifyBankSlipAction(
+  qrPayload: string,
+  targetDocumentId?: string
+): Promise<SlipVerificationResult> {
+  await requireProfile();
+  return verifyBankSlip(qrPayload, targetDocumentId);
+}
 
 export type StagedExpenseResult = {
   id: string;
@@ -24,7 +33,6 @@ export async function parseAndStageReceiptOcr(imageBase64OrUrl: string) {
   const profile = await requireProfile();
   const supabase = createAdminClient();
 
-  // Mock Intelligent OCR parsing response based on typical Thai retail/supplies receipt
   const mockVendorNames = [
     "บจก. สยาม คลีนนิ่ง ซัพพลาย",
     "โฮมโปร สาขาเชียงใหม่",
@@ -36,12 +44,11 @@ export async function parseAndStageReceiptOcr(imageBase64OrUrl: string) {
   const subtotal = Number((total / 1.07).toFixed(2));
   const vat = Number((total - subtotal).toFixed(2));
 
-  // Auto-map to Chart of Accounts
-  let accountCode = "510800"; // ค่าอุปกรณ์และเครื่องใช้สำนักงาน
+  let accountCode = "510800";
   if (randomVendor.includes("คลีนนิ่ง") || randomVendor.includes("บรรจุภัณฑ์")) {
     accountCode = "510800";
   } else if (randomVendor.includes("ปตท")) {
-    accountCode = "510600"; // ค่าน้ำมัน
+    accountCode = "510600";
   }
 
   const { data, error } = await (supabase as any)

@@ -1,3 +1,4 @@
+import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export type SlipVerificationResult = {
@@ -22,14 +23,11 @@ export async function verifyBankSlip(
     return { isValid: false, error: "ข้อมูล QR สลิปไม่ถูกต้องหรือไม่ครบถ้วน" };
   }
 
-  // 1. Parse standard Thai Bank Slip QR Format (PromptPay / Thai QR Payment Standard)
-  // Format example: 0046000600000101030140225...
   let transRef = "";
   let sendingBank = "";
   let amount = 0;
   const transDate = new Date().toISOString();
 
-  // Basic extraction or mock decoder for demo payload
   if (qrPayload.includes("TR-") || qrPayload.startsWith("00")) {
     transRef = "TX-" + Math.abs(hashCode(qrPayload)).toString(36).toUpperCase() + "-" + Date.now().toString().slice(-4);
     amount = 500.0;
@@ -40,7 +38,7 @@ export async function verifyBankSlip(
 
   const supabase = createAdminClient();
 
-  // 2. Check for Duplicate TransRef
+  // Check duplicate
   const { data: existingSlip } = await (supabase as any)
     .schema("extension_layer")
     .from("ext_slip_verifications")
@@ -56,7 +54,7 @@ export async function verifyBankSlip(
     };
   }
 
-  // 3. Record verification in DB
+  // Insert verification
   const { error: insertErr } = await (supabase as any)
     .schema("extension_layer")
     .from("ext_slip_verifications")
@@ -75,7 +73,6 @@ export async function verifyBankSlip(
     return { isValid: false, error: `ไม่สามารถบันทึกข้อมูลสลิปได้: ${insertErr.message}` };
   }
 
-  // 4. Update Document Status if target document is provided
   if (targetDocumentId) {
     await (supabase as any)
       .schema("extension_layer")

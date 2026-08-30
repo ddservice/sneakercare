@@ -4,8 +4,9 @@ import { useState, useTransition } from "react";
 import {
   parseAndStageReceiptOcr,
   approveStagedExpense,
+  verifyBankSlipAction,
 } from "@/app/actions/smartacc-expenses";
-import { verifyBankSlip, type SlipVerificationResult } from "@/lib/smartacc/slip-verifier";
+import type { SlipVerificationResult } from "@/lib/smartacc/slip-verifier";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -88,7 +89,7 @@ export function ExpensesOcrClient({
     }
 
     startTransition(async () => {
-      const res = await verifyBankSlip(qrInput);
+      const res = await verifyBankSlipAction(qrInput);
       setSlipResult(res);
       if (res.isValid) {
         toast.success(`ตรวจสอบสลิปสำเร็จ: TransRef ${res.transRef}`);

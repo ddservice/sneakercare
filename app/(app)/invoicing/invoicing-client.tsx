@@ -7,7 +7,7 @@ import {
   type CreateDocumentPayload,
   type DocumentItemInput,
 } from "@/app/actions/smartacc-documents";
-import { DOC_TYPE_CONFIG, type DocumentType } from "@/lib/smartacc/numbering";
+import { DOC_TYPE_CONFIG, type DocumentType } from "@/lib/smartacc/types";
 import { thaiBahtText } from "@/lib/smartacc/baht-text";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";

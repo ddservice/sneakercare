@@ -1,24 +1,8 @@
+import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { DOC_TYPE_CONFIG, type DocumentType } from "./types";
 
-export type DocumentType =
-  | "QUOTATION"
-  | "DO"
-  | "INVOICE"
-  | "BILLING_NOTE"
-  | "TAX_INVOICE"
-  | "RECEIPT";
-
-export const DOC_TYPE_CONFIG: Record<
-  DocumentType,
-  { prefix: string; labelTh: string; labelEn: string }
-> = {
-  QUOTATION: { prefix: "QT", labelTh: "ใบเสนอราคา", labelEn: "Quotation" },
-  DO: { prefix: "DO", labelTh: "ใบส่งของ", labelEn: "Delivery Order" },
-  INVOICE: { prefix: "INV", labelTh: "ใบแจ้งหนี้", labelEn: "Invoice" },
-  BILLING_NOTE: { prefix: "BN", labelTh: "ใบวางบิล", labelEn: "Billing Note" },
-  TAX_INVOICE: { prefix: "TAX", labelTh: "ใบกำกับภาษี", labelEn: "Tax Invoice" },
-  RECEIPT: { prefix: "REC", labelTh: "ใบเสร็จรับเงิน", labelEn: "Receipt" },
-};
+export { DOC_TYPE_CONFIG, type DocumentType };
 
 export async function generateDocumentNumber(
   docType: DocumentType,
@@ -35,7 +19,6 @@ export async function generateDocumentNumber(
   });
 
   if (error || !data) {
-    // Fallback if RPC is constrained
     const randomSeq = Math.floor(1000 + Math.random() * 9000);
     return `${config.prefix}-${yearMonth}-${randomSeq}`;
   }
