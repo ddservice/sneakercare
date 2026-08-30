@@ -215,3 +215,8 @@ export function canManageUsers(role: Role): boolean {
 export function canEditMinStock(role: Role): boolean {
   return role === "admin" || role === "co_admin";
 }
+
+export function canRecordWaste(role: Role): boolean {
+  return role === "admin" || role === "co_admin";
+}
+
