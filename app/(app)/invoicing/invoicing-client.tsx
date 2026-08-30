@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import {
   createSmartAccDocument,
   convertDocument,
+  lookupDbdCompany,
   type CreateDocumentPayload,
   type DocumentItemInput,
   type CatalogItem,
@@ -98,6 +99,38 @@ export function InvoicingClient({
   const vatRate = isTaxApplicable ? 7.0 : 0.0;
   const vatAmount = subtotal * (vatRate / 100);
   const grandTotal = subtotal + vatAmount;
+
+  // DBD search state
+  const [isSearchingDbd, setIsSearchingDbd] = useState(false);
+  const [dbdSearchInput, setDbdSearchInput] = useState("");
+
+  async function handleDbdSearch(query?: string) {
+    const q = query || dbdSearchInput || taxId || companyName;
+    if (!q) {
+      toast.error("กรุณากรอกเลขประจำตัวผู้เสียภาษี 13 หลัก หรือชื่อบริษัท");
+      return;
+    }
+
+    setIsSearchingDbd(true);
+    try {
+      const res = await lookupDbdCompany(q);
+      if (res) {
+        setCompanyName(res.companyName);
+        setTaxId(res.taxId);
+        setBranchCode(res.branchCode || "00000");
+        setAddress(res.address || "");
+        if (res.phone) setPhone(res.phone);
+        if (res.email) setEmail(res.email);
+        toast.success(`ดึงข้อมูลนิติบุคคลสำเร็จ: ${res.companyName}`);
+      } else {
+        toast.error("ไม่พบข้อมูลนิติบุคคลจากเลขนี้ในระบบ DBD");
+      }
+    } catch {
+      toast.error("เกิดข้อผิดพลาดในการดึงข้อมูล DBD");
+    } finally {
+      setIsSearchingDbd(false);
+    }
+  }
 
   function handleAddCatalogItem(catItem: CatalogItem) {
     setItems([
@@ -308,6 +341,37 @@ export function InvoicingClient({
                   </div>
                 </CardHeader>
                 <CardContent className="p-5 space-y-4">
+                  {/* DBD Auto-Fill Bar */}
+                  <div className="rounded-xl border border-teal-200 bg-teal-50/50 p-3 space-y-2">
+                    <Label className="text-xs font-bold text-teal-900 flex items-center gap-1.5">
+                      <Search className="h-3.5 w-3.5 text-teal-700" />
+                      ค้นหา & ดึงข้อมูลอัตโนมัติจาก DBD / ทะเบียนพาณิชย์ (13 หลัก หรือ ชื่อบริษัท)
+                    </Label>
+                    <div className="flex gap-2">
+                      <Input
+                        value={dbdSearchInput}
+                        onChange={(e) => setDbdSearchInput(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            handleDbdSearch();
+                          }
+                        }}
+                        placeholder="พิมพ์เลขผู้เสียภาษี 13 หลัก เช่น 0105558000000 หรือชื่อบริษัท..."
+                        className="text-xs h-9 bg-white font-mono"
+                      />
+                      <Button
+                        type="button"
+                        size="sm"
+                        disabled={isSearchingDbd}
+                        onClick={() => handleDbdSearch()}
+                        className="bg-teal-700 hover:bg-teal-800 text-white text-xs h-9 px-4 shrink-0 font-semibold gap-1"
+                      >
+                        {isSearchingDbd ? "กำลังค้นหา..." : "ดึงข้อมูล DBD"}
+                      </Button>
+                    </div>
+                  </div>
+
                   <div className="grid gap-3 sm:grid-cols-2">
                     <div className="space-y-1.5 sm:col-span-2">
                       <Label className="text-xs font-semibold text-slate-700">
@@ -322,13 +386,24 @@ export function InvoicingClient({
                       />
                     </div>
                     <div className="space-y-1.5">
-                      <Label className="text-xs font-semibold text-slate-700">
-                        เลขประจำตัวผู้เสียภาษีลูกค้า (Tax ID 13 หลัก)
-                      </Label>
+                      <div className="flex items-center justify-between">
+                        <Label className="text-xs font-semibold text-slate-700">
+                          เลขประจำตัวผู้เสียภาษีลูกค้า (Tax ID)
+                        </Label>
+                        {taxId.length === 13 && (
+                          <button
+                            type="button"
+                            onClick={() => handleDbdSearch(taxId)}
+                            className="text-[11px] text-teal-700 hover:underline font-semibold"
+                          >
+                            ดึงข้อมูลจากเลขนี้
+                          </button>
+                        )}
+                      </div>
                       <Input
                         value={taxId}
                         onChange={(e) => setTaxId(e.target.value)}
-                        placeholder="เลข 13 หลักของลูกค้า (ถ้ามี)"
+                        placeholder="เลข 13 หลักของลูกค้า"
                         className="text-xs h-9 font-mono"
                       />
                     </div>
