@@ -287,34 +287,49 @@ export function InvoicingClient({
               {/* Customer Info Card */}
               <Card className="border-slate-200 shadow-xs">
                 <CardHeader className="border-b border-slate-100 pb-3">
-                  <CardTitle className="text-sm font-bold flex items-center gap-2">
-                    <Building2 className="h-4 w-4 text-teal-700" />
-                    ข้อมูลลูกค้า / คู่ค้า
-                  </CardTitle>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <CardTitle className="text-sm font-bold flex items-center gap-2">
+                        <Building2 className="h-4 w-4 text-teal-700" />
+                        ข้อมูลลูกค้า / ผู้รับเอกสาร (Bill To / Customer)
+                      </CardTitle>
+                      <CardDescription className="text-xs mt-0.5">
+                        ระบุชื่อลูกค้าหรือบริษัทที่เราต้องการออกบิลไปเรียกเก็บเงิน
+                      </CardDescription>
+                    </div>
+                    {shopProfile && (
+                      <div className="hidden sm:flex items-center gap-2 rounded-lg bg-teal-50 border border-teal-100 px-2.5 py-1 text-[11px] text-teal-800">
+                        {shopProfile.logoUrl && (
+                          <img src={shopProfile.logoUrl} alt="Logo" className="h-4 w-4 object-contain rounded" />
+                        )}
+                        <span>ผู้ออกบิล: <strong>{shopProfile.name}</strong></span>
+                      </div>
+                    )}
+                  </div>
                 </CardHeader>
                 <CardContent className="p-5 space-y-4">
                   <div className="grid gap-3 sm:grid-cols-2">
                     <div className="space-y-1.5 sm:col-span-2">
                       <Label className="text-xs font-semibold text-slate-700">
-                        ชื่อลูกค้า / นิติบุคคล <span className="text-rose-500">*</span>
+                        ชื่อลูกค้า หรือ บริษัทผู้รับเอกสาร <span className="text-rose-500">*</span>
                       </Label>
                       <Input
                         value={companyName}
                         onChange={(e) => setCompanyName(e.target.value)}
-                        placeholder="เช่น บจก. สยาม ฟุตแวร์ หรือ คุณสมชาย ใจดี"
+                        placeholder="เช่น บริษัท เชียงใหม่ สตาร์ทอัพ จำกัด หรือ คุณสมชาย ใจดี"
                         className="text-xs h-9"
                         required
                       />
                     </div>
                     <div className="space-y-1.5">
                       <Label className="text-xs font-semibold text-slate-700">
-                        เลขประจำตัวผู้เสียภาษี (Tax ID 13 หลัก)
+                        เลขประจำตัวผู้เสียภาษีลูกค้า (Tax ID 13 หลัก)
                       </Label>
                       <Input
                         value={taxId}
                         onChange={(e) => setTaxId(e.target.value)}
-                        placeholder="เลข 13 หลัก"
-                        className="text-xs h-9"
+                        placeholder="เลข 13 หลักของลูกค้า (ถ้ามี)"
+                        className="text-xs h-9 font-mono"
                       />
                     </div>
                     <div className="space-y-1.5">
