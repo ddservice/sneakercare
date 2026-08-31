@@ -334,7 +334,7 @@ export function ExpensesClient({ initialData }: { initialData: ExpensesPayload }
 
       {/* ── Time Range Selector & Overall Summary ── */}
       <div className="print:hidden">
-        <TimeRangeFilterBar onFilterChange={handleFilterRange} isPending={isPending} />
+        <TimeRangeFilterBar selectedRange={data.timeRange} onSelectRange={handleFilterRange} />
       </div>
 
       {/* ── Metric Summary Cards ── */}
