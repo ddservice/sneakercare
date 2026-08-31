@@ -194,11 +194,11 @@ export function StatisticsClient({ initialData }: { initialData: AnalyticsDashbo
             <CardContent className="p-5 space-y-3">
               {initialData.monthlyTrends.map((m) => {
                 const pct = Math.round((m.revenue / maxMonthRevenue) * 100);
-                const isSelected = selectedMonth === m.month;
+                const isSelected = selectedRange === m.month;
                 return (
                   <div
                     key={m.month}
-                    onClick={() => setSelectedMonth(m.month)}
+                    onClick={() => setSelectedRange(m.month)}
                     className={`cursor-pointer rounded-lg p-2.5 transition-all ${
                       isSelected
                         ? "bg-teal-50/80 border border-teal-300"
