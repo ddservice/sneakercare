@@ -1,7 +1,7 @@
 import { requireProfile, requireAdmin } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { getActiveBranches } from "@/lib/branch";
-import { ROLE_LABEL } from "@/lib/permissions";
+import { ROLE_LABEL, type Role } from "@/lib/permissions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -12,21 +12,31 @@ export default async function AdminUsersPage() {
   requireAdmin(profile);
 
   const supabase = await createClient();
-  const [{ data: users }, branches] = await Promise.all([
-    supabase
-      .from("profiles")
-      .select("id, username, display_name, role, branch_id, is_active")
-      .order("display_name"),
-    getActiveBranches(),
-  ]);
+  let users: any[] = [];
+  let branches: any[] = [];
 
-  const branchName = new Map((branches ?? []).map((branch) => [branch.id, branch.name]));
+  try {
+    const [{ data: userRows }, branchRows] = await Promise.all([
+      supabase
+        .from("profiles")
+        .select("id, username, display_name, role, branch_id, is_active")
+        .order("display_name"),
+      getActiveBranches().catch(() => []),
+    ]);
+    if (userRows) users = userRows;
+    if (branchRows) branches = branchRows;
+  } catch {
+    users = [];
+    branches = [];
+  }
+
+  const branchName = new Map(branches.map((branch) => [branch.id, branch.name]));
 
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle>ผู้ใช้และสิทธิ์</CardTitle>
-        <InviteUserForm branches={branches ?? []} />
+        <InviteUserForm branches={branches} />
       </CardHeader>
       <CardContent>
         <Table>
@@ -41,7 +51,7 @@ export default async function AdminUsersPage() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {(users ?? []).map((user) => (
+            {users.map((user) => (
               <TableRow key={user.id}>
                 <TableCell>{user.display_name}</TableCell>
                 <TableCell>{user.username}</TableCell>
@@ -53,11 +63,11 @@ export default async function AdminUsersPage() {
                   </Badge>
                 </TableCell>
                 <TableCell className="text-right">
-                  <EditUserForm user={user} branches={branches ?? []} />
+                  <EditUserForm user={user} branches={branches} />
                 </TableCell>
               </TableRow>
             ))}
-            {(!users || users.length === 0) && (
+            {users.length === 0 && (
               <TableRow>
                 <TableCell colSpan={6} className="text-center text-muted-foreground">
                   ยังไม่มีผู้ใช้

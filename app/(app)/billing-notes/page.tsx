@@ -10,15 +10,32 @@ export default async function BillingNotesPage() {
   await requireProfile();
   const supabase = createAdminClient();
 
-  const [{ data: documents }, shopProfile] = await Promise.all([
-    (supabase as any)
-      .schema("extension_layer")
-      .from("ext_documents")
-      .select("*, ext_contacts(*), ext_document_items(*)")
-      .eq("doc_type", "BILLING_NOTE")
-      .order("created_at", { ascending: false }),
-    fetchShopProfile(),
-  ]);
+  let documents: any[] = [];
+  let shopProfile = {
+    name: "บริษัท รวยรับทรัพย์168 จำกัด (SneakerCare)",
+    taxId: "0505566000000",
+    phone: "089-xxx-xxxx",
+    address: "552/4 ถ.เชียงใหม่-ลำพูน ต.หนองหอย อ.เมือง จ.เชียงใหม่ 50000",
+    logoUrl: "",
+    promptPayId: "0505566000000",
+  };
+
+  try {
+    const [{ data: docs }, profile] = await Promise.all([
+      (supabase as any)
+        .schema("extension_layer")
+        .from("ext_documents")
+        .select("*, ext_contacts(*), ext_document_items(*)")
+        .eq("doc_type", "BILLING_NOTE")
+        .order("created_at", { ascending: false }),
+      fetchShopProfile().catch(() => shopProfile),
+    ]);
+    if (docs) documents = docs;
+    if (profile) shopProfile = profile;
+  } catch {
+    // Graceful fallback if extension_layer is not configured
+    documents = [];
+  }
 
   const currentDoc = documents?.[0];
 
