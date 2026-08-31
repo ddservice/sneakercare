@@ -5,9 +5,9 @@ import {
   fetchAllExpensesData,
   addExpense,
   deleteExpense,
+  saveStaffPayrollAdjustment,
   type ExpensesPayload,
   type StaffPayslip,
-  type ExpenseActionState,
 } from "@/app/actions/expenses";
 import { TimeRangeFilterBar } from "@/components/time-range-filter";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -29,10 +29,8 @@ import {
   Printer,
   X,
   CreditCard,
-  Check,
-  Calculator,
   UserPlus,
-  Edit3,
+  Save,
   TrendingUp,
   Percent,
 } from "lucide-react";
@@ -45,19 +43,135 @@ export function ExpensesClient({ initialData }: { initialData: ExpensesPayload }
   // Print Payslip Modal State
   const [selectedPayslip, setSelectedPayslip] = useState<StaffPayslip | null>(null);
 
-  // Edit/Adjust Staff Modal State
-  const [editingStaff, setEditingStaff] = useState<StaffPayslip | null>(null);
-
-  // New Staff / Daily Wage Modal State
+  // New Staff Modal State
   const [showAddStaffModal, setShowAddStaffModal] = useState(false);
   const [staffFormType, setStaffFormType] = useState<"monthly" | "probation_daily">("probation_daily");
   const [dailyRate, setDailyRate] = useState<number>(350);
   const [daysWorked, setDaysWorked] = useState<number>(26);
 
+  // Interactive Live Values State for Staff (Keyed by employeeName)
+  const [staffDrafts, setStaffDrafts] = useState<
+    Record<
+      string,
+      {
+        diligence: number;
+        ot: number;
+        commPct: number;
+        daysWorked: number;
+        otherDeductions: number;
+      }
+    >
+  >(() => {
+    const initial: Record<string, any> = {};
+    initialData.payslips.forEach((p) => {
+      initial[p.employeeName] = {
+        diligence: p.diligence,
+        ot: p.ot,
+        commPct: p.commPct || 0,
+        daysWorked: p.daysWorked || 26,
+        otherDeductions: p.otherDeductions || 0,
+      };
+    });
+    return initial;
+  });
+
   function handleFilterRange(range: string) {
     startTransition(async () => {
       const updated = await fetchAllExpensesData(range);
       setData(updated);
+      const newDrafts: Record<string, any> = {};
+      updated.payslips.forEach((p) => {
+        newDrafts[p.employeeName] = {
+          diligence: p.diligence,
+          ot: p.ot,
+          commPct: p.commPct || 0,
+          daysWorked: p.daysWorked || 26,
+          otherDeductions: p.otherDeductions || 0,
+        };
+      });
+      setStaffDrafts(newDrafts);
+    });
+  }
+
+  function updateStaffDraft(
+    empName: string,
+    field: "diligence" | "ot" | "commPct" | "daysWorked" | "otherDeductions",
+    val: number
+  ) {
+    setStaffDrafts((prev) => ({
+      ...prev,
+      [empName]: {
+        ...(prev[empName] || {
+          diligence: 500,
+          ot: 0,
+          commPct: 0,
+          daysWorked: 26,
+          otherDeductions: 0,
+        }),
+        [field]: val,
+      },
+    }));
+  }
+
+  // Calculate live numbers for a payslip given current drafts
+  function getComputedPayslip(p: StaffPayslip): StaffPayslip {
+    const draft = staffDrafts[p.employeeName] || {
+      diligence: p.diligence,
+      ot: p.ot,
+      commPct: p.commPct || 0,
+      daysWorked: p.daysWorked || 26,
+      otherDeductions: p.otherDeductions || 0,
+    };
+
+    const isDaily = p.employmentType === "probation_daily";
+    const base = isDaily ? (draft.daysWorked || 26) * 350 : p.baseSalary;
+    const comm = Math.round((data.totalMonthlySales * draft.commPct) / 100);
+    const wht = Math.round(comm * 0.03);
+    const sso = isDaily ? 0 : 600;
+    const net = base + draft.diligence + draft.ot + comm - wht - sso - draft.otherDeductions;
+
+    return {
+      ...p,
+      baseSalary: base,
+      daysWorked: isDaily ? draft.daysWorked : undefined,
+      diligence: draft.diligence,
+      ot: draft.ot,
+      commPct: draft.commPct,
+      commission: comm,
+      wht,
+      ssoDeduction: sso,
+      otherDeductions: draft.otherDeductions,
+      netPay: net,
+    };
+  }
+
+  // Save changes to database (sc_opex)
+  async function handleSaveStaff(p: StaffPayslip) {
+    const computed = getComputedPayslip(p);
+    startTransition(async () => {
+      const res = await saveStaffPayrollAdjustment({
+        month: computed.month,
+        employeeName: computed.employeeName,
+        employmentType: computed.employmentType,
+        baseSalary: computed.baseSalary,
+        diligence: computed.diligence,
+        ot: computed.ot,
+        commPct: computed.commPct || 0,
+        commission: computed.commission,
+        wht: computed.wht,
+        ssoDeduction: computed.ssoDeduction,
+        otherDeductions: computed.otherDeductions,
+        netPay: computed.netPay,
+        payMethod: computed.payMethod,
+      });
+
+      if (res?.error) {
+        toast.error(res.error);
+      } else {
+        toast.success(`บันทึกยอดเงินเดือนของ ${computed.employeeName} สำเร็จแล้ว`);
+        const updated = await fetchAllExpensesData(data.timeRange);
+        setData(updated);
+      }
     });
   }
 
@@ -72,65 +186,6 @@ export function ExpensesClient({ initialData }: { initialData: ExpensesPayload }
         setData(updated);
       }
     });
-  }
-
-  // Save / Update Staff Payslip with Diligence, Commission, OT, and Deductions
-  function handleSaveStaffAdjustment(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    if (!editingStaff) return;
-
-    const form = e.currentTarget;
-    const empType = (form.elements.namedItem("employment_type") as HTMLSelectElement)?.value as "monthly" | "probation_daily";
-    const days = parseFloat((form.elements.namedItem("days_worked") as HTMLInputElement)?.value || "26");
-    const rate = parseFloat((form.elements.namedItem("daily_wage") as HTMLInputElement)?.value || "350");
-    const baseSal = empType === "monthly"
-      ? parseFloat((form.elements.namedItem("base_salary") as HTMLInputElement)?.value || "12000")
-      : days * rate;
-    const diligence = parseFloat((form.elements.namedItem("diligence") as HTMLInputElement)?.value || "0");
-    const ot = parseFloat((form.elements.namedItem("ot") as HTMLInputElement)?.value || "0");
-    const commPct = parseFloat((form.elements.namedItem("comm_pct") as HTMLSelectElement)?.value || "0");
-    const otherDeduct = parseFloat((form.elements.namedItem("other_deduct") as HTMLInputElement)?.value || "0");
-
-    // Commission = Monthly Sales * commPct%
-    const commission = Math.round((data.totalMonthlySales * commPct) / 100);
-    // WHT = 3% on commission ONLY (ตามระบบเดิม)
-    const wht = Math.round(commission * 0.03);
-    // SSO = 5% for monthly staff (600฿), 0 for daily probation
-    const sso = empType === "monthly" ? 600 : 0;
-
-    const netPay = baseSal + diligence + ot + commission - wht - sso - otherDeduct;
-
-    const updatedPayslip: StaffPayslip = {
-      ...editingStaff,
-      employmentType: empType,
-      daysWorked: empType === "probation_daily" ? days : undefined,
-      dailyWage: empType === "probation_daily" ? rate : undefined,
-      baseSalary: baseSal,
-      diligence,
-      ot,
-      commPct,
-      commission,
-      wht,
-      ssoDeduction: sso,
-      otherDeductions: otherDeduct,
-      netPay,
-    };
-
-    setData((prev) => {
-      const updatedList = prev.payslips.map((p) =>
-        p.employeeName === editingStaff.employeeName ? updatedPayslip : p
-      );
-      const newTotal = updatedList.reduce((sum, p) => sum + p.netPay, 0);
-      return {
-        ...prev,
-        payslips: updatedList,
-        totalPayroll: newTotal,
-        netExpenses: newTotal + prev.totalOpex - prev.totalRentalIncome,
-      };
-    });
-
-    toast.success(`อัปเดตข้อมูลค่าแรง & สลิปของ ${editingStaff.employeeName} สำเร็จ`);
-    setEditingStaff(null);
   }
 
   async function handleDelete(id: string | number) {
@@ -158,7 +213,7 @@ export function ExpensesClient({ initialData }: { initialData: ExpensesPayload }
           </div>
           <h2 className="text-2xl font-bold tracking-tight">ค่าใช้จ่าย & ระบบจ่ายเงินเดือนพนักงาน</h2>
           <p className="text-sm text-teal-100/80">
-            จัดการเงินเดือนพนักงานประจำ (เชียง, มิ้ว), ค่าจ้างทดลองงานรายวัน (เจ - 350฿/วัน), เบี้ยขยัน, ค่าคอมมิชชั่น % ยอดขาย และหัก ณ ที่จ่าย 3%
+            จัดการเงินเดือนพนักงานประจำ (นายธีรภัทร / น.ส.สุทธินันท์), ค่าจ้างทดลองงานรายวัน (เจ - 350฿/วัน), เบี้ยขยัน, ค่าคอมมิชชั่น % ยอดขาย และหัก ณ ที่จ่าย 3%
           </p>
         </div>
 
@@ -297,7 +352,7 @@ export function ExpensesClient({ initialData }: { initialData: ExpensesPayload }
         </button>
       </div>
 
-      {/* ── TAB 1: STAFF PAYROLL, COMMISSIONS & ADJUSTMENTS ── */}
+      {/* ── TAB 1: STAFF PAYROLL, COMMISSIONS & DIRECT ADJUSTMENT CARDS ── */}
       {activeTab === "payroll" && (
         <div className="space-y-6">
           {/* Shop Structure Overview Banner */}
@@ -332,9 +387,9 @@ export function ExpensesClient({ initialData }: { initialData: ExpensesPayload }
                   <Badge className="bg-teal-600 text-white text-[10px]">พนักงานประจำ</Badge>
                 </div>
                 <div className="text-lg font-black text-teal-300">
-                  ฿{data.payslips.find((p) => p.employeeName.includes("ธีรภัทร") || p.employeeName.includes("เชียง"))?.netPay.toLocaleString("th-TH", { minimumFractionDigits: 2 }) || "11,900.00"}
+                  ฿{data.payslips.find((p) => p.employeeName.includes("ธีรภัทร"))?.netPay.toLocaleString("th-TH", { minimumFractionDigits: 2 }) || "12,575.00"}
                 </div>
-                <div className="text-[10px] text-teal-200/80">ฐาน 12,000 + เบี้ยขยัน 500 − ปกส. 600</div>
+                <div className="text-[10px] text-teal-200/80">ฐาน 12,000 + เบี้ยขยัน 500 + OT 675 − ปกส. 600</div>
               </div>
 
               <div className="rounded-xl bg-white/10 p-3.5 backdrop-blur-xs space-y-1">
@@ -343,7 +398,7 @@ export function ExpensesClient({ initialData }: { initialData: ExpensesPayload }
                   <Badge className="bg-indigo-600 text-white text-[10px]">พนักงานประจำ</Badge>
                 </div>
                 <div className="text-lg font-black text-teal-300">
-                  ฿{data.payslips.find((p) => p.employeeName.includes("สุทธินันท์") || p.employeeName.includes("มิ้ว"))?.netPay.toLocaleString("th-TH", { minimumFractionDigits: 2 }) || "11,900.00"}
+                  ฿{data.payslips.find((p) => p.employeeName.includes("สุทธินันท์"))?.netPay.toLocaleString("th-TH", { minimumFractionDigits: 2 }) || "11,900.00"}
                 </div>
                 <div className="text-[10px] text-teal-200/80">ฐาน 12,000 + เบี้ยขยัน 500 − ปกส. 600</div>
               </div>
@@ -354,149 +409,227 @@ export function ExpensesClient({ initialData }: { initialData: ExpensesPayload }
                   <Badge className="bg-amber-500 text-slate-950 font-bold text-[10px]">ทดลองงาน 350฿/วัน</Badge>
                 </div>
                 <div className="text-lg font-black text-amber-300">
-                  ฿{data.payslips.find((p) => p.employeeName === "เจ (พนักงานทดลองงาน)")?.netPay.toLocaleString("th-TH", { minimumFractionDigits: 2 }) || "9,600.00"}
+                  ฿{data.payslips.find((p) => p.employeeName.includes("เจ"))?.netPay.toLocaleString("th-TH", { minimumFractionDigits: 2 }) || "9,600.00"}
                 </div>
-                <div className="text-[10px] text-teal-200/80">ทำงาน 26 วัน x 350฿ + เบี้ยขยัน (ไม่หัก ปกส.)</div>
+                <div className="text-[10px] text-teal-200/80">ทำงาน 26 วัน x 350฿ + เบี้ยขยัน 500 (ไม่หัก ปกส.)</div>
               </div>
             </div>
           </div>
 
-          {/* Individual Payslips Cards */}
+          {/* Individual Interactive Payslip Cards with Direct Controls */}
           <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-            {data.payslips.map((p, idx) => (
-              <Card key={idx} className="border-slate-200 shadow-sm overflow-hidden flex flex-col justify-between hover:border-teal-400 transition-all">
-                <div>
-                  <CardHeader className="bg-slate-50/80 border-b border-slate-200 p-4">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <CardTitle className="text-sm font-bold text-slate-900 flex items-center gap-2">
-                          <Users className="h-4 w-4 text-teal-700" />
-                          {p.employeeName}
-                        </CardTitle>
-                        <CardDescription className="text-[11px] text-slate-500">
-                          {p.employeeRole || "พนักงานประจำ"} · รอบ: {p.month}
-                        </CardDescription>
-                      </div>
-                      <Badge
-                        className={
-                          p.employmentType === "probation_daily"
-                            ? "bg-amber-500 text-slate-950 font-bold text-[10px]"
-                            : "bg-teal-700 text-white font-semibold text-[10px]"
-                        }
-                      >
-                        {p.employmentType === "probation_daily" ? "ทดลองงาน (350฿/วัน)" : "พนักงานประจำ"}
-                      </Badge>
-                    </div>
-                  </CardHeader>
+            {data.payslips.map((rawP, idx) => {
+              const p = getComputedPayslip(rawP);
+              const draft = staffDrafts[p.employeeName] || {
+                diligence: p.diligence,
+                ot: p.ot,
+                commPct: p.commPct || 0,
+                daysWorked: p.daysWorked || 26,
+                otherDeductions: p.otherDeductions || 0,
+              };
 
-                  <CardContent className="p-4 space-y-3.5">
-                    {/* รายได้ (Earnings) */}
-                    <div className="space-y-1.5 rounded-xl bg-slate-50 p-3 border border-slate-200">
-                      <div className="text-[11px] font-bold text-slate-700 flex justify-between items-center">
-                        <span>รายได้ & ค่าตอบแทน (Earnings)</span>
-                        {p.employmentType === "probation_daily" && (
-                          <span className="text-[10px] text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded">
-                            {p.daysWorked || 26} วัน x {p.dailyWage || 350}฿
-                          </span>
-                        )}
+              return (
+                <Card
+                  key={idx}
+                  className="border-slate-200 shadow-sm overflow-hidden flex flex-col justify-between hover:border-teal-400 transition-all bg-white"
+                >
+                  <div>
+                    <CardHeader className="bg-slate-50/80 border-b border-slate-200 p-4">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <CardTitle className="text-sm font-bold text-slate-900 flex items-center gap-1.5">
+                            <Users className="h-4 w-4 text-teal-700" />
+                            {p.employeeName}
+                          </CardTitle>
+                          <CardDescription className="text-[11px] text-slate-500 font-medium">
+                            {p.employeeRole || "พนักงาน"} · งวด: {p.month}
+                          </CardDescription>
+                        </div>
+                        <Badge
+                          className={
+                            p.employmentType === "probation_daily"
+                              ? "bg-amber-500 text-slate-950 font-bold text-[10px]"
+                              : "bg-teal-700 text-white font-semibold text-[10px]"
+                          }
+                        >
+                          {p.employmentType === "probation_daily" ? "ทดลองงาน (350฿/วัน)" : "พนักงานประจำ"}
+                        </Badge>
                       </div>
-                      <div className="space-y-1 text-xs">
-                        <div className="flex justify-between">
-                          <span className="text-slate-600">
-                            {p.employmentType === "probation_daily" ? "ค่าจ้างตามวันทำงาน:" : "เงินเดือนพื้นฐาน:"}
-                          </span>
-                          <span className="font-mono font-bold text-slate-800">
+                    </CardHeader>
+
+                    <CardContent className="p-4 space-y-4 text-xs">
+                      {/* 1. Base Wage / Days Worked */}
+                      {p.employmentType === "probation_daily" ? (
+                        <div className="space-y-1.5 bg-amber-50/80 p-3 rounded-xl border border-amber-200">
+                          <div className="flex justify-between items-center text-[11px] font-bold text-amber-900">
+                            <span>จำนวนวันทำงานในเดือนนี้ (วัน):</span>
+                            <span className="font-mono text-sm">฿{p.baseSalary.toLocaleString()}</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Input
+                              type="number"
+                              value={draft.daysWorked}
+                              onChange={(e) =>
+                                updateStaffDraft(
+                                  p.employeeName,
+                                  "daysWorked",
+                                  parseFloat(e.target.value) || 0
+                                )
+                              }
+                              className="h-8 bg-white font-mono text-xs"
+                            />
+                            <span className="text-[11px] text-slate-500 shrink-0">วัน x 350฿</span>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="flex justify-between items-center bg-slate-50 p-2.5 rounded-lg border border-slate-200">
+                          <span className="text-slate-600 font-semibold">เงินเดือนพื้นฐาน:</span>
+                          <span className="font-mono font-bold text-slate-900 text-sm">
                             ฿{p.baseSalary.toLocaleString()}
                           </span>
                         </div>
-                        <div className="flex justify-between">
-                          <span className="text-slate-600">เบี้ยขยัน:</span>
-                          <span className="font-mono text-emerald-600">+฿{p.diligence.toLocaleString()}</span>
+                      )}
+
+                      {/* 2. Diligence & OT Direct Inputs */}
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="space-y-1">
+                          <Label className="text-[11px] font-bold text-emerald-700">เบี้ยขยัน (บาท):</Label>
+                          <Input
+                            type="number"
+                            value={draft.diligence}
+                            onChange={(e) =>
+                              updateStaffDraft(
+                                p.employeeName,
+                                "diligence",
+                                parseFloat(e.target.value) || 0
+                              )
+                            }
+                            className="h-8 font-mono text-xs border-emerald-300 focus:ring-emerald-500"
+                            placeholder="500"
+                          />
                         </div>
-                        {p.ot > 0 && (
-                          <div className="flex justify-between">
-                            <span className="text-slate-600">ค่าล่วงเวลา (OT):</span>
-                            <span className="font-mono text-emerald-600">+฿{p.ot.toLocaleString()}</span>
-                          </div>
-                        )}
-                        {p.commission > 0 && (
-                          <div className="flex justify-between">
-                            <span className="text-slate-600">ค่าคอมมิชชั่น ({p.commPct}%):</span>
-                            <span className="font-mono text-emerald-600">+฿{p.commission.toLocaleString()}</span>
-                          </div>
-                        )}
-                      </div>
-                    </div>
 
-                    {/* รายการหัก (Deductions) */}
-                    <div className="space-y-1.5 rounded-xl bg-rose-50/50 p-3 border border-rose-100">
-                      <div className="text-[11px] font-bold text-rose-900">รายการหัก (Deductions)</div>
-                      <div className="space-y-1 text-xs">
-                        {p.ssoDeduction > 0 ? (
-                          <div className="flex justify-between">
-                            <span className="text-slate-600">ประกันสังคม (5%):</span>
-                            <span className="font-mono text-rose-600">-฿{p.ssoDeduction.toLocaleString()}</span>
-                          </div>
-                        ) : (
-                          <div className="flex justify-between text-slate-400 text-[11px]">
-                            <span>ประกันสังคม:</span>
-                            <span>ยกเว้น (ช่วงทดลองงาน)</span>
-                          </div>
-                        )}
+                        <div className="space-y-1">
+                          <Label className="text-[11px] font-bold text-emerald-700">ค่าล่วงเวลา OT (บาท):</Label>
+                          <Input
+                            type="number"
+                            value={draft.ot}
+                            onChange={(e) =>
+                              updateStaffDraft(
+                                p.employeeName,
+                                "ot",
+                                parseFloat(e.target.value) || 0
+                              )
+                            }
+                            className="h-8 font-mono text-xs border-emerald-300 focus:ring-emerald-500"
+                            placeholder="0"
+                          />
+                        </div>
+                      </div>
+
+                      {/* 3. Commission Percentage Selector */}
+                      <div className="space-y-1 bg-teal-50/70 p-2.5 rounded-xl border border-teal-200">
+                        <div className="flex justify-between items-center text-[11px]">
+                          <Label className="font-bold text-teal-900 flex items-center gap-1">
+                            <Percent className="h-3 w-3 text-teal-700" /> ค่าคอมมิชชั่น / อินเซนทีฟ (%):
+                          </Label>
+                          <span className="font-mono font-bold text-teal-800">
+                            +฿{p.commission.toLocaleString()}
+                          </span>
+                        </div>
+                        <select
+                          value={draft.commPct}
+                          onChange={(e) =>
+                            updateStaffDraft(
+                              p.employeeName,
+                              "commPct",
+                              parseFloat(e.target.value) || 0
+                            )
+                          }
+                          className="w-full rounded-md border border-teal-300 bg-white p-1.5 text-xs font-semibold text-teal-900"
+                        >
+                          <option value="0">ไม่มีค่าคอม (0%)</option>
+                          <option value="1">1% (฿{(data.totalMonthlySales * 0.01).toLocaleString()})</option>
+                          <option value="1.5">1.5% (฿{(data.totalMonthlySales * 0.015).toLocaleString()})</option>
+                          <option value="2">2% (฿{(data.totalMonthlySales * 0.02).toLocaleString()})</option>
+                          <option value="2.5">2.5% (฿{(data.totalMonthlySales * 0.025).toLocaleString()})</option>
+                          <option value="3">3% (฿{(data.totalMonthlySales * 0.03).toLocaleString()})</option>
+                          <option value="5">5% (฿{(data.totalMonthlySales * 0.05).toLocaleString()})</option>
+                        </select>
+                      </div>
+
+                      {/* 4. Deductions Summary */}
+                      <div className="space-y-1 rounded-xl bg-rose-50/50 p-2.5 border border-rose-100 text-[11px]">
+                        <div className="flex justify-between text-slate-600">
+                          <span>หักประกันสังคม (5%):</span>
+                          <span className="font-mono font-semibold text-rose-600">
+                            {p.ssoDeduction > 0 ? `-฿${p.ssoDeduction.toLocaleString()}` : "ยกเว้น"}
+                          </span>
+                        </div>
                         {p.wht > 0 && (
-                          <div className="flex justify-between">
-                            <span className="text-slate-600">หัก ณ ที่จ่าย 3% (เฉพาะค่าคอม):</span>
-                            <span className="font-mono text-rose-600">-฿{p.wht.toLocaleString()}</span>
+                          <div className="flex justify-between text-slate-600">
+                            <span>หักภาษี ณ ที่จ่าย 3% (เฉพาะคอม):</span>
+                            <span className="font-mono font-semibold text-rose-600">-฿{p.wht.toLocaleString()}</span>
                           </div>
                         )}
-                        {p.otherDeductions > 0 && (
-                          <div className="flex justify-between">
-                            <span className="text-slate-600">รายการหักอื่นๆ:</span>
-                            <span className="font-mono text-rose-600">-฿{p.otherDeductions.toLocaleString()}</span>
-                          </div>
-                        )}
+                        <div className="flex items-center justify-between pt-1">
+                          <span className="text-slate-600">หักอื่นๆ (ขาด/สาย):</span>
+                          <Input
+                            type="number"
+                            value={draft.otherDeductions}
+                            onChange={(e) =>
+                              updateStaffDraft(
+                                p.employeeName,
+                                "otherDeductions",
+                                parseFloat(e.target.value) || 0
+                              )
+                            }
+                            className="h-6 w-24 font-mono text-xs text-right"
+                            placeholder="0"
+                          />
+                        </div>
                       </div>
-                    </div>
 
-                    {/* ยอดรับสุทธิ (Net Pay) */}
-                    <div className="rounded-xl bg-teal-900 p-3.5 text-white flex items-center justify-between">
-                      <div>
-                        <span className="text-[11px] text-teal-200 block">ยอดโอนสุทธิ (Net Pay)</span>
-                        <span className="text-lg font-black font-mono">
-                          ฿{p.netPay.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
-                        </span>
+                      {/* 5. Live Computed Net Pay */}
+                      <div className="rounded-xl bg-teal-900 p-3.5 text-white flex items-center justify-between">
+                        <div>
+                          <span className="text-[10px] text-teal-200 block">ยอดโอนสุทธิคำนวณสด (Net Pay)</span>
+                          <span className="text-lg font-black font-mono">
+                            ฿{p.netPay.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+                          </span>
+                        </div>
+                        <div className="rounded-lg bg-teal-700/50 p-1.5 text-white">
+                          <CheckCircle2 className="h-4 w-4" />
+                        </div>
                       </div>
-                      <div className="rounded-lg bg-teal-700/50 p-1.5 text-white">
-                        <CheckCircle2 className="h-4 w-4" />
-                      </div>
-                    </div>
-                  </CardContent>
-                </div>
+                    </CardContent>
+                  </div>
 
-                {/* Actions: Edit & Print */}
-                <div className="p-3 bg-slate-50 border-t border-slate-200 flex items-center justify-between gap-2">
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setEditingStaff(p)}
-                    className="text-xs text-slate-700 hover:text-teal-800 gap-1 font-semibold"
-                  >
-                    <Edit3 className="h-3.5 w-3.5 text-teal-700" /> ปรับยอด / เบี้ยขยัน
-                  </Button>
+                  {/* Actions: Direct Save & Print Payslip */}
+                  <div className="p-3 bg-slate-50 border-t border-slate-200 flex items-center justify-between gap-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      disabled={isPending}
+                      onClick={() => handleSaveStaff(p)}
+                      className="bg-teal-700 hover:bg-teal-800 text-white font-bold text-xs gap-1.5 shadow-xs"
+                    >
+                      <Save className="h-3.5 w-3.5" /> บันทึกยอดงวดนี้
+                    </Button>
 
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setSelectedPayslip(p)}
-                    className="text-xs gap-1.5 border-teal-600 text-teal-800 hover:bg-teal-50 font-bold"
-                  >
-                    <Printer className="h-3.5 w-3.5" /> สลิปเงินเดือน
-                  </Button>
-                </div>
-              </Card>
-            ))}
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setSelectedPayslip(p)}
+                      className="text-xs gap-1 border-slate-300 text-slate-700 hover:bg-slate-100 font-bold"
+                    >
+                      <Printer className="h-3.5 w-3.5" /> สลิปเงินเดือน
+                    </Button>
+                  </div>
+                </Card>
+              );
+            })}
           </div>
         </div>
       )}
@@ -722,132 +855,6 @@ export function ExpensesClient({ initialData }: { initialData: ExpensesPayload }
               </CardContent>
             </Card>
           ))}
-        </div>
-      )}
-
-      {/* ── EDIT / ADJUST STAFF MODAL (เบี้ยขยัน, ค่าคอม %, OT, วันทำงาน) ── */}
-      {editingStaff && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-xs">
-          <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl border border-slate-200 space-y-5">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <div>
-                <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-                  <Edit3 className="h-4 w-4 text-teal-700" />
-                  ปรับแก้ค่าแรง & เบี้ยขยัน: {editingStaff.employeeName}
-                </h3>
-                <p className="text-[11px] text-slate-500">งวดเดือน {editingStaff.month}</p>
-              </div>
-              <button onClick={() => setEditingStaff(null)} className="text-slate-400 hover:text-slate-600">
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-
-            <form onSubmit={handleSaveStaffAdjustment} className="space-y-4 text-xs">
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <Label className="font-semibold">ประเภทการจ้างงาน</Label>
-                  <select
-                    name="employment_type"
-                    defaultValue={editingStaff.employmentType}
-                    className="w-full rounded-lg border border-slate-200 p-2 font-medium"
-                  >
-                    <option value="monthly">พนักงานประจำ (เงินเดือน)</option>
-                    <option value="probation_daily">ทดลองงาน (วันละ 350฿)</option>
-                  </select>
-                </div>
-
-                <div className="space-y-1">
-                  <Label className="font-semibold">เงินเดือนฐาน หรือ อัตราวันละ</Label>
-                  <Input
-                    name={editingStaff.employmentType === "monthly" ? "base_salary" : "daily_wage"}
-                    defaultValue={editingStaff.employmentType === "monthly" ? editingStaff.baseSalary : (editingStaff.dailyWage || 350)}
-                    className="h-9 font-mono"
-                  />
-                </div>
-              </div>
-
-              {editingStaff.employmentType === "probation_daily" && (
-                <div className="space-y-1 bg-amber-50 p-2.5 rounded-xl border border-amber-200">
-                  <Label className="font-semibold text-amber-900">จำนวนวันที่มาทำงานในเดือนนี้ (วัน)</Label>
-                  <Input
-                    name="days_worked"
-                    type="number"
-                    defaultValue={editingStaff.daysWorked || 26}
-                    className="h-8 font-mono bg-white"
-                  />
-                  <span className="text-[10px] text-amber-800">
-                    คำนวณฐานค่าแรง: {editingStaff.daysWorked || 26} วัน x 350฿ = ฿{((editingStaff.daysWorked || 26) * 350).toLocaleString()}
-                  </span>
-                </div>
-              )}
-
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <Label className="font-semibold text-emerald-700">เบี้ยขยัน (บาท)</Label>
-                  <Input
-                    name="diligence"
-                    type="number"
-                    defaultValue={editingStaff.diligence}
-                    className="h-9 font-mono"
-                    placeholder="เช่น 500"
-                  />
-                </div>
-
-                <div className="space-y-1">
-                  <Label className="font-semibold text-emerald-700">ค่าล่วงเวลา OT (บาท)</Label>
-                  <Input
-                    name="ot"
-                    type="number"
-                    defaultValue={editingStaff.ot}
-                    className="h-9 font-mono"
-                    placeholder="เช่น 675"
-                  />
-                </div>
-              </div>
-
-              {/* Commission Calculator from Sales */}
-              <div className="space-y-1.5 rounded-xl bg-teal-50/70 p-3 border border-teal-200">
-                <div className="flex justify-between items-center">
-                  <Label className="font-bold text-teal-900 flex items-center gap-1">
-                    <Percent className="h-3.5 w-3.5 text-teal-700" /> ค่าคอมมิชชั่น / ค่าอินเซนทีฟ (% ยอดขายร้าน)
-                  </Label>
-                  <span className="text-[10px] font-bold text-teal-800">
-                    ยอดขายร้าน: ฿{data.totalMonthlySales.toLocaleString()}
-                  </span>
-                </div>
-                <select
-                  name="comm_pct"
-                  defaultValue={editingStaff.commPct || 0}
-                  className="w-full rounded-lg border border-teal-300 bg-white p-2 font-semibold text-teal-900"
-                >
-                  <option value="0">ไม่มีค่าคอม (0%)</option>
-                  <option value="1">1% (ประมาณ ฿{(data.totalMonthlySales * 0.01).toLocaleString()})</option>
-                  <option value="2">2% (ประมาณ ฿{(data.totalMonthlySales * 0.02).toLocaleString()})</option>
-                  <option value="3">3% (ประมาณ ฿{(data.totalMonthlySales * 0.03).toLocaleString()})</option>
-                  <option value="5">5% (ประมาณ ฿{(data.totalMonthlySales * 0.05).toLocaleString()})</option>
-                  <option value="10">10% (ประมาณ ฿{(data.totalMonthlySales * 0.10).toLocaleString()})</option>
-                </select>
-                <p className="text-[10px] text-teal-700">
-                  * หากมีค่าคอมมิชชั่น ระบบจะคำนวณหักภาษี ณ ที่จ่าย 3% เฉพาะยอดค่าคอมให้อัตโนมัติตามกฎหมาย
-                </p>
-              </div>
-
-              <div className="space-y-1">
-                <Label className="font-semibold text-rose-700">รายการหักอื่นๆ (บาท — ขาด/ลา/สาย/เงินประกัน)</Label>
-                <Input
-                  name="other_deduct"
-                  type="number"
-                  defaultValue={editingStaff.otherDeductions}
-                  className="h-9 font-mono"
-                  placeholder="0"
-                />
-              </div>
-
-              <Button type="submit" className="w-full bg-teal-800 hover:bg-teal-900 text-white font-bold h-9">
-                บันทึกการปรับยอด & คำนวณเงินเดือนใหม่
-              </Button>
-            </form>
-          </div>
         </div>
       )}
 

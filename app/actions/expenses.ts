@@ -6,6 +6,7 @@ import { revalidatePath } from "next/cache";
 
 export type StaffPayslip = {
   employeeName: string;
+  nickname?: string;
   month: string;
   employmentType: "monthly" | "probation_daily";
   dailyWage?: number;
@@ -153,29 +154,29 @@ export async function fetchAllExpensesData(timeRange: string = "this_month"): Pr
   // 2. Process Staff Payslips
   const staffMap: Record<string, StaffPayslip> = {};
 
-  // Initialize the 3 real shop staff members:
   // 1. นายธีรภัทร ทาแผ (เชียง): พนักงานประจำ (เงินเดือน) - หยุดพุธ
-  // 2. น.ส.สุทธินันท์ นนทจันทร์ (มิ้ว): พนักงานประจำ (เงินเดือน) - หยุดอาทิตย์
-  // 3. เจ (พนักงานทดลองงาน): วันละ 350฿ x 26 วัน - หยุดศุกร์
   staffMap["นายธีรภัทร ทาแผ (เชียง)"] = {
     employeeName: "นายธีรภัทร ทาแผ (เชียง)",
+    nickname: "เชียง",
     month: targetMonthFilter,
     employmentType: "monthly",
     baseSalary: 12000,
     diligence: 500,
-    ot: 0,
+    ot: 675,
     commPct: 0,
     commission: 0,
     wht: 0,
     ssoDeduction: 600,
     otherDeductions: 0,
-    netPay: 11900,
+    netPay: 12575, // 12000 + 500 + 675 - 600
     payMethod: "บัญชีร้าน (โอน)",
     employeeRole: "พนักงานประจำ / ช่างหลัก",
   };
 
+  // 2. น.ส.สุทธินันท์ นนทจันทร์ (มิ้ว): พนักงานประจำ (เงินเดือน) - หยุดอาทิตย์
   staffMap["น.ส.สุทธินันท์ นนทจันทร์ (มิ้ว)"] = {
     employeeName: "น.ส.สุทธินันท์ นนทจันทร์ (มิ้ว)",
+    nickname: "มิ้ว",
     month: targetMonthFilter,
     employmentType: "monthly",
     baseSalary: 12000,
@@ -186,13 +187,15 @@ export async function fetchAllExpensesData(timeRange: string = "this_month"): Pr
     wht: 0,
     ssoDeduction: 600,
     otherDeductions: 0,
-    netPay: 11900,
+    netPay: 11900, // 12000 + 500 - 600
     payMethod: "บัญชีร้าน (โอน)",
     employeeRole: "พนักงานประจำ / ผู้จัดการหน้าร้าน",
   };
 
+  // 3. เจ (พนักงานทดลองงาน): วันละ 350฿ x 26 วัน - หยุดศุกร์
   staffMap["เจ (พนักงานทดลองงาน)"] = {
     employeeName: "เจ (พนักงานทดลองงาน)",
+    nickname: "เจ",
     month: targetMonthFilter,
     employmentType: "probation_daily",
     dailyWage: 350,
@@ -355,6 +358,63 @@ export async function fetchAllExpensesData(timeRange: string = "this_month"): Pr
     miscExpenses,
     rentals,
   };
+}
+
+export async function saveStaffPayrollAdjustment(payload: {
+  month: string;
+  employeeName: string;
+  employmentType: "monthly" | "probation_daily";
+  baseSalary: number;
+  diligence: number;
+  ot: number;
+  commPct: number;
+  commission: number;
+  wht: number;
+  ssoDeduction: number;
+  otherDeductions: number;
+  netPay: number;
+  payMethod: string;
+}): Promise<ExpenseActionState> {
+  const profile = await requireProfile();
+  const supabase = createAdminClient();
+
+  const m = payload.month;
+  // Get pure name for key without brackets e.g. "นายธีรภัทร ทาแผ"
+  let cleanKeyName = payload.employeeName;
+  if (cleanKeyName.includes("ธีรภัทร")) cleanKeyName = "นายธีรภัทร ทาแผ";
+  else if (cleanKeyName.includes("สุทธินันท์")) cleanKeyName = "น.ส.สุทธินันท์ นนทจันทร์";
+  else if (cleanKeyName.includes("เจ")) cleanKeyName = "เจ";
+
+  const keysToSave = [
+    { key: `emp_${cleanKeyName}`, name: `เงินจ่ายพนักงาน: ${cleanKeyName}`, amount: payload.netPay, category: "ค่าแรงพนักงาน" },
+    { key: `empd_base_sal_${cleanKeyName}`, name: `empd_base_sal_${cleanKeyName}: ${cleanKeyName}`, amount: payload.baseSalary, category: "payslip_detail" },
+    { key: `empd_diligence_${cleanKeyName}`, name: `empd_diligence_${cleanKeyName}: ${cleanKeyName}`, amount: payload.diligence, category: "payslip_detail" },
+    { key: `empd_ot_${cleanKeyName}`, name: `empd_ot_${cleanKeyName}: ${cleanKeyName}`, amount: payload.ot, category: "payslip_detail" },
+    { key: `empd_comm_pct_${cleanKeyName}`, name: `empd_comm_pct_${cleanKeyName}: ${cleanKeyName}`, amount: payload.commPct, category: "payslip_detail" },
+    { key: `empd_wht_${cleanKeyName}`, name: `empd_wht_${cleanKeyName}: ${cleanKeyName}`, amount: payload.wht, category: "payslip_detail" },
+    { key: `empd_deduct_total_${cleanKeyName}`, name: `empd_deduct_total_${cleanKeyName}: ${cleanKeyName}`, amount: payload.otherDeductions, category: "payslip_detail" },
+  ];
+
+  for (const item of keysToSave) {
+    await (supabase.from("sc_opex" as any) as any)
+      .delete()
+      .eq("month", m)
+      .eq("key", item.key);
+
+    await (supabase.from("sc_opex" as any) as any).insert({
+      month: m,
+      category: item.category,
+      key: item.key,
+      name: item.name,
+      amount: item.amount,
+      pay_method: payload.payMethod || "บัญชีร้าน",
+      recorded_by: profile.display_name,
+      last_updated: new Date().toISOString(),
+    });
+  }
+
+  revalidatePath("/expenses");
+  return { success: true };
 }
 
 export async function addExpense(
