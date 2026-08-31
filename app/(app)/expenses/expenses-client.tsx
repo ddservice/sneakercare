@@ -19,7 +19,6 @@ import {
   type ExpenseCategoryKey,
 } from "@/lib/expense-categories";
 import { thaiBahtText } from "@/lib/bahttext";
-import { TimeRangeFilterBar } from "@/components/time-range-filter";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -50,11 +49,33 @@ import {
   Filter,
   Layers,
   PieChart,
-  Download,
+  Calendar,
+  ChevronLeft,
+  ChevronRight,
+  RefreshCw,
 } from "lucide-react";
+
+export const AVAILABLE_MONTHS = [
+  { value: "08/2026", iso: "2026-08", label: "สิงหาคม 2569 (08/2026) — งวดล่าสุด", monthName: "สิงหาคม 2569" },
+  { value: "07/2026", iso: "2026-07", label: "กรกฎาคม 2569 (07/2026)", monthName: "กรกฎาคม 2569" },
+  { value: "06/2026", iso: "2026-06", label: "มิถุนายน 2569 (06/2026)", monthName: "มิถุนายน 2569" },
+  { value: "05/2026", iso: "2026-05", label: "พฤษภาคม 2569 (05/2026)", monthName: "พฤษภาคม 2569" },
+  { value: "04/2026", iso: "2026-04", label: "เมษายน 2569 (04/2026)", monthName: "เมษายน 2569" },
+  { value: "03/2026", iso: "2026-03", label: "มีนาคม 2569 (03/2026)", monthName: "มีนาคม 2569" },
+  { value: "02/2026", iso: "2026-02", label: "กุมภาพันธ์ 2569 (02/2026)", monthName: "กุมภาพันธ์ 2569" },
+  { value: "01/2026", iso: "2026-01", label: "มกราคม 2569 (01/2026)", monthName: "มกราคม 2569" },
+  { value: "12/2025", iso: "2025-12", label: "ธันวาคม 2568 (12/2025)", monthName: "ธันวาคม 2568" },
+  { value: "11/2025", iso: "2025-11", label: "พฤศจิกายน 2568 (11/2025)", monthName: "พฤศจิกายน 2568" },
+  { value: "all", iso: "all", label: "📊 ภาพรวมสะสมทุกงวด (All Time: 10 เดือน)", monthName: "ภาพรวมสะสมทั้งหมด (10 เดือน)" },
+];
 
 export function ExpensesClient({ initialData }: { initialData: ExpensesPayload }) {
   const [data, setData] = useState<ExpensesPayload>(initialData);
+  const [selectedMonth, setSelectedMonth] = useState<string>(() => {
+    if (initialData.timeRange && initialData.timeRange.includes("/")) return initialData.timeRange;
+    if (initialData.timeRange === "all") return "all";
+    return "08/2026";
+  });
   const [activeTab, setActiveTab] = useState<"overview" | "payroll" | "opex">("overview");
   const [selectedCategoryFilter, setSelectedCategoryFilter] = useState<ExpenseCategoryKey | "all">("all");
   const [isPending, startTransition] = useTransition();
@@ -160,9 +181,20 @@ export function ExpensesClient({ initialData }: { initialData: ExpensesPayload }
     });
   }, [data.opexList, selectedCategoryFilter]);
 
-  function handleFilterRange(range: string) {
+  // Current Month Meta
+  const currentMonthMeta = useMemo(() => {
+    return AVAILABLE_MONTHS.find((m) => m.value === selectedMonth) || AVAILABLE_MONTHS[0];
+  }, [selectedMonth]);
+
+  const currentMonthIndex = useMemo(() => {
+    return AVAILABLE_MONTHS.findIndex((m) => m.value === selectedMonth);
+  }, [selectedMonth]);
+
+  // Month Switch Handler
+  function handleSelectMonth(monthVal: string) {
+    setSelectedMonth(monthVal);
     startTransition(async () => {
-      const updated = await fetchAllExpensesData(range);
+      const updated = await fetchAllExpensesData(monthVal);
       setData(updated);
       const newDrafts: Record<string, any> = {};
       updated.payslips.forEach((p) => {
@@ -175,7 +207,15 @@ export function ExpensesClient({ initialData }: { initialData: ExpensesPayload }
         };
       });
       setStaffDrafts(newDrafts);
+      toast.success(`เปลี่ยนเป็นงวด: ${AVAILABLE_MONTHS.find((m) => m.value === monthVal)?.monthName || monthVal}`);
     });
+  }
+
+  function handleShiftMonth(direction: number) {
+    const nextIdx = currentMonthIndex + direction;
+    if (nextIdx >= 0 && nextIdx < AVAILABLE_MONTHS.length) {
+      handleSelectMonth(AVAILABLE_MONTHS[nextIdx].value);
+    }
   }
 
   function updateStaffDraft(
@@ -357,7 +397,7 @@ export function ExpensesClient({ initialData }: { initialData: ExpensesPayload }
       if (res.success) {
         toast.success(`เพิ่มพนักงานใหม่ "${newStaffName}" สำเร็จเรียบร้อย`);
         setShowAddStaffModal(false);
-        const updated = await fetchAllExpensesData(data.timeRange);
+        const updated = await fetchAllExpensesData(selectedMonth);
         setData(updated);
       } else {
         toast.error(res.error || "เกิดข้อผิดพลาดในการสร้างพนักงาน");
@@ -394,7 +434,7 @@ export function ExpensesClient({ initialData }: { initialData: ExpensesPayload }
         setShowAddExpenseModal(false);
         setExpTitle("");
         setExpAmount(0);
-        const updated = await fetchAllExpensesData(data.timeRange);
+        const updated = await fetchAllExpensesData(selectedMonth);
         setData(updated);
       } else {
         toast.error(res.error || "เกิดข้อผิดพลาดในการบันทึก");
@@ -410,7 +450,7 @@ export function ExpensesClient({ initialData }: { initialData: ExpensesPayload }
       try {
         await deleteExpense(id);
         toast.success(`ลบรายการ "${name}" เรียบร้อยแล้ว`);
-        const updated = await fetchAllExpensesData(data.timeRange);
+        const updated = await fetchAllExpensesData(selectedMonth);
         setData(updated);
       } catch (err: any) {
         toast.error(err.message || "ไม่สามารถลบรายการได้");
@@ -419,7 +459,7 @@ export function ExpensesClient({ initialData }: { initialData: ExpensesPayload }
   }
 
   return (
-    <div className="space-y-8">
+    <div className={`space-y-8 transition-opacity duration-200 ${isPending ? "opacity-60 pointer-events-none" : "opacity-100"}`}>
       {/* ── Page Header Banner ── */}
       <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl bg-gradient-to-r from-teal-800 via-teal-900 to-slate-900 p-6 text-white shadow-md print:hidden">
         <div className="space-y-1">
@@ -449,10 +489,103 @@ export function ExpensesClient({ initialData }: { initialData: ExpensesPayload }
         </div>
       </div>
 
-      {/* ── Time Range Selector Bar ── */}
-      <div className="print:hidden">
-        <TimeRangeFilterBar selectedRange={data.timeRange} onSelectRange={handleFilterRange} />
-      </div>
+      {/* ── HIGH-END PROFESSIONAL ACCOUNTING MONTH SELECTOR TOOLBAR ── */}
+      <Card className="border-teal-200 bg-teal-50/50 shadow-xs print:hidden">
+        <CardContent className="p-4 space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            {/* Left: Month Dropdown */}
+            <div className="flex flex-wrap items-center gap-2.5">
+              <div className="flex items-center gap-2">
+                <div className="h-8 w-8 rounded-lg bg-teal-800 text-white flex items-center justify-center font-bold shadow-2xs">
+                  <Calendar className="h-4 w-4" />
+                </div>
+                <span className="text-xs font-bold text-teal-950">เลือกงวดบัญชี & เงินเดือน:</span>
+              </div>
+
+              <select
+                value={selectedMonth}
+                onChange={(e) => handleSelectMonth(e.target.value)}
+                disabled={isPending}
+                className="h-9 rounded-xl border-2 border-teal-600 bg-white px-3 text-xs font-bold text-teal-950 shadow-2xs focus:outline-none focus:ring-2 focus:ring-teal-500/20 cursor-pointer min-w-[240px]"
+              >
+                {AVAILABLE_MONTHS.map((m) => (
+                  <option key={m.value} value={m.value}>
+                    {m.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Right: Quick Month Navigation Arrows */}
+            <div className="flex flex-wrap items-center gap-1.5">
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                disabled={isPending || selectedMonth === "all" || currentMonthIndex >= AVAILABLE_MONTHS.length - 2}
+                onClick={() => handleShiftMonth(1)}
+                className="h-8 text-xs font-semibold gap-1 bg-white border-teal-200 text-teal-900 hover:bg-teal-100"
+                title="ย้อนกลับไปงวดเดือนก่อนหน้า"
+              >
+                <ChevronLeft className="h-4 w-4" /> เดือนก่อนหน้า
+              </Button>
+
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                disabled={isPending || selectedMonth === "all" || currentMonthIndex <= 0}
+                onClick={() => handleShiftMonth(-1)}
+                className="h-8 text-xs font-semibold gap-1 bg-white border-teal-200 text-teal-900 hover:bg-teal-100"
+                title="ไปยังงวดเดือนถัดไป"
+              >
+                เดือนถัดไป <ChevronRight className="h-4 w-4" />
+              </Button>
+
+              <Button
+                type="button"
+                size="sm"
+                onClick={() => handleSelectMonth("08/2026")}
+                disabled={isPending || selectedMonth === "08/2026"}
+                className="h-8 text-xs font-bold bg-teal-800 hover:bg-teal-700 text-white shadow-2xs"
+              >
+                🎯 งวดล่าสุด (ส.ค. 69)
+              </Button>
+
+              <Button
+                type="button"
+                size="sm"
+                variant={selectedMonth === "all" ? "default" : "outline"}
+                onClick={() => handleSelectMonth("all")}
+                disabled={isPending}
+                className={`h-8 text-xs font-bold ${
+                  selectedMonth === "all" ? "bg-slate-900 text-white" : "bg-white text-slate-700 border-slate-300"
+                }`}
+              >
+                🌐 รวมสะสมทุกงวด
+              </Button>
+            </div>
+          </div>
+
+          {/* Active Period Status Bar */}
+          <div className="flex items-center justify-between text-xs border-t border-teal-200/60 pt-2 font-medium text-teal-950">
+            <div className="flex items-center gap-2">
+              <span>📅 กำลังแสดงผลงวด:</span>
+              <span className="font-extrabold text-teal-900 bg-white px-2 py-0.5 rounded-md border border-teal-200">
+                {currentMonthMeta.monthName}
+              </span>
+              {isPending && (
+                <span className="flex items-center gap-1 text-[11px] text-teal-700 font-bold animate-pulse">
+                  <RefreshCw className="h-3 w-3 animate-spin" /> กำลังโหลดข้อมูล...
+                </span>
+              )}
+            </div>
+            <div className="text-slate-500 text-[11px]">
+              บันทึกค่าใช้จ่าย {data.opexList.length} รายการ · พนักงาน {data.payslips.length} ท่าน
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* ── Top Level Metric Summary Cards ── */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 print:hidden">
@@ -687,7 +820,7 @@ export function ExpensesClient({ initialData }: { initialData: ExpensesPayload }
         </div>
       </div>
 
-      {/* ── VIEW 1: PAYROLL SECTION (When active or filtered) ── */}
+      {/* ── VIEW 1: PAYROLL SECTION ── */}
       {(activeTab === "payroll" || (activeTab === "overview" && (selectedCategoryFilter === "all" || selectedCategoryFilter === "payroll"))) && (
         <div className="space-y-4">
           <div className="flex items-center justify-between">
@@ -696,7 +829,7 @@ export function ExpensesClient({ initialData }: { initialData: ExpensesPayload }
               1. หมวดค่าแรงและบัญชีเงินเดือนพนักงาน (Staff & Payroll)
             </h3>
             <span className="text-xs font-semibold text-slate-500">
-              รวม: <strong className="text-teal-900 font-mono">฿{data.totalPayroll.toLocaleString()}</strong>
+              งวด {currentMonthMeta.monthName}: <strong className="text-teal-900 font-mono">฿{data.totalPayroll.toLocaleString()}</strong>
             </span>
           </div>
 
@@ -907,7 +1040,7 @@ export function ExpensesClient({ initialData }: { initialData: ExpensesPayload }
         </div>
       )}
 
-      {/* ── VIEW 2: OPEX / EXPENSES TABLE SECTION (When active or filtered) ── */}
+      {/* ── VIEW 2: OPEX / EXPENSES TABLE SECTION ── */}
       {(activeTab === "opex" || (activeTab === "overview" && selectedCategoryFilter !== "payroll")) && (
         <Card className="border-slate-200 shadow-sm">
           <CardHeader className="p-4 bg-slate-50 border-b border-slate-200 flex flex-wrap items-center justify-between gap-2">
@@ -918,8 +1051,8 @@ export function ExpensesClient({ initialData }: { initialData: ExpensesPayload }
               </CardTitle>
               <CardDescription className="text-xs text-slate-500">
                 {selectedCategoryFilter === "all"
-                  ? "แสดงรายการค่าใช้จ่ายทั้งหมดในงวดนี้"
-                  : `กำลังกรองหมวด: ${EXPENSE_CATEGORIES[selectedCategoryFilter as ExpenseCategoryKey]?.label || selectedCategoryFilter}`}
+                  ? `งวด ${currentMonthMeta.monthName} — แสดงรายการค่าใช้จ่ายทั้งหมด`
+                  : `งวด ${currentMonthMeta.monthName} — กำลังกรอง: ${EXPENSE_CATEGORIES[selectedCategoryFilter as ExpenseCategoryKey]?.label || selectedCategoryFilter}`}
               </CardDescription>
             </div>
             <div className="flex items-center gap-2">
@@ -985,7 +1118,7 @@ export function ExpensesClient({ initialData }: { initialData: ExpensesPayload }
                   {filteredOpexList.length === 0 && (
                     <tr>
                       <td colSpan={6} className="px-4 py-8 text-center text-slate-400">
-                        ไม่พบรายการค่าใช้จ่ายในหมวดหมู่นี้
+                        ไม่พบรายการค่าใช้จ่ายในงวดนี้
                       </td>
                     </tr>
                   )}

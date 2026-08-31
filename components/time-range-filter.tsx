@@ -4,13 +4,11 @@ import { Calendar, ChevronDown } from "lucide-react";
 
 export type TimeRangePreset =
   | "today"
-  | "yesterday"
   | "this_week"
   | "this_month"
   | "last_month"
-  | "this_year"
   | "all"
-  | string; // or specific month YYYY-MM
+  | string;
 
 export const MONTH_OPTIONS = [
   { value: "all", label: "📊 ดูข้อมูลสะสมทั้งหมด (All Time: 10 เดือน)" },
@@ -34,19 +32,20 @@ export function TimeRangeFilterBar({
   onSelectRange: (range: string) => void;
 }) {
   const PRESET_BUTTONS = [
-    { id: "today", label: "วันนี้" },
-    { id: "yesterday", label: "เมื่อวาน" },
-    { id: "this_week", label: "สัปดาห์นี้" },
-    { id: "this_month", label: "เดือนนี้" },
-    { id: "last_month", label: "เดือนที่แล้ว" },
-    { id: "this_year", label: "ปีนี้" },
-    { id: "all", label: "ทั้งหมด" },
+    { id: "today", label: "🗓️ วันนี้" },
+    { id: "this_week", label: "📅 สัปดาห์นี้" },
+    { id: "this_month", label: "📆 เดือนนี้ (ส.ค. 69)" },
+    { id: "last_month", label: "⏪ เดือนที่แล้ว (ก.ค. 69)" },
+    { id: "all", label: "🌐 ทั้งหมด" },
   ];
 
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white p-2.5 shadow-2xs">
+    <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-teal-200 bg-teal-50/40 p-3 shadow-2xs">
       {/* Quick Presets Buttons */}
-      <div className="flex flex-wrap items-center gap-1">
+      <div className="flex flex-wrap items-center gap-1.5">
+        <span className="text-xs font-bold text-teal-950 mr-1 flex items-center gap-1">
+          <Calendar className="h-3.5 w-3.5 text-teal-700" /> ช่วงเวลา:
+        </span>
         {PRESET_BUTTONS.map((btn) => {
           const isActive = selectedRange === btn.id;
           return (
@@ -54,10 +53,10 @@ export function TimeRangeFilterBar({
               key={btn.id}
               type="button"
               onClick={() => onSelectRange(btn.id)}
-              className={`rounded-lg px-2.5 py-1 text-xs font-semibold transition-all ${
+              className={`rounded-lg px-3 py-1.5 text-xs font-bold transition-all cursor-pointer ${
                 isActive
-                  ? "bg-teal-700 text-white shadow-2xs font-bold"
-                  : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                  ? "bg-teal-800 text-white shadow-2xs"
+                  : "bg-white text-slate-700 border border-slate-200 hover:bg-teal-50 hover:text-teal-900"
               }`}
             >
               {btn.label}
@@ -72,7 +71,7 @@ export function TimeRangeFilterBar({
           <select
             value={MONTH_OPTIONS.some((m) => m.value === selectedRange) ? selectedRange : "all"}
             onChange={(e) => onSelectRange(e.target.value)}
-            className="appearance-none rounded-lg border border-slate-200 bg-slate-50 py-1 pl-7 pr-8 text-xs font-bold text-teal-900 shadow-2xs hover:bg-white focus:outline-none focus:ring-1 focus:ring-teal-500 cursor-pointer"
+            className="appearance-none rounded-xl border-2 border-teal-600 bg-white py-1.5 pl-8 pr-8 text-xs font-bold text-teal-950 shadow-2xs hover:bg-teal-50/50 focus:outline-none focus:ring-2 focus:ring-teal-500/20 cursor-pointer"
           >
             {MONTH_OPTIONS.map((opt) => (
               <option key={opt.value} value={opt.value}>
@@ -80,8 +79,8 @@ export function TimeRangeFilterBar({
               </option>
             ))}
           </select>
-          <Calendar className="pointer-events-none absolute left-2 top-2 h-3.5 w-3.5 text-teal-700" />
-          <ChevronDown className="pointer-events-none absolute right-2 top-2 h-3.5 w-3.5 text-slate-400" />
+          <Calendar className="pointer-events-none absolute left-2.5 top-2.5 h-3.5 w-3.5 text-teal-700" />
+          <ChevronDown className="pointer-events-none absolute right-2.5 top-2.5 h-3.5 w-3.5 text-slate-400" />
         </div>
       </div>
     </div>

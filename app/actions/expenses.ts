@@ -105,56 +105,65 @@ export async function fetchAllExpensesData(timeRange: string = "this_month"): Pr
 
   const allRows = rows || [];
 
-  // Filter rows by timeRange
+  // Determine target month or all-time
+  const isAllTime = timeRange === "all";
   let targetMonthFilter: string = "08/2026";
   let targetSalesMonth: string = "2026-08";
 
-  if (timeRange === "this_month" || timeRange === "today" || timeRange === "yesterday" || timeRange === "this_week") {
+  if (isAllTime) {
+    targetMonthFilter = "all";
+    targetSalesMonth = "all";
+  } else if (timeRange === "this_month" || timeRange === "today" || timeRange === "yesterday" || timeRange === "this_week") {
     targetMonthFilter = "08/2026";
     targetSalesMonth = "2026-08";
   } else if (timeRange === "last_month") {
     targetMonthFilter = "07/2026";
     targetSalesMonth = "2026-07";
+  } else if (timeRange.includes("/")) {
+    targetMonthFilter = timeRange;
+    const [m, y] = timeRange.split("/");
+    targetSalesMonth = `${y}-${m}`;
   } else if (timeRange.includes("-")) {
     const [y, m] = timeRange.split("-");
     targetMonthFilter = `${m}/${y}`;
     targetSalesMonth = `${y}-${m}`;
   }
 
-  // Fetch real sales for the month to calculate commission %
-  const { data: salesRows } = await (supabase.from("sc_sales" as any) as any)
-    .select("date, total_revenue, grand_total, discount")
-    .gte("date", `${targetSalesMonth}-01`)
-    .lte("date", `${targetSalesMonth}-31`);
+  // Fetch sales to calculate commission %
+  let salesQuery = (supabase.from("sc_sales" as any) as any).select("date, total_revenue, grand_total, discount");
+  if (!isAllTime) {
+    salesQuery = salesQuery.gte("date", `${targetSalesMonth}-01`).lte("date", `${targetSalesMonth}-31`);
+  }
+  const { data: salesRows } = await salesQuery;
 
   const totalMonthlySales = (salesRows || []).reduce(
     (sum: number, r: any) => sum + Number(r.total_revenue || (Number(r.grand_total || 0) - Number(r.discount || 0))),
     0
   );
 
-  const filteredRows = allRows.filter((r: any) => r.month === targetMonthFilter);
+  // Filter rows by month
+  const filteredRows = isAllTime ? allRows : allRows.filter((r: any) => r.month === targetMonthFilter);
 
-  // 1. Process Operating Expenses (ค่าดำเนินการ & ภาษี)
+  // 1. Process Operating Expenses (Excluding internal detail & rental meter rows)
   const opexList: RealExpenseRecord[] = [];
   let totalOpex = 0;
 
   filteredRows
     .filter(
       (r: any) =>
-        r.category === "ค่าดำเนินการ" ||
-        r.category === "ภาษี" ||
-        r.category === "ค่าเช่าร้าน" ||
-        r.category === "ค่าการตลาด" ||
-        r.category === "ทั่วไป"
+        r.category !== "payslip_detail" &&
+        r.category !== "rental_meter" &&
+        !r.name?.startsWith("empd_") &&
+        !r.category?.startsWith("empd_")
     )
     .forEach((r: any) => {
       const amt = Number(r.amount || 0);
-      if (amt < 10000000) { // filter out timestamp placeholder anomalies
+      if (amt > 0 && amt < 10000000) {
         totalOpex += amt;
         opexList.push({
           id: r.id,
           month: r.month,
-          category: r.category,
+          category: r.category || "ค่าดำเนินการ",
           name: r.name,
           amount: amt,
           payMethod: r.pay_method || "บัญชีร้าน",
