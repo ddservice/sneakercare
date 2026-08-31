@@ -74,7 +74,7 @@ const EMPLOYEES: EmployeeInfo[] = [
     id: "jae",
     name: "เจ (พนักงานทดลองงาน)",
     type: "daily",
-    role: "พนักงานทดลองงาน / ช่างสปา",
+    role: "ช่างสปารองเท้า (ทดลองงาน)",
     wageNote: "วันละ 350 บาท (คำนวณตามวันทำจริง)",
     offDay: 5, // Fri
     offDayName: "วันศุกร์",

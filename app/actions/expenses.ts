@@ -177,7 +177,7 @@ export async function fetchAllExpensesData(timeRange: string = "this_month"): Pr
     otherDeductions: 0,
     netPay: 12575, // 12000 + 500 + 675 - 600
     payMethod: "บัญชีร้าน (โอน)",
-    employeeRole: "พนักงานประจำ / ช่างหลัก",
+    employeeRole: "พนักงานประจำ / ช่างสปาหลัก",
   };
 
   // 2. น.ส.สุทธินันท์ นนทจันทร์ (มิ้ว): พนักงานประจำ (เงินเดือน) - หยุดอาทิตย์
@@ -223,7 +223,7 @@ export async function fetchAllExpensesData(timeRange: string = "this_month"): Pr
     otherDeductions: 0,
     netPay: 2800, // 2,800 ฿
     payMethod: "บัญชีร้าน (โอน)",
-    employeeRole: "พนักงานทดลองงาน / ช่างสปา (350฿/วัน เริ่ม 24 ส.ค.)",
+    employeeRole: "ช่างสปารองเท้า (ทดลองงาน)",
   };
 
   // Merge any saved custom records from sc_opex
