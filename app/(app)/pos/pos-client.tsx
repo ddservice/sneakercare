@@ -45,21 +45,24 @@ export type OrderItem = {
 };
 
 const DEFAULT_SERVICES = [
-  { id: "s1", name: "ซักทำความสะอาดทั่วไป (Basic Clean)", price: 150, category: "cleaning" },
-  { id: "s2", name: "ซักละเอียด + ฆ่าเชื้อ (Deep Clean)", price: 250, category: "cleaning" },
-  { id: "s3", name: "ซักด่วนพิเศษ (Express Clean)", price: 350, category: "cleaning" },
-  { id: "s4", name: "แก้ยางเหลืองขอบรองเท้า (Unyellowing)", price: 300, category: "treatment" },
-  { id: "s5", name: "ทำสี / เก็บรายละเอียด (Repaint)", price: 500, category: "repair" },
-  { id: "s6", name: "ซ่อมพื้น / ติดกาว (Sole Repair)", price: 200, category: "repair" },
-  { id: "s7", name: "เคลือบสเปรย์กันน้ำนาโน (Waterproof)", price: 100, category: "treatment" },
+  { id: "pkg_s", name: "Package Size S (ผ้าใบ/แตะทั่วไป 35-37)", price: 200, category: "package" },
+  { id: "pkg_m", name: "Package Size M (สนีกเกอร์มาตรฐาน 38-41)", price: 400, category: "package" },
+  { id: "pkg_l", name: "Package Size L (สนีกเกอร์แบรนด์/หุ้มข้อ 42-44)", price: 600, category: "package" },
+  { id: "pkg_xl", name: "Package Size XL (โอเวอร์ไซส์/บูทพิเศษ 45+)", price: 800, category: "package" },
+  { id: "opt_express", name: "บริการเสริม: ซักด่วน (Express Clean)", price: 100, category: "addon" },
+  { id: "opt_unyellow", name: "บริการเสริม: แก้เหลือง (Unyellowing)", price: 150, category: "addon" },
+  { id: "opt_deepclean", name: "บริการเสริม: ซักละเอียด + ฆ่าเชื้อ", price: 100, category: "addon" },
+  { id: "opt_waterproof", name: "บริการเสริม: เคลือบสเปรย์กันน้ำนาโน", price: 100, category: "addon" },
+  { id: "opt_repair", name: "บริการเสริม: ซ่อมพื้น / ติดกาว", price: 200, category: "addon" },
+  { id: "opt_repaint", name: "บริการเสริม: ทำสี / Repaint", price: 350, category: "addon" },
 ];
 
 const POPULAR_BRANDS = ["Nike", "Adidas", "Jordan", "New Balance", "Converse", "Vans", "On Cloud", "Asics"];
 const SIZES = [
-  { label: "S (35-37)", val: "S" },
-  { label: "M (38-41)", val: "M" },
-  { label: "L (42-44)", val: "L" },
-  { label: "XL (45+)", val: "XL" },
+  { label: "S (200฿)", val: "S" },
+  { label: "M (400฿)", val: "M" },
+  { label: "L (600฿)", val: "L" },
+  { label: "XL (800฿)", val: "XL" },
 ];
 
 const STATUS_CONFIG = {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useMemo } from "react";
 import { saveDailySale, deleteDailySale, type DailySaleInput } from "@/app/actions/daily-sales";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -17,14 +17,21 @@ import {
   Trash2,
   Edit2,
   CheckCircle2,
+  Clock,
+  AlertCircle,
   Sparkles,
-  ArrowRight,
+  Zap,
   TrendingUp,
   Receipt,
+  RotateCcw,
+  Tag,
+  Layers,
+  ArrowUpDown,
+  Search,
 } from "lucide-react";
 import Link from "next/link";
 
-type DailySaleRow = {
+export type DailySaleRow = {
   id: number;
   date: string;
   size_s: number;
@@ -33,18 +40,39 @@ type DailySaleRow = {
   size_xl: number;
   cash_amount: number;
   transfer_amount: number;
+  amount_paid?: number;
   discount: number;
   grand_total: number;
+  total_revenue?: number;
+  payment_status?: string;
   extra_items?: string;
   recorded_by?: string;
+  created_at?: string;
 };
 
-// Size price presets based on SneakerCare standard
-const SIZE_PRICES = {
-  s: 350,
-  m: 450,
-  l: 550,
-  xl: 650,
+// Size price presets based on official SneakerCare package standards
+export const SIZE_PRICES = {
+  s: 200,
+  m: 400,
+  l: 600,
+  xl: 800,
+};
+
+// Standard preset add-on options
+export const PRESET_OPTIONS = [
+  { id: "opt_express", name: "ซักด่วน", price: 100, icon: "⚡", tag: "+100฿" },
+  { id: "opt_unyellow", name: "แก้เหลือง", price: 150, icon: "✨", tag: "+150฿" },
+  { id: "opt_deepclean", name: "ซักละเอียด+ฆ่าเชื้อ", price: 100, icon: "🧼", tag: "+100฿" },
+  { id: "opt_waterproof", name: "เคลือบกันน้ำนาโน", price: 100, icon: "🛡️", tag: "+100฿" },
+  { id: "opt_sole_repair", name: "ซ่อมพื้น/ติดกาว", price: 200, icon: "🩹", tag: "+200฿" },
+  { id: "opt_repaint", name: "ทำสี/Repaint", price: 350, icon: "🎨", tag: "+350฿" },
+];
+
+type ExtraLine = {
+  id: string;
+  name: string;
+  price: number;
+  qty: number;
 };
 
 export function DailyEntryClient({ initialRecords }: { initialRecords: DailySaleRow[] }) {
@@ -54,33 +82,51 @@ export function DailyEntryClient({ initialRecords }: { initialRecords: DailySale
   // Form State
   const [editingId, setEditingId] = useState<number | null>(null);
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
-  const [sizeS, setSizeS] = useState(0);
-  const [sizeM, setSizeM] = useState(0);
-  const [sizeL, setSizeL] = useState(0);
-  const [sizeXL, setSizeXL] = useState(0);
-  const [cashAmount, setCashAmount] = useState(0);
-  const [transferAmount, setTransferAmount] = useState(0);
-  const [discount, setDiscount] = useState(0);
-  const [extraItems, setExtraItems] = useState("");
-  const [isManualGrandTotal, setIsManualGrandTotal] = useState(false);
-  const [manualGrandTotal, setManualGrandTotal] = useState(0);
+  const [sizeS, setSizeS] = useState<number>(0);
+  const [sizeM, setSizeM] = useState<number>(0);
+  const [sizeL, setSizeL] = useState<number>(0);
+  const [sizeXL, setSizeXL] = useState<number>(0);
 
-  // Auto Estimated Total
-  const totalPairs = Number(sizeS) + Number(sizeM) + Number(sizeL) + Number(sizeXL);
-  const estimatedSizeTotal =
-    Number(sizeS) * SIZE_PRICES.s +
-    Number(sizeM) * SIZE_PRICES.m +
-    Number(sizeL) * SIZE_PRICES.l +
-    Number(sizeXL) * SIZE_PRICES.xl;
+  // Extra add-on services list
+  const [extraLines, setExtraLines] = useState<ExtraLine[]>([]);
+  const [customExtraName, setCustomExtraName] = useState("");
+  const [customExtraPrice, setCustomExtraPrice] = useState<number | "">("");
 
-  const paymentSplitTotal = Number(cashAmount) + Number(transferAmount);
-  const calculatedGrandTotal = isManualGrandTotal
-    ? manualGrandTotal
-    : paymentSplitTotal > 0
-    ? paymentSplitTotal
-    : Math.max(0, estimatedSizeTotal - Number(discount));
+  // Payment Breakdown
+  const [cashAmount, setCashAmount] = useState<number>(0);
+  const [transferAmount, setTransferAmount] = useState<number>(0);
+  const [discount, setDiscount] = useState<number>(0);
+  const [paymentStatusManual, setPaymentStatusManual] = useState<string | null>(null);
 
-  // Preset size helper
+  // Filters & Search for history
+  const [searchTerm, setSearchTerm] = useState("");
+  const [selectedMonth, setSelectedMonth] = useState<string>("all");
+
+  // Calculations
+  const totalPairs = Number(sizeS || 0) + Number(sizeM || 0) + Number(sizeL || 0) + Number(sizeXL || 0);
+  const sizeGross =
+    Number(sizeS || 0) * SIZE_PRICES.s +
+    Number(sizeM || 0) * SIZE_PRICES.m +
+    Number(sizeL || 0) * SIZE_PRICES.l +
+    Number(sizeXL || 0) * SIZE_PRICES.xl;
+
+  const extraServicesTotal = extraLines.reduce((sum, line) => sum + line.price * line.qty, 0);
+  const grossTotal = sizeGross + extraServicesTotal;
+  const netTotal = Math.max(0, grossTotal - Number(discount || 0));
+
+  const actualReceived = Number(cashAmount || 0) + Number(transferAmount || 0);
+  const outstandingAmount = Math.max(0, netTotal - actualReceived);
+
+  // Auto payment status
+  const currentPaymentStatus = useMemo(() => {
+    if (paymentStatusManual) return paymentStatusManual;
+    if (netTotal === 0 && actualReceived === 0) return "ชำระครบ";
+    if (actualReceived >= netTotal && netTotal > 0) return "ชำระครบ";
+    if (actualReceived > 0) return "ชำระบางส่วน";
+    return "ค้างชำระ";
+  }, [paymentStatusManual, actualReceived, netTotal]);
+
+  // Adjust size count
   function adjustSize(size: "s" | "m" | "l" | "xl", delta: number) {
     if (size === "s") setSizeS((prev) => Math.max(0, prev + delta));
     if (size === "m") setSizeM((prev) => Math.max(0, prev + delta));
@@ -88,22 +134,128 @@ export function DailyEntryClient({ initialRecords }: { initialRecords: DailySale
     if (size === "xl") setSizeXL((prev) => Math.max(0, prev + delta));
   }
 
+  // Quick Preset Add-on
+  function addPresetOption(preset: (typeof PRESET_OPTIONS)[0]) {
+    setExtraLines((prev) => {
+      const existing = prev.find((item) => item.name === preset.name);
+      if (existing) {
+        return prev.map((item) =>
+          item.name === preset.name ? { ...item, qty: item.qty + 1 } : item
+        );
+      }
+      return [...prev, { id: `preset-${Date.now()}-${Math.random()}`, name: preset.name, price: preset.price, qty: 1 }];
+    });
+    toast.success(`เพิ่มบริการเสริม: ${preset.name} (+${preset.price}฿)`);
+  }
+
+  // Add Custom Service
+  function addCustomExtra() {
+    if (!customExtraName.trim()) {
+      toast.error("กรุณาระบุชื่อบริการเสริม");
+      return;
+    }
+    const priceNum = Number(customExtraPrice) || 0;
+    if (priceNum <= 0) {
+      toast.error("กรุณาระบุราคาบริการ");
+      return;
+    }
+
+    setExtraLines((prev) => [
+      ...prev,
+      {
+        id: `custom-${Date.now()}`,
+        name: customExtraName.trim(),
+        price: priceNum,
+        qty: 1,
+      },
+    ]);
+    setCustomExtraName("");
+    setCustomExtraPrice("");
+    toast.success(`เพิ่มรายการ: ${customExtraName.trim()} (+${priceNum}฿)`);
+  }
+
+  function removeExtraLine(id: string) {
+    setExtraLines((prev) => prev.filter((item) => item.id !== id));
+  }
+
+  function updateExtraQty(id: string, delta: number) {
+    setExtraLines((prev) =>
+      prev
+        .map((item) => (item.id === id ? { ...item, qty: Math.max(0, item.qty + delta) } : item))
+        .filter((item) => item.qty > 0)
+    );
+  }
+
+  // Payment quick helpers
+  function autoFillTransferAll() {
+    setTransferAmount(netTotal);
+    setCashAmount(0);
+    setPaymentStatusManual("ชำระครบ");
+    toast.info("ตั้งค่ายอดโอนเต็มจำนวนเรียบร้อย");
+  }
+
+  function autoFillCashAll() {
+    setCashAmount(netTotal);
+    setTransferAmount(0);
+    setPaymentStatusManual("ชำระครบ");
+    toast.info("ตั้งค่ายอดเงินสดเต็มจำนวนเรียบร้อย");
+  }
+
+  function autoFillHalfSplit() {
+    const half = Math.round((netTotal / 2) * 100) / 100;
+    setCashAmount(half);
+    setTransferAmount(netTotal - half);
+    setPaymentStatusManual("ชำระครบ");
+    toast.info("แบ่งยอดเงินสดและเงินโอน 50/50 เรียบร้อย");
+  }
+
+  function autoFillPendingAll() {
+    setCashAmount(0);
+    setTransferAmount(0);
+    setPaymentStatusManual("ค้างชำระ");
+    toast.warning("ตั้งค่าเป็นยอดค้างชำระทั้งหมด");
+  }
+
+  // Edit record
   function handleEdit(record: DailySaleRow) {
     setEditingId(record.id);
     setDate(record.date);
-    setSizeS(record.size_s || 0);
-    setSizeM(record.size_m || 0);
-    setSizeL(record.size_l || 0);
-    setSizeXL(record.size_xl || 0);
+    setSizeS(Number(record.size_s || 0));
+    setSizeM(Number(record.size_m || 0));
+    setSizeL(Number(record.size_l || 0));
+    setSizeXL(Number(record.size_xl || 0));
     setCashAmount(Number(record.cash_amount || 0));
     setTransferAmount(Number(record.transfer_amount || 0));
     setDiscount(Number(record.discount || 0));
-    setExtraItems(record.extra_items || "");
-    setManualGrandTotal(Number(record.grand_total || 0));
-    setIsManualGrandTotal(true);
+    setPaymentStatusManual(record.payment_status || null);
+
+    // Parse extra items string if present
+    if (record.extra_items && record.extra_items.trim()) {
+      try {
+        if (record.extra_items.startsWith("[")) {
+          setExtraLines(JSON.parse(record.extra_items));
+        } else {
+          // Plain text fallback
+          setExtraLines([
+            {
+              id: `parsed-${Date.now()}`,
+              name: record.extra_items,
+              price: 0,
+              qty: 1,
+            },
+          ]);
+        }
+      } catch {
+        setExtraLines([]);
+      }
+    } else {
+      setExtraLines([]);
+    }
+
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
+  // Reset form
   function handleReset() {
     setEditingId(null);
     setDate(new Date().toISOString().slice(0, 10));
@@ -111,21 +263,28 @@ export function DailyEntryClient({ initialRecords }: { initialRecords: DailySale
     setSizeM(0);
     setSizeL(0);
     setSizeXL(0);
+    setExtraLines([]);
+    setCustomExtraName("");
+    setCustomExtraPrice("");
     setCashAmount(0);
     setTransferAmount(0);
     setDiscount(0);
-    setExtraItems("");
-    setIsManualGrandTotal(false);
-    setManualGrandTotal(0);
+    setPaymentStatusManual(null);
   }
 
+  // Submit Handler
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
 
-    if (totalPairs === 0 && calculatedGrandTotal === 0) {
-      toast.error("กรุณาระบุจำนวนรองเท้าหรือยอดเงินที่รับชำระ");
+    if (totalPairs === 0 && grossTotal === 0 && actualReceived === 0) {
+      toast.error("กรุณาระบุจำนวนรองเท้า บริการเสริม หรือยอดเงินที่รับชำระ");
       return;
     }
+
+    // Format extra items string for summary
+    const extraSummaryStr = extraLines.length > 0
+      ? extraLines.map((item) => `${item.name} x${item.qty} (${item.price * item.qty}฿)`).join(", ")
+      : "";
 
     startTransition(async () => {
       const payload: DailySaleInput = {
@@ -137,27 +296,42 @@ export function DailyEntryClient({ initialRecords }: { initialRecords: DailySale
         size_xl: sizeXL,
         cash_amount: cashAmount,
         transfer_amount: transferAmount,
-        discount: discount,
-        grand_total: calculatedGrandTotal,
-        extra_items: extraItems,
+        amount_paid: actualReceived,
+        discount,
+        gross_amount: grossTotal,
+        grand_total: netTotal,
+        payment_status: currentPaymentStatus,
+        extra_items: extraSummaryStr,
       };
 
       const res = await saveDailySale(payload);
       if (res.success) {
-        toast.success(editingId ? "อัปเดตยอดขายรายวันสำเร็จ" : "บันทึกยอดขายรายวันสำเร็จ");
+        toast.success(editingId ? "อัปเดตบันทึกยอดขายรายวันสำเร็จ" : "บันทึกยอดขายประจำวันสำเร็จ");
         handleReset();
-        // Update local list
+
+        // Update local state smoothly
         setRecords((prev) => {
           if (editingId) {
             return prev.map((r) =>
-              r.id === editingId ? { ...r, ...payload, id: editingId, grand_total: calculatedGrandTotal } : r
+              r.id === editingId
+                ? {
+                    ...r,
+                    ...payload,
+                    id: editingId,
+                    total_revenue: netTotal,
+                    amount_paid: actualReceived,
+                    grand_total: grossTotal,
+                  }
+                : r
             );
           } else {
             return [
               {
                 id: Date.now(),
                 ...payload,
-                grand_total: calculatedGrandTotal,
+                total_revenue: netTotal,
+                amount_paid: actualReceived,
+                grand_total: grossTotal,
                 recorded_by: "คุณ",
               } as DailySaleRow,
               ...prev,
@@ -165,24 +339,56 @@ export function DailyEntryClient({ initialRecords }: { initialRecords: DailySale
           }
         });
       } else {
-        toast.error(res.error || "เกิดข้อผิดพลาดในการบันทึก");
+        toast.error(res.error || "เกิดข้อผิดพลาดในการบันทึกยอดขาย");
       }
     });
   }
 
+  // Delete record
   async function handleDelete(id: number) {
     if (!confirm("คุณต้องการลบบันทึกยอดขายของวันนี้ใช่หรือไม่?")) return;
 
     startTransition(async () => {
       const res = await deleteDailySale(id);
       if (res.success) {
-        toast.success("ลบบันทึกเรียบร้อย");
+        toast.success("ลบบันทึกยอดขายเรียบร้อย");
         setRecords((prev) => prev.filter((r) => r.id !== id));
       } else {
         toast.error(res.error || "ไม่สามารถลบรายการได้");
       }
     });
   }
+
+  // Filtered list
+  const filteredRecords = useMemo(() => {
+    return records.filter((r) => {
+      const matchesSearch =
+        r.date.includes(searchTerm) ||
+        (r.extra_items && r.extra_items.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        (r.recorded_by && r.recorded_by.toLowerCase().includes(searchTerm.toLowerCase()));
+
+      const matchesMonth =
+        selectedMonth === "all" || r.date.startsWith(selectedMonth);
+
+      return matchesSearch && matchesMonth;
+    });
+  }, [records, searchTerm, selectedMonth]);
+
+  // Overall Statistics from filtered records
+  const totalStats = useMemo(() => {
+    return filteredRecords.reduce(
+      (acc, r) => {
+        acc.pairs += (r.size_s || 0) + (r.size_m || 0) + (r.size_l || 0) + (r.size_xl || 0);
+        acc.revenue += Number(r.total_revenue || r.grand_total || 0);
+        acc.cash += Number(r.cash_amount || 0);
+        acc.transfer += Number(r.transfer_amount || 0);
+        acc.paid += Number(r.amount_paid || (Number(r.cash_amount || 0) + Number(r.transfer_amount || 0)));
+        acc.discount += Number(r.discount || 0);
+        return acc;
+      },
+      { pairs: 0, revenue: 0, cash: 0, transfer: 0, paid: 0, discount: 0 }
+    );
+  }, [filteredRecords]);
 
   return (
     <div className="space-y-8">
@@ -191,37 +397,37 @@ export function DailyEntryClient({ initialRecords }: { initialRecords: DailySale
         <div className="space-y-1">
           <div className="inline-flex items-center gap-2 rounded-full bg-teal-500/20 px-3 py-1 text-xs font-semibold text-teal-200 ring-1 ring-teal-400/30">
             <Footprints className="h-3.5 w-3.5" />
-            SneakerCare Daily Sales Entry
+            SneakerCare POS Daily Sales Entry
           </div>
-          <h2 className="text-2xl font-bold tracking-tight">บันทึกยอดขายประจำวัน (Daily Summary)</h2>
-          <p className="text-sm text-teal-100/80">
-            กรอกสรุปยอดขายรายวัน จำนวนรองเท้าแต่ละไซส์ (S/M/L/XL) และยอดเงินสด/เงินโอน เชื่อมต่อสถิติอัตโนมัติ
+          <h2 className="text-2xl font-bold tracking-tight">บันทึกยอดขายและงานบริการประจำวัน</h2>
+          <p className="text-xs sm:text-sm text-teal-100/80">
+            ระบบคำนวณตาม Package มาตรฐาน (S 200฿ | M 400฿ | L 600฿ | XL 800฿), เพิ่มตัวเลือกบริการเสริม, แยกยอดเงินสด-เงินโอน และยอดรับจริงอัตโนมัติ
           </p>
         </div>
 
         <div className="flex items-center gap-2">
           <Link href="/statistics">
-            <Button variant="outline" className="bg-white/10 text-white hover:bg-white/20 border-white/20 text-xs gap-1.5">
-              <TrendingUp className="h-4 w-4" /> ดูสถิติย้อนหลัง
+            <Button variant="outline" className="bg-white/10 text-white hover:bg-white/20 border-white/20 text-xs gap-1.5 h-9">
+              <TrendingUp className="h-4 w-4" /> ดูสถิติสรุป
             </Button>
           </Link>
           <Link href="/pos">
-            <Button variant="outline" className="bg-white/10 text-white hover:bg-white/20 border-white/20 text-xs gap-1.5">
-              <Receipt className="h-4 w-4" /> หน้า POS รายบิล
+            <Button variant="outline" className="bg-white/10 text-white hover:bg-white/20 border-white/20 text-xs gap-1.5 h-9">
+              <Receipt className="h-4 w-4" /> เปิดบิลรับงาน (POS)
             </Button>
           </Link>
         </div>
       </div>
 
       <div className="grid gap-8 lg:grid-cols-12">
-        {/* ── Left Form Column (5 Cols) ── */}
-        <div className="lg:col-span-5 space-y-6">
+        {/* ── LEFT COLUMN: Input Form (6 Cols) ── */}
+        <div className="lg:col-span-6 space-y-6">
           <Card className="border-teal-200/80 shadow-md">
             <CardHeader className="bg-teal-50/70 border-b border-teal-100 p-5">
               <div className="flex items-center justify-between">
                 <CardTitle className="text-base font-bold text-teal-950 flex items-center gap-2">
                   <Sparkles className="h-4 w-4 text-teal-700" />
-                  {editingId ? "แก้ไขบันทึกยอดขาย" : "แบบฟอร์มบันทึกยอดขายรายวัน"}
+                  {editingId ? "แก้ไขบันทึกยอดขายรายวัน" : "แบบฟอร์มบันทึกงานบริการ / ยอดขาย"}
                 </CardTitle>
                 {editingId && (
                   <Badge variant="outline" className="bg-amber-100 text-amber-800 border-amber-300">
@@ -230,48 +436,52 @@ export function DailyEntryClient({ initialRecords }: { initialRecords: DailySale
                 )}
               </div>
               <CardDescription className="text-xs text-teal-800/80">
-                ระบบคำนวณและอัปเดตไปยัง Dashboard & สถิติร้านทันที
+                กรอกจำนวนคู่ตาม Package ไซส์, บริการเสริม, ยอดเงินสด/โอน และสถานะการชำระเงิน
               </CardDescription>
             </CardHeader>
 
             <CardContent className="p-5 space-y-5">
-              <form onSubmit={handleSubmit} className="space-y-4">
+              <form onSubmit={handleSubmit} className="space-y-5">
                 {/* 1. Date */}
                 <div className="space-y-1.5">
                   <Label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
-                    <Calendar className="h-3.5 w-3.5 text-teal-700" /> วันที่ทำรายการ
+                    <Calendar className="h-3.5 w-3.5 text-teal-700" /> วันที่ใช้บริการ / บันทึกยอดขาย
                   </Label>
                   <Input
                     type="date"
                     value={date}
                     onChange={(e) => setDate(e.target.value)}
-                    className="text-xs h-9 font-medium"
+                    className="text-xs h-9 font-medium bg-white"
                     required
                   />
                 </div>
 
-                {/* 2. Shoe Sizes Grid */}
-                <div className="space-y-2 rounded-xl border border-slate-200 bg-slate-50/60 p-3.5">
+                {/* 2. Shoe Package Sizes Grid (S: 200, M: 400, L: 600, XL: 800) */}
+                <div className="space-y-2.5 rounded-xl border border-slate-200 bg-slate-50/70 p-4">
                   <div className="flex items-center justify-between">
                     <Label className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
-                      <Footprints className="h-3.5 w-3.5 text-teal-700" /> จำนวนรองเท้าตามขนาด (ไซส์)
+                      <Footprints className="h-3.5 w-3.5 text-teal-700" /> จำนวนคู่แยกตาม Size (Package ราคามาตรฐาน)
                     </Label>
-                    <span className="text-xs font-black text-teal-800">รวม {totalPairs} คู่</span>
+                    <span className="rounded-full bg-teal-100 px-2.5 py-0.5 text-xs font-black text-teal-900">
+                      รวม {totalPairs} คู่ ({sizeGross.toLocaleString()} ฿)
+                    </span>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-2.5 pt-1">
-                    {/* Size S */}
-                    <div className="rounded-lg bg-white p-2.5 border border-slate-200 shadow-2xs space-y-1">
-                      <div className="flex items-center justify-between text-[11px] font-bold text-teal-800">
-                        <span>Size S (350฿)</span>
-                        <span>{sizeS * SIZE_PRICES.s}฿</span>
+                  <div className="grid grid-cols-2 gap-3 pt-1">
+                    {/* Size S (200฿) */}
+                    <div className="rounded-xl border-2 border-blue-400 bg-gradient-to-b from-blue-50/80 to-white p-3 shadow-xs space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="font-extrabold text-xs text-blue-900">Size S</span>
+                        <span className="rounded-full bg-blue-600 px-2 py-0.5 text-[10px] font-bold text-white">
+                          200 ฿/คู่
+                        </span>
                       </div>
-                      <div className="flex items-center gap-1">
+                      <div className="flex items-center gap-1.5">
                         <Button
                           type="button"
                           variant="outline"
                           size="sm"
-                          className="h-7 w-7 p-0 text-slate-600"
+                          className="h-8 w-8 p-0 text-blue-700 hover:bg-blue-100 font-bold"
                           onClick={() => adjustSize("s", -1)}
                         >
                           -
@@ -281,32 +491,37 @@ export function DailyEntryClient({ initialRecords }: { initialRecords: DailySale
                           min="0"
                           value={sizeS}
                           onChange={(e) => setSizeS(Math.max(0, parseInt(e.target.value) || 0))}
-                          className="h-7 text-center font-mono font-bold text-xs"
+                          className="h-8 text-center font-mono font-bold text-sm bg-white border-blue-200 text-blue-900"
                         />
                         <Button
                           type="button"
                           variant="outline"
                           size="sm"
-                          className="h-7 w-7 p-0 text-teal-700 font-bold"
+                          className="h-8 w-8 p-0 text-blue-700 hover:bg-blue-100 font-bold"
                           onClick={() => adjustSize("s", 1)}
                         >
                           +
                         </Button>
                       </div>
+                      <div className="text-right text-[11px] font-bold text-blue-700 border-t border-blue-100 pt-1">
+                        = {(Number(sizeS || 0) * SIZE_PRICES.s).toLocaleString()} ฿
+                      </div>
                     </div>
 
-                    {/* Size M */}
-                    <div className="rounded-lg bg-white p-2.5 border border-slate-200 shadow-2xs space-y-1">
-                      <div className="flex items-center justify-between text-[11px] font-bold text-teal-800">
-                        <span>Size M (450฿)</span>
-                        <span>{sizeM * SIZE_PRICES.m}฿</span>
+                    {/* Size M (400฿) */}
+                    <div className="rounded-xl border-2 border-emerald-400 bg-gradient-to-b from-emerald-50/80 to-white p-3 shadow-xs space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="font-extrabold text-xs text-emerald-900">Size M</span>
+                        <span className="rounded-full bg-emerald-600 px-2 py-0.5 text-[10px] font-bold text-white">
+                          400 ฿/คู่
+                        </span>
                       </div>
-                      <div className="flex items-center gap-1">
+                      <div className="flex items-center gap-1.5">
                         <Button
                           type="button"
                           variant="outline"
                           size="sm"
-                          className="h-7 w-7 p-0 text-slate-600"
+                          className="h-8 w-8 p-0 text-emerald-700 hover:bg-emerald-100 font-bold"
                           onClick={() => adjustSize("m", -1)}
                         >
                           -
@@ -316,32 +531,37 @@ export function DailyEntryClient({ initialRecords }: { initialRecords: DailySale
                           min="0"
                           value={sizeM}
                           onChange={(e) => setSizeM(Math.max(0, parseInt(e.target.value) || 0))}
-                          className="h-7 text-center font-mono font-bold text-xs"
+                          className="h-8 text-center font-mono font-bold text-sm bg-white border-emerald-200 text-emerald-900"
                         />
                         <Button
                           type="button"
                           variant="outline"
                           size="sm"
-                          className="h-7 w-7 p-0 text-teal-700 font-bold"
+                          className="h-8 w-8 p-0 text-emerald-700 hover:bg-emerald-100 font-bold"
                           onClick={() => adjustSize("m", 1)}
                         >
                           +
                         </Button>
                       </div>
+                      <div className="text-right text-[11px] font-bold text-emerald-700 border-t border-emerald-100 pt-1">
+                        = {(Number(sizeM || 0) * SIZE_PRICES.m).toLocaleString()} ฿
+                      </div>
                     </div>
 
-                    {/* Size L */}
-                    <div className="rounded-lg bg-white p-2.5 border border-slate-200 shadow-2xs space-y-1">
-                      <div className="flex items-center justify-between text-[11px] font-bold text-teal-800">
-                        <span>Size L (550฿)</span>
-                        <span>{sizeL * SIZE_PRICES.l}฿</span>
+                    {/* Size L (600฿) */}
+                    <div className="rounded-xl border-2 border-purple-400 bg-gradient-to-b from-purple-50/80 to-white p-3 shadow-xs space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="font-extrabold text-xs text-purple-900">Size L</span>
+                        <span className="rounded-full bg-purple-600 px-2 py-0.5 text-[10px] font-bold text-white">
+                          600 ฿/คู่
+                        </span>
                       </div>
-                      <div className="flex items-center gap-1">
+                      <div className="flex items-center gap-1.5">
                         <Button
                           type="button"
                           variant="outline"
                           size="sm"
-                          className="h-7 w-7 p-0 text-slate-600"
+                          className="h-8 w-8 p-0 text-purple-700 hover:bg-purple-100 font-bold"
                           onClick={() => adjustSize("l", -1)}
                         >
                           -
@@ -351,32 +571,37 @@ export function DailyEntryClient({ initialRecords }: { initialRecords: DailySale
                           min="0"
                           value={sizeL}
                           onChange={(e) => setSizeL(Math.max(0, parseInt(e.target.value) || 0))}
-                          className="h-7 text-center font-mono font-bold text-xs"
+                          className="h-8 text-center font-mono font-bold text-sm bg-white border-purple-200 text-purple-900"
                         />
                         <Button
                           type="button"
                           variant="outline"
                           size="sm"
-                          className="h-7 w-7 p-0 text-teal-700 font-bold"
+                          className="h-8 w-8 p-0 text-purple-700 hover:bg-purple-100 font-bold"
                           onClick={() => adjustSize("l", 1)}
                         >
                           +
                         </Button>
                       </div>
+                      <div className="text-right text-[11px] font-bold text-purple-700 border-t border-purple-100 pt-1">
+                        = {(Number(sizeL || 0) * SIZE_PRICES.l).toLocaleString()} ฿
+                      </div>
                     </div>
 
-                    {/* Size XL */}
-                    <div className="rounded-lg bg-white p-2.5 border border-slate-200 shadow-2xs space-y-1">
-                      <div className="flex items-center justify-between text-[11px] font-bold text-teal-800">
-                        <span>Size XL (650฿)</span>
-                        <span>{sizeXL * SIZE_PRICES.xl}฿</span>
+                    {/* Size XL (800฿) */}
+                    <div className="rounded-xl border-2 border-pink-400 bg-gradient-to-b from-pink-50/80 to-white p-3 shadow-xs space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="font-extrabold text-xs text-pink-900">Size XL</span>
+                        <span className="rounded-full bg-pink-600 px-2 py-0.5 text-[10px] font-bold text-white">
+                          800 ฿/คู่
+                        </span>
                       </div>
-                      <div className="flex items-center gap-1">
+                      <div className="flex items-center gap-1.5">
                         <Button
                           type="button"
                           variant="outline"
                           size="sm"
-                          className="h-7 w-7 p-0 text-slate-600"
+                          className="h-8 w-8 p-0 text-pink-700 hover:bg-pink-100 font-bold"
                           onClick={() => adjustSize("xl", -1)}
                         >
                           -
@@ -386,59 +611,162 @@ export function DailyEntryClient({ initialRecords }: { initialRecords: DailySale
                           min="0"
                           value={sizeXL}
                           onChange={(e) => setSizeXL(Math.max(0, parseInt(e.target.value) || 0))}
-                          className="h-7 text-center font-mono font-bold text-xs"
+                          className="h-8 text-center font-mono font-bold text-sm bg-white border-pink-200 text-pink-900"
                         />
                         <Button
                           type="button"
                           variant="outline"
                           size="sm"
-                          className="h-7 w-7 p-0 text-teal-700 font-bold"
+                          className="h-8 w-8 p-0 text-pink-700 hover:bg-pink-100 font-bold"
                           onClick={() => adjustSize("xl", 1)}
                         >
                           +
                         </Button>
                       </div>
+                      <div className="text-right text-[11px] font-bold text-pink-700 border-t border-pink-100 pt-1">
+                        = {(Number(sizeXL || 0) * SIZE_PRICES.xl).toLocaleString()} ฿
+                      </div>
                     </div>
                   </div>
                 </div>
 
-                {/* 3. Payment Method Breakdown */}
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1.5">
-                    <Label className="text-xs font-bold text-slate-700 flex items-center gap-1">
-                      <Wallet className="h-3.5 w-3.5 text-emerald-600" /> ยอดเงินสด (บาท)
+                {/* 3. Add-on Services & Extra Options (บริการอื่นๆ / เพิ่มเติม) */}
+                <div className="space-y-3 rounded-xl border border-amber-200 bg-amber-50/40 p-4">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-xs font-bold text-amber-950 flex items-center gap-1.5">
+                      <Zap className="h-3.5 w-3.5 text-amber-600" /> ตัวเลือกบริการเสริม (Add-on Options)
                     </Label>
-                    <Input
-                      type="number"
-                      min="0"
-                      step="any"
-                      value={cashAmount || ""}
-                      placeholder="0.00"
-                      onChange={(e) => setCashAmount(parseFloat(e.target.value) || 0)}
-                      className="text-xs h-9 font-mono"
-                    />
+                    <span className="text-[11px] font-semibold text-amber-800">
+                      รวมบริการเสริม: <strong>{extraServicesTotal.toLocaleString()} ฿</strong>
+                    </span>
                   </div>
 
-                  <div className="space-y-1.5">
-                    <Label className="text-xs font-bold text-slate-700 flex items-center gap-1">
-                      <Smartphone className="h-3.5 w-3.5 text-blue-600" /> ยอดเงินโอน (บาท)
-                    </Label>
+                  {/* Preset quick buttons */}
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                    {PRESET_OPTIONS.map((preset) => (
+                      <button
+                        key={preset.id}
+                        type="button"
+                        onClick={() => addPresetOption(preset)}
+                        className="flex items-center justify-between rounded-lg border border-amber-200 bg-white px-2.5 py-1.5 text-left text-xs font-medium text-slate-800 shadow-2xs hover:bg-amber-100/70 hover:border-amber-400 active:scale-95 transition-all"
+                      >
+                        <span className="flex items-center gap-1 truncate">
+                          <span>{preset.icon}</span>
+                          <span className="truncate">{preset.name}</span>
+                        </span>
+                        <span className="font-bold text-amber-700 shrink-0 text-[11px]">{preset.tag}</span>
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Custom Extra Input */}
+                  <div className="flex items-center gap-2 pt-1">
+                    <Input
+                      type="text"
+                      placeholder="หรือพิมพ์ชื่อบริการเสริมอื่นๆ..."
+                      value={customExtraName}
+                      onChange={(e) => setCustomExtraName(e.target.value)}
+                      className="h-8 text-xs bg-white flex-1"
+                    />
                     <Input
                       type="number"
-                      min="0"
-                      step="any"
-                      value={transferAmount || ""}
-                      placeholder="0.00"
-                      onChange={(e) => setTransferAmount(parseFloat(e.target.value) || 0)}
-                      className="text-xs h-9 font-mono"
+                      placeholder="ราคา (฿)"
+                      value={customExtraPrice}
+                      onChange={(e) => setCustomExtraPrice(e.target.value ? Number(e.target.value) : "")}
+                      className="h-8 text-xs font-mono w-24 bg-white"
                     />
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={addCustomExtra}
+                      className="h-8 text-xs bg-amber-600 hover:bg-amber-700 text-white gap-1 px-3 shrink-0"
+                    >
+                      <Plus className="h-3.5 w-3.5" /> เพิ่ม
+                    </Button>
                   </div>
+
+                  {/* Added Extra Lines Table */}
+                  {extraLines.length > 0 && (
+                    <div className="rounded-lg border border-amber-200 bg-white overflow-hidden mt-2">
+                      <table className="w-full text-xs">
+                        <thead className="bg-amber-100/60 text-amber-900 font-semibold border-b border-amber-200">
+                          <tr>
+                            <th className="px-2.5 py-1.5 text-left">รายการบริการเสริม</th>
+                            <th className="px-2 py-1.5 text-center w-24">จำนวน</th>
+                            <th className="px-2.5 py-1.5 text-right w-24">รวม (฿)</th>
+                            <th className="px-2 py-1.5 w-8"></th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-amber-100">
+                          {extraLines.map((line) => (
+                            <tr key={line.id} className="hover:bg-amber-50/50">
+                              <td className="px-2.5 py-1.5 font-medium text-slate-800">{line.name}</td>
+                              <td className="px-2 py-1.5 text-center">
+                                <div className="inline-flex items-center gap-1">
+                                  <button
+                                    type="button"
+                                    onClick={() => updateExtraQty(line.id, -1)}
+                                    className="h-5 w-5 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 flex items-center justify-center font-bold"
+                                  >
+                                    -
+                                  </button>
+                                  <span className="font-mono font-bold w-5 text-center">{line.qty}</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => updateExtraQty(line.id, 1)}
+                                    className="h-5 w-5 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 flex items-center justify-center font-bold"
+                                  >
+                                    +
+                                  </button>
+                                </div>
+                              </td>
+                              <td className="px-2.5 py-1.5 text-right font-bold text-amber-900">
+                                {(line.price * line.qty).toLocaleString()} ฿
+                              </td>
+                              <td className="px-1.5 py-1.5 text-center">
+                                <button
+                                  type="button"
+                                  onClick={() => removeExtraLine(line.id)}
+                                  className="text-rose-500 hover:text-rose-700 p-1"
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
                 </div>
 
-                {/* 4. Discount & Notes */}
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1.5">
-                    <Label className="text-xs font-semibold text-slate-700">ส่วนลด (ถ้ามี)</Label>
+                {/* 4. Financial Breakdown & Payment Split */}
+                <div className="space-y-3 rounded-xl border border-teal-200 bg-teal-50/30 p-4">
+                  <div className="flex items-center justify-between border-b border-teal-100 pb-2">
+                    <Label className="text-xs font-bold text-teal-950 flex items-center gap-1.5">
+                      <Wallet className="h-3.5 w-3.5 text-teal-700" /> สรุปยอดเงินและวิธีชำระ (เงินสด / เงินโอน / ยอดรับจริง)
+                    </Label>
+                  </div>
+
+                  {/* Summary Totals Bar */}
+                  <div className="grid grid-cols-3 gap-2 text-center">
+                    <div className="rounded-lg bg-white p-2 border border-slate-200 shadow-2xs">
+                      <div className="text-[10px] text-slate-500 font-semibold">ยอดก่อนลด</div>
+                      <div className="text-xs sm:text-sm font-bold text-slate-800">{grossTotal.toLocaleString()} ฿</div>
+                    </div>
+                    <div className="rounded-lg bg-white p-2 border border-slate-200 shadow-2xs">
+                      <div className="text-[10px] text-amber-700 font-semibold">ส่วนลดรวม</div>
+                      <div className="text-xs sm:text-sm font-bold text-amber-700">-{(Number(discount || 0)).toLocaleString()} ฿</div>
+                    </div>
+                    <div className="rounded-lg bg-teal-900 p-2 text-white shadow-2xs">
+                      <div className="text-[10px] text-teal-200 font-semibold">ยอดสุทธิที่ต้องรับ</div>
+                      <div className="text-xs sm:text-sm font-black text-teal-100">{netTotal.toLocaleString()} ฿</div>
+                    </div>
+                  </div>
+
+                  {/* Discount Input */}
+                  <div className="space-y-1">
+                    <Label className="text-xs font-semibold text-slate-700">ส่วนลดรวม (บาท)</Label>
                     <Input
                       type="number"
                       min="0"
@@ -446,50 +774,183 @@ export function DailyEntryClient({ initialRecords }: { initialRecords: DailySale
                       value={discount || ""}
                       placeholder="0.00"
                       onChange={(e) => setDiscount(parseFloat(e.target.value) || 0)}
-                      className="text-xs h-9 font-mono"
+                      className="text-xs h-8 font-mono bg-white"
                     />
                   </div>
 
-                  <div className="space-y-1.5">
-                    <Label className="text-xs font-semibold text-slate-700">รายการพิเศษ / หมายเหตุ</Label>
-                    <Input
-                      value={extraItems}
-                      placeholder="เช่น ซักด่วน, ลูกค้า VIP"
-                      onChange={(e) => setExtraItems(e.target.value)}
-                      className="text-xs h-9"
-                    />
+                  {/* Cash & Transfer Inputs */}
+                  <div className="grid grid-cols-2 gap-3 pt-1">
+                    <div className="space-y-1.5">
+                      <Label className="text-xs font-bold text-blue-900 flex items-center gap-1">
+                        <Smartphone className="h-3.5 w-3.5 text-blue-600" /> ยอดเงินโอน (บาท)
+                      </Label>
+                      <Input
+                        type="number"
+                        min="0"
+                        step="any"
+                        value={transferAmount || ""}
+                        placeholder="0.00"
+                        onChange={(e) => {
+                          setTransferAmount(parseFloat(e.target.value) || 0);
+                          setPaymentStatusManual(null);
+                        }}
+                        className="text-xs h-9 font-mono font-bold text-blue-900 bg-white border-blue-300"
+                      />
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <Label className="text-xs font-bold text-emerald-900 flex items-center gap-1">
+                        <Wallet className="h-3.5 w-3.5 text-emerald-600" /> ยอดเงินสด (บาท)
+                      </Label>
+                      <Input
+                        type="number"
+                        min="0"
+                        step="any"
+                        value={cashAmount || ""}
+                        placeholder="0.00"
+                        onChange={(e) => {
+                          setCashAmount(parseFloat(e.target.value) || 0);
+                          setPaymentStatusManual(null);
+                        }}
+                        className="text-xs h-9 font-mono font-bold text-emerald-900 bg-white border-emerald-300"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Quick Fill Buttons */}
+                  <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                    <span className="text-[11px] font-semibold text-slate-500 mr-1">กรอกด่วน:</span>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={autoFillTransferAll}
+                      className="h-7 text-[11px] bg-blue-50 hover:bg-blue-100 text-blue-800 border-blue-200 px-2"
+                    >
+                      ⚡ โอนทั้งหมด ({netTotal.toLocaleString()}฿)
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={autoFillCashAll}
+                      className="h-7 text-[11px] bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border-emerald-200 px-2"
+                    >
+                      💵 เงินสดทั้งหมด ({netTotal.toLocaleString()}฿)
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={autoFillHalfSplit}
+                      className="h-7 text-[11px] bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200 px-2"
+                    >
+                      🌓 แบ่ง 50/50
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={autoFillPendingAll}
+                      className="h-7 text-[11px] bg-rose-50 hover:bg-rose-100 text-rose-700 border-rose-200 px-2"
+                    >
+                      ⏳ ค้างชำระ
+                    </Button>
+                  </div>
+
+                  {/* Actual Received & Outstanding Card */}
+                  <div className="rounded-xl border border-teal-300/80 bg-white p-3.5 shadow-xs space-y-2">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="font-bold text-slate-700 flex items-center gap-1.5">
+                        <CheckCircle2 className="h-4 w-4 text-emerald-600" /> ยอดที่ได้รับจริง (Amount Paid):
+                      </span>
+                      <span className="text-sm font-extrabold text-teal-900 font-mono">
+                        {actualReceived.toLocaleString()} บาท
+                      </span>
+                    </div>
+
+                    {outstandingAmount > 0 ? (
+                      <div className="flex items-center justify-between text-xs border-t border-rose-100 pt-2 text-rose-700">
+                        <span className="font-bold flex items-center gap-1.5">
+                          <AlertCircle className="h-4 w-4 text-rose-500" /> ยอดค้างชำระ (Outstanding):
+                        </span>
+                        <span className="text-sm font-black font-mono text-rose-600">
+                          {outstandingAmount.toLocaleString()} บาท
+                        </span>
+                      </div>
+                    ) : (
+                      <div className="text-[11px] text-emerald-700 font-medium flex items-center gap-1 border-t border-emerald-100 pt-1.5">
+                        <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" /> รับชำระครบถ้วน ไม่มียอดค้างชำระ
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Payment Status Selector */}
+                  <div className="space-y-1.5 pt-1">
+                    <Label className="text-xs font-bold text-slate-700">สถานะการชำระเงิน</Label>
+                    <div className="grid grid-cols-3 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setPaymentStatusManual("ชำระครบ")}
+                        className={`rounded-lg border py-2 px-3 text-xs font-bold text-center transition-all ${
+                          currentPaymentStatus === "ชำระครบ"
+                            ? "bg-emerald-600 text-white border-emerald-600 shadow-xs"
+                            : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
+                        }`}
+                      >
+                        ✓ ชำระครบ
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setPaymentStatusManual("ชำระบางส่วน")}
+                        className={`rounded-lg border py-2 px-3 text-xs font-bold text-center transition-all ${
+                          currentPaymentStatus === "ชำระบางส่วน"
+                            ? "bg-amber-500 text-white border-amber-500 shadow-xs"
+                            : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
+                        }`}
+                      >
+                        ⏱ ชำระบางส่วน
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setPaymentStatusManual("ค้างชำระ")}
+                        className={`rounded-lg border py-2 px-3 text-xs font-bold text-center transition-all ${
+                          currentPaymentStatus === "ค้างชำระ"
+                            ? "bg-rose-600 text-white border-rose-600 shadow-xs"
+                            : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
+                        }`}
+                      >
+                        ✕ ค้างชำระ
+                      </button>
+                    </div>
                   </div>
                 </div>
 
-                {/* 5. Total Grand Summary */}
-                <div className="rounded-xl bg-teal-900 p-4 text-white space-y-1 shadow-sm">
-                  <div className="flex items-center justify-between text-xs text-teal-200">
-                    <span>ยอดขายรวมสุทธิประจำวัน</span>
-                    <span>{totalPairs} คู่</span>
-                  </div>
-                  <div className="text-2xl font-black text-white">
-                    ฿{calculatedGrandTotal.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
-                  </div>
-                </div>
-
-                {/* Action Buttons */}
-                <div className="flex gap-2 pt-2">
+                {/* Form Action Buttons */}
+                <div className="flex items-center gap-3 pt-2">
                   {editingId && (
                     <Button
                       type="button"
                       variant="outline"
                       onClick={handleReset}
-                      className="w-1/3 text-xs"
+                      className="h-10 text-xs font-bold text-slate-600 border-slate-300"
                     >
-                      ยกเลิก
+                      <RotateCcw className="h-3.5 w-3.5 mr-1" /> ยกเลิกแก้ไข
                     </Button>
                   )}
                   <Button
                     type="submit"
                     disabled={isPending}
-                    className="flex-1 bg-teal-700 hover:bg-teal-800 text-white font-bold text-xs h-10 shadow-sm"
+                    className="h-10 flex-1 bg-teal-700 hover:bg-teal-800 text-white font-bold text-sm shadow-md gap-2"
                   >
-                    {isPending ? "กำลังบันทึก..." : editingId ? "บันทึกการแก้ไข" : "บันทึกยอดขายรายวัน"}
+                    {isPending ? (
+                      "กำลังบันทึกข้อมูล..."
+                    ) : (
+                      <>
+                        <CheckCircle2 className="h-4 w-4" />
+                        {editingId ? "บันทึกการแก้ไขยอดขาย" : "บันทึกยอดขายประจำวัน"}
+                      </>
+                    )}
                   </Button>
                 </div>
               </form>
@@ -497,86 +958,172 @@ export function DailyEntryClient({ initialRecords }: { initialRecords: DailySale
           </Card>
         </div>
 
-        {/* ── Right Column: Recent Daily Records Table (7 Cols) ── */}
-        <div className="lg:col-span-7 space-y-4">
+        {/* ── RIGHT COLUMN: Historical Log & Analytics (6 Cols) ── */}
+        <div className="lg:col-span-6 space-y-6">
+          {/* Filter & Metric Summary Card */}
           <Card className="border-slate-200 shadow-sm">
-            <CardHeader className="border-b border-slate-100 p-4 flex flex-row items-center justify-between">
-              <div>
-                <CardTitle className="text-sm font-bold text-slate-900">
-                  ประวัติบันทึกยอดขายรายวันล่าสุด ({records.length} รายการ)
-                </CardTitle>
-                <CardDescription className="text-xs text-slate-500">
-                  ข้อมูลจริงจากระบบ SneakerCare ที่บันทึกรายวัน
-                </CardDescription>
+            <CardHeader className="p-4 bg-slate-50 border-b border-slate-200">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <CardTitle className="text-sm font-bold text-slate-900">
+                    สรุปยอดบันทึกย้อนหลัง ({filteredRecords.length} วัน)
+                  </CardTitle>
+                  <CardDescription className="text-xs text-slate-500">
+                    รวม {totalStats.pairs} คู่ | ยอดขายรวม {totalStats.revenue.toLocaleString()} ฿
+                  </CardDescription>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <div className="relative">
+                    <Search className="h-3.5 w-3.5 absolute left-2.5 top-2 text-slate-400" />
+                    <Input
+                      type="text"
+                      placeholder="ค้นหาวันที่ / บริการ..."
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      className="h-8 text-xs pl-8 w-44 bg-white"
+                    />
+                  </div>
+                </div>
               </div>
             </CardHeader>
 
-            <CardContent className="p-0">
-              <div className="overflow-x-auto max-h-[620px] overflow-y-auto">
-                <table className="w-full text-left text-xs">
-                  <thead className="sticky top-0 bg-slate-50 border-b border-slate-200 font-semibold text-slate-600">
-                    <tr>
-                      <th className="px-3 py-2.5">วันที่</th>
-                      <th className="px-3 py-2.5 text-center">ขนาด (S/M/L/XL)</th>
-                      <th className="px-3 py-2.5 text-right">เงินสด</th>
-                      <th className="px-3 py-2.5 text-right">โอนเงิน</th>
-                      <th className="px-3 py-2.5 text-right">ยอดสุทธิ</th>
-                      <th className="px-3 py-2.5 text-center">จัดการ</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {records.map((r) => {
-                      const totalPairsRow =
-                        Number(r.size_s || 0) +
-                        Number(r.size_m || 0) +
-                        Number(r.size_l || 0) +
-                        Number(r.size_xl || 0);
+            <CardContent className="p-4 space-y-4">
+              {/* Stat Pills */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center text-xs">
+                <div className="rounded-lg bg-blue-50 border border-blue-200 p-2.5">
+                  <div className="text-[10px] text-blue-600 font-semibold">เงินโอนสะสม</div>
+                  <div className="font-extrabold text-blue-950 font-mono text-sm">
+                    {totalStats.transfer.toLocaleString()} ฿
+                  </div>
+                </div>
+                <div className="rounded-lg bg-emerald-50 border border-emerald-200 p-2.5">
+                  <div className="text-[10px] text-emerald-600 font-semibold">เงินสดสะสม</div>
+                  <div className="font-extrabold text-emerald-950 font-mono text-sm">
+                    {totalStats.cash.toLocaleString()} ฿
+                  </div>
+                </div>
+                <div className="rounded-lg bg-teal-50 border border-teal-200 p-2.5">
+                  <div className="text-[10px] text-teal-700 font-semibold">ยอดรับจริงรวม</div>
+                  <div className="font-extrabold text-teal-950 font-mono text-sm">
+                    {totalStats.paid.toLocaleString()} ฿
+                  </div>
+                </div>
+                <div className="rounded-lg bg-amber-50 border border-amber-200 p-2.5">
+                  <div className="text-[10px] text-amber-700 font-semibold">ส่วนลดรวม</div>
+                  <div className="font-extrabold text-amber-950 font-mono text-sm">
+                    {totalStats.discount.toLocaleString()} ฿
+                  </div>
+                </div>
+              </div>
 
-                      return (
-                        <tr key={r.id} className="hover:bg-slate-50/80 transition-colors">
-                          <td className="px-3 py-2.5 font-mono font-bold text-teal-900">
-                            {r.date}
-                          </td>
-                          <td className="px-3 py-2.5 text-center">
-                            <span className="font-mono text-slate-700">
-                              S:{r.size_s || 0} M:{r.size_m || 0} L:{r.size_l || 0} XL:{r.size_xl || 0}
-                            </span>
-                            <span className="text-[10px] text-slate-400 block">({totalPairsRow} คู่)</span>
-                          </td>
-                          <td className="px-3 py-2.5 text-right font-mono text-slate-600">
-                            ฿{Number(r.cash_amount || 0).toLocaleString()}
-                          </td>
-                          <td className="px-3 py-2.5 text-right font-mono text-slate-600">
-                            ฿{Number(r.transfer_amount || 0).toLocaleString()}
-                          </td>
-                          <td className="px-3 py-2.5 text-right font-mono font-black text-teal-800">
-                            ฿{Number(r.grand_total || 0).toLocaleString("th-TH", { minimumFractionDigits: 2 })}
-                          </td>
-                          <td className="px-3 py-2.5 text-center">
-                            <div className="flex items-center justify-center gap-1">
-                              <button
-                                type="button"
-                                onClick={() => handleEdit(r)}
-                                className="p-1 rounded text-slate-500 hover:text-teal-700 hover:bg-teal-50"
-                                title="แก้ไข"
-                              >
-                                <Edit2 className="h-3.5 w-3.5" />
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => handleDelete(r.id)}
-                                className="p-1 rounded text-slate-400 hover:text-rose-600 hover:bg-rose-50"
-                                title="ลบ"
-                              >
-                                <Trash2 className="h-3.5 w-3.5" />
-                              </button>
-                            </div>
+              {/* Records Table */}
+              <div className="rounded-xl border border-slate-200 bg-white overflow-hidden shadow-2xs">
+                <div className="max-h-[560px] overflow-y-auto">
+                  <table className="w-full text-xs">
+                    <thead className="sticky top-0 bg-slate-100/90 backdrop-blur-xs text-slate-700 font-bold border-b border-slate-200 z-10">
+                      <tr>
+                        <th className="px-3 py-2.5 text-left">วันที่</th>
+                        <th className="px-2 py-2.5 text-center">ไซส์ (S/M/L/XL)</th>
+                        <th className="px-2.5 py-2.5 text-right">เงินโอน / เงินสด</th>
+                        <th className="px-2.5 py-2.5 text-right">ยอดรับจริง / สุทธิ</th>
+                        <th className="px-2 py-2.5 text-center">สถานะ</th>
+                        <th className="px-2 py-2.5 text-center">จัดการ</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-200">
+                      {filteredRecords.map((record) => {
+                        const recPairs =
+                          (record.size_s || 0) +
+                          (record.size_m || 0) +
+                          (record.size_l || 0) +
+                          (record.size_xl || 0);
+
+                        const recPaid = Number(
+                          record.amount_paid !== undefined
+                            ? record.amount_paid
+                            : (Number(record.cash_amount || 0) + Number(record.transfer_amount || 0))
+                        );
+                        const recNet = Number(record.total_revenue || record.grand_total || 0);
+
+                        const statusBadge =
+                          record.payment_status === "ชำระครบ" ? (
+                            <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-300 text-[10px]">
+                              ชำระครบ
+                            </Badge>
+                          ) : record.payment_status === "ชำระบางส่วน" ? (
+                            <Badge variant="outline" className="bg-amber-50 text-amber-800 border-amber-300 text-[10px]">
+                              ชำระบางส่วน
+                            </Badge>
+                          ) : (
+                            <Badge variant="outline" className="bg-rose-50 text-rose-700 border-rose-300 text-[10px]">
+                              ค้างชำระ
+                            </Badge>
+                          );
+
+                        return (
+                          <tr key={record.id} className="hover:bg-slate-50/80 transition-colors">
+                            <td className="px-3 py-2.5 font-bold text-slate-900 whitespace-nowrap">
+                              <div>{record.date}</div>
+                              {record.extra_items && (
+                                <div className="text-[10px] text-amber-700 font-normal truncate max-w-[140px]" title={record.extra_items}>
+                                  + {record.extra_items}
+                                </div>
+                              )}
+                            </td>
+                            <td className="px-2 py-2.5 text-center">
+                              <div className="font-bold text-teal-900 font-mono">{recPairs} คู่</div>
+                              <div className="text-[10px] text-slate-500 font-mono">
+                                S:{record.size_s || 0} M:{record.size_m || 0} L:{record.size_l || 0} XL:{record.size_xl || 0}
+                              </div>
+                            </td>
+                            <td className="px-2.5 py-2.5 text-right font-mono whitespace-nowrap">
+                              <div className="text-blue-700 font-semibold">โอน: {Number(record.transfer_amount || 0).toLocaleString()}฿</div>
+                              <div className="text-emerald-700">สด: {Number(record.cash_amount || 0).toLocaleString()}฿</div>
+                            </td>
+                            <td className="px-2.5 py-2.5 text-right font-mono whitespace-nowrap">
+                              <div className="font-black text-slate-900">{recPaid.toLocaleString()} ฿</div>
+                              {recNet !== recPaid && (
+                                <div className="text-[10px] text-slate-400">สุทธิ {recNet.toLocaleString()}฿</div>
+                              )}
+                            </td>
+                            <td className="px-2 py-2.5 text-center whitespace-nowrap">{statusBadge}</td>
+                            <td className="px-2 py-2.5 text-center whitespace-nowrap">
+                              <div className="flex items-center justify-center gap-1">
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => handleEdit(record)}
+                                  className="h-7 w-7 p-0 text-slate-600 hover:text-teal-700"
+                                >
+                                  <Edit2 className="h-3.5 w-3.5" />
+                                </Button>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => handleDelete(record.id)}
+                                  className="h-7 w-7 p-0 text-slate-400 hover:text-rose-600"
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </Button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+
+                      {filteredRecords.length === 0 && (
+                        <tr>
+                          <td colSpan={6} className="px-4 py-8 text-center text-slate-400">
+                            ยังไม่มีรายการบันทึกยอดขาย
                           </td>
                         </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             </CardContent>
           </Card>
