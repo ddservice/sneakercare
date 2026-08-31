@@ -97,6 +97,13 @@ export async function lookupDbdCompany(taxIdOrKeyword: string): Promise<DbdCompa
     phone?: string;
   }> = [
     {
+      name: "บริษัท เอสเทีย เชียงใหม่ จำกัด",
+      taxId: "0505565023357",
+      branch: "00000",
+      address: "248/56 ถนนมณีนพรัตน์ ต.ศรีภูมิ อ.เมืองเชียงใหม่ จ.เชียงใหม่ 50200",
+      phone: "053211888",
+    },
+    {
       name: "บริษัท รวยรับทรัพย์168 จำกัด",
       taxId: "0505568021002",
       branch: "00000",
@@ -168,7 +175,45 @@ export async function lookupDbdCompany(taxIdOrKeyword: string): Promise<DbdCompa
     },
   ];
 
-  // Check matching by Tax ID or Company Name keyword
+  // 3. Search in persistent sc_settings registry
+  try {
+    const { data: regSetting } = await (supabase.from("sc_settings" as any) as any)
+      .select("value")
+      .eq("key", "dbd_company_registry")
+      .maybeSingle();
+
+    if (regSetting?.value) {
+      const dynamicList: Array<{
+        companyName: string;
+        taxId: string;
+        branchCode: string;
+        address: string;
+        phone?: string;
+      }> = JSON.parse(regSetting.value);
+
+      const dynMatched = dynamicList.find(
+        (c) =>
+          (cleaned && c.taxId && c.taxId.includes(cleaned)) ||
+          (c.companyName && c.companyName.toLowerCase().includes(keyword)) ||
+          (c.companyName && keyword.includes(c.companyName.toLowerCase()))
+      );
+
+      if (dynMatched) {
+        return {
+          companyName: dynMatched.companyName,
+          taxId: dynMatched.taxId,
+          branchCode: dynMatched.branchCode || "00000",
+          address: dynMatched.address || "สำนักงานใหญ่",
+          phone: dynMatched.phone || "",
+          source: "dbd_registry",
+        };
+      }
+    }
+  } catch {
+    // ignore
+  }
+
+  // 4. Check matching in built-in Thai Registry
   const matched = THAI_DBD_REGISTRY.find(
     (c) =>
       (cleaned && c.taxId.includes(cleaned)) ||
@@ -183,51 +228,6 @@ export async function lookupDbdCompany(taxIdOrKeyword: string): Promise<DbdCompa
       branchCode: matched.branch || "00000",
       address: matched.address,
       phone: matched.phone || "",
-      source: "dbd_registry",
-    };
-  }
-
-  // 3. Dynamic Juristic Number Resolution (For ANY 13-Digit Tax ID)
-  if (cleaned.length === 13) {
-    const provinceCodes: Record<string, string> = {
-      "01": "กรุงเทพมหานคร",
-      "02": "จังหวัดสมุทรปราการ",
-      "03": "จังหวัดนนทบุรี",
-      "04": "จังหวัดปทุมธานี",
-      "05": "จังหวัดเชียงใหม่",
-      "06": "จังหวัดเชียงราย",
-      "07": "จังหวัดพิษณุโลก",
-      "08": "จังหวัดนครสวรรค์",
-      "10": "จังหวัดขอนแก่น",
-      "11": "จังหวัดนครราชสีมา",
-      "12": "จังหวัดอุดรธานี",
-      "20": "จังหวัดชลบุรี",
-      "21": "จังหวัดระยอง",
-      "30": "จังหวัดสุราษฎร์ธานี",
-      "31": "จังหวัดสงขลา",
-      "32": "จังหวัดภูเก็ต",
-    };
-
-    const provCode = cleaned.slice(0, 2);
-    const provinceName = provinceCodes[provCode] || "กรุงเทพมหานคร";
-
-    // Format realistic registered name and address
-    return {
-      companyName: `บริษัท นิติบุคคล รหัส ${cleaned.slice(0, 5)}... จำกัด`,
-      taxId: cleaned,
-      branchCode: "00000",
-      address: `เลขที่ 99/1 หมู่ 2 ถนนสายหลัก ต.ในเมือง อ.เมือง ${provinceName}`,
-      source: "dbd_registry",
-    };
-  }
-
-  // If search was a text keyword (e.g. "เชียงใหม่ คลีนนิ่ง")
-  if (raw.length >= 3) {
-    return {
-      companyName: raw.startsWith("บริษัท") || raw.startsWith("บจก.") ? raw : `บริษัท ${raw} จำกัด`,
-      taxId: "05055" + Math.floor(10000000 + Math.random() * 90000000).toString().slice(0, 8),
-      branchCode: "00000",
-      address: "สำนักงานใหญ่ เลขที่ 123 ต.สุเทพ อ.เมือง จ.เชียงใหม่ 50200",
       source: "dbd_registry",
     };
   }
@@ -325,24 +325,47 @@ export async function createSmartAccDocument(payload: CreateDocumentPayload) {
     promptpayPayload = generatePromptPayPayload(payload.promptPayTarget, grandTotal);
   }
 
-  // 4. Upsert Contact
+  // 4. Upsert Contact to Persistent Registry
   let contactId: string | null = null;
   if (payload.companyName) {
-    const { data: contact } = await (supabase as any)
-      .schema("extension_layer")
-      .from("ext_contacts")
-      .insert({
-        company_name: payload.companyName,
-        tax_id: payload.taxId || null,
-        branch_code: payload.branchCode || "00000",
-        address: payload.address || null,
-        phone: payload.phone || null,
-        email: payload.email || null,
-      })
-      .select("id")
-      .single();
+    try {
+      const { data: regSetting } = await (supabase.from("sc_settings" as any) as any)
+        .select("value")
+        .eq("key", "dbd_company_registry")
+        .maybeSingle();
 
-    if (contact) contactId = contact.id;
+      let currentRegistry: any[] = [];
+      if (regSetting?.value) {
+        currentRegistry = JSON.parse(regSetting.value);
+      }
+
+      const existingIdx = currentRegistry.findIndex(
+        (c) => (payload.taxId && c.taxId === payload.taxId) || c.companyName === payload.companyName
+      );
+
+      const newEntry = {
+        companyName: payload.companyName,
+        taxId: payload.taxId || "",
+        branchCode: payload.branchCode || "00000",
+        address: payload.address || "",
+        phone: payload.phone || "",
+        email: payload.email || "",
+      };
+
+      if (existingIdx >= 0) {
+        currentRegistry[existingIdx] = { ...currentRegistry[existingIdx], ...newEntry };
+      } else {
+        currentRegistry.unshift(newEntry);
+      }
+
+      await (supabase.from("sc_settings" as any) as any).upsert({
+        key: "dbd_company_registry",
+        value: JSON.stringify(currentRegistry.slice(0, 100)),
+        updated_at: new Date().toISOString(),
+      });
+    } catch {
+      // ignore
+    }
   }
 
   // 5. Insert Document
