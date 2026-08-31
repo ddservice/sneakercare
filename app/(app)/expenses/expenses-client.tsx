@@ -409,9 +409,9 @@ export function ExpensesClient({ initialData }: { initialData: ExpensesPayload }
                   <Badge className="bg-amber-500 text-slate-950 font-bold text-[10px]">ทดลองงาน 350฿/วัน</Badge>
                 </div>
                 <div className="text-lg font-black text-amber-300">
-                  ฿{data.payslips.find((p) => p.employeeName.includes("เจ"))?.netPay.toLocaleString("th-TH", { minimumFractionDigits: 2 }) || "9,600.00"}
+                  ฿{data.payslips.find((p) => p.employeeName.includes("เจ"))?.netPay.toLocaleString("th-TH", { minimumFractionDigits: 2 }) || "2,450.00"}
                 </div>
-                <div className="text-[10px] text-teal-200/80">ทำงาน 26 วัน x 350฿ + เบี้ยขยัน 500 (ไม่หัก ปกส.)</div>
+                <div className="text-[10px] text-teal-200/80">เริ่ม 24 ส.ค. 69 (ทำ 7 วัน x 350฿) ไม่หัก ปกส.</div>
               </div>
             </div>
           </div>
