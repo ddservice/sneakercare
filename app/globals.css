@@ -128,3 +128,18 @@
     @apply font-sans;
   }
 }
+
+@media print {
+  body {
+    background: #ffffff !important;
+    color: #000000 !important;
+    font-size: 12pt !important;
+  }
+  header, nav, aside, footer, .no-print, [role="navigation"] {
+    display: none !important;
+  }
+  @page {
+    margin: 1cm;
+    size: auto;
+  }
+}

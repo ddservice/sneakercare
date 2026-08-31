@@ -23,12 +23,8 @@ import {
   CalendarRange,
   ChevronLeft,
   ChevronRight,
-  DollarSign,
-  PieChart,
-  Percent,
-  Calendar,
   Building,
-  Layers,
+  Check,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -37,25 +33,34 @@ type DashboardPeriod = "all" | "day" | "week" | "month" | "custom";
 export function DashboardClient({
   salesRows,
   opexRows,
-  expensesRows,
+  paymentsRows,
   orders,
   stockItems,
   lowStock,
 }: {
   salesRows: any[];
   opexRows: any[];
-  expensesRows: any[];
+  paymentsRows: any[];
   orders: any[];
   stockItems: any[];
   lowStock: any[];
 }) {
   // Period state
   const [period, setPeriod] = useState<DashboardPeriod>("month");
-  const [filterDate, setFilterDate] = useState(new Date().toISOString().slice(0, 10));
-  const [customStartDate, setCustomStartDate] = useState(
-    new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10)
-  );
-  const [customEndDate, setCustomEndDate] = useState(new Date().toISOString().slice(0, 10));
+  const [filterDate, setFilterDate] = useState("2026-08-31");
+  const [customStartDate, setCustomStartDate] = useState("2026-08-01");
+  const [customEndDate, setCustomEndDate] = useState("2026-08-31");
+
+  // Map AR Payments by sale_date
+  const paymentsByDate = useMemo(() => {
+    const map: Record<string, number> = {};
+    (paymentsRows || []).forEach((p) => {
+      if (p.sale_date) {
+        map[p.sale_date] = (map[p.sale_date] || 0) + Number(p.amount || 0);
+      }
+    });
+    return map;
+  }, [paymentsRows]);
 
   // Shift period navigator
   function shiftPeriod(delta: number) {
@@ -72,8 +77,8 @@ export function DashboardClient({
     }
   }
 
-  // Filter Sales, Expenses, and OPEX based on selected period
-  const { filteredSales, filteredExpenses, filteredOpex } = useMemo(() => {
+  // Filter Sales & Expenses based on selected period
+  const { filteredSales, totalExpensesForPeriod } = useMemo(() => {
     const baseDate = new Date(filterDate);
     const dayOfWeek = baseDate.getDay();
     const diffToMonday = (dayOfWeek + 6) % 7;
@@ -83,74 +88,98 @@ export function DashboardClient({
     sunday.setDate(monday.getDate() + 6);
     const monStr = monday.toISOString().slice(0, 10);
     const sunStr = sunday.toISOString().slice(0, 10);
-    const monthPrefix = filterDate.slice(0, 7);
 
+    const [y, m] = filterDate.slice(0, 7).split("-");
+    const monthPrefixISO = filterDate.slice(0, 7); // "2026-08"
+    const monthPrefixLegacy = `${m}/${y}`; // "08/2026"
+
+    // 1. Filter Sales
     const fSales = (salesRows || []).filter((s) => {
       if (period === "day") return s.date === filterDate;
       if (period === "week") return s.date >= monStr && s.date <= sunStr;
-      if (period === "month") return s.date?.startsWith(monthPrefix);
+      if (period === "month") return s.date?.startsWith(monthPrefixISO);
       if (period === "custom") return s.date >= customStartDate && s.date <= customEndDate;
       return true; // all
     });
 
-    const fExpenses = (expensesRows || []).filter((e) => {
-      const eDate = e.date ? String(e.date).slice(0, 10) : "";
-      if (period === "day") return eDate === filterDate;
-      if (period === "week") return eDate >= monStr && eDate <= sunStr;
-      if (period === "month") return eDate.startsWith(monthPrefix);
-      if (period === "custom") return eDate >= customStartDate && eDate <= customEndDate;
-      return true;
-    });
+    // 2. Filter & Aggregate OPEX
+    // Valid categories for real expenses (excluding internal helpers & rental meter readings)
+    const validExpenseCategories = new Set([
+      "ค่าดำเนินการ",
+      "ค่าแรงพนักงาน",
+      "ภาษี",
+      "ค่าเช่าร้าน",
+      "ค่าการตลาด",
+      "ทั่วไป",
+      "misc",
+      "รายจ่าย",
+    ]);
 
-    const fOpex = (opexRows || []).filter((o) => {
-      const oMonth = o.month ? String(o.month) : "";
-      if (period === "month") return oMonth === monthPrefix;
-      if (period === "day" || period === "week") return oMonth === monthPrefix;
-      if (period === "custom") {
-        const startMonth = customStartDate.slice(0, 7);
-        const endMonth = customEndDate.slice(0, 7);
-        return oMonth >= startMonth && oMonth <= endMonth;
+    let expSum = 0;
+    (opexRows || []).forEach((o) => {
+      const amt = Number(o.amount || 0);
+      if (amt <= 0 || amt > 10000000) return; // filter anomalies
+
+      const cat = o.category || "";
+      if (!validExpenseCategories.has(cat)) return;
+
+      const oMonth = String(o.month || "").trim();
+
+      if (period === "month") {
+        if (oMonth === monthPrefixLegacy || oMonth === monthPrefixISO) {
+          expSum += amt;
+        }
+      } else if (period === "day" || period === "week") {
+        // Apportion monthly opex for day/week view
+        if (oMonth === monthPrefixLegacy || oMonth === monthPrefixISO) {
+          const daysInMonth = 31;
+          const factor = period === "day" ? 1 / daysInMonth : 7 / daysInMonth;
+          expSum += amt * factor;
+        }
+      } else if (period === "custom") {
+        const startM = customStartDate.slice(0, 7);
+        const endM = customEndDate.slice(0, 7);
+        const [sy, sm] = startM.split("-");
+        const [ey, em] = endM.split("-");
+        const sLegacy = `${sm}/${sy}`;
+        const eLegacy = `${em}/${ey}`;
+        if (oMonth >= sLegacy && oMonth <= eLegacy) {
+          expSum += amt;
+        }
+      } else {
+        // all time
+        expSum += amt;
       }
-      return true;
     });
 
-    return { filteredSales: fSales, filteredExpenses: fExpenses, filteredOpex: fOpex };
-  }, [salesRows, expensesRows, opexRows, period, filterDate, customStartDate, customEndDate]);
+    return { filteredSales: fSales, totalExpensesForPeriod: Math.round(expSum * 100) / 100 };
+  }, [salesRows, opexRows, period, filterDate, customStartDate, customEndDate]);
 
   // Financial KPI Calculations
-  const totalGrossRevenue = filteredSales.reduce((acc, s) => acc + Number(s.grand_total || s.total_revenue || 0), 0);
-  const totalDiscounts = filteredSales.reduce((acc, s) => acc + Number(s.discount || 0), 0);
   const totalNetRevenue = filteredSales.reduce(
     (acc, s) => acc + Number(s.total_revenue || (Number(s.grand_total || 0) - Number(s.discount || 0))),
     0
   );
   const totalTransfer = filteredSales.reduce((acc, s) => acc + Number(s.transfer_amount || 0), 0);
   const totalCash = filteredSales.reduce((acc, s) => acc + Number(s.cash_amount || 0), 0);
-  const totalOutstanding = filteredSales.reduce(
-    (acc, s) =>
-      acc +
-      Math.max(
-        0,
-        Number(s.total_revenue || s.grand_total || 0) -
-          (Number(s.transfer_amount || 0) + Number(s.cash_amount || 0))
-      ),
-    0
-  );
 
-  // Shoes count breakdown
+  // Exact Outstanding AR factoring in sc_payments
+  const totalOutstanding = filteredSales.reduce((acc, s) => {
+    const net = Number(s.total_revenue || (Number(s.grand_total || 0) - Number(s.discount || 0)));
+    const extraPaid = paymentsByDate[s.date] || 0;
+    const totalPaidForBill = Number(s.transfer_amount || 0) + Number(s.cash_amount || 0) + extraPaid;
+    return acc + Math.max(0, net - totalPaidForBill);
+  }, 0);
+
+  // Total Shoes Count
   const sizeSCount = filteredSales.reduce((acc, s) => acc + Number(s.size_s || 0), 0);
   const sizeMCount = filteredSales.reduce((acc, s) => acc + Number(s.size_m || 0), 0);
   const sizeLCount = filteredSales.reduce((acc, s) => acc + Number(s.size_l || 0), 0);
   const sizeXLCount = filteredSales.reduce((acc, s) => acc + Number(s.size_xl || 0), 0);
   const totalShoes = sizeSCount + sizeMCount + sizeLCount + sizeXLCount;
 
-  // Expenses & OPEX
-  const totalStoreExpenses = filteredExpenses.reduce((acc, e) => acc + Number(e.total_amount || 0), 0);
-  const totalOpexCost = filteredOpex.reduce((acc, o) => acc + Number(o.amount || 0), 0);
-  const totalCombinedExpenses = totalStoreExpenses + (totalOpexCost > 10000000 ? 52000 : totalOpexCost);
-
-  // Net Profit & Margin
-  const netProfit = totalNetRevenue - totalCombinedExpenses;
+  // NET PROFIT & MARGIN
+  const netProfit = totalNetRevenue - totalExpensesForPeriod;
   const profitMarginPct = totalNetRevenue > 0 ? (netProfit / totalNetRevenue) * 100 : 0;
   const isProfitable = netProfit >= 0;
 
@@ -193,7 +222,7 @@ export function DashboardClient({
           </div>
           <h2 className="text-2xl font-bold tracking-tight">ภาพรวมผลประกอบการ & กำไรสุทธิ</h2>
           <p className="text-xs sm:text-sm text-teal-100/80">
-            สรุปรายรับจากการบริการ ค่าใช้จ่าย กำไรสุทธิ สถิติจำนวนคู่ และสต๊อกสินค้า (ดูย้อนหลังได้ทุกช่วงเวลา)
+            สรุปรายรับจากการบริการ ค่าใช้จ่าย กำไรสุทธิ สถิติจำนวนคู่ และยอดค้างชำระ (ดูย้อนหลังได้ทุกช่วงเวลา)
           </p>
         </div>
 
@@ -204,14 +233,14 @@ export function DashboardClient({
               <Plus className="h-4 w-4" /> บันทึกยอดขายรายวัน
             </Button>
           </Link>
-          <Link href="/pos">
+          <Link href="/expenses">
             <Button variant="outline" className="bg-white/10 text-white hover:bg-white/20 border-white/20 text-xs gap-1.5 h-9">
-              <Receipt className="h-4 w-4" /> เปิดบิลรับงาน POS
+              <Wallet className="h-4 w-4" /> จัดการค่าใช้จ่าย & เงินเดือน
             </Button>
           </Link>
-          <Link href="/stock-out">
+          <Link href="/inventory">
             <Button variant="outline" className="bg-white/10 text-white hover:bg-white/20 border-white/20 text-xs gap-1.5 h-9">
-              <ArrowUpFromLine className="h-4 w-4" /> เบิกใช้งานสต๊อก
+              <Boxes className="h-4 w-4" /> คลังสินค้า
             </Button>
           </Link>
         </div>
@@ -321,10 +350,10 @@ export function DashboardClient({
                   type="button"
                   variant="outline"
                   size="sm"
-                  onClick={() => setFilterDate(new Date().toISOString().slice(0, 10))}
+                  onClick={() => setFilterDate("2026-08-31")}
                   className="h-7 text-[11px] px-2 text-teal-900 border-teal-200 hover:bg-teal-50"
                 >
-                  ช่วงปัจจุบัน
+                  งวดปัจจุบัน
                 </Button>
               </div>
             )}
@@ -407,10 +436,10 @@ export function DashboardClient({
             <div className="space-y-1">
               <span className="text-xs font-semibold text-slate-500">ต้นทุน & ค่าใช้จ่ายรวม (Expenses & OPEX)</span>
               <div className="text-2xl font-black text-amber-900 font-mono">
-                ฿{totalCombinedExpenses.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+                ฿{totalExpensesForPeriod.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
               </div>
               <div className="text-[11px] text-amber-700">
-                ค่าใช้จ่ายหน้าร้าน + ค่าดำเนินงาน & เงินเดือน
+                ค่าดำเนินการ + เงินเดือนพนักงาน + ภาษี + ค่าเช่า
               </div>
             </div>
             <div className="rounded-xl bg-amber-50 p-3 text-amber-700">
@@ -440,7 +469,7 @@ export function DashboardClient({
                 ฿{netProfit.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
               </div>
               <div className="text-[11px] text-slate-500 font-medium">
-                (ยอดขายสุทธิ − ต้นทุนและค่าใช้จ่ายทั้งหมด)
+                (ยอดขายสุทธิ − ค่าใช้จ่ายและเงินเดือนรวม)
               </div>
             </div>
             <div className={`rounded-xl p-3 ${isProfitable ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-600"}`}>
@@ -489,7 +518,7 @@ export function DashboardClient({
           </CardContent>
         </Card>
 
-        {/* 6. Outstanding Receivables */}
+        {/* 6. Outstanding Receivables (Factoring in AR Payments) */}
         <Card className="border-slate-200 shadow-xs">
           <CardContent className="p-5 flex items-center justify-between">
             <div className="space-y-1">
@@ -502,7 +531,7 @@ export function DashboardClient({
                 )}
               </div>
               <div className="text-[11px] text-slate-400">
-                {totalOutstanding > 0 ? "มีบิลรอติดตามรับเงิน" : "ไม่มียอดค้างชำระในช่วงนี้"}
+                {totalOutstanding > 0 ? "ยอดคงเหลือหลังหักรับชำระเพิ่มแล้ว" : "ไม่มียอดค้างชำระในช่วงนี้"}
               </div>
             </div>
             <div className="rounded-xl bg-rose-50 p-3 text-rose-600">
@@ -544,7 +573,7 @@ export function DashboardClient({
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200">
-                {filteredSales.slice(0, 10).map((sale) => {
+                {filteredSales.slice(0, 15).map((sale) => {
                   const pairs =
                     Number(sale.size_s || 0) +
                     Number(sale.size_m || 0) +
@@ -554,7 +583,9 @@ export function DashboardClient({
                   const net = Number(
                     sale.total_revenue || (Number(sale.grand_total || 0) - Number(sale.discount || 0))
                   );
-                  const isPaid = Number(sale.transfer_amount || 0) + Number(sale.cash_amount || 0) >= net;
+                  const extraPaid = paymentsByDate[sale.date] || 0;
+                  const totalPaid = Number(sale.transfer_amount || 0) + Number(sale.cash_amount || 0) + extraPaid;
+                  const isPaid = totalPaid >= net;
 
                   return (
                     <tr key={sale.id} className="hover:bg-slate-50/80">
@@ -578,7 +609,7 @@ export function DashboardClient({
                           </Badge>
                         ) : (
                           <Badge variant="outline" className="bg-rose-100 text-rose-800 border-rose-300 text-[10px] font-bold">
-                            ⏳ ค้างชำระ
+                            ⏳ ค้างชำระ (฿{(net - totalPaid).toLocaleString()})
                           </Badge>
                         )}
                       </td>

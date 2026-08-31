@@ -7,9 +7,11 @@ import {
   deleteExpense,
   saveStaffPayrollAdjustment,
   saveStaffProfileInfo,
+  createStaffMember,
   type ExpensesPayload,
   type StaffPayslip,
 } from "@/app/actions/expenses";
+import { thaiBahtText } from "@/lib/bahttext";
 import { TimeRangeFilterBar } from "@/components/time-range-filter";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -36,6 +38,9 @@ import {
   Percent,
   IdCard,
   Edit,
+  ShieldCheck,
+  Building,
+  Check,
 } from "lucide-react";
 
 export function ExpensesClient({ initialData }: { initialData: ExpensesPayload }) {
@@ -46,14 +51,28 @@ export function ExpensesClient({ initialData }: { initialData: ExpensesPayload }
   // Print Payslip Modal State
   const [selectedPayslip, setSelectedPayslip] = useState<StaffPayslip | null>(null);
 
-  // Edit Staff Profile (ID Card, Bank, Full Name) Modal State
+  // Edit Staff Profile Modal State
   const [editingProfileStaff, setEditingProfileStaff] = useState<StaffPayslip | null>(null);
+  const [editFullName, setEditFullName] = useState("");
+  const [editNickname, setEditNickname] = useState("");
+  const [editIdCardNo, setEditIdCardNo] = useState("");
+  const [editBankName, setEditBankName] = useState("");
+  const [editAccountNo, setEditAccountNo] = useState("");
+  const [editRole, setEditRole] = useState("");
+  const [editEmpType, setEditEmpType] = useState<"monthly" | "probation_daily">("monthly");
+  const [editSalary, setEditSalary] = useState<number>(12000);
+  const [editDailyRate, setEditDailyRate] = useState<number>(350);
 
   // New Staff Modal State
   const [showAddStaffModal, setShowAddStaffModal] = useState(false);
-  const [staffFormType, setStaffFormType] = useState<"monthly" | "probation_daily">("probation_daily");
-  const [dailyRate, setDailyRate] = useState<number>(350);
-  const [daysWorked, setDaysWorked] = useState<number>(8);
+  const [newStaffName, setNewStaffName] = useState("");
+  const [newStaffNickname, setNewStaffNickname] = useState("");
+  const [newStaffIdCard, setNewStaffIdCard] = useState("");
+  const [newStaffBank, setNewStaffBank] = useState("กสิกรไทย (KBANK)");
+  const [newStaffAccount, setNewStaffAccount] = useState("");
+  const [newStaffPosition, setNewStaffPosition] = useState("ช่างสปารองเท้า");
+  const [newStaffType, setNewStaffType] = useState<"monthly" | "probation_daily">("probation_daily");
+  const [newStaffSalary, setNewStaffSalary] = useState<number>(350);
 
   // Interactive Live Values State for Staff (Keyed by employeeName)
   const [staffDrafts, setStaffDrafts] = useState<
@@ -102,364 +121,310 @@ export function ExpensesClient({ initialData }: { initialData: ExpensesPayload }
   function updateStaffDraft(
     empName: string,
     field: "diligence" | "ot" | "commPct" | "daysWorked" | "otherDeductions",
-    val: number
+    value: number
   ) {
-    setStaffDrafts((prev) => ({
-      ...prev,
-      [empName]: {
-        ...(prev[empName] || {
-          diligence: 500,
-          ot: 0,
-          commPct: 0,
-          daysWorked: 8,
-          otherDeductions: 0,
-        }),
-        [field]: val,
-      },
-    }));
-  }
+    setStaffDrafts((prev) => {
+      const current = prev[empName] || {
+        diligence: 0,
+        ot: 0,
+        commPct: 0,
+        daysWorked: 8,
+        otherDeductions: 0,
+      };
+      const next = { ...current, [field]: value };
 
-  // Calculate live numbers for a payslip given current drafts
-  function getComputedPayslip(p: StaffPayslip): StaffPayslip {
-    const draft = staffDrafts[p.employeeName] || {
-      diligence: p.diligence,
-      ot: p.ot,
-      commPct: p.commPct || 0,
-      daysWorked: p.daysWorked || 8,
-      otherDeductions: p.otherDeductions || 0,
-    };
+      setData((prevData) => {
+        const updatedPayslips = prevData.payslips.map((p) => {
+          if (p.employeeName !== empName) return p;
 
-    const isDaily = p.employmentType === "probation_daily";
-    const base = isDaily ? (draft.daysWorked || 8) * 350 : p.baseSalary;
-    const comm = Math.round((data.totalMonthlySales * draft.commPct) / 100);
-    const wht = Math.round(comm * 0.03);
-    const sso = isDaily ? 0 : 600;
-    const net = base + draft.diligence + draft.ot + comm - wht - sso - draft.otherDeductions;
+          let base = p.baseSalary;
+          if (p.employmentType === "probation_daily") {
+            const daily = p.dailyWage || 350;
+            base = daily * next.daysWorked;
+          }
 
-    return {
-      ...p,
-      baseSalary: base,
-      daysWorked: isDaily ? draft.daysWorked : undefined,
-      diligence: draft.diligence,
-      ot: draft.ot,
-      commPct: draft.commPct,
-      commission: comm,
-      wht,
-      ssoDeduction: sso,
-      otherDeductions: draft.otherDeductions,
-      netPay: net,
-    };
-  }
+          const comm = Math.round((prevData.totalMonthlySales * next.commPct) / 100);
+          const wht = Math.round(comm * 0.03);
+          const sso = p.employmentType === "monthly" ? 600 : 0;
+          const net = base + next.diligence + next.ot + comm - sso - wht - next.otherDeductions;
 
-  // Save payroll adjustments to database (sc_opex)
-  async function handleSaveStaff(p: StaffPayslip) {
-    const computed = getComputedPayslip(p);
-    startTransition(async () => {
-      const res = await saveStaffPayrollAdjustment({
-        month: computed.month,
-        employeeName: computed.employeeName,
-        employmentType: computed.employmentType,
-        baseSalary: computed.baseSalary,
-        diligence: computed.diligence,
-        ot: computed.ot,
-        commPct: computed.commPct || 0,
-        commission: computed.commission,
-        wht: computed.wht,
-        ssoDeduction: computed.ssoDeduction,
-        otherDeductions: computed.otherDeductions,
-        netPay: computed.netPay,
-        payMethod: computed.payMethod,
+          return {
+            ...p,
+            baseSalary: base,
+            daysWorked: next.daysWorked,
+            diligence: next.diligence,
+            ot: next.ot,
+            commPct: next.commPct,
+            commission: comm,
+            wht,
+            ssoDeduction: sso,
+            otherDeductions: next.otherDeductions,
+            netPay: net,
+          };
+        });
+
+        const newPayrollTotal = updatedPayslips.reduce((sum, item) => sum + item.netPay, 0);
+
+        return {
+          ...prevData,
+          payslips: updatedPayslips,
+          totalPayroll: newPayrollTotal,
+          netExpenses: prevData.totalOpex + newPayrollTotal,
+        };
       });
 
-      if (res?.error) {
-        toast.error(res.error);
+      return { ...prev, [empName]: next };
+    });
+  }
+
+  function handleSaveStaffAdjustment(p: StaffPayslip) {
+    startTransition(async () => {
+      const res = await saveStaffPayrollAdjustment({
+        month: p.month,
+        employeeName: p.employeeName,
+        employmentType: p.employmentType,
+        baseSalary: p.baseSalary,
+        diligence: p.diligence,
+        ot: p.ot,
+        commPct: p.commPct || 0,
+        commission: p.commission,
+        wht: p.wht,
+        ssoDeduction: p.ssoDeduction,
+        otherDeductions: p.otherDeductions,
+        netPay: p.netPay,
+        payMethod: p.payMethod,
+      });
+
+      if (res.success) {
+        toast.success(`บันทึกข้อมูลเงินเดือนของ ${p.employeeName} สำเร็จแล้ว`);
       } else {
-        toast.success(`บันทึกยอดเงินเดือนของ ${computed.employeeName} สำเร็จแล้ว`);
-        const updated = await fetchAllExpensesData(data.timeRange);
-        setData(updated);
+        toast.error(res.error || "เกิดข้อผิดพลาดในการบันทึก");
       }
     });
   }
 
-  // Save profile info (ID card, bank, position) to database
-  async function handleSaveProfileInfo(e: React.FormEvent<HTMLFormElement>) {
+  // Open Edit Profile Modal
+  function handleOpenEditProfile(p: StaffPayslip) {
+    setEditingProfileStaff(p);
+    setEditFullName(p.employeeName);
+    setEditNickname(p.nickname || "");
+    setEditIdCardNo(p.idCardNo || "");
+    setEditBankName(p.bankName || "กสิกรไทย (KBANK)");
+    setEditAccountNo(p.accountNo || "");
+    setEditRole(p.employeeRole || (p.employmentType === "monthly" ? "พนักงานประจำ" : "พนักงานทดลองงาน"));
+    setEditEmpType(p.employmentType);
+    setEditSalary(p.baseSalary || 12000);
+    setEditDailyRate(p.dailyWage || 350);
+  }
+
+  // Save Edit Profile Modal
+  function handleSaveStaffProfile(e: React.FormEvent) {
     e.preventDefault();
     if (!editingProfileStaff) return;
-    const form = e.currentTarget;
-    const fullName = (form.elements.namedItem("prof_fullname") as HTMLInputElement)?.value.trim();
-    const nickname = (form.elements.namedItem("prof_nickname") as HTMLInputElement)?.value.trim();
-    const idCardNo = (form.elements.namedItem("prof_idcard") as HTMLInputElement)?.value.trim();
-    const bankName = (form.elements.namedItem("prof_bank") as HTMLInputElement)?.value.trim();
-    const accountNo = (form.elements.namedItem("prof_account") as HTMLInputElement)?.value.trim();
-    const employeeRole = (form.elements.namedItem("prof_role") as HTMLInputElement)?.value.trim();
 
     startTransition(async () => {
       const res = await saveStaffProfileInfo({
         employeeKeyName: editingProfileStaff.employeeName,
-        fullName,
-        nickname,
-        idCardNo,
-        bankName,
-        accountNo,
-        employeeRole,
+        fullName: editFullName.trim(),
+        nickname: editNickname.trim(),
+        idCardNo: editIdCardNo.trim(),
+        bankName: editBankName.trim(),
+        accountNo: editAccountNo.trim(),
+        employeeRole: editRole.trim(),
+        employmentType: editEmpType,
+        baseSalary: editEmpType === "monthly" ? editSalary : editDailyRate * (editingProfileStaff.daysWorked || 8),
+        dailyWage: editEmpType === "probation_daily" ? editDailyRate : undefined,
+        daysWorked: editingProfileStaff.daysWorked || 8,
       });
 
-      if (res?.error) {
-        toast.error(res.error);
-      } else {
-        toast.success(`บันทึกข้อมูลและเลขบัตรประชาชนของ ${fullName} เรียบร้อยแล้ว`);
+      if (res.success) {
+        toast.success(`อัปเดตข้อมูลและประเภทพนักงาน "${editFullName}" เรียบร้อยแล้ว`);
+        // Update local state
+        setData((prev) => ({
+          ...prev,
+          payslips: prev.payslips.map((p) =>
+            p.employeeName === editingProfileStaff.employeeName
+              ? {
+                  ...p,
+                  employeeName: editFullName.trim(),
+                  nickname: editNickname.trim(),
+                  idCardNo: editIdCardNo.trim(),
+                  bankName: editBankName.trim(),
+                  accountNo: editAccountNo.trim(),
+                  employeeRole: editRole.trim(),
+                  employmentType: editEmpType,
+                  baseSalary: editEmpType === "monthly" ? editSalary : editDailyRate * (p.daysWorked || 8),
+                  dailyWage: editEmpType === "probation_daily" ? editDailyRate : undefined,
+                  ssoDeduction: editEmpType === "monthly" ? 600 : 0,
+                  netPay:
+                    (editEmpType === "monthly" ? editSalary : editDailyRate * (p.daysWorked || 8)) +
+                    p.diligence +
+                    p.ot +
+                    p.commission -
+                    (editEmpType === "monthly" ? 600 : 0) -
+                    p.wht -
+                    p.otherDeductions,
+                }
+              : p
+          ),
+        }));
         setEditingProfileStaff(null);
-        const updated = await fetchAllExpensesData(data.timeRange);
-        setData(updated);
+      } else {
+        toast.error(res.error || "เกิดข้อผิดพลาดในการอัปเดต");
       }
     });
   }
 
-  async function handleAddExpense(formData: FormData) {
-    startTransition(async () => {
-      const res = await addExpense(undefined, formData);
-      if (res?.error) {
-        toast.error(res.error);
-      } else if (res?.success) {
-        toast.success("บันทึกค่าใช้จ่ายสำเร็จ");
-        const updated = await fetchAllExpensesData(data.timeRange);
-        setData(updated);
-      }
-    });
-  }
-
-  async function handleDelete(id: string | number) {
-    if (!confirm("คุณแน่ใจหรือไม่ว่าต้องการลบรายการนี้?")) return;
-    try {
-      await deleteExpense(id);
-      toast.success("ลบรายการสำเร็จ");
-      setData((prev) => ({
-        ...prev,
-        opexList: prev.opexList.filter((e) => e.id !== id),
-      }));
-    } catch (err: any) {
-      toast.error(err.message || "เกิดข้อผิดพลาด");
+  // Create Staff Member (4th, 5th, etc.)
+  function handleCreateStaff(e: React.FormEvent) {
+    e.preventDefault();
+    if (!newStaffName.trim()) {
+      toast.error("กรุณาระบุชื่อพนักงาน");
+      return;
     }
+
+    startTransition(async () => {
+      const res = await createStaffMember({
+        fullName: newStaffName.trim(),
+        nickname: newStaffNickname.trim() || newStaffName.trim(),
+        idCardNo: newStaffIdCard.trim() || "ยังไม่ได้ระบุ",
+        bankName: newStaffBank.trim(),
+        accountNo: newStaffAccount.trim() || "-",
+        position: newStaffPosition.trim(),
+        employmentType: newStaffType,
+        salary: newStaffType === "monthly" ? newStaffSalary : newStaffSalary,
+      });
+
+      if (res.success) {
+        toast.success(`เพิ่มพนักงานใหม่ "${newStaffName}" สำเร็จเรียบร้อย`);
+        setShowAddStaffModal(false);
+        // Refresh
+        const updated = await fetchAllExpensesData(data.timeRange);
+        setData(updated);
+      } else {
+        toast.error(res.error || "เกิดข้อผิดพลาดในการสร้างพนักงาน");
+      }
+    });
   }
 
   return (
     <div className="space-y-8">
-      {/* ── Header Banner ── */}
-      <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl bg-gradient-to-r from-teal-800 via-slate-800 to-slate-900 p-6 text-white shadow-md">
+      {/* ── Page Header ── */}
+      <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl bg-gradient-to-r from-teal-800 via-teal-900 to-slate-900 p-6 text-white shadow-md print:hidden">
         <div className="space-y-1">
           <div className="inline-flex items-center gap-2 rounded-full bg-teal-500/20 px-3 py-1 text-xs font-semibold text-teal-200 ring-1 ring-teal-400/30">
             <Wallet className="h-3.5 w-3.5" />
-            SneakerCare Opex & Payroll System
+            Financial & Payroll Management
           </div>
-          <h2 className="text-2xl font-bold tracking-tight">ค่าใช้จ่าย & ระบบจ่ายเงินเดือนพนักงาน</h2>
-          <p className="text-sm text-teal-100/80">
-            จัดการข้อมูลพนักงาน เลขบัตรประชาชน 13 หลัก บัญชีธนาคาร เงินเดือนประจำ ค่าจ้างรายวัน เบี้ยขยัน ค่าคอม % ยอดขาย และพิมพ์สลิปเงินเดือน A4
+          <h2 className="text-2xl font-bold tracking-tight">ระบบบันทึกค่าใช้จ่าย & บัญชีเงินเดือนพนักงาน</h2>
+          <p className="text-xs sm:text-sm text-teal-100/80">
+            จัดการเงินเดือน คำนวณเบี้ยขยัน/OT/คอมมิชชั่น ออกสลิปเงินเดือนทางการสำหรับธุรกรรมธนาคาร และควบคุมค่าใช้จ่าย OPEX
           </p>
         </div>
 
         <div className="flex items-center gap-2">
           <Button
             onClick={() => setShowAddStaffModal(true)}
-            className="bg-teal-400 font-bold hover:bg-teal-300 text-slate-950 text-xs gap-1.5 shadow-sm"
+            className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs gap-1.5 shadow-xs h-9"
           >
-            <UserPlus className="h-4 w-4" /> + เพิ่มพนักงานใหม่
+            <UserPlus className="h-4 w-4" /> เพิ่มพนักงานใหม่
           </Button>
         </div>
       </div>
 
-      {/* ── Universal Time Filter Bar ── */}
-      <TimeRangeFilterBar
-        selectedRange={data.timeRange}
-        onSelectRange={handleFilterRange}
-      />
+      {/* ── Time Range Selector & Overall Summary ── */}
+      <div className="print:hidden">
+        <TimeRangeFilterBar onFilterChange={handleFilterRange} isPending={isPending} />
+      </div>
 
-      {/* ── KPI Summary Cards ── */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {/* 1. Total Payroll */}
-        <Card className="border-slate-200 shadow-2xs">
-          <CardContent className="p-5 flex items-center justify-between">
+      {/* ── Metric Summary Cards ── */}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 print:hidden">
+        <Card className="border-teal-200 shadow-xs">
+          <CardContent className="p-4 flex items-center justify-between">
             <div className="space-y-1">
-              <span className="text-xs font-semibold text-slate-500">ยอดเงินเดือน & ค่าจ้างรวม</span>
-              <div className="text-2xl font-black text-indigo-600">
-                ฿{data.totalPayroll.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
-              </div>
-              <div className="text-[11px] text-slate-400">{data.payslips.length} พนักงาน</div>
-            </div>
-            <div className="rounded-xl bg-indigo-50 p-3 text-indigo-600">
-              <Users className="h-6 w-6" />
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* 2. Total Opex */}
-        <Card className="border-slate-200 shadow-2xs">
-          <CardContent className="p-5 flex items-center justify-between">
-            <div className="space-y-1">
-              <span className="text-xs font-semibold text-slate-500">ค่าดำเนินการร้าน (Opex)</span>
-              <div className="text-2xl font-black text-rose-600">
-                ฿{data.totalOpex.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
-              </div>
-              <div className="text-[11px] text-slate-400">{data.opexList.length} รายการ</div>
-            </div>
-            <div className="rounded-xl bg-rose-50 p-3 text-rose-600">
-              <Building2 className="h-6 w-6" />
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* 3. Monthly Sales for Commission */}
-        <Card className="border-slate-200 shadow-2xs">
-          <CardContent className="p-5 flex items-center justify-between">
-            <div className="space-y-1">
-              <span className="text-xs font-semibold text-slate-500">ยอดขายร้านประจำงวด (ฐานคิดคอม)</span>
-              <div className="text-2xl font-black text-emerald-600">
+              <span className="text-xs font-semibold text-slate-500">ยอดขายประจำเดือน</span>
+              <div className="text-xl font-bold text-teal-800 font-mono">
                 ฿{data.totalMonthlySales.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
               </div>
-              <div className="text-[11px] text-slate-400">จากระบบ sc_sales</div>
+              <div className="text-[10px] text-slate-400">ฐานคำนวณค่าคอมมิชชั่น</div>
             </div>
-            <div className="rounded-xl bg-emerald-50 p-3 text-emerald-600">
-              <TrendingUp className="h-6 w-6" />
+            <div className="rounded-xl bg-teal-50 p-2.5 text-teal-700">
+              <Receipt className="h-5 w-5" />
             </div>
           </CardContent>
         </Card>
 
-        {/* 4. Net Expenses */}
-        <Card className="border-slate-200 shadow-2xs">
-          <CardContent className="p-5 flex items-center justify-between">
+        <Card className="border-indigo-200 shadow-xs">
+          <CardContent className="p-4 flex items-center justify-between">
             <div className="space-y-1">
-              <span className="text-xs font-semibold text-slate-500">รวมรายจ่ายสุทธิทั้งสิ้น</span>
-              <div className="text-2xl font-black text-slate-900">
+              <span className="text-xs font-semibold text-slate-500">ค่าแรง & เงินเดือนรวม</span>
+              <div className="text-xl font-bold text-indigo-700 font-mono">
+                ฿{data.totalPayroll.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+              </div>
+              <div className="text-[10px] text-slate-400">พนักงาน {data.payslips.length} ท่าน</div>
+            </div>
+            <div className="rounded-xl bg-indigo-50 p-2.5 text-indigo-700">
+              <Users className="h-5 w-5" />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="border-amber-200 shadow-xs">
+          <CardContent className="p-4 flex items-center justify-between">
+            <div className="space-y-1">
+              <span className="text-xs font-semibold text-slate-500">ค่าดำเนินการ (OPEX)</span>
+              <div className="text-xl font-bold text-amber-700 font-mono">
+                ฿{data.totalOpex.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+              </div>
+              <div className="text-[10px] text-slate-400">ค่าน้ำ, ค่าไฟ, อินเทอร์เน็ต, ฯลฯ</div>
+            </div>
+            <div className="rounded-xl bg-amber-50 p-2.5 text-amber-700">
+              <Building2 className="h-5 w-5" />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="border-slate-300 shadow-xs bg-slate-900 text-white">
+          <CardContent className="p-4 flex items-center justify-between">
+            <div className="space-y-1">
+              <span className="text-xs font-semibold text-slate-400">รวมค่าใช้จ่ายทั้งหมด</span>
+              <div className="text-xl font-black text-emerald-400 font-mono">
                 ฿{data.netExpenses.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
               </div>
-              <div className="text-[11px] text-slate-400">Payroll + Opex − Rental</div>
+              <div className="text-[10px] text-slate-400">เงินเดือน + ค่าดำเนินการ</div>
             </div>
-            <div className="rounded-xl bg-teal-50 p-3 text-teal-700">
-              <Wallet className="h-6 w-6" />
+            <div className="rounded-xl bg-slate-800 p-2.5 text-emerald-400">
+              <Wallet className="h-5 w-5" />
             </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* ── Sub Navigation Tabs ── */}
-      <div className="flex rounded-xl bg-slate-100 p-1 border border-slate-200 max-w-2xl">
-        <button
-          type="button"
+      {/* ── Main Tab Navigation ── */}
+      <div className="flex items-center gap-2 border-b border-slate-200 pb-2 print:hidden">
+        <Button
+          variant={activeTab === "payroll" ? "default" : "ghost"}
+          size="sm"
           onClick={() => setActiveTab("payroll")}
-          className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
-            activeTab === "payroll"
-              ? "bg-white text-teal-900 shadow-xs"
-              : "text-slate-600 hover:text-slate-900"
-          }`}
+          className={`text-xs font-bold ${activeTab === "payroll" ? "bg-teal-800 text-white" : "text-slate-600"}`}
         >
-          <Users className="h-4 w-4" />
-          เงินเดือน & ค่าคอม ({data.payslips.length})
-        </button>
-        <button
-          type="button"
+          <Users className="h-3.5 w-3.5 mr-1" /> บัญชีเงินเดือนพนักงาน ({data.payslips.length})
+        </Button>
+        <Button
+          variant={activeTab === "opex" ? "default" : "ghost"}
+          size="sm"
           onClick={() => setActiveTab("opex")}
-          className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
-            activeTab === "opex"
-              ? "bg-white text-teal-900 shadow-xs"
-              : "text-slate-600 hover:text-slate-900"
-          }`}
+          className={`text-xs font-bold ${activeTab === "opex" ? "bg-teal-800 text-white" : "text-slate-600"}`}
         >
-          <Building2 className="h-4 w-4" />
-          ค่าดำเนินการร้าน ({data.opexList.length})
-        </button>
-        <button
-          type="button"
-          onClick={() => setActiveTab("misc")}
-          className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
-            activeTab === "misc"
-              ? "bg-white text-teal-900 shadow-xs"
-              : "text-slate-600 hover:text-slate-900"
-          }`}
-        >
-          <Receipt className="h-4 w-4" />
-          รายการพิเศษ ({data.miscExpenses.length})
-        </button>
-        <button
-          type="button"
-          onClick={() => setActiveTab("rental")}
-          className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
-            activeTab === "rental"
-              ? "bg-white text-teal-900 shadow-xs"
-              : "text-slate-600 hover:text-slate-900"
-          }`}
-        >
-          <Home className="h-4 w-4" />
-          ห้องเช่า ({data.rentals.length})
-        </button>
+          <Building2 className="h-3.5 w-3.5 mr-1" /> ค่าดำเนินการร้าน ({data.opexList.length})
+        </Button>
       </div>
 
-      {/* ── TAB 1: STAFF PAYROLL, COMMISSIONS & DIRECT ADJUSTMENT CARDS ── */}
+      {/* ── TAB 1: PAYROLL / STAFF SECTION ── */}
       {activeTab === "payroll" && (
         <div className="space-y-6">
-          {/* Shop Structure Overview Banner */}
-          <div className="rounded-2xl border border-teal-700/60 bg-gradient-to-r from-teal-950 to-slate-900 p-6 text-white shadow-lg space-y-4">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="flex items-center gap-3">
-                <div className="rounded-xl bg-teal-400 p-2.5 text-slate-950">
-                  <CreditCard className="h-6 w-6" />
-                </div>
-                <div>
-                  <div className="inline-flex items-center gap-1.5 text-xs font-bold text-teal-300">
-                    <Sparkles className="h-3.5 w-3.5" /> โครงสร้างพนักงานร้าน SneakerCare ประจำงวด
-                  </div>
-                  <h3 className="text-xl font-black text-white">
-                    รวมยอดจ่ายเงินเดือนสุทธิ: ฿{data.totalPayroll.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
-                  </h3>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <div className="rounded-xl bg-white/10 px-3 py-1.5 text-xs text-teal-200">
-                  ฐานยอดขายร้านคิดค่าคอม: <strong className="text-white font-mono">฿{data.totalMonthlySales.toLocaleString()}</strong>
-                </div>
-              </div>
-            </div>
-
-            {/* Quick 3-Staff Summary Grid */}
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 pt-2">
-              <div className="rounded-xl bg-white/10 p-3.5 backdrop-blur-xs space-y-1">
-                <div className="text-xs text-teal-200 flex items-center justify-between">
-                  <span>1. นายธีรภัทร ทาแผ (เชียง)</span>
-                  <Badge className="bg-teal-600 text-white text-[10px]">พนักงานประจำ</Badge>
-                </div>
-                <div className="text-lg font-black text-teal-300">
-                  ฿{data.payslips.find((p) => p.employeeName.includes("ธีรภัทร"))?.netPay.toLocaleString("th-TH", { minimumFractionDigits: 2 }) || "12,575.00"}
-                </div>
-                <div className="text-[10px] text-teal-200/80">ฐาน 12,000 + เบี้ยขยัน 500 + OT 675 − ปกส. 600</div>
-              </div>
-
-              <div className="rounded-xl bg-white/10 p-3.5 backdrop-blur-xs space-y-1">
-                <div className="text-xs text-teal-200 flex items-center justify-between">
-                  <span>2. น.ส.สุทธินันท์ นนทจันทร์ (มิ้ว)</span>
-                  <Badge className="bg-indigo-600 text-white text-[10px]">พนักงานประจำ</Badge>
-                </div>
-                <div className="text-lg font-black text-teal-300">
-                  ฿{data.payslips.find((p) => p.employeeName.includes("สุทธินันท์"))?.netPay.toLocaleString("th-TH", { minimumFractionDigits: 2 }) || "11,900.00"}
-                </div>
-                <div className="text-[10px] text-teal-200/80">ฐาน 12,000 + เบี้ยขยัน 500 − ปกส. 600</div>
-              </div>
-
-              <div className="rounded-xl bg-white/10 p-3.5 backdrop-blur-xs space-y-1">
-                <div className="text-xs text-teal-200 flex items-center justify-between">
-                  <span>3. เจ (พนักงานทดลองงาน)</span>
-                  <Badge className="bg-amber-500 text-slate-950 font-bold text-[10px]">ทดลองงาน 350฿/วัน</Badge>
-                </div>
-                <div className="text-lg font-black text-amber-300">
-                  ฿{data.payslips.find((p) => p.employeeName.includes("เจ"))?.netPay.toLocaleString("th-TH", { minimumFractionDigits: 2 }) || "2,800.00"}
-                </div>
-                <div className="text-[10px] text-teal-200/80">เริ่ม 24 ส.ค. 69 (ทำครบ 8 วัน x 350฿) ไม่หัก ปกส.</div>
-              </div>
-            </div>
-          </div>
-
-          {/* Individual Interactive Payslip Cards with Direct Controls */}
           <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-            {data.payslips.map((rawP, idx) => {
-              const p = getComputedPayslip(rawP);
+            {data.payslips.map((p) => {
               const draft = staffDrafts[p.employeeName] || {
                 diligence: p.diligence,
                 ot: p.ot,
@@ -468,226 +433,196 @@ export function ExpensesClient({ initialData }: { initialData: ExpensesPayload }
                 otherDeductions: p.otherDeductions || 0,
               };
 
+              const isMonthly = p.employmentType === "monthly";
+
               return (
                 <Card
-                  key={idx}
-                  className="border-slate-200 shadow-sm overflow-hidden flex flex-col justify-between hover:border-teal-400 transition-all bg-white"
+                  key={p.employeeName}
+                  className={`border-2 shadow-sm transition-all overflow-hidden ${
+                    isMonthly ? "border-teal-300 bg-white" : "border-amber-300 bg-white"
+                  }`}
                 >
-                  <div>
-                    <CardHeader className="bg-slate-50/80 border-b border-slate-200 p-4">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <CardTitle className="text-sm font-bold text-slate-900 flex items-center gap-1.5">
-                            <Users className="h-4 w-4 text-teal-700" />
-                            {p.employeeName}
-                          </CardTitle>
-                          <CardDescription className="text-[11px] text-slate-500 font-medium">
-                            {p.employeeRole || "พนักงาน"} · งวด: {p.month}
-                          </CardDescription>
+                  <CardHeader className={`p-4 border-b ${isMonthly ? "bg-teal-50/60 border-teal-100" : "bg-amber-50/60 border-amber-100"}`}>
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <CardTitle className="text-base font-bold text-slate-900 flex items-center gap-1.5">
+                          <Users className={`h-4 w-4 ${isMonthly ? "text-teal-700" : "text-amber-600"}`} />
+                          {p.employeeName}
+                        </CardTitle>
+                        <CardDescription className="text-xs text-slate-500 font-medium">
+                          {p.employeeRole || (isMonthly ? "พนักงานประจำ" : "พนักงานทดลองงาน")} · งวด: {p.month}
+                        </CardDescription>
+                      </div>
+
+                      {/* Status Badge with Strict Color Toggle */}
+                      <Badge
+                        className={`text-[10px] font-bold shrink-0 ${
+                          isMonthly
+                            ? "bg-teal-700 text-white hover:bg-teal-800"
+                            : "bg-amber-500 text-slate-950 hover:bg-amber-600"
+                        }`}
+                      >
+                        {isMonthly ? "พนักงานประจำ" : "ทดลองงาน (350฿/วัน)"}
+                      </Badge>
+                    </div>
+
+                    {/* Employee Profile Card with Edit Button */}
+                    <div className="mt-2.5 rounded-lg bg-white p-2.5 border border-slate-200 shadow-2xs flex items-center justify-between text-[11px] text-slate-700">
+                      <div className="space-y-0.5">
+                        <div className="flex items-center gap-1 font-mono text-[10px] text-slate-900">
+                          <IdCard className="h-3.5 w-3.5 text-teal-700 shrink-0" />
+                          <span>เลขบัตร: <strong>{p.idCardNo || "ยังไม่ได้ระบุ"}</strong></span>
                         </div>
-                        <Badge
-                          className={
-                            p.employmentType === "probation_daily"
-                              ? "bg-amber-500 text-slate-950 font-bold text-[10px]"
-                              : "bg-teal-700 text-white font-semibold text-[10px]"
+                        <div className="text-[10px] text-slate-500 truncate max-w-[190px]">
+                          {p.bankName || "กสิกรไทย"}: {p.accountNo || "-"}
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleOpenEditProfile(p)}
+                        className="rounded-md bg-teal-50 px-2 py-1 text-teal-800 hover:bg-teal-100 text-[10px] font-bold flex items-center gap-1 border border-teal-200 shrink-0"
+                        title="แก้ไขข้อมูลพนักงานและเปลี่ยนสถานะประจำ/ทดลองงาน"
+                      >
+                        <Edit className="h-3 w-3" /> แก้ไข
+                      </button>
+                    </div>
+                  </CardHeader>
+
+                  <CardContent className="p-4 space-y-4 text-xs">
+                    {/* Base Salary or Daily Rate */}
+                    {isMonthly ? (
+                      <div className="flex justify-between items-center bg-slate-50 p-2.5 rounded-lg border border-slate-200">
+                        <span className="text-slate-600 font-semibold">เงินเดือนประจำ:</span>
+                        <span className="font-mono font-bold text-slate-900 text-sm">
+                          ฿{p.baseSalary.toLocaleString()}
+                        </span>
+                      </div>
+                    ) : (
+                      <div className="space-y-1.5 bg-amber-50/80 p-3 rounded-xl border border-amber-200">
+                        <div className="flex justify-between items-center text-[11px] font-bold text-amber-900">
+                          <span>จำนวนวันทำงานในเดือนนี้ (วัน):</span>
+                          <span className="font-mono text-sm">฿{p.baseSalary.toLocaleString()}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Input
+                            type="number"
+                            value={draft.daysWorked}
+                            onChange={(e) =>
+                              updateStaffDraft(p.employeeName, "daysWorked", parseFloat(e.target.value) || 0)
+                            }
+                            className="h-8 bg-white font-mono text-xs"
+                          />
+                          <span className="text-[11px] text-slate-500 shrink-0">วัน x {p.dailyWage || 350}฿</span>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Diligence & OT */}
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="space-y-1">
+                        <Label className="text-[11px] font-bold text-emerald-700">เบี้ยขยัน (บาท):</Label>
+                        <Input
+                          type="number"
+                          value={draft.diligence}
+                          onChange={(e) =>
+                            updateStaffDraft(p.employeeName, "diligence", parseFloat(e.target.value) || 0)
                           }
-                        >
-                          {p.employmentType === "probation_daily" ? "ทดลองงาน (350฿/วัน)" : "พนักงานประจำ"}
-                        </Badge>
+                          className="h-8 font-mono text-xs border-emerald-300"
+                        />
                       </div>
-
-                      {/* Employee Profile Quick Details (ID Card & Bank) */}
-                      <div className="mt-2.5 rounded-lg bg-teal-50/60 p-2 border border-teal-100/80 flex items-center justify-between text-[11px] text-slate-700">
-                        <div className="space-y-0.5">
-                          <div className="flex items-center gap-1 font-mono text-[10px] text-teal-950">
-                            <IdCard className="h-3 w-3 text-teal-700 shrink-0" />
-                            <span>เลขบัตร: <strong>{p.idCardNo || "ยังไม่ได้ระบุ"}</strong></span>
-                          </div>
-                          <div className="text-[10px] text-slate-500 truncate max-w-[200px]">
-                            {p.bankName || "ธนาคาร"}: {p.accountNo || "-"}
-                          </div>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => setEditingProfileStaff(p)}
-                          className="rounded p-1 text-teal-700 hover:bg-teal-100 text-[10px] font-bold flex items-center gap-0.5 shrink-0"
-                          title="แก้ไขเลขบัตรประชาชนและข้อมูลพนักงาน"
-                        >
-                          <Edit className="h-3 w-3" /> แก้ไข
-                        </button>
+                      <div className="space-y-1">
+                        <Label className="text-[11px] font-bold text-emerald-700">ค่าล่วงเวลา OT (บาท):</Label>
+                        <Input
+                          type="number"
+                          value={draft.ot}
+                          onChange={(e) => updateStaffDraft(p.employeeName, "ot", parseFloat(e.target.value) || 0)}
+                          className="h-8 font-mono text-xs border-emerald-300"
+                        />
                       </div>
-                    </CardHeader>
+                    </div>
 
-                    <CardContent className="p-4 space-y-4 text-xs">
-                      {/* 1. Base Wage / Days Worked */}
-                      {p.employmentType === "probation_daily" ? (
-                        <div className="space-y-1.5 bg-amber-50/80 p-3 rounded-xl border border-amber-200">
-                          <div className="flex justify-between items-center text-[11px] font-bold text-amber-900">
-                            <span>จำนวนวันทำงานในเดือนนี้ (วัน):</span>
-                            <span className="font-mono text-sm">฿{p.baseSalary.toLocaleString()}</span>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <Input
-                              type="number"
-                              value={draft.daysWorked}
-                              onChange={(e) =>
-                                updateStaffDraft(
-                                  p.employeeName,
-                                  "daysWorked",
-                                  parseFloat(e.target.value) || 0
-                                )
-                              }
-                              className="h-8 bg-white font-mono text-xs"
-                            />
-                            <span className="text-[11px] text-slate-500 shrink-0">วัน x 350฿</span>
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="flex justify-between items-center bg-slate-50 p-2.5 rounded-lg border border-slate-200">
-                          <span className="text-slate-600 font-semibold">เงินเดือนพื้นฐาน:</span>
-                          <span className="font-mono font-bold text-slate-900 text-sm">
-                            ฿{p.baseSalary.toLocaleString()}
-                          </span>
+                    {/* Commission */}
+                    <div className="space-y-1 bg-teal-50/70 p-2.5 rounded-xl border border-teal-200">
+                      <div className="flex justify-between items-center text-[11px]">
+                        <Label className="font-bold text-teal-900 flex items-center gap-1">
+                          <Percent className="h-3 w-3 text-teal-700" /> คอมมิชชั่น (%):
+                        </Label>
+                        <span className="font-mono font-bold text-teal-800">+฿{p.commission.toLocaleString()}</span>
+                      </div>
+                      <select
+                        value={draft.commPct}
+                        onChange={(e) =>
+                          updateStaffDraft(p.employeeName, "commPct", parseFloat(e.target.value) || 0)
+                        }
+                        className="w-full rounded-md border border-teal-300 bg-white p-1.5 text-xs font-semibold text-teal-900"
+                      >
+                        <option value="0">ไม่มีค่าคอม (0%)</option>
+                        <option value="1">1% (฿{(data.totalMonthlySales * 0.01).toLocaleString()})</option>
+                        <option value="1.5">1.5% (฿{(data.totalMonthlySales * 0.015).toLocaleString()})</option>
+                        <option value="2">2% (฿{(data.totalMonthlySales * 0.02).toLocaleString()})</option>
+                        <option value="2.5">2.5% (฿{(data.totalMonthlySales * 0.025).toLocaleString()})</option>
+                        <option value="3">3% (฿{(data.totalMonthlySales * 0.03).toLocaleString()})</option>
+                      </select>
+                    </div>
+
+                    {/* Deductions */}
+                    <div className="space-y-1 rounded-xl bg-rose-50/50 p-2.5 border border-rose-100 text-[11px]">
+                      <div className="flex justify-between text-slate-600">
+                        <span>หักประกันสังคม (5%):</span>
+                        <span className="font-mono font-semibold text-rose-600">
+                          {p.ssoDeduction > 0 ? `-฿${p.ssoDeduction.toLocaleString()}` : "ยกเว้น"}
+                        </span>
+                      </div>
+                      {p.wht > 0 && (
+                        <div className="flex justify-between text-slate-600">
+                          <span>หักภาษี ณ ที่จ่าย 3% (คอม):</span>
+                          <span className="font-mono font-semibold text-rose-600">-฿{p.wht.toLocaleString()}</span>
                         </div>
                       )}
-
-                      {/* 2. Diligence & OT Direct Inputs */}
-                      <div className="grid grid-cols-2 gap-2">
-                        <div className="space-y-1">
-                          <Label className="text-[11px] font-bold text-emerald-700">เบี้ยขยัน (บาท):</Label>
-                          <Input
-                            type="number"
-                            value={draft.diligence}
-                            onChange={(e) =>
-                              updateStaffDraft(
-                                p.employeeName,
-                                "diligence",
-                                parseFloat(e.target.value) || 0
-                              )
-                            }
-                            className="h-8 font-mono text-xs border-emerald-300 focus:ring-emerald-500"
-                            placeholder="500"
-                          />
-                        </div>
-
-                        <div className="space-y-1">
-                          <Label className="text-[11px] font-bold text-emerald-700">ค่าล่วงเวลา OT (บาท):</Label>
-                          <Input
-                            type="number"
-                            value={draft.ot}
-                            onChange={(e) =>
-                              updateStaffDraft(
-                                p.employeeName,
-                                "ot",
-                                parseFloat(e.target.value) || 0
-                              )
-                            }
-                            className="h-8 font-mono text-xs border-emerald-300 focus:ring-emerald-500"
-                            placeholder="0"
-                          />
-                        </div>
-                      </div>
-
-                      {/* 3. Commission Percentage Selector */}
-                      <div className="space-y-1 bg-teal-50/70 p-2.5 rounded-xl border border-teal-200">
-                        <div className="flex justify-between items-center text-[11px]">
-                          <Label className="font-bold text-teal-900 flex items-center gap-1">
-                            <Percent className="h-3 w-3 text-teal-700" /> ค่าคอมมิชชั่น / อินเซนทีฟ (%):
-                          </Label>
-                          <span className="font-mono font-bold text-teal-800">
-                            +฿{p.commission.toLocaleString()}
-                          </span>
-                        </div>
-                        <select
-                          value={draft.commPct}
+                      <div className="flex items-center justify-between pt-1">
+                        <span className="text-slate-600">หักอื่นๆ (ขาด/สาย):</span>
+                        <Input
+                          type="number"
+                          value={draft.otherDeductions}
                           onChange={(e) =>
-                            updateStaffDraft(
-                              p.employeeName,
-                              "commPct",
-                              parseFloat(e.target.value) || 0
-                            )
+                            updateStaffDraft(p.employeeName, "otherDeductions", parseFloat(e.target.value) || 0)
                           }
-                          className="w-full rounded-md border border-teal-300 bg-white p-1.5 text-xs font-semibold text-teal-900"
+                          className="h-6 w-24 font-mono text-xs text-right"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Net Pay Box */}
+                    <div className="rounded-xl bg-slate-900 p-3 text-white flex items-center justify-between">
+                      <div>
+                        <div className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">
+                          ยอดจ่ายสุทธิ (Net Pay)
+                        </div>
+                        <div className="text-lg font-black text-emerald-400 font-mono">
+                          ฿{p.netPay.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setSelectedPayslip(p)}
+                          className="h-8 bg-white/10 hover:bg-white/20 text-white border-white/20 text-xs px-2.5 gap-1"
+                          title="พิมพ์สลิปเงินเดือนทางการสำหรับทำธุรกรรมธนาคาร"
                         >
-                          <option value="0">ไม่มีค่าคอม (0%)</option>
-                          <option value="1">1% (฿{(data.totalMonthlySales * 0.01).toLocaleString()})</option>
-                          <option value="1.5">1.5% (฿{(data.totalMonthlySales * 0.015).toLocaleString()})</option>
-                          <option value="2">2% (฿{(data.totalMonthlySales * 0.02).toLocaleString()})</option>
-                          <option value="2.5">2.5% (฿{(data.totalMonthlySales * 0.025).toLocaleString()})</option>
-                          <option value="3">3% (฿{(data.totalMonthlySales * 0.03).toLocaleString()})</option>
-                          <option value="5">5% (฿{(data.totalMonthlySales * 0.05).toLocaleString()})</option>
-                        </select>
+                          <Printer className="h-3.5 w-3.5" /> สลิป
+                        </Button>
+                        <Button
+                          size="sm"
+                          disabled={isPending}
+                          onClick={() => handleSaveStaffAdjustment(p)}
+                          className="h-8 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs px-2.5 gap-1"
+                        >
+                          <Save className="h-3.5 w-3.5" /> บันทึก
+                        </Button>
                       </div>
-
-                      {/* 4. Deductions Summary */}
-                      <div className="space-y-1 rounded-xl bg-rose-50/50 p-2.5 border border-rose-100 text-[11px]">
-                        <div className="flex justify-between text-slate-600">
-                          <span>หักประกันสังคม (5%):</span>
-                          <span className="font-mono font-semibold text-rose-600">
-                            {p.ssoDeduction > 0 ? `-฿${p.ssoDeduction.toLocaleString()}` : "ยกเว้น"}
-                          </span>
-                        </div>
-                        {p.wht > 0 && (
-                          <div className="flex justify-between text-slate-600">
-                            <span>หักภาษี ณ ที่จ่าย 3% (เฉพาะคอม):</span>
-                            <span className="font-mono font-semibold text-rose-600">-฿{p.wht.toLocaleString()}</span>
-                          </div>
-                        )}
-                        <div className="flex items-center justify-between pt-1">
-                          <span className="text-slate-600">หักอื่นๆ (ขาด/สาย):</span>
-                          <Input
-                            type="number"
-                            value={draft.otherDeductions}
-                            onChange={(e) =>
-                              updateStaffDraft(
-                                p.employeeName,
-                                "otherDeductions",
-                                parseFloat(e.target.value) || 0
-                              )
-                            }
-                            className="h-6 w-24 font-mono text-xs text-right"
-                            placeholder="0"
-                          />
-                        </div>
-                      </div>
-
-                      {/* 5. Live Computed Net Pay */}
-                      <div className="rounded-xl bg-teal-900 p-3.5 text-white flex items-center justify-between">
-                        <div>
-                          <span className="text-[10px] text-teal-200 block">ยอดโอนสุทธิคำนวณสด (Net Pay)</span>
-                          <span className="text-lg font-black font-mono">
-                            ฿{p.netPay.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
-                          </span>
-                        </div>
-                        <div className="rounded-lg bg-teal-700/50 p-1.5 text-white">
-                          <CheckCircle2 className="h-4 w-4" />
-                        </div>
-                      </div>
-                    </CardContent>
-                  </div>
-
-                  {/* Actions: Direct Save & Print Payslip */}
-                  <div className="p-3 bg-slate-50 border-t border-slate-200 flex items-center justify-between gap-2">
-                    <Button
-                      type="button"
-                      size="sm"
-                      disabled={isPending}
-                      onClick={() => handleSaveStaff(p)}
-                      className="bg-teal-700 hover:bg-teal-800 text-white font-bold text-xs gap-1.5 shadow-xs"
-                    >
-                      <Save className="h-3.5 w-3.5" /> บันทึกยอดงวดนี้
-                    </Button>
-
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setSelectedPayslip(p)}
-                      className="text-xs gap-1 border-slate-300 text-slate-700 hover:bg-slate-100 font-bold"
-                    >
-                      <Printer className="h-3.5 w-3.5" /> สลิปเงินเดือน
-                    </Button>
-                  </div>
+                    </div>
+                  </CardContent>
                 </Card>
               );
             })}
@@ -695,392 +630,267 @@ export function ExpensesClient({ initialData }: { initialData: ExpensesPayload }
         </div>
       )}
 
-      {/* ── TAB 2: OPEX LIST & ADD FORM ── */}
+      {/* ── TAB 2: OPEX SECTION ── */}
       {activeTab === "opex" && (
-        <div className="grid gap-8 lg:grid-cols-12">
-          {/* Add Expense Form (4 Cols) */}
-          <div className="lg:col-span-4">
-            <Card className="border-slate-200 shadow-xs">
-              <CardHeader className="bg-slate-50 border-b border-slate-100 p-4">
-                <CardTitle className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
-                  <Plus className="h-4 w-4 text-teal-700" />
-                  บันทึกค่าใช้จ่ายใหม่
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="p-4">
-                <form action={handleAddExpense} className="space-y-3.5">
-                  <div className="space-y-1">
-                    <Label className="text-xs font-semibold">หมวดหมู่</Label>
-                    <select
-                      name="category"
-                      className="w-full rounded-lg border border-slate-200 bg-white p-2 text-xs font-medium"
-                    >
-                      <option value="ค่าดำเนินการ">ค่าดำเนินการทั่วไป</option>
-                      <option value="ภาษี">ภาษี / ค่าธรรมเนียม</option>
-                      <option value="ค่าเช่าร้าน">ค่าเช่าสถานที่</option>
-                      <option value="ค่าการตลาด">การตลาด / LINE OA</option>
-                      <option value="ค่าซ่อมบำรุง">ซ่อมบำรุง / อุปกรณ์</option>
-                    </select>
-                  </div>
-
-                  <div className="space-y-1">
-                    <Label className="text-xs font-semibold">ชื่อรายการ</Label>
-                    <Input
-                      name="title"
-                      placeholder="เช่น ค่าไฟประจำเดือน, ค่าเน็ต 3BB"
-                      required
-                      className="text-xs h-9"
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className="space-y-1">
-                      <Label className="text-xs font-semibold">จำนวนเงิน (บาท)</Label>
-                      <Input
-                        name="amount"
-                        type="number"
-                        step="any"
-                        min="0.01"
-                        placeholder="0.00"
-                        required
-                        className="text-xs h-9 font-mono"
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <Label className="text-xs font-semibold">ช่องทางจ่าย</Label>
-                      <select
-                        name="pay_method"
-                        className="w-full rounded-lg border border-slate-200 bg-white p-2 text-xs font-medium"
-                      >
-                        <option value="บัญชีร้าน">บัญชีร้าน (โอน)</option>
-                        <option value="เงินสดร้าน">เงินสดร้าน</option>
-                      </select>
-                    </div>
-                  </div>
-
-                  <div className="space-y-1">
-                    <Label className="text-xs font-semibold">วันที่จ่าย</Label>
-                    <Input
-                      name="expense_date"
-                      type="date"
-                      defaultValue={new Date().toISOString().slice(0, 10)}
-                      className="text-xs h-9"
-                    />
-                  </div>
-
-                  <Button
-                    type="submit"
-                    disabled={isPending}
-                    className="w-full bg-teal-700 hover:bg-teal-800 text-white font-bold text-xs h-9"
-                  >
-                    {isPending ? "กำลังบันทึก..." : "บันทึกค่าใช้จ่าย"}
-                  </Button>
-                </form>
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Opex Table (8 Cols) */}
-          <div className="lg:col-span-8">
-            <Card className="border-slate-200 shadow-xs">
-              <CardHeader className="border-b border-slate-100 p-4">
-                <CardTitle className="text-sm font-bold text-slate-900">
-                  รายการค่าใช้จ่ายดำเนินงานร้าน ({data.opexList.length} รายการ)
-                </CardTitle>
-                <CardDescription className="text-xs">
-                  ข้อมูลจริงจากฐานข้อมูลระบบ SneakerCare
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="p-0">
-                <div className="overflow-x-auto max-h-[500px] overflow-y-auto">
-                  <table className="w-full text-left text-xs">
-                    <thead className="sticky top-0 bg-slate-50 border-b border-slate-200 font-semibold text-slate-600">
-                      <tr>
-                        <th className="px-4 py-3">เดือน</th>
-                        <th className="px-4 py-3">รายการ</th>
-                        <th className="px-4 py-3">หมวดหมู่</th>
-                        <th className="px-4 py-3 text-right">จำนวนเงิน</th>
-                        <th className="px-4 py-3">วิธีจ่าย</th>
-                        <th className="px-4 py-3 text-center">ลบ</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {data.opexList.length === 0 ? (
-                        <tr>
-                          <td colSpan={6} className="p-8 text-center text-slate-400">
-                            ไม่มีรายการค่าใช้จ่ายในรอบเวลานี้
-                          </td>
-                        </tr>
-                      ) : (
-                        data.opexList.map((e) => (
-                          <tr key={e.id} className="hover:bg-slate-50/80">
-                            <td className="px-4 py-3 font-mono font-semibold text-teal-800">
-                              {e.month}
-                            </td>
-                            <td className="px-4 py-3 font-semibold text-slate-800">
-                              {e.name}
-                            </td>
-                            <td className="px-4 py-3 text-slate-500">
-                              <Badge variant="outline" className="text-[10px]">
-                                {e.category}
-                              </Badge>
-                            </td>
-                            <td className="px-4 py-3 text-right font-mono font-bold text-rose-600">
-                              ฿{e.amount.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
-                            </td>
-                            <td className="px-4 py-3 text-slate-500 text-[11px]">
-                              {e.payMethod}
-                            </td>
-                            <td className="px-4 py-3 text-center">
-                              <button
-                                type="button"
-                                onClick={() => handleDelete(e.id)}
-                                className="text-slate-400 hover:text-rose-600 p-1 rounded"
-                              >
-                                <Trash2 className="h-3.5 w-3.5" />
-                              </button>
-                            </td>
-                          </tr>
-                        ))
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        </div>
-      )}
-
-      {/* ── TAB 3: MISC & PARTNER EXPENSES ── */}
-      {activeTab === "misc" && (
-        <Card className="border-slate-200 shadow-xs">
-          <CardHeader className="border-b border-slate-100 p-4">
-            <CardTitle className="text-sm font-bold text-slate-900">
-              รายการค่าใช้จ่ายพิเศษ & พาร์ทเนอร์ ({data.miscExpenses.length} รายการ)
-            </CardTitle>
-            <CardDescription className="text-xs">
-              ค่าที่ปรึกษา, คืนเงินลูกค้า, ค่าบรอดแคสต์ LINE OA, ค่าคอมมิชชั่น และอื่นๆ
-            </CardDescription>
+        <Card className="border-slate-200 shadow-sm">
+          <CardHeader className="p-4 bg-slate-50 border-b border-slate-200 flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <CardTitle className="text-sm font-bold text-slate-900">
+                รายการค่าใช้จ่ายดำเนินงานร้าน (OPEX)
+              </CardTitle>
+              <CardDescription className="text-xs text-slate-500">
+                ค่าน้ำประปา, ไฟฟ้า, อินเทอร์เน็ต, ภาษี, ค่าเช่าสถานที่ และรายจ่ายทั่วไป
+              </CardDescription>
+            </div>
           </CardHeader>
           <CardContent className="p-0">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead className="bg-slate-50 border-b border-slate-200 font-semibold text-slate-600">
-                  <tr>
-                    <th className="px-4 py-3">รอบเดือน</th>
-                    <th className="px-4 py-3">รายการ</th>
-                    <th className="px-4 py-3">ช่องทางจ่าย</th>
-                    <th className="px-4 py-3 text-right">จำนวนเงิน</th>
+            <table className="w-full text-xs">
+              <thead className="bg-slate-100 text-slate-700 font-bold border-b border-slate-200">
+                <tr>
+                  <th className="px-4 py-2.5 text-left">งวดเดือน</th>
+                  <th className="px-3 py-2.5 text-left">หมวดหมู่</th>
+                  <th className="px-3 py-2.5 text-left">รายการ</th>
+                  <th className="px-3 py-2.5 text-left">ช่องทางชำระ</th>
+                  <th className="px-4 py-2.5 text-right">จำนวนเงิน (บาท)</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-200">
+                {data.opexList.map((item) => (
+                  <tr key={item.id} className="hover:bg-slate-50">
+                    <td className="px-4 py-2.5 font-mono text-slate-600">{item.month}</td>
+                    <td className="px-3 py-2.5">
+                      <span className="rounded-md bg-slate-100 px-2 py-0.5 font-medium text-slate-700">
+                        {item.category}
+                      </span>
+                    </td>
+                    <td className="px-3 py-2.5 font-bold text-slate-900">{item.name}</td>
+                    <td className="px-3 py-2.5 text-slate-600">{item.payMethod}</td>
+                    <td className="px-4 py-2.5 text-right font-mono font-bold text-amber-900">
+                      ฿{item.amount.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+                    </td>
                   </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {data.miscExpenses.map((m, idx) => (
-                    <tr key={idx} className="hover:bg-slate-50/80">
-                      <td className="px-4 py-3 font-mono font-semibold text-teal-800">{m.month}</td>
-                      <td className="px-4 py-3 font-semibold text-slate-800">{m.name}</td>
-                      <td className="px-4 py-3 text-slate-500">{m.method}</td>
-                      <td className="px-4 py-3 text-right font-mono font-bold text-rose-600">
-                        ฿{m.amount.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                ))}
+              </tbody>
+            </table>
           </CardContent>
         </Card>
       )}
 
-      {/* ── TAB 4: RENTAL INCOME & METERS ── */}
-      {activeTab === "rental" && (
-        <div className="grid gap-4 md:grid-cols-3">
-          {data.rentals.map((r, idx) => (
-            <Card key={idx} className="border-slate-200 shadow-xs">
-              <CardHeader className="bg-slate-50 p-4 border-b border-slate-100">
-                <CardTitle className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
-                  <Home className="h-4 w-4 text-teal-700" />
-                  {r.roomName}
-                </CardTitle>
-                <CardDescription className="text-[11px]">
-                  ผู้เช่า: {r.tenantName} · รอบ: {r.month}
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="p-4 space-y-2">
-                <div className="flex justify-between text-xs">
-                  <span className="text-slate-500">ค่าเช่ารายเดือน:</span>
-                  <span className="font-mono font-bold text-emerald-600">
-                    ฿{r.rentAmount.toLocaleString()}
-                  </span>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      )}
-
-      {/* ── EDIT STAFF PROFILE & ID CARD MODAL ── */}
+      {/* ── EDIT STAFF PROFILE & STATUS MODAL ── */}
       {editingProfileStaff && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-xs">
-          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl border border-slate-200 space-y-5">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-                <IdCard className="h-4 w-4 text-teal-700" />
-                แก้ไขข้อมูล & เลขบัตรประชาชน: {editingProfileStaff.employeeName}
-              </h3>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between border-b border-slate-200 pb-3">
+              <div className="flex items-center gap-2">
+                <div className="h-8 w-8 rounded-full bg-teal-100 text-teal-800 flex items-center justify-center font-bold">
+                  <Edit className="h-4 w-4" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-slate-900">แก้ไขข้อมูล & สถานะพนักงาน</h3>
+                  <p className="text-xs text-slate-500">ปรับเปลี่ยนสถานะประจำ/ทดลองงาน และข้อมูลบัญชี</p>
+                </div>
+              </div>
               <button
+                type="button"
                 onClick={() => setEditingProfileStaff(null)}
-                className="text-slate-400 hover:text-slate-600"
+                className="rounded-full p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
               >
-                <X className="h-5 w-5" />
+                <X className="h-4 w-4" />
               </button>
             </div>
 
-            <form onSubmit={handleSaveProfileInfo} className="space-y-3.5 text-xs">
-              <div className="space-y-1">
-                <Label className="font-semibold">ชื่อ-นามสกุลจริง (ตามบัตรประชาชน)</Label>
-                <Input
-                  name="prof_fullname"
-                  defaultValue={editingProfileStaff.employeeName}
-                  required
-                  className="h-9"
-                />
+            <form onSubmit={handleSaveStaffProfile} className="space-y-4 text-xs">
+              {/* Toggle Status (Regular vs Probation) */}
+              <div className="space-y-1.5">
+                <Label className="font-bold text-slate-700">สถานะและประเภทการจ้างงาน *</Label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditEmpType("monthly");
+                      setEditSalary(12000);
+                    }}
+                    className={`p-3 rounded-xl border text-center font-bold transition-all ${
+                      editEmpType === "monthly"
+                        ? "bg-teal-700 text-white border-teal-700 shadow-md ring-2 ring-teal-500/30"
+                        : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100"
+                    }`}
+                  >
+                    🟢 พนักงานประจำ
+                    <div className="text-[10px] font-normal opacity-90">เงินเดือนประจำ + สิทธิ ปกส.</div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditEmpType("probation_daily");
+                      setEditDailyRate(350);
+                    }}
+                    className={`p-3 rounded-xl border text-center font-bold transition-all ${
+                      editEmpType === "probation_daily"
+                        ? "bg-amber-500 text-slate-950 border-amber-500 shadow-md ring-2 ring-amber-400/30"
+                        : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100"
+                    }`}
+                  >
+                    🟠 พนักงานทดลองงาน
+                    <div className="text-[10px] font-normal opacity-90">คำนวณตามวันทำจริง (350฿/วัน)</div>
+                  </button>
+                </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-2">
-                <div className="space-y-1">
-                  <Label className="font-semibold">ชื่อเล่น</Label>
+              {/* Full Name & Nickname */}
+              <div className="grid grid-cols-3 gap-2">
+                <div className="col-span-2 space-y-1">
+                  <Label className="font-bold text-slate-700">ชื่อ-นามสกุล จริง *</Label>
                   <Input
-                    name="prof_nickname"
-                    defaultValue={editingProfileStaff.nickname || ""}
-                    placeholder="เช่น เชียง, มิ้ว, เจ"
-                    className="h-9"
+                    type="text"
+                    value={editFullName}
+                    onChange={(e) => setEditFullName(e.target.value)}
+                    className="h-9 text-xs"
+                    required
                   />
                 </div>
                 <div className="space-y-1">
-                  <Label className="font-semibold">ตำแหน่งงาน</Label>
+                  <Label className="font-bold text-slate-700">ชื่อเรียก/เล่น</Label>
                   <Input
-                    name="prof_role"
-                    defaultValue={editingProfileStaff.employeeRole || "พนักงาน"}
-                    placeholder="เช่น ช่างหลัก, ผู้จัดการ"
-                    className="h-9"
+                    type="text"
+                    value={editNickname}
+                    onChange={(e) => setEditNickname(e.target.value)}
+                    className="h-9 text-xs"
                   />
                 </div>
               </div>
 
+              {/* ID Card */}
               <div className="space-y-1">
-                <Label className="font-semibold text-teal-900 flex items-center gap-1">
-                  <IdCard className="h-3.5 w-3.5 text-teal-700" /> เลขประจำตัวประชาชน 13 หลัก
-                </Label>
+                <Label className="font-bold text-slate-700">เลขบัตรประจำตัวประชาชน (13 หลัก) *</Label>
                 <Input
-                  name="prof_idcard"
-                  defaultValue={editingProfileStaff.idCardNo || ""}
+                  type="text"
+                  value={editIdCardNo}
+                  onChange={(e) => setEditIdCardNo(e.target.value)}
                   placeholder="เช่น 1-5099-01234-56-7"
-                  className="h-9 font-mono text-xs border-teal-300"
+                  className="h-9 text-xs font-mono"
+                  required
                 />
-                <span className="text-[10px] text-slate-400">ใช้สำหรับพิมพ์ใบสลิปเงินเดือน A4, ภ.ง.ด.1 และประกันสังคม</span>
               </div>
 
+              {/* Position */}
+              <div className="space-y-1">
+                <Label className="font-bold text-slate-700">ตำแหน่งงาน</Label>
+                <Input
+                  type="text"
+                  value={editRole}
+                  onChange={(e) => setEditRole(e.target.value)}
+                  className="h-9 text-xs"
+                  placeholder="เช่น ช่างสปาหลัก, ผู้จัดการหน้าร้าน"
+                />
+              </div>
+
+              {/* Bank & Account */}
               <div className="grid grid-cols-2 gap-2">
                 <div className="space-y-1">
-                  <Label className="font-semibold">ธนาคาร</Label>
+                  <Label className="font-bold text-slate-700">ธนาคาร</Label>
                   <Input
-                    name="prof_bank"
-                    defaultValue={editingProfileStaff.bankName || "กสิกรไทย (KBANK)"}
-                    placeholder="เช่น กสิกรไทย"
-                    className="h-9"
+                    type="text"
+                    value={editBankName}
+                    onChange={(e) => setEditBankName(e.target.value)}
+                    className="h-9 text-xs"
                   />
                 </div>
                 <div className="space-y-1">
-                  <Label className="font-semibold">เลขที่บัญชี</Label>
+                  <Label className="font-bold text-slate-700">เลขบัญชี / พร้อมเพย์</Label>
                   <Input
-                    name="prof_account"
-                    defaultValue={editingProfileStaff.accountNo || ""}
-                    placeholder="xxx-x-xxxxx-x"
-                    className="h-9 font-mono"
+                    type="text"
+                    value={editAccountNo}
+                    onChange={(e) => setEditAccountNo(e.target.value)}
+                    className="h-9 text-xs font-mono"
                   />
                 </div>
               </div>
 
-              <Button
-                type="submit"
-                disabled={isPending}
-                className="w-full bg-teal-800 hover:bg-teal-900 text-white font-bold h-9 gap-1.5"
-              >
-                <Save className="h-4 w-4" /> {isPending ? "กำลังบันทึก..." : "บันทึกข้อมูลพนักงาน"}
-              </Button>
+              {/* Wage / Salary Input */}
+              {editEmpType === "monthly" ? (
+                <div className="space-y-1">
+                  <Label className="font-bold text-teal-900">ฐานเงินเดือนประจำ (บาท/เดือน)</Label>
+                  <Input
+                    type="number"
+                    value={editSalary}
+                    onChange={(e) => setEditSalary(parseFloat(e.target.value) || 0)}
+                    className="h-9 text-xs font-mono font-bold"
+                  />
+                </div>
+              ) : (
+                <div className="space-y-1">
+                  <Label className="font-bold text-amber-900">อัตราค่าจ้างทดลองงาน (บาท/วัน)</Label>
+                  <Input
+                    type="number"
+                    value={editDailyRate}
+                    onChange={(e) => setEditDailyRate(parseFloat(e.target.value) || 0)}
+                    className="h-9 text-xs font-mono font-bold"
+                  />
+                </div>
+              )}
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-200">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setEditingProfileStaff(null)}
+                  className="text-xs h-9"
+                >
+                  ยกเลิก
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={isPending}
+                  size="sm"
+                  className="bg-teal-700 hover:bg-teal-800 text-white font-bold text-xs h-9 px-4 gap-1"
+                >
+                  <Check className="h-4 w-4" /> บันทึกการเปลี่ยนแปลง
+                </Button>
+              </div>
             </form>
           </div>
         </div>
       )}
 
-      {/* ── ADD NEW STAFF MODAL ── */}
+      {/* ── CREATE NEW STAFF MEMBER MODAL (4th, 5th, etc.) ── */}
       {showAddStaffModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-xs">
-          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl border border-slate-200 space-y-5">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-                <UserPlus className="h-4 w-4 text-teal-700" />
-                เพิ่มข้อมูลพนักงานใหม่
-              </h3>
-              <button onClick={() => setShowAddStaffModal(false)} className="text-slate-400 hover:text-slate-600">
-                <X className="h-5 w-5" />
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between border-b border-slate-200 pb-3">
+              <div className="flex items-center gap-2">
+                <div className="h-8 w-8 rounded-full bg-emerald-100 text-emerald-800 flex items-center justify-center font-bold">
+                  <UserPlus className="h-4 w-4" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-slate-900">เพิ่มพนักงานใหม่เข้าสู่ระบบ</h3>
+                  <p className="text-xs text-slate-500">บันทึกข้อมูลพนักงานคนที่ 4, 5... พร้อมระบบเงินเดือน</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowAddStaffModal(false)}
+                className="rounded-full p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+              >
+                <X className="h-4 w-4" />
               </button>
             </div>
 
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                const form = e.currentTarget;
-                const name = (form.elements.namedItem("new_emp_name") as HTMLInputElement)?.value.trim();
-                if (!name) return;
-                const type = staffFormType;
-                const base = type === "monthly" ? 12000 : daysWorked * dailyRate;
-                const sso = type === "monthly" ? 600 : 0;
-                const net = base + 500 - sso;
-
-                const newStaff: StaffPayslip = {
-                  employeeName: name,
-                  month: "08/2026",
-                  employmentType: type,
-                  daysWorked: type === "probation_daily" ? daysWorked : undefined,
-                  dailyWage: type === "probation_daily" ? dailyRate : undefined,
-                  baseSalary: base,
-                  diligence: 500,
-                  ot: 0,
-                  commission: 0,
-                  wht: 0,
-                  ssoDeduction: sso,
-                  otherDeductions: 0,
-                  netPay: net,
-                  payMethod: "บัญชีร้าน (โอน)",
-                  employeeRole: type === "monthly" ? "พนักงานประจำ" : "พนักงานทดลองงาน (350฿/วัน)",
-                };
-
-                setData((prev) => ({
-                  ...prev,
-                  payslips: [...prev.payslips, newStaff],
-                  totalPayroll: prev.totalPayroll + net,
-                }));
-                toast.success(`เพิ่มพนักงาน ${name} เรียบร้อยแล้ว`);
-                setShowAddStaffModal(false);
-              }}
-              className="space-y-4 text-xs"
-            >
-              <div className="space-y-1">
-                <Label className="font-semibold">ชื่อ-นามสกุล หรือชื่อเล่นพนักงาน</Label>
-                <Input name="new_emp_name" placeholder="ระบุชื่อพนักงาน" required className="h-9" />
-              </div>
-
-              <div className="space-y-1">
-                <Label className="font-semibold">รูปแบบการจ้างงาน</Label>
+            <form onSubmit={handleCreateStaff} className="space-y-4 text-xs">
+              <div className="space-y-1.5">
+                <Label className="font-bold text-slate-700">ประเภทการจ้างงาน *</Label>
                 <div className="grid grid-cols-2 gap-2">
                   <button
                     type="button"
-                    onClick={() => setStaffFormType("probation_daily")}
+                    onClick={() => {
+                      setNewStaffType("probation_daily");
+                      setNewStaffSalary(350);
+                    }}
                     className={`p-2.5 rounded-xl border text-center font-bold transition-all ${
-                      staffFormType === "probation_daily"
-                        ? "bg-amber-500 text-slate-950 border-amber-500"
+                      newStaffType === "probation_daily"
+                        ? "bg-amber-500 text-slate-950 border-amber-500 shadow-xs"
                         : "bg-slate-50 text-slate-700 border-slate-200"
                     }`}
                   >
@@ -1088,10 +898,13 @@ export function ExpensesClient({ initialData }: { initialData: ExpensesPayload }
                   </button>
                   <button
                     type="button"
-                    onClick={() => setStaffFormType("monthly")}
+                    onClick={() => {
+                      setNewStaffType("monthly");
+                      setNewStaffSalary(12000);
+                    }}
                     className={`p-2.5 rounded-xl border text-center font-bold transition-all ${
-                      staffFormType === "monthly"
-                        ? "bg-teal-800 text-white border-teal-800"
+                      newStaffType === "monthly"
+                        ? "bg-teal-700 text-white border-teal-700 shadow-xs"
                         : "bg-slate-50 text-slate-700 border-slate-200"
                     }`}
                   >
@@ -1100,177 +913,341 @@ export function ExpensesClient({ initialData }: { initialData: ExpensesPayload }
                 </div>
               </div>
 
-              <Button type="submit" className="w-full bg-teal-800 hover:bg-teal-900 text-white font-bold h-9">
-                บันทึกพนักงานใหม่
-              </Button>
+              <div className="grid grid-cols-3 gap-2">
+                <div className="col-span-2 space-y-1">
+                  <Label className="font-bold text-slate-700">ชื่อ-นามสกุล จริง *</Label>
+                  <Input
+                    type="text"
+                    value={newStaffName}
+                    onChange={(e) => setNewStaffName(e.target.value)}
+                    placeholder="เช่น นายสมชาย ใจดี"
+                    className="h-9 text-xs"
+                    required
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="font-bold text-slate-700">ชื่อเล่น</Label>
+                  <Input
+                    type="text"
+                    value={newStaffNickname}
+                    onChange={(e) => setNewStaffNickname(e.target.value)}
+                    placeholder="เช่น ชาย"
+                    className="h-9 text-xs"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <Label className="font-bold text-slate-700">เลขประจำตัวประชาชน (13 หลัก)</Label>
+                <Input
+                  type="text"
+                  value={newStaffIdCard}
+                  onChange={(e) => setNewStaffIdCard(e.target.value)}
+                  placeholder="เช่น 1-5099-xxxxx-xx-x"
+                  className="h-9 text-xs font-mono"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <Label className="font-bold text-slate-700">ตำแหน่งงาน</Label>
+                <Input
+                  type="text"
+                  value={newStaffPosition}
+                  onChange={(e) => setNewStaffPosition(e.target.value)}
+                  className="h-9 text-xs"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-1">
+                  <Label className="font-bold text-slate-700">ธนาคาร</Label>
+                  <Input
+                    type="text"
+                    value={newStaffBank}
+                    onChange={(e) => setNewStaffBank(e.target.value)}
+                    className="h-9 text-xs"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="font-bold text-slate-700">เลขบัญชี / พร้อมเพย์</Label>
+                  <Input
+                    type="text"
+                    value={newStaffAccount}
+                    onChange={(e) => setNewStaffAccount(e.target.value)}
+                    className="h-9 text-xs font-mono"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <Label className="font-bold text-slate-700">
+                  {newStaffType === "monthly" ? "ฐานเงินเดือน (บาท/เดือน)" : "อัตราค่าจ้าง (บาท/วัน)"}
+                </Label>
+                <Input
+                  type="number"
+                  value={newStaffSalary}
+                  onChange={(e) => setNewStaffSalary(parseFloat(e.target.value) || 0)}
+                  className="h-9 text-xs font-mono font-bold"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-200">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowAddStaffModal(false)}
+                  className="text-xs h-9"
+                >
+                  ยกเลิก
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={isPending}
+                  size="sm"
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs h-9 px-4 gap-1"
+                >
+                  <Check className="h-4 w-4" /> สร้างพนักงาน
+                </Button>
+              </div>
             </form>
           </div>
         </div>
       )}
 
-      {/* ── PRINTABLE PAYSLIP MODAL ── */}
+      {/* ── OFFICIAL STANDARD PAYSLIP VOUCHER MODAL (FOR BANKING & FORMAL USE) ── */}
       {selectedPayslip && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-xs print:p-0 print:bg-white">
-          <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl border border-slate-200 print:shadow-none print:border-none print:max-w-none print:w-full space-y-6">
-            {/* Modal Actions */}
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3 print:hidden">
-              <span className="text-sm font-bold text-slate-800">ใบแจ้งเงินเดือน / สลิปเงินเดือนพนักงาน</span>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-xs print:p-0 print:bg-white print:static">
+          <div className="w-full max-w-2xl rounded-2xl bg-white p-8 shadow-2xl border border-slate-300 print:shadow-none print:border-none print:p-0 print:max-w-none print:w-full space-y-6">
+            {/* Top Toolbar (Hidden on Print) */}
+            <div className="flex items-center justify-between border-b border-slate-200 pb-3 print:hidden">
+              <div className="flex items-center gap-2">
+                <ShieldCheck className="h-5 w-5 text-teal-700" />
+                <span className="text-sm font-bold text-slate-900">
+                  ใบแจ้งเงินเดือน / สลิปเงินเดือนพนักงาน (Official Payslip Voucher)
+                </span>
+              </div>
               <div className="flex items-center gap-2">
                 <Button
                   size="sm"
                   onClick={() => window.print()}
-                  className="bg-teal-700 hover:bg-teal-800 text-white font-bold text-xs gap-1.5"
+                  className="bg-teal-700 hover:bg-teal-800 text-white font-bold text-xs gap-1.5 shadow-md"
                 >
-                  <Printer className="h-3.5 w-3.5" /> พิมพ์สลิป (Print)
+                  <Printer className="h-4 w-4" /> พิมพ์สลิปเงินเดือนทางการ (Print A4)
                 </Button>
                 <button
                   onClick={() => setSelectedPayslip(null)}
-                  className="text-slate-400 hover:text-slate-600 p-1"
+                  className="rounded-full p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
                 >
                   <X className="h-5 w-5" />
                 </button>
               </div>
             </div>
 
-            {/* Payslip A4/A5 Document Content */}
-            <div className="space-y-4 text-slate-900 font-sans">
-              {/* Company Header */}
-              <div className="text-center space-y-1 border-b border-slate-200 pb-4">
-                <h2 className="text-lg font-black text-slate-900">บริษัท รวยรับทรัพย์168 จำกัด</h2>
-                <p className="text-xs text-slate-600">
-                  SneakerCare 552/4 ถ.เชียงใหม่-ลำพูน ต.หนองหอย อ.เมืองเชียงใหม่ จ.เชียงใหม่ 50000
-                </p>
-                <div className="text-xs font-bold text-teal-800 pt-1">
-                  ใบแจ้งเงินเดือนพนักงาน (PAYSLIP) ประจำงวดเดือน {selectedPayslip.month}
+            {/* ── OFFICIAL PAYSLIP VOUCHER CONTAINER ── */}
+            <div className="space-y-4 text-slate-900 font-sans border-2 border-slate-800 p-6 rounded-xl print:border-2 print:border-slate-900 print:p-6 bg-white">
+              {/* Header: Company Name & Tax Registration */}
+              <div className="flex items-start justify-between border-b-2 border-slate-800 pb-4">
+                <div className="space-y-1">
+                  <h1 className="text-lg font-black tracking-tight text-slate-950 uppercase">
+                    บริษัท รวยรับทรัพย์168 จำกัด (สำนักงานใหญ่)
+                  </h1>
+                  <div className="text-xs text-slate-700 font-medium">
+                    สาขา SneakerCare: 552/4 ถ.เชียงใหม่-ลำพูน ต.หนองหอย อ.เมืองเชียงใหม่ จ.เชียงใหม่ 50000
+                  </div>
+                  <div className="text-xs text-slate-600 font-mono">
+                    เลขประจำตัวผู้เสียภาษีอากร: <strong>0-5035-67004-98-1</strong> · โทร. 088-251-5168
+                  </div>
+                </div>
+                <div className="text-right">
+                  <div className="inline-block rounded-md bg-slate-900 px-3 py-1 text-xs font-black text-white tracking-wide">
+                    PAYSLIP VOUCHER
+                  </div>
+                  <div className="text-[11px] font-mono text-slate-500 pt-1">
+                    เลขที่: PS-{selectedPayslip.month.replace("/", "")}-{selectedPayslip.idCardNo?.slice(-4) || "0001"}
+                  </div>
+                  <div className="text-[11px] text-slate-700 font-semibold">
+                    วันที่จ่ายเงิน: 31 สิงหาคม 2569
+                  </div>
                 </div>
               </div>
 
-              {/* Employee Info */}
-              <div className="grid grid-cols-2 gap-2 text-xs bg-slate-50 p-3 rounded-lg border border-slate-200">
+              {/* Title Banner */}
+              <div className="text-center font-bold text-sm bg-slate-100 py-1.5 rounded-md border border-slate-300">
+                ใบจ่ายเงินเดือนและหลักฐานการรับเงิน ประจำงวดเดือน {selectedPayslip.month}
+              </div>
+
+              {/* Employee Information 2×2 Box */}
+              <div className="grid grid-cols-2 gap-3 text-xs bg-slate-50 p-3 rounded-lg border border-slate-300">
                 <div>
-                  <span className="text-slate-500">ชื่อ-นามสกุล: </span>
-                  <span className="font-bold">{selectedPayslip.employeeName}</span>
+                  <span className="text-slate-500 font-semibold">ชื่อ-นามสกุล: </span>
+                  <span className="font-bold text-slate-950">{selectedPayslip.employeeName}</span>
                 </div>
                 <div>
-                  <span className="text-slate-500">เลขบัตรประชาชน: </span>
-                  <span className="font-mono font-semibold text-slate-900">{selectedPayslip.idCardNo || "1-5099-xxxxx-xx-x"}</span>
+                  <span className="text-slate-500 font-semibold">เลขประจำตัวประชาชน: </span>
+                  <span className="font-mono font-bold text-slate-950">{selectedPayslip.idCardNo || "1-5099-xxxxx-xx-x"}</span>
                 </div>
                 <div>
-                  <span className="text-slate-500">สถานะ/ตำแหน่ง: </span>
-                  <span className="font-semibold">
-                    {selectedPayslip.employeeRole || (selectedPayslip.employmentType === "probation_daily" ? "พนักงานทดลองงาน" : "พนักงานประจำ")}
+                  <span className="text-slate-500 font-semibold">ตำแหน่ง / แผนก: </span>
+                  <span className="font-semibold text-slate-900">
+                    {selectedPayslip.employeeRole || (selectedPayslip.employmentType === "monthly" ? "พนักงานประจำ" : "พนักงานทดลองงาน")}
                   </span>
                 </div>
                 <div>
-                  <span className="text-slate-500">ธนาคาร & เลขบัญชี: </span>
-                  <span className="font-mono">{selectedPayslip.bankName || "กสิกรไทย"} {selectedPayslip.accountNo || ""}</span>
+                  <span className="text-slate-500 font-semibold">ช่องทางการชำระ: </span>
+                  <span className="font-mono text-slate-900">
+                    {selectedPayslip.bankName || "กสิกรไทย"} {selectedPayslip.accountNo || ""}
+                  </span>
                 </div>
               </div>
 
-              {/* Table of Earnings & Deductions */}
-              <table className="w-full text-xs border border-slate-200">
-                <thead className="bg-slate-100 font-bold border-b border-slate-200">
+              {/* Earnings & Deductions Official Table */}
+              <table className="w-full text-xs border border-slate-400">
+                <thead className="bg-slate-200 font-bold border-b border-slate-400 text-slate-900">
                   <tr>
-                    <th className="p-2.5 text-left w-1/2">รายการรับ (Earnings)</th>
-                    <th className="p-2.5 text-left w-1/2">รายการหัก (Deductions)</th>
+                    <th className="p-2.5 text-left w-1/2 border-r border-slate-300">รายการรับ (EARNINGS)</th>
+                    <th className="p-2.5 text-left w-1/2">รายการหัก (DEDUCTIONS)</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100">
+                <tbody className="divide-y divide-slate-200">
                   <tr>
-                    <td className="p-2.5 align-top space-y-1 border-r border-slate-200">
+                    {/* Left: Earnings */}
+                    <td className="p-3 align-top space-y-1.5 border-r border-slate-300 bg-white">
                       <div className="flex justify-between">
                         <span>
                           {selectedPayslip.employmentType === "probation_daily"
-                            ? `ค่าจ้างรายวัน (${selectedPayslip.daysWorked || 8} วัน @ ${selectedPayslip.dailyWage || 350}฿):`
-                            : "เงินเดือนพื้นฐาน:"}
+                            ? `ค่าจ้างรายวัน (${selectedPayslip.daysWorked || 8} วัน @ ${selectedPayslip.dailyWage || 350}฿)`
+                            : "เงินเดือนพื้นฐาน (Basic Salary)"}
                         </span>
-                        <span className="font-mono font-semibold">฿{selectedPayslip.baseSalary.toLocaleString()}</span>
+                        <span className="font-mono font-semibold">
+                          ฿{selectedPayslip.baseSalary.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+                        </span>
                       </div>
+
                       {selectedPayslip.diligence > 0 && (
-                        <div className="flex justify-between">
-                          <span>เบี้ยขยัน:</span>
-                          <span className="font-mono font-semibold">฿{selectedPayslip.diligence.toLocaleString()}</span>
+                        <div className="flex justify-between text-slate-800">
+                          <span>เบี้ยขยัน (Diligence Allowance)</span>
+                          <span className="font-mono font-semibold">
+                            ฿{selectedPayslip.diligence.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+                          </span>
                         </div>
                       )}
+
                       {selectedPayslip.ot > 0 && (
-                        <div className="flex justify-between">
-                          <span>ค่าล่วงเวลา (OT):</span>
-                          <span className="font-mono font-semibold">฿{selectedPayslip.ot.toLocaleString()}</span>
+                        <div className="flex justify-between text-slate-800">
+                          <span>ค่าทำงานล่วงเวลา (Overtime Pay)</span>
+                          <span className="font-mono font-semibold">
+                            ฿{selectedPayslip.ot.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+                          </span>
                         </div>
                       )}
+
                       {selectedPayslip.commission > 0 && (
-                        <div className="flex justify-between">
-                          <span>ค่าคอมมิชชั่น ({selectedPayslip.commPct}%):</span>
-                          <span className="font-mono font-semibold">฿{selectedPayslip.commission.toLocaleString()}</span>
+                        <div className="flex justify-between text-slate-800">
+                          <span>ค่าคอมมิชชั่น/อินเซนทีฟ ({selectedPayslip.commPct}%)</span>
+                          <span className="font-mono font-semibold">
+                            ฿{selectedPayslip.commission.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+                          </span>
                         </div>
                       )}
                     </td>
-                    <td className="p-2.5 align-top space-y-1">
+
+                    {/* Right: Deductions */}
+                    <td className="p-3 align-top space-y-1.5 bg-white">
                       {selectedPayslip.ssoDeduction > 0 ? (
-                        <div className="flex justify-between">
-                          <span>ประกันสังคม (5%):</span>
-                          <span className="font-mono font-semibold">-฿{selectedPayslip.ssoDeduction.toLocaleString()}</span>
+                        <div className="flex justify-between text-slate-800">
+                          <span>เงินสมทบกองทุนประกันสังคม 5%</span>
+                          <span className="font-mono font-semibold text-rose-700">
+                            -฿{selectedPayslip.ssoDeduction.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+                          </span>
                         </div>
                       ) : (
-                        <div className="text-slate-400 text-[11px]">ไม่มีรายการหักประกันสังคม</div>
+                        <div className="text-slate-400 text-[11px] italic">ไม่มีรายการหักประกันสังคม</div>
                       )}
+
                       {selectedPayslip.wht > 0 && (
-                        <div className="flex justify-between">
-                          <span>ภาษีหัก ณ ที่จ่าย 3% (เฉพาะคอม):</span>
-                          <span className="font-mono font-semibold">-฿{selectedPayslip.wht.toLocaleString()}</span>
+                        <div className="flex justify-between text-slate-800">
+                          <span>ภาษีเงินได้หัก ณ ที่จ่าย 3%</span>
+                          <span className="font-mono font-semibold text-rose-700">
+                            -฿{selectedPayslip.wht.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+                          </span>
                         </div>
                       )}
+
                       {selectedPayslip.otherDeductions > 0 && (
-                        <div className="flex justify-between">
-                          <span>รายการหักอื่นๆ:</span>
-                          <span className="font-mono font-semibold">-฿{selectedPayslip.otherDeductions.toLocaleString()}</span>
+                        <div className="flex justify-between text-slate-800">
+                          <span>หักขาด/ลา/มาสาย/อื่นๆ</span>
+                          <span className="font-mono font-semibold text-rose-700">
+                            -฿{selectedPayslip.otherDeductions.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+                          </span>
                         </div>
                       )}
                     </td>
                   </tr>
                 </tbody>
-                <tfoot className="bg-teal-50/70 border-t-2 border-slate-300 font-bold">
+
+                {/* Subtotals */}
+                <tfoot className="bg-slate-100 border-t-2 border-slate-400 font-bold">
                   <tr>
-                    <td className="p-2.5 border-r border-slate-200">
+                    <td className="p-2.5 border-r border-slate-300">
                       <div className="flex justify-between">
-                        <span>รวมรายได้:</span>
-                        <span className="font-mono text-emerald-700">
-                          ฿{(selectedPayslip.baseSalary + selectedPayslip.diligence + selectedPayslip.ot + selectedPayslip.commission).toLocaleString()}
+                        <span>รวมเงินได้ (Total Earnings):</span>
+                        <span className="font-mono text-emerald-800 font-bold">
+                          ฿{(selectedPayslip.baseSalary + selectedPayslip.diligence + selectedPayslip.ot + selectedPayslip.commission).toLocaleString("th-TH", { minimumFractionDigits: 2 })}
                         </span>
                       </div>
                     </td>
                     <td className="p-2.5">
                       <div className="flex justify-between">
-                        <span>รวมรายการหัก:</span>
-                        <span className="font-mono text-rose-700">
-                          -฿{(selectedPayslip.ssoDeduction + selectedPayslip.wht + selectedPayslip.otherDeductions).toLocaleString()}
+                        <span>รวมรายการหัก (Total Deductions):</span>
+                        <span className="font-mono text-rose-800 font-bold">
+                          -฿{(selectedPayslip.ssoDeduction + selectedPayslip.wht + selectedPayslip.otherDeductions).toLocaleString("th-TH", { minimumFractionDigits: 2 })}
                         </span>
                       </div>
                     </td>
                   </tr>
-                  <tr className="bg-teal-900 text-white text-sm">
+
+                  {/* Grand Net Pay */}
+                  <tr className="bg-slate-900 text-white font-bold">
                     <td colSpan={2} className="p-3">
-                      <div className="flex justify-between items-center">
-                        <span className="font-bold">ยอดเงินได้สุทธิที่ได้รับ (Net Pay):</span>
-                        <span className="text-base font-black">
+                      <div className="flex justify-between items-center text-sm">
+                        <span>จำนวนเงินจ่ายสุทธิ (NET PAY AMOUNT):</span>
+                        <span className="text-base font-black text-emerald-300 font-mono">
                           ฿{selectedPayslip.netPay.toLocaleString("th-TH", { minimumFractionDigits: 2 })} บาท
                         </span>
+                      </div>
+                      <div className="text-xs font-normal text-slate-300 pt-1 text-right italic">
+                        ({thaiBahtText(selectedPayslip.netPay)})
                       </div>
                     </td>
                   </tr>
                 </tfoot>
               </table>
 
-              {/* Signatures */}
-              <div className="grid grid-cols-2 gap-6 pt-6 text-center text-xs">
+              {/* Signatures & Certification */}
+              <div className="grid grid-cols-2 gap-8 pt-6 text-center text-xs">
                 <div className="space-y-6">
-                  <div className="border-b border-dashed border-slate-400 w-3/4 mx-auto pb-6"></div>
-                  <div>ลงชื่อ .....................................................<br /><span className="text-[10px] text-slate-500">(ผู้จ่ายเงิน / ผู้มีอำนาจลงนาม)</span></div>
+                  <div className="border-b border-slate-400 w-4/5 mx-auto pb-8"></div>
+                  <div>
+                    <div className="font-bold">ลงชื่อ ................................................................</div>
+                    <div className="text-[11px] text-slate-600 pt-1">(ผู้มีอำนาจลงนาม / ฝ่ายการเงินและบัญชี)</div>
+                    <div className="text-[10px] text-slate-400">บริษัท รวยรับทรัพย์168 จำกัด</div>
+                  </div>
                 </div>
+
                 <div className="space-y-6">
-                  <div className="border-b border-dashed border-slate-400 w-3/4 mx-auto pb-6"></div>
-                  <div>ลงชื่อ .....................................................<br /><span className="text-[10px] text-slate-500">(ผู้รับเงิน / พนักงาน)</span></div>
+                  <div className="border-b border-slate-400 w-4/5 mx-auto pb-8"></div>
+                  <div>
+                    <div className="font-bold">ลงชื่อ ................................................................</div>
+                    <div className="text-[11px] text-slate-600 pt-1">({selectedPayslip.employeeName})</div>
+                    <div className="text-[10px] text-slate-400">พนักงานผู้รับเงิน</div>
+                  </div>
                 </div>
+              </div>
+
+              {/* Footer Notice */}
+              <div className="text-center text-[10px] text-slate-400 border-t border-slate-200 pt-2">
+                เอกสารนี้เป็นหลักฐานการจ่ายเงินเดือนที่ออกโดยระบบอิเล็กทรอนิกส์ สามารถใช้ประกอบการทำธุรกรรมทางการเงินและยื่นสถาบันการเงินได้อย่างเป็นทางการ
               </div>
             </div>
           </div>
