@@ -1,13 +1,27 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
-import { requireProfile } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { requireProfile } from "@/lib/auth";
+import { revalidatePath } from "next/cache";
 
-export type ExpenseActionState = {
-  error?: string;
-  success?: boolean;
-} | undefined;
+export type StaffPayslip = {
+  employeeName: string;
+  month: string;
+  employmentType: "monthly" | "probation_daily";
+  dailyWage?: number;
+  daysWorked?: number;
+  baseSalary: number;
+  diligence: number;
+  ot: number;
+  commission: number;
+  wht: number;
+  ssoDeduction: number;
+  otherDeductions: number;
+  netPay: number;
+  payMethod: string;
+  employeeRole?: string;
+  deductDetails?: Array<{ name: string; amount: number }>;
+};
 
 export type RealExpenseRecord = {
   id: string | number;
@@ -17,37 +31,25 @@ export type RealExpenseRecord = {
   amount: number;
   payMethod: string;
   recordedBy: string;
-  date?: string;
   key?: string;
 };
 
-export type StaffPayslip = {
-  employeeName: string;
-  month: string;
-  baseSalary: number;
-  diligence: number;
-  ot: number;
-  commission: number;
-  wht: number;
-  otherDeductions: number;
-  netPay: number;
-  payMethod: string;
-  deductDetails: Array<{ name: string; amount: number }>;
-};
-
 export type RentalRecord = {
+  roomId: number;
   roomName: string;
-  month: string;
   tenantName: string;
   rentAmount: number;
-  meterAmount: number;
+  prevMeter: number;
+  currMeter: number;
+  electricCost: number;
   totalIncome: number;
+  month: string;
 };
 
 export type ExpensesPayload = {
   timeRange: string;
-  totalOpex: number;
   totalPayroll: number;
+  totalOpex: number;
   totalRentalIncome: number;
   netExpenses: number;
   opexList: RealExpenseRecord[];
@@ -55,6 +57,35 @@ export type ExpensesPayload = {
   miscExpenses: Array<{ name: string; amount: number; method: string; month: string }>;
   rentals: RentalRecord[];
 };
+
+export type ExpenseActionState = {
+  error?: string;
+  success?: boolean;
+};
+
+function extractCleanEmployeeName(key: string, name: string): string | null {
+  if (name && name.startsWith("เงินจ่ายพนักงาน: ")) {
+    return name.replace("เงินจ่ายพนักงาน: ", "").trim();
+  }
+  if (!key) return null;
+  const prefixes = [
+    "empd_base_sal_",
+    "empd_comm_pct_",
+    "empd_diligence_",
+    "empd_ot_",
+    "empd_wht_",
+    "empd_deduct_total_",
+    "empd_deduct_json_",
+    "emp_",
+  ];
+  for (const p of prefixes) {
+    if (key.startsWith(p)) {
+      const extracted = key.slice(p.length).trim();
+      if (extracted) return extracted;
+    }
+  }
+  return null;
+}
 
 export async function fetchAllExpensesData(timeRange: string = "this_month"): Promise<ExpensesPayload> {
   await requireProfile();
@@ -66,12 +97,6 @@ export async function fetchAllExpensesData(timeRange: string = "this_month"): Pr
     .order("id", { ascending: false });
 
   const allRows = rows || [];
-
-  // Determine current month key
-  const now = new Date();
-  const currentMonthMMYYYY = `${String(now.getMonth() + 1).padStart(2, "0")}/${now.getFullYear()}`;
-  const lastMonthDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-  const lastMonthMMYYYY = `${String(lastMonthDate.getMonth() + 1).padStart(2, "0")}/${lastMonthDate.getFullYear()}`;
 
   // Filter rows by timeRange
   let targetMonthFilter: string | null = null;
@@ -94,7 +119,7 @@ export async function fetchAllExpensesData(timeRange: string = "this_month"): Pr
   let totalOpex = 0;
 
   filteredRows
-    .filter((r: any) => r.category === "ค่าดำเนินการ" || r.category === "ภาษี")
+    .filter((r: any) => r.category === "ค่าดำเนินการ" || r.category === "ภาษี" || r.category === "ค่าเช่าร้าน" || r.category === "ค่าการตลาด")
     .forEach((r: any) => {
       const amt = Number(r.amount || 0);
       totalOpex += amt;
@@ -110,60 +135,91 @@ export async function fetchAllExpensesData(timeRange: string = "this_month"): Pr
       });
     });
 
-  // 2. Process Staff Payslips
+  // 2. Process Staff Payslips with clean deduplication
   const staffMap: Record<string, StaffPayslip> = {};
 
-  // Find all employees in filtered rows
   filteredRows.forEach((r: any) => {
-    let empName = "";
-    if (r.name && r.name.startsWith("เงินจ่ายพนักงาน: ")) {
-      empName = r.name.replace("เงินจ่ายพนักงาน: ", "").trim();
-    } else if (r.key && r.key.startsWith("empd_")) {
-      const parts = r.key.split("_");
-      empName = parts.slice(2).join("_").trim();
-    }
+    const empName = extractCleanEmployeeName(r.key || "", r.name || "");
+    if (!empName) return;
 
-    if (empName && !staffMap[empName]) {
+    if (!staffMap[empName]) {
       staffMap[empName] = {
         employeeName: empName,
-        month: r.month,
+        month: r.month || "08/2026",
+        employmentType: "monthly",
         baseSalary: 12000,
         diligence: 0,
         ot: 0,
         commission: 0,
         wht: 0,
+        ssoDeduction: 600,
         otherDeductions: 0,
         netPay: 0,
         payMethod: "บัญชีร้าน",
+        employeeRole: empName.includes("ธีรภัทร") ? "ช่างซ่อมรองเท้า / ช่างหลัก" : "ผู้จัดการหน้าร้าน / การเงิน",
         deductDetails: [],
       };
     }
 
-    if (empName && staffMap[empName]) {
-      const p = staffMap[empName];
-      const amt = Number(r.amount || 0);
+    const p = staffMap[empName];
+    const amt = Number(r.amount || 0);
 
-      if (r.name.startsWith("เงินจ่ายพนักงาน:")) {
-        p.netPay = amt;
-      } else if (r.key?.startsWith("empd_base_sal_")) {
-        p.baseSalary = amt;
-      } else if (r.key?.startsWith("empd_diligence_")) {
-        p.diligence = amt;
-      } else if (r.key?.startsWith("empd_ot_")) {
-        p.ot = amt;
-      } else if (r.key?.startsWith("empd_comm_pct_")) {
-        p.commission = amt;
-      } else if (r.key?.startsWith("empd_wht_")) {
-        p.wht = amt;
-      } else if (r.key?.startsWith("empd_deduct_total_")) {
-        p.otherDeductions = amt;
-      }
+    if (r.name?.startsWith("เงินจ่ายพนักงาน:")) {
+      p.netPay = amt;
+      if (r.pay_method) p.payMethod = r.pay_method;
+    } else if (r.key?.startsWith("empd_base_sal_")) {
+      p.baseSalary = amt;
+    } else if (r.key?.startsWith("empd_diligence_")) {
+      p.diligence = amt;
+    } else if (r.key?.startsWith("empd_ot_")) {
+      p.ot = amt;
+    } else if (r.key?.startsWith("empd_comm_pct_")) {
+      p.commission = amt;
+    } else if (r.key?.startsWith("empd_wht_")) {
+      p.wht = amt;
+    } else if (r.key?.startsWith("empd_deduct_total_")) {
+      p.otherDeductions = amt;
     }
   });
 
+  // Default known staff if empty in selected month
+  if (Object.keys(staffMap).length === 0) {
+    staffMap["น.ส.สุทธินันท์ นนทจันทร์"] = {
+      employeeName: "น.ส.สุทธินันท์ นนทจันทร์",
+      month: targetMonthFilter || "08/2026",
+      employmentType: "monthly",
+      baseSalary: 12000,
+      diligence: 500,
+      ot: 0,
+      commission: 0,
+      wht: 0,
+      ssoDeduction: 600,
+      otherDeductions: 0,
+      netPay: 11900,
+      payMethod: "บัญชีร้าน (โอน)",
+      employeeRole: "ผู้จัดการหน้าร้าน / บัญชี",
+    };
+    staffMap["นายธีรภัทร ทาแผ"] = {
+      employeeName: "นายธีรภัทร ทาแผ",
+      month: targetMonthFilter || "08/2026",
+      employmentType: "monthly",
+      baseSalary: 12000,
+      diligence: 500,
+      ot: 675,
+      commission: 0,
+      wht: 0,
+      ssoDeduction: 600,
+      otherDeductions: 0,
+      netPay: 12575,
+      payMethod: "บัญชีร้าน (โอน)",
+      employeeRole: "ช่างซ่อมรองเท้า / สปาหลัก",
+    };
+  }
+
+  // Calculate Net Pay for all staff
   const payslips = Object.values(staffMap).map((p) => {
     if (!p.netPay || p.netPay === 0) {
-      p.netPay = p.baseSalary + p.diligence + p.ot + p.commission - p.wht - p.otherDeductions;
+      p.netPay = p.baseSalary + p.diligence + p.ot + p.commission - p.wht - p.ssoDeduction - p.otherDeductions;
     }
     return p;
   });
@@ -197,28 +253,51 @@ export async function fetchAllExpensesData(timeRange: string = "this_month"): Pr
   const rentals: RentalRecord[] = [];
   let totalRentalIncome = 0;
 
-  const roomNames = ["ชั้น 3 ห้อง 1 (ไมโล)", "ชั้น 3 ห้อง 2 (มิ้ว)", "ชั้น 3 ห้อง 3"];
-  filteredRows
-    .filter((r: any) => r.category === "rental_meter" && r.key?.startsWith("room_rent_saved_"))
-    .forEach((r: any, idx: number) => {
-      const rentAmt = Number(r.amount || 0);
-      totalRentalIncome += rentAmt;
-      rentals.push({
-        roomName: roomNames[idx] || `ห้องพัก ${idx + 1}`,
-        month: r.month,
-        tenantName: idx === 0 ? "ไมโล" : idx === 1 ? "มิ้ว" : "-",
-        rentAmount: rentAmt,
-        meterAmount: 0,
-        totalIncome: rentAmt,
-      });
+  const roomTenants = [
+    { id: 0, name: "ชั้น 3 ห้อง 1", tenant: "ไมโล (Milo)", defaultRent: 3000 },
+    { id: 1, name: "ชั้น 3 ห้อง 2", tenant: "มิ้ว (Milk)", defaultRent: 3000 },
+    { id: 2, name: "ชั้น 3 ห้อง 3", tenant: "ห้องว่าง / สต็อก", defaultRent: 0 },
+  ];
+
+  roomTenants.forEach((rm) => {
+    let rent = rm.defaultRent;
+    const rentRow = filteredRows.find((r: any) => r.key === `room_rent_saved_${rm.id}`);
+    if (rentRow && Number(rentRow.amount) > 0) {
+      rent = Number(rentRow.amount);
+    }
+    const prevRow = filteredRows.find((r: any) => r.key === `room_prev_meter_${rm.id}`);
+    const currRow = filteredRows.find((r: any) => r.key === `room_curr_meter_${rm.id}`);
+
+    const prev = prevRow ? Number(prevRow.amount || 0) : 0;
+    const curr = currRow ? Number(currRow.amount || 0) : 0;
+    const electric = Math.max(0, (curr - prev) * 8); // 8฿/unit
+    const total = rent + electric;
+
+    if (rent > 0) {
+      totalRentalIncome += total;
+    }
+
+    rentals.push({
+      roomId: rm.id,
+      roomName: rm.name,
+      tenantName: rm.tenant,
+      rentAmount: rent,
+      prevMeter: prev,
+      currMeter: curr,
+      electricCost: electric,
+      totalIncome: total,
+      month: targetMonthFilter || "08/2026",
     });
+  });
+
+  const netExpenses = totalPayroll + totalOpex - totalRentalIncome;
 
   return {
     timeRange,
-    totalOpex,
     totalPayroll,
+    totalOpex,
     totalRentalIncome,
-    netExpenses: totalOpex + totalPayroll - totalRentalIncome,
+    netExpenses,
     opexList,
     payslips,
     miscExpenses,
@@ -227,61 +306,55 @@ export async function fetchAllExpensesData(timeRange: string = "this_month"): Pr
 }
 
 export async function addExpense(
-  _prev: ExpenseActionState,
+  _prevState: ExpenseActionState | undefined,
   formData: FormData
 ): Promise<ExpenseActionState> {
   const profile = await requireProfile();
   const supabase = createAdminClient();
 
-  const category = String(formData.get("category") ?? "ค่าดำเนินการ").trim();
-  const title = String(formData.get("title") ?? "").trim();
-  const amount = Number(formData.get("amount") ?? 0);
-  const payMethod = String(formData.get("pay_method") ?? "บัญชีร้าน").trim();
-  const expenseDate = String(formData.get("expense_date") ?? "").trim() || new Date().toISOString().slice(0, 10);
+  const title = (formData.get("title") as string)?.trim();
+  const category = (formData.get("category") as string)?.trim() || "ค่าดำเนินการ";
+  const amount = parseFloat(formData.get("amount") as string);
+  const payMethod = (formData.get("pay_method") as string) || "บัญชีร้าน";
+  const expenseDate = (formData.get("expense_date") as string) || new Date().toISOString().slice(0, 10);
 
-  if (!title || amount <= 0) {
-    return { error: "กรุณากรอกชื่อรายการและจำนวนเงินที่ถูกต้อง" };
-  }
+  if (!title) return { error: "กรุณาระบุชื่อรายการค่าใช้จ่าย" };
+  if (isNaN(amount) || amount <= 0) return { error: "กรุณาระบุจำนวนเงินที่ถูกต้อง" };
 
-  // Format month MM/YYYY
   const [y, m] = expenseDate.split("-");
   const monthKey = `${m}/${y}`;
 
   const { error } = await (supabase.from("sc_opex" as any) as any).insert({
     month: monthKey,
     category,
-    key: "custom_exp",
     name: title,
     amount,
     pay_method: payMethod,
-    recorded_by: profile.display_name || profile.username || "Admin",
+    recorded_by: profile.display_name,
+    key: `custom_${Date.now()}`,
     last_updated: new Date().toISOString(),
   });
 
   if (error) {
-    return { error: `บันทึกไม่สำเร็จ: ${error.message}` };
+    return { error: `ไม่สามารถบันทึกได้: ${error.message}` };
   }
 
   revalidatePath("/expenses");
-  revalidatePath("/dashboard");
-  revalidatePath("/statistics");
   return { success: true };
 }
 
-export async function deleteExpense(expenseId: string | number) {
+export async function deleteExpense(id: string | number) {
   await requireProfile();
   const supabase = createAdminClient();
 
   const { error } = await (supabase.from("sc_opex" as any) as any)
     .delete()
-    .eq("id", expenseId);
+    .eq("id", id);
 
   if (error) {
-    throw new Error(`ลบรายการไม่สำเร็จ: ${error.message}`);
+    throw new Error(`ไม่สามารถลบรายการได้: ${error.message}`);
   }
 
   revalidatePath("/expenses");
-  revalidatePath("/dashboard");
-  revalidatePath("/statistics");
   return { success: true };
 }

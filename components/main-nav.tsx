@@ -12,6 +12,7 @@ import {
   FileText,
   ScanLine,
   Landmark,
+  Calendar,
 } from "lucide-react";
 import type { AppModule } from "@/lib/permissions";
 
@@ -21,6 +22,7 @@ const ICON_MAP: Record<string, React.ElementType> = {
   invoicing: FileText,
   inventory: Boxes,
   expenses: Wallet,
+  roster: Calendar,
   "expenses-ocr": ScanLine,
   "tax-filing": Landmark,
   statistics: TrendingUp,
