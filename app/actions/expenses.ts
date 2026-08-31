@@ -13,9 +13,10 @@ export type StaffPayslip = {
   baseSalary: number;
   diligence: number;
   ot: number;
+  commPct?: number;
   commission: number;
-  wht: number;
-  ssoDeduction: number;
+  wht: number; // 3% of commission
+  ssoDeduction: number; // 5% of base salary for monthly staff
   otherDeductions: number;
   netPay: number;
   payMethod: string;
@@ -48,6 +49,7 @@ export type RentalRecord = {
 
 export type ExpensesPayload = {
   timeRange: string;
+  totalMonthlySales: number;
   totalPayroll: number;
   totalOpex: number;
   totalRentalIncome: number;
@@ -99,20 +101,33 @@ export async function fetchAllExpensesData(timeRange: string = "this_month"): Pr
   const allRows = rows || [];
 
   // Filter rows by timeRange
-  let targetMonthFilter: string | null = null;
+  let targetMonthFilter: string = "08/2026";
+  let targetSalesMonth: string = "2026-08";
+
   if (timeRange === "this_month" || timeRange === "today" || timeRange === "yesterday" || timeRange === "this_week") {
-    targetMonthFilter = "08/2026"; // Current active data month in system
+    targetMonthFilter = "08/2026";
+    targetSalesMonth = "2026-08";
   } else if (timeRange === "last_month") {
     targetMonthFilter = "07/2026";
+    targetSalesMonth = "2026-07";
   } else if (timeRange.includes("-")) {
-    // format YYYY-MM -> MM/YYYY
     const [y, m] = timeRange.split("-");
     targetMonthFilter = `${m}/${y}`;
+    targetSalesMonth = `${y}-${m}`;
   }
 
-  const filteredRows = targetMonthFilter
-    ? allRows.filter((r: any) => r.month === targetMonthFilter)
-    : allRows;
+  // Fetch real sales for the month to calculate commission %
+  const { data: salesRows } = await (supabase.from("sc_sales" as any) as any)
+    .select("date, total_amount")
+    .gte("date", `${targetSalesMonth}-01`)
+    .lte("date", `${targetSalesMonth}-31`);
+
+  const totalMonthlySales = (salesRows || []).reduce(
+    (sum: number, r: any) => sum + Number(r.total_amount || 0),
+    0
+  );
+
+  const filteredRows = allRows.filter((r: any) => r.month === targetMonthFilter);
 
   // 1. Process Operating Expenses (ค่าดำเนินการ & ภาษี)
   const opexList: RealExpenseRecord[] = [];
@@ -135,46 +150,115 @@ export async function fetchAllExpensesData(timeRange: string = "this_month"): Pr
       });
     });
 
-  // 2. Process Staff Payslips with clean deduplication
+  // 2. Process Staff Payslips
   const staffMap: Record<string, StaffPayslip> = {};
 
+  // Initialize the 3 real shop staff members:
+  // 1. เชียง: พนักงานประจำ (เงินเดือน) - หยุดพุธ
+  // 2. มิ้ว: พนักงานประจำ (เงินเดือน) - หยุดอาทิตย์
+  // 3. เจ: พนักงานทดลองงาน (วันละ 350฿ x 26 วัน) - หยุดศุกร์
+  staffMap["เชียง"] = {
+    employeeName: "เชียง",
+    month: targetMonthFilter,
+    employmentType: "monthly",
+    baseSalary: 12000,
+    diligence: 500,
+    ot: 0,
+    commPct: 0,
+    commission: 0,
+    wht: 0,
+    ssoDeduction: 600,
+    otherDeductions: 0,
+    netPay: 11900,
+    payMethod: "บัญชีร้าน (โอน)",
+    employeeRole: "พนักงานประจำ / ช่างหลัก",
+  };
+
+  staffMap["มิ้ว"] = {
+    employeeName: "มิ้ว",
+    month: targetMonthFilter,
+    employmentType: "monthly",
+    baseSalary: 12000,
+    diligence: 500,
+    ot: 0,
+    commPct: 0,
+    commission: 0,
+    wht: 0,
+    ssoDeduction: 600,
+    otherDeductions: 0,
+    netPay: 11900,
+    payMethod: "บัญชีร้าน (โอน)",
+    employeeRole: "พนักงานประจำ / ผู้จัดการหน้าร้าน",
+  };
+
+  staffMap["นายธีรภัทร ทาแผ (เจ)"] = {
+    employeeName: "นายธีรภัทร ทาแผ (เจ)",
+    month: targetMonthFilter,
+    employmentType: "probation_daily",
+    dailyWage: 350,
+    daysWorked: 26,
+    baseSalary: 9100, // 26 * 350
+    diligence: 500,
+    ot: 675,
+    commPct: 0,
+    commission: 0,
+    wht: 0,
+    ssoDeduction: 0, // ยกเว้นประกันสังคมช่วงทดลองงาน
+    otherDeductions: 0,
+    netPay: 10275, // 9100 + 500 + 675
+    payMethod: "บัญชีร้าน (โอน)",
+    employeeRole: "พนักงานทดลองงาน / ช่างสปา (350฿/วัน)",
+  };
+
+  // Merge any saved custom records from sc_opex
   filteredRows.forEach((r: any) => {
-    const empName = extractCleanEmployeeName(r.key || "", r.name || "");
-    if (!empName) return;
+    const rawEmp = extractCleanEmployeeName(r.key || "", r.name || "");
+    if (!rawEmp) return;
+
+    // Normalize name to our 3 staff members if matched
+    let empName = rawEmp;
+    if (rawEmp.includes("ธีรภัทร") || rawEmp.includes("เจ")) {
+      empName = "นายธีรภัทร ทาแผ (เจ)";
+    } else if (rawEmp.includes("เชียง")) {
+      empName = "เชียง";
+    } else if (rawEmp.includes("มิ้ว")) {
+      empName = "มิ้ว";
+    } else if (rawEmp.includes("สุทธินันท์")) {
+      empName = "เชียง"; // Map legacy manager name to Chiang
+    }
 
     if (!staffMap[empName]) {
       staffMap[empName] = {
         employeeName: empName,
-        month: r.month || "08/2026",
+        month: r.month || targetMonthFilter,
         employmentType: "monthly",
         baseSalary: 12000,
-        diligence: 0,
+        diligence: 500,
         ot: 0,
+        commPct: 0,
         commission: 0,
         wht: 0,
         ssoDeduction: 600,
         otherDeductions: 0,
-        netPay: 0,
-        payMethod: "บัญชีร้าน",
-        employeeRole: empName.includes("ธีรภัทร") ? "ช่างซ่อมรองเท้า / ช่างหลัก" : "ผู้จัดการหน้าร้าน / การเงิน",
-        deductDetails: [],
+        netPay: 11900,
+        payMethod: "บัญชีร้าน (โอน)",
+        employeeRole: "พนักงานประจำ",
       };
     }
 
     const p = staffMap[empName];
     const amt = Number(r.amount || 0);
 
-    if (r.name?.startsWith("เงินจ่ายพนักงาน:")) {
-      p.netPay = amt;
-      if (r.pay_method) p.payMethod = r.pay_method;
-    } else if (r.key?.startsWith("empd_base_sal_")) {
+    if (r.key?.startsWith("empd_base_sal_")) {
       p.baseSalary = amt;
     } else if (r.key?.startsWith("empd_diligence_")) {
       p.diligence = amt;
     } else if (r.key?.startsWith("empd_ot_")) {
       p.ot = amt;
     } else if (r.key?.startsWith("empd_comm_pct_")) {
-      p.commission = amt;
+      p.commPct = amt;
+      p.commission = Math.round((totalMonthlySales * amt) / 100);
+      p.wht = Math.round(p.commission * 0.03); // WHT 3% on commission
     } else if (r.key?.startsWith("empd_wht_")) {
       p.wht = amt;
     } else if (r.key?.startsWith("empd_deduct_total_")) {
@@ -182,45 +266,14 @@ export async function fetchAllExpensesData(timeRange: string = "this_month"): Pr
     }
   });
 
-  // Default known staff if empty in selected month
-  if (Object.keys(staffMap).length === 0) {
-    staffMap["น.ส.สุทธินันท์ นนทจันทร์"] = {
-      employeeName: "น.ส.สุทธินันท์ นนทจันทร์",
-      month: targetMonthFilter || "08/2026",
-      employmentType: "monthly",
-      baseSalary: 12000,
-      diligence: 500,
-      ot: 0,
-      commission: 0,
-      wht: 0,
-      ssoDeduction: 600,
-      otherDeductions: 0,
-      netPay: 11900,
-      payMethod: "บัญชีร้าน (โอน)",
-      employeeRole: "ผู้จัดการหน้าร้าน / บัญชี",
-    };
-    staffMap["นายธีรภัทร ทาแผ"] = {
-      employeeName: "นายธีรภัทร ทาแผ",
-      month: targetMonthFilter || "08/2026",
-      employmentType: "monthly",
-      baseSalary: 12000,
-      diligence: 500,
-      ot: 675,
-      commission: 0,
-      wht: 0,
-      ssoDeduction: 600,
-      otherDeductions: 0,
-      netPay: 12575,
-      payMethod: "บัญชีร้าน (โอน)",
-      employeeRole: "ช่างซ่อมรองเท้า / สปาหลัก",
-    };
-  }
-
   // Calculate Net Pay for all staff
   const payslips = Object.values(staffMap).map((p) => {
-    if (!p.netPay || p.netPay === 0) {
-      p.netPay = p.baseSalary + p.diligence + p.ot + p.commission - p.wht - p.ssoDeduction - p.otherDeductions;
+    // If commission % is set, recompute commission & 3% WHT
+    if (p.commPct && p.commPct > 0) {
+      p.commission = Math.round((totalMonthlySales * p.commPct) / 100);
+      p.wht = Math.round(p.commission * 0.03);
     }
+    p.netPay = p.baseSalary + p.diligence + p.ot + p.commission - p.wht - p.ssoDeduction - p.otherDeductions;
     return p;
   });
 
@@ -286,7 +339,7 @@ export async function fetchAllExpensesData(timeRange: string = "this_month"): Pr
       currMeter: curr,
       electricCost: electric,
       totalIncome: total,
-      month: targetMonthFilter || "08/2026",
+      month: targetMonthFilter,
     });
   });
 
@@ -294,6 +347,7 @@ export async function fetchAllExpensesData(timeRange: string = "this_month"): Pr
 
   return {
     timeRange,
+    totalMonthlySales,
     totalPayroll,
     totalOpex,
     totalRentalIncome,

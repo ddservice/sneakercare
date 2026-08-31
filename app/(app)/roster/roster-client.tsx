@@ -55,29 +55,29 @@ const EMPLOYEES: EmployeeInfo[] = [
     name: "เชียง",
     type: "monthly",
     role: "พนักงานประจำ / ช่างหลัก",
-    wageNote: "เงินเดือนประจำ",
+    wageNote: "เงินเดือนประจำ (12,000 ฿)",
     offDay: 3, // Wed
     offDayName: "วันพุธ",
     color: "bg-teal-700 text-white",
   },
   {
-    id: "jae",
-    name: "เจ (ธีรภัทร)",
+    id: "milk",
+    name: "มิ้ว",
     type: "monthly",
-    role: "พนักงานประจำ / ช่างสปา",
-    wageNote: "เงินเดือนประจำ",
-    offDay: 5, // Fri
-    offDayName: "วันศุกร์",
+    role: "พนักงานประจำ / ผู้จัดการหน้าร้าน",
+    wageNote: "เงินเดือนประจำ (12,000 ฿)",
+    offDay: 0, // Sun
+    offDayName: "วันอาทิตย์",
     color: "bg-indigo-700 text-white",
   },
   {
-    id: "milk",
-    name: "มิ้ว",
+    id: "jae",
+    name: "เจ (ธีรภัทร)",
     type: "daily",
-    role: "พนักงานทดลองงาน / หน้าร้าน",
-    wageNote: "วันละ 350 บาท",
-    offDay: 0, // Sun
-    offDayName: "วันอาทิตย์",
+    role: "พนักงานทดลองงาน / ช่างสปา",
+    wageNote: "วันละ 350 บาท (คำนวณตามวันทำจริง)",
+    offDay: 5, // Fri
+    offDayName: "วันศุกร์",
     color: "bg-amber-600 text-white",
   },
 ];
@@ -203,29 +203,29 @@ export function RosterClient() {
     return days;
   }, [currentYear, currentMonth]);
 
-  // Monthly stats for Milk (Daily Wage @ 350฿) & Chiang/Jae
+  // Monthly stats for Jae (Daily Wage @ 350฿) & Chiang/Milk
   const monthlyStats = useMemo(() => {
-    let milkWorkDays = 0;
-    let chiangWorkDays = 0;
     let jaeWorkDays = 0;
+    let chiangWorkDays = 0;
+    let milkWorkDays = 0;
     let holidayCount = 0;
 
     calendarDays.forEach((day) => {
       if (!day) return;
       if (day.holiday) holidayCount++;
 
-      if (!day.off.includes("มิ้ว")) milkWorkDays++;
-      if (!day.off.includes("เชียง")) chiangWorkDays++;
       if (!day.off.includes("เจ")) jaeWorkDays++;
+      if (!day.off.includes("เชียง")) chiangWorkDays++;
+      if (!day.off.includes("มิ้ว")) milkWorkDays++;
     });
 
-    const milkEstimatedWage = milkWorkDays * 350;
+    const jaeEstimatedWage = jaeWorkDays * 350;
 
     return {
-      milkWorkDays,
-      milkEstimatedWage,
-      chiangWorkDays,
       jaeWorkDays,
+      jaeEstimatedWage,
+      chiangWorkDays,
+      milkWorkDays,
       holidayCount,
     };
   }, [calendarDays]);
@@ -306,10 +306,10 @@ export function RosterClient() {
                 <span className="text-slate-500">รูปแบบค่าจ้าง:</span>
                 <span className="font-semibold text-slate-700">{emp.wageNote}</span>
               </div>
-              {emp.id === "milk" && (
+              {emp.id === "jae" && (
                 <div className="rounded-lg bg-amber-50 p-2 border border-amber-200/80 text-[11px] text-amber-900 font-medium">
-                  💡 เดือนนี้ทำงาน {monthlyStats.milkWorkDays} วัน = ประมาณการค่าจ้าง ฿
-                  {monthlyStats.milkEstimatedWage.toLocaleString()} บาท
+                  💡 เดือนนี้ทำงาน {monthlyStats.jaeWorkDays} วัน = ประมาณการค่าจ้าง ฿
+                  {monthlyStats.jaeEstimatedWage.toLocaleString()} บาท
                 </div>
               )}
             </CardContent>
