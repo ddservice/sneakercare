@@ -1,4 +1,7 @@
-// ⚠️ Next.js เวอร์ชันนี้เปลี่ยนชื่อ middleware.ts → proxy.ts (ดู AGENTS.md) — ห้ามสร้าง middleware.ts คู่กัน
+if (typeof (globalThis as any).self === "undefined") {
+  (globalThis as any).self = globalThis;
+}
+
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
