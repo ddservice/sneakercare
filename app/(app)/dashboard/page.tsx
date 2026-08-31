@@ -31,12 +31,14 @@ export default async function DashboardPage() {
   // 1. Fetch Real Sales Data (sc_sales + service_orders)
   const [{ data: salesRows }, { data: orders }, { data: opexRows }, { data: lowStock }, { data: allItems }] =
     await Promise.all([
-      supabase.from("sc_sales").select("*").order("date", { ascending: false }),
+      (supabase.from("sc_sales" as any) as any).select("*").order("date", { ascending: false }),
       supabase.from("service_orders").select("*").order("received_at", { ascending: false }),
-      supabase.from("sc_opex").select("*"),
+      (supabase.from("sc_opex" as any) as any).select("*"),
       supabase.from("v_low_stock").select("*"),
       supabase.from("items").select("id, name"),
     ]);
+
+  const recentOrders = orders?.slice(0, 5) ?? [];
 
   // Current month (e.g. 2026-08)
   const currentMonthKey = new Date().toISOString().slice(0, 7);
