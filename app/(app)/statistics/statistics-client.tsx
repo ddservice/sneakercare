@@ -180,43 +180,79 @@ export function StatisticsClient({ initialData }: { initialData: AnalyticsDashbo
             </Card>
           </div>
 
-          {/* ── Monthly Trend Bar Visualizer ── */}
-          <Card className="border-slate-200 shadow-xs">
-            <CardHeader className="border-b border-slate-100 pb-3">
-              <CardTitle className="text-sm font-bold flex items-center gap-2 text-slate-900">
-                <BarChart3 className="h-4 w-4 text-teal-700" />
-                แนวโน้มยอดขายย้อนหลังทุกเดือน (Monthly Revenue Breakdown)
+          {/* ── Monthly Trend Bar Visualizer with Growth/Decline % ── */}
+          <Card className="border-slate-200 shadow-xs dark:border-slate-800 dark:bg-slate-900">
+            <CardHeader className="border-b border-slate-100 dark:border-slate-800 pb-3">
+              <CardTitle className="text-sm font-bold flex items-center gap-2 text-slate-900 dark:text-slate-100">
+                <BarChart3 className="h-4 w-4 text-teal-700 dark:text-teal-400" />
+                แนวโน้มยอดขายย้อนหลังทุกเดือน & อัตราการเติบโต (Monthly Revenue & MoM Growth)
               </CardTitle>
-              <CardDescription className="text-xs">
-                เปรียบเทียบยอดขายรวมในแต่ละเดือนตั้งแต่ พฤศจิกายน 2025 ถึงปัจจุบัน
+              <CardDescription className="text-xs text-slate-500 dark:text-slate-400">
+                เปรียบเทียบยอดขายรวมและอัตราการเติบโต/ลดลงเทียบเดือนก่อนหน้า (MoM Growth %)
               </CardDescription>
             </CardHeader>
             <CardContent className="p-5 space-y-3">
-              {initialData.monthlyTrends.map((m) => {
+              {initialData.monthlyTrends.map((m, idx, arr) => {
                 const pct = Math.round((m.revenue / maxMonthRevenue) * 100);
                 const isSelected = selectedRange === m.month;
+
+                // Calculate Month-over-Month Growth vs previous chronological month
+                const prevMonth = idx < arr.length - 1 ? arr[idx + 1] : null;
+                let growthPct: number | null = null;
+                if (prevMonth && prevMonth.revenue > 0) {
+                  growthPct = Math.round(((m.revenue - prevMonth.revenue) / prevMonth.revenue) * 1000) / 10;
+                }
+
                 return (
                   <div
                     key={m.month}
                     onClick={() => setSelectedRange(m.month)}
-                    className={`cursor-pointer rounded-lg p-2.5 transition-all ${
+                    className={`cursor-pointer rounded-xl p-3 transition-all ${
                       isSelected
-                        ? "bg-teal-50/80 border border-teal-300"
-                        : "hover:bg-slate-50 border border-transparent"
+                        ? "bg-teal-50/90 border-2 border-teal-500 shadow-xs dark:bg-teal-950/40 dark:border-teal-400"
+                        : "hover:bg-slate-50 border border-slate-200/60 dark:border-slate-800 dark:hover:bg-slate-800/60"
                     }`}
                   >
-                    <div className="flex items-center justify-between text-xs font-bold mb-1.5">
-                      <span className={isSelected ? "text-teal-900" : "text-slate-800"}>
-                        {m.label} ({m.daysCount} วัน / {m.totalShoes} คู่)
-                      </span>
-                      <span className="font-mono text-teal-800">
+                    <div className="flex flex-wrap items-center justify-between text-xs font-bold gap-2 mb-1.5">
+                      <div className="flex items-center gap-2">
+                        <span className={isSelected ? "text-teal-950 dark:text-teal-200 font-extrabold" : "text-slate-800 dark:text-slate-200"}>
+                          {m.label}
+                        </span>
+                        <span className="text-[11px] text-slate-400 font-normal">
+                          ({m.daysCount} วัน · {m.totalShoes} คู่)
+                        </span>
+
+                        {/* Growth % Badge */}
+                        {growthPct !== null ? (
+                          <Badge
+                            variant="outline"
+                            className={`text-[10px] font-black px-1.5 py-0 ${
+                              growthPct > 0
+                                ? "bg-emerald-100 text-emerald-800 border-emerald-300 dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-700"
+                                : growthPct < 0
+                                ? "bg-rose-100 text-rose-800 border-rose-300 dark:bg-rose-950/60 dark:text-rose-300 dark:border-rose-700"
+                                : "bg-slate-100 text-slate-700 border-slate-300"
+                            }`}
+                          >
+                            {growthPct > 0 ? `▲ +${growthPct}%` : `▼ ${growthPct}%`}
+                          </Badge>
+                        ) : (
+                          <Badge variant="outline" className="text-[10px] text-slate-400 border-slate-200">
+                            งวดเริ่มต้น
+                          </Badge>
+                        )}
+                      </div>
+
+                      <span className="font-mono font-black text-sm text-teal-800 dark:text-teal-300">
                         ฿{m.revenue.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
                       </span>
                     </div>
-                    <div className="h-2.5 w-full rounded-full bg-slate-100 overflow-hidden">
+
+                    {/* Progress Visual Bar */}
+                    <div className="h-2.5 w-full rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
                       <div
                         className={`h-full rounded-full transition-all duration-500 ${
-                          isSelected ? "bg-teal-700" : "bg-teal-500"
+                          isSelected ? "bg-teal-700 dark:bg-teal-400" : "bg-teal-500 dark:bg-teal-600"
                         }`}
                         style={{ width: `${pct}%` }}
                       />
@@ -227,35 +263,42 @@ export function StatisticsClient({ initialData }: { initialData: AnalyticsDashbo
             </CardContent>
           </Card>
 
-          {/* ── Shoe Size Breakdown ── */}
-          <Card className="border-slate-200 shadow-xs">
-            <CardHeader className="border-b border-slate-100 pb-3">
-              <CardTitle className="text-sm font-bold flex items-center gap-2 text-slate-900">
-                <PieChart className="h-4 w-4 text-teal-700" />
-                สถิติสัดส่วนขนาดรองเท้าที่รับบริการ (Size Distribution)
+          {/* ── Package Distribution (Replaced Size with Package) ── */}
+          <Card className="border-slate-200 shadow-xs dark:border-slate-800 dark:bg-slate-900">
+            <CardHeader className="border-b border-slate-100 dark:border-slate-800 pb-3">
+              <CardTitle className="text-sm font-bold flex items-center gap-2 text-slate-900 dark:text-slate-100">
+                <PieChart className="h-4 w-4 text-teal-700 dark:text-teal-400" />
+                สถิติสัดส่วนแพ็กเกจบริการ (Package Distribution)
               </CardTitle>
-              <CardDescription className="text-xs">
-                คำนวณจาก {totalShoes.toLocaleString()} คู่ ในช่วงเวลาที่เลือก
+              <CardDescription className="text-xs text-slate-500 dark:text-slate-400">
+                วิเคราะห์สัดส่วนแพ็กเกจบริการจาก {totalShoes.toLocaleString()} คู่ ในช่วงเวลาที่เลือก
               </CardDescription>
             </CardHeader>
             <CardContent className="p-5">
               <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
                 {[
-                  { label: "Size S (35-37)", count: sizeS, desc: "เท้าเล็ก / ผู้หญิง" },
-                  { label: "Size M (38-41)", count: sizeM, desc: "มาตรฐานทั่วไป" },
-                  { label: "Size L (42-44)", count: sizeL, desc: "มาตรฐานผู้ชาย" },
-                  { label: "Size XL (45+)", count: sizeXL, desc: "ขนาดใหญ่พิเศษ" },
+                  { label: "Package S (200฿)", count: sizeS, desc: "ทำความสะอาดพื้นฐาน (Basic)" },
+                  { label: "Package M (400฿)", count: sizeM, desc: "ทำความสะอาดมาตรฐาน (Standard)" },
+                  { label: "Package L (600฿)", count: sizeL, desc: "สปาแบบพรีเมียม (Premium)" },
+                  { label: "Package XL (800฿)", count: sizeXL, desc: "บูรณะฟูลเซ็ต (Full Restoration)" },
                 ].map((s) => {
                   const pct = totalShoes > 0 ? Math.round((s.count / totalShoes) * 100) : 0;
                   return (
                     <div
                       key={s.label}
-                      className="rounded-xl border border-slate-200 bg-slate-50/50 p-4 text-center"
+                      className="rounded-xl border border-slate-200 p-4 bg-slate-50/50 space-y-2 dark:border-slate-800 dark:bg-slate-800/50"
                     >
-                      <div className="text-xs font-bold text-slate-700">{s.label}</div>
-                      <div className="text-2xl font-black text-teal-800 my-1 font-mono">{s.count} คู่</div>
-                      <div className="text-[11px] font-semibold text-teal-700">{pct}%</div>
-                      <div className="text-[10px] text-slate-400 mt-0.5">{s.desc}</div>
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold text-xs text-slate-900 dark:text-slate-100">{s.label}</span>
+                        <span className="text-xs font-mono font-bold text-teal-700 dark:text-teal-300">{pct}%</span>
+                      </div>
+                      <div className="text-2xl font-black font-mono text-slate-900 dark:text-slate-100">
+                        {s.count.toLocaleString()} <span className="text-xs font-normal text-slate-500">คู่</span>
+                      </div>
+                      <div className="text-[11px] text-slate-400">{s.desc}</div>
+                      <div className="h-1.5 w-full rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
+                        <div className="h-full bg-teal-600 dark:bg-teal-400 rounded-full" style={{ width: `${pct}%` }} />
+                      </div>
                     </div>
                   );
                 })}

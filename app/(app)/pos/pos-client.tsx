@@ -45,10 +45,10 @@ export type OrderItem = {
 };
 
 const DEFAULT_SERVICES = [
-  { id: "pkg_s", name: "Package Size S (ผ้าใบ/แตะทั่วไป 35-37)", price: 200, category: "package" },
-  { id: "pkg_m", name: "Package Size M (สนีกเกอร์มาตรฐาน 38-41)", price: 400, category: "package" },
-  { id: "pkg_l", name: "Package Size L (สนีกเกอร์แบรนด์/หุ้มข้อ 42-44)", price: 600, category: "package" },
-  { id: "pkg_xl", name: "Package Size XL (โอเวอร์ไซส์/บูทพิเศษ 45+)", price: 800, category: "package" },
+  { id: "pkg_s", name: "Package S — ทำความสะอาดพื้นฐาน", price: 200, category: "package" },
+  { id: "pkg_m", name: "Package M — ทำความสะอาดมาตรฐาน", price: 400, category: "package" },
+  { id: "pkg_l", name: "Package L — สปาแบบพรีเมียม", price: 600, category: "package" },
+  { id: "pkg_xl", name: "Package XL — บูรณะฟูลเซ็ตครบวงจร", price: 800, category: "package" },
   { id: "opt_express", name: "บริการเสริม: ซักด่วน (Express Clean)", price: 100, category: "addon" },
   { id: "opt_unyellow", name: "บริการเสริม: แก้เหลือง (Unyellowing)", price: 150, category: "addon" },
   { id: "opt_deepclean", name: "บริการเสริม: ซักละเอียด + ฆ่าเชื้อ", price: 100, category: "addon" },
@@ -59,10 +59,10 @@ const DEFAULT_SERVICES = [
 
 const POPULAR_BRANDS = ["Nike", "Adidas", "Jordan", "New Balance", "Converse", "Vans", "On Cloud", "Asics"];
 const SIZES = [
-  { label: "S (200฿)", val: "S" },
-  { label: "M (400฿)", val: "M" },
-  { label: "L (600฿)", val: "L" },
-  { label: "XL (800฿)", val: "XL" },
+  { label: "Package S (200฿)", val: "S" },
+  { label: "Package M (400฿)", val: "M" },
+  { label: "Package L (600฿)", val: "L" },
+  { label: "Package XL (800฿)", val: "XL" },
 ];
 
 const STATUS_CONFIG = {

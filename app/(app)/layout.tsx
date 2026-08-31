@@ -6,6 +6,7 @@ import { logout } from "@/app/actions/auth";
 import { Toaster } from "@/components/ui/sonner";
 import { BranchPicker } from "@/components/branch-picker";
 import { MainNav } from "@/components/main-nav";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { Footprints, LogOut, Shield } from "lucide-react";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
@@ -58,6 +59,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
               <span className="text-slate-300 dark:text-slate-600">|</span>
               <span className="font-medium">{profile.display_name}</span>
             </div>
+
+            {/* Dark / Light Mode Icon-only Switch */}
+            <ThemeToggle />
 
             <form action={logout}>
               <Button

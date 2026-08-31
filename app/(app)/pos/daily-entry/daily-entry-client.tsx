@@ -806,11 +806,11 @@ export function DailyEntryClient({ initialRecords }: { initialRecords: DailySale
                   />
                 </div>
 
-                {/* 2. Shoe Package Sizes Grid (S: 200, M: 400, L: 600, XL: 800) */}
+                {/* 2. Shoe Package Grid (Package S: 200, Package M: 400, Package L: 600, Package XL: 800) */}
                 <div className="space-y-2.5 rounded-xl border border-slate-200 bg-slate-50/70 p-4">
                   <div className="flex items-center justify-between">
                     <Label className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
-                      <Footprints className="h-3.5 w-3.5 text-teal-700" /> จำนวนคู่แยกตาม Size (Package ราคามาตรฐาน)
+                      <Footprints className="h-3.5 w-3.5 text-teal-700" /> จำนวนคู่แยกตามแพ็กเกจบริการ (Service Package)
                     </Label>
                     <span className="rounded-full bg-teal-100 px-2.5 py-0.5 text-xs font-black text-teal-900">
                       รวม {totalPairs} คู่ ({sizeGross.toLocaleString()} ฿)
@@ -818,10 +818,10 @@ export function DailyEntryClient({ initialRecords }: { initialRecords: DailySale
                   </div>
 
                   <div className="grid grid-cols-2 gap-3 pt-1">
-                    {/* Size S (200฿) */}
+                    {/* Package S (200฿) */}
                     <div className="rounded-xl border-2 border-blue-400 bg-gradient-to-b from-blue-50/80 to-white p-3 shadow-xs space-y-2">
                       <div className="flex items-center justify-between">
-                        <span className="font-extrabold text-xs text-blue-900">Size S</span>
+                        <span className="font-extrabold text-xs text-blue-900">Package S</span>
                         <span className="rounded-full bg-blue-600 px-2 py-0.5 text-[10px] font-bold text-white">
                           200 ฿/คู่
                         </span>
@@ -858,10 +858,10 @@ export function DailyEntryClient({ initialRecords }: { initialRecords: DailySale
                       </div>
                     </div>
 
-                    {/* Size M (400฿) */}
+                    {/* Package M (400฿) */}
                     <div className="rounded-xl border-2 border-emerald-400 bg-gradient-to-b from-emerald-50/80 to-white p-3 shadow-xs space-y-2">
                       <div className="flex items-center justify-between">
-                        <span className="font-extrabold text-xs text-emerald-900">Size M</span>
+                        <span className="font-extrabold text-xs text-emerald-900">Package M</span>
                         <span className="rounded-full bg-emerald-600 px-2 py-0.5 text-[10px] font-bold text-white">
                           400 ฿/คู่
                         </span>
@@ -898,10 +898,10 @@ export function DailyEntryClient({ initialRecords }: { initialRecords: DailySale
                       </div>
                     </div>
 
-                    {/* Size L (600฿) */}
+                    {/* Package L (600฿) */}
                     <div className="rounded-xl border-2 border-purple-400 bg-gradient-to-b from-purple-50/80 to-white p-3 shadow-xs space-y-2">
                       <div className="flex items-center justify-between">
-                        <span className="font-extrabold text-xs text-purple-900">Size L</span>
+                        <span className="font-extrabold text-xs text-purple-900">Package L</span>
                         <span className="rounded-full bg-purple-600 px-2 py-0.5 text-[10px] font-bold text-white">
                           600 ฿/คู่
                         </span>
@@ -938,10 +938,10 @@ export function DailyEntryClient({ initialRecords }: { initialRecords: DailySale
                       </div>
                     </div>
 
-                    {/* Size XL (800฿) */}
+                    {/* Package XL (800฿) */}
                     <div className="rounded-xl border-2 border-pink-400 bg-gradient-to-b from-pink-50/80 to-white p-3 shadow-xs space-y-2">
                       <div className="flex items-center justify-between">
-                        <span className="font-extrabold text-xs text-pink-900">Size XL</span>
+                        <span className="font-extrabold text-xs text-pink-900">Package XL</span>
                         <span className="rounded-full bg-pink-600 px-2 py-0.5 text-[10px] font-bold text-white">
                           800 ฿/คู่
                         </span>
@@ -1398,7 +1398,7 @@ export function DailyEntryClient({ initialRecords }: { initialRecords: DailySale
                     <thead className="sticky top-0 bg-slate-100/90 backdrop-blur-xs text-slate-700 font-bold border-b border-slate-200 z-10">
                       <tr>
                         <th className="px-3 py-2.5 text-left">วันที่</th>
-                        <th className="px-2 py-2.5 text-center">ไซส์ (S/M/L/XL)</th>
+                        <th className="px-2 py-2.5 text-center">แพ็กเกจ (S/M/L/XL)</th>
                         <th className="px-2.5 py-2.5 text-right">เงินโอน / เงินสด / ยอดรับ</th>
                         <th className="px-2.5 py-2.5 text-center">สถานะ / ค้างชำระ</th>
                         <th className="px-2 py-2.5 text-center">จัดการ</th>

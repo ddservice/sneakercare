@@ -248,14 +248,47 @@ export async function fetchCatalogItems(): Promise<CatalogItem[]> {
     supabase.from("items").select("id, name, category, base_unit"),
   ]);
 
-  const catalog: CatalogItem[] = [];
+  const catalog: CatalogItem[] = [
+    {
+      id: "pkg_s",
+      name: "Package S — ทำความสะอาดพื้นฐาน (Basic Clean)",
+      category: "package",
+      price: 200,
+      unit: "คู่",
+      source: "service",
+    },
+    {
+      id: "pkg_m",
+      name: "Package M — ทำความสะอาดมาตรฐาน (Standard Clean)",
+      category: "package",
+      price: 400,
+      unit: "คู่",
+      source: "service",
+    },
+    {
+      id: "pkg_l",
+      name: "Package L — สปาแบบพรีเมียม (Premium Spa)",
+      category: "package",
+      price: 600,
+      unit: "คู่",
+      source: "service",
+    },
+    {
+      id: "pkg_xl",
+      name: "Package XL — บูรณะฟูลเซ็ตครบวงจร (Full Restoration)",
+      category: "package",
+      price: 800,
+      unit: "คู่",
+      source: "service",
+    },
+  ];
 
   if (servicesRes.data) {
     servicesRes.data.forEach((s: any) => {
       catalog.push({
         id: s.id,
         name: s.name,
-        category: s.category || "บริการ",
+        category: s.category || "treatment",
         price: Number(s.base_price || 0),
         unit: "คู่/งาน",
         source: "service",
@@ -268,8 +301,8 @@ export async function fetchCatalogItems(): Promise<CatalogItem[]> {
       catalog.push({
         id: i.id,
         name: i.name,
-        category: i.category || "สินค้า/อุปกรณ์",
-        price: 0, // Consumables/Supplies price
+        category: "product",
+        price: 0,
         unit: i.base_unit || "ชิ้น",
         source: "item",
       });

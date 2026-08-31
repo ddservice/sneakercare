@@ -58,10 +58,10 @@ export function ReportsClient({
     const data = salesData.map((s, idx) => ({
       ลำดับ: idx + 1,
       วันที่: s.date,
-      "Size S (200฿)": s.size_s || 0,
-      "Size M (400฿)": s.size_m || 0,
-      "Size L (600฿)": s.size_l || 0,
-      "Size XL (800฿)": s.size_xl || 0,
+      "Package S (200฿)": s.size_s || 0,
+      "Package M (400฿)": s.size_m || 0,
+      "Package L (600฿)": s.size_l || 0,
+      "Package XL (800฿)": s.size_xl || 0,
       บริการเสริม: s.extra_items || "—",
       ยอดก่อนลด: s.grand_total || s.total_revenue || 0,
       ส่วนลด: s.discount || 0,
@@ -125,7 +125,7 @@ export function ReportsClient({
 
     if (type === "sales") {
       headers = [
-        ["วันที่", "Size S", "Size M", "Size L", "Size XL", "ยอดสุทธิ", "ยอดเงินโอน", "ยอดเงินสด", "ส่วนลด"],
+        ["วันที่", "Package S", "Package M", "Package L", "Package XL", "ยอดสุทธิ", "ยอดเงินโอน", "ยอดเงินสด", "ส่วนลด"],
         ["2026-08-31", 5, 2, 1, 0, 2400, 2000, 400, 0],
       ];
       fileName = "SneakerCare_Sales_Template.xlsx";

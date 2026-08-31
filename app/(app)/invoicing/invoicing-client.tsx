@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useMemo, useTransition } from "react";
 import {
   createSmartAccDocument,
   convertDocument,
@@ -83,6 +83,28 @@ export function InvoicingClient({
 
   // Selected DOs for Billing Note
   const [selectedDoIds, setSelectedDoIds] = useState<string[]>([]);
+
+  // Catalog UI State
+  const [catalogSearch, setCatalogSearch] = useState("");
+  const [catalogCategoryTab, setCatalogCategoryTab] = useState<string>("all");
+
+  const filteredCatalog = useMemo(() => {
+    return catalog.filter((cat) => {
+      const matchCat =
+        catalogCategoryTab === "all" ||
+        (catalogCategoryTab === "package" && cat.category === "package") ||
+        (catalogCategoryTab === "treatment" &&
+          ["treatment", "cleaning", "repair", "protection"].includes(cat.category)) ||
+        (catalogCategoryTab === "product" && cat.category === "product");
+
+      const matchSearch =
+        !catalogSearch.trim() ||
+        cat.name.toLowerCase().includes(catalogSearch.toLowerCase()) ||
+        String(cat.price).includes(catalogSearch);
+
+      return matchCat && matchSearch;
+    });
+  }, [catalog, catalogCategoryTab, catalogSearch]);
 
   // Generated document state
   const [createdDoc, setCreatedDoc] = useState<{
@@ -440,31 +462,107 @@ export function InvoicingClient({
                 </CardContent>
               </Card>
 
-              {/* Real Catalog Quick Add */}
-              <Card className="border-slate-200 bg-slate-50/50 shadow-xs">
-                <CardHeader className="border-b border-slate-200 pb-3">
-                  <CardTitle className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
-                    <Sparkles className="h-3.5 w-3.5 text-teal-700" />
-                    เลือกรายการบริการ / สินค้าจากระบบ (Catalog)
-                  </CardTitle>
+              {/* Structured & Categorized Professional Catalog Quick Add Panel */}
+              <Card className="border-teal-200 bg-white shadow-xs overflow-hidden">
+                <CardHeader className="p-3.5 bg-gradient-to-r from-teal-50/80 via-slate-50 to-white border-b border-slate-200 flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <CardTitle className="text-xs font-bold text-teal-950 flex items-center gap-1.5">
+                      <Sparkles className="h-4 w-4 text-teal-700" />
+                      เลือกรายการบริการ / สินค้าจากระบบ (Catalog)
+                    </CardTitle>
+                    <CardDescription className="text-[11px] text-slate-500">
+                      คลิกเพื่อเพิ่มรายการเข้าสู่เอกสารทันที พร้อมคำนวณภาษีและยอดสุทธิอัตโนมัติ
+                    </CardDescription>
+                  </div>
+
+                  {/* Search input */}
+                  <div className="relative w-48">
+                    <Search className="pointer-events-none absolute left-2.5 top-2 h-3.5 w-3.5 text-slate-400" />
+                    <Input
+                      type="text"
+                      placeholder="ค้นหาบริการ/สินค้า..."
+                      value={catalogSearch}
+                      onChange={(e) => setCatalogSearch(e.target.value)}
+                      className="h-7.5 pl-8 pr-2 text-xs bg-white rounded-lg border-slate-200"
+                    />
+                  </div>
                 </CardHeader>
-                <CardContent className="p-3">
-                  <div className="flex flex-wrap gap-1.5">
-                    {catalog.map((cat) => (
+
+                <CardContent className="p-3.5 space-y-3">
+                  {/* Category Filter Tabs */}
+                  <div className="flex flex-wrap items-center gap-1.5 border-b border-slate-100 pb-2.5">
+                    {[
+                      { id: "all", label: "🌐 ทั้งหมด", count: catalog.length },
+                      { id: "package", label: "👟 แพ็กเกจหลัก (Packages)", count: catalog.filter((c) => c.category === "package").length },
+                      { id: "treatment", label: "🛡️ บริการเสริม & ซ่อม (Treatments)", count: catalog.filter((c) => ["treatment", "cleaning", "repair", "protection"].includes(c.category)).length },
+                      { id: "product", label: "🧴 น้ำยา & อุปกรณ์ (Supplies)", count: catalog.filter((c) => c.category === "product").length },
+                    ].map((tab) => (
                       <button
-                        key={cat.id}
+                        key={tab.id}
                         type="button"
-                        onClick={() => handleAddCatalogItem(cat)}
-                        className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-800 shadow-xs hover:border-teal-600 hover:bg-teal-50/50 transition-all text-left"
+                        onClick={() => setCatalogCategoryTab(tab.id)}
+                        className={`rounded-lg px-2.5 py-1 text-xs font-bold transition-all cursor-pointer ${
+                          catalogCategoryTab === tab.id
+                            ? "bg-teal-800 text-white shadow-2xs"
+                            : "bg-slate-50 text-slate-700 hover:bg-slate-100 border border-slate-200"
+                        }`}
                       >
-                        <span className="font-medium">{cat.name}</span>
-                        {cat.price > 0 && (
-                          <span className="font-mono font-bold text-teal-800">
-                            ฿{cat.price.toLocaleString()}
-                          </span>
-                        )}
+                        {tab.label} <span className="opacity-70 text-[10px]">({tab.count})</span>
                       </button>
                     ))}
+                  </div>
+
+                  {/* Filtered Grid Cards */}
+                  <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 max-h-56 overflow-y-auto pr-1">
+                    {filteredCatalog.map((cat) => {
+                      const isPkg = cat.category === "package";
+                      const isTreatment = ["treatment", "cleaning", "repair", "protection"].includes(cat.category);
+
+                      return (
+                        <div
+                          key={cat.id}
+                          onClick={() => handleAddCatalogItem(cat)}
+                          className={`flex items-center justify-between p-2.5 rounded-xl border transition-all cursor-pointer group text-xs ${
+                            isPkg
+                              ? "bg-teal-50/40 border-teal-200 hover:bg-teal-100/70 hover:border-teal-400"
+                              : isTreatment
+                              ? "bg-amber-50/40 border-amber-200 hover:bg-amber-100/70 hover:border-amber-400"
+                              : "bg-slate-50 border-slate-200 hover:bg-slate-100 hover:border-slate-300"
+                          }`}
+                        >
+                          <div className="space-y-0.5 min-w-0 pr-2">
+                            <div className="font-bold text-slate-900 truncate group-hover:text-teal-900">
+                              {cat.name}
+                            </div>
+                            <div className="text-[10px] text-slate-500 flex items-center gap-1">
+                              <span className="font-mono">{cat.unit || "คู่"}</span>
+                              {cat.price > 0 && (
+                                <>
+                                  <span>·</span>
+                                  <span className="font-black text-teal-800 font-mono">
+                                    ฿{cat.price.toLocaleString()}
+                                  </span>
+                                </>
+                              )}
+                            </div>
+                          </div>
+
+                          <Button
+                            type="button"
+                            size="sm"
+                            className="h-7 px-2 text-[11px] font-bold bg-white text-slate-800 border border-slate-300 group-hover:bg-teal-700 group-hover:text-white group-hover:border-teal-700 shrink-0 shadow-2xs"
+                          >
+                            <Plus className="h-3 w-3 mr-0.5" /> เพิ่ม
+                          </Button>
+                        </div>
+                      );
+                    })}
+
+                    {filteredCatalog.length === 0 && (
+                      <div className="col-span-full py-6 text-center text-xs text-slate-400">
+                        ไม่พบรายการที่ค้นหา
+                      </div>
+                    )}
                   </div>
                 </CardContent>
               </Card>

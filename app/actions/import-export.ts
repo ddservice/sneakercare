@@ -49,10 +49,10 @@ export async function bulkImportSales(rows: any[]): Promise<BulkImportResult> {
         }
       }
 
-      const sizeS = Number(r["Size S"] || r["size_s"] || r[3] || 0);
-      const sizeM = Number(r["Size M"] || r["size_m"] || r[4] || 0);
-      const sizeL = Number(r["Size L"] || r["size_l"] || r[5] || 0);
-      const sizeXL = Number(r["Size XL"] || r["size_xl"] || r[6] || 0);
+      const sizeS = Number(r["Package S"] || r["Package S (200฿)"] || r["Size S"] || r["size_s"] || r[3] || 0);
+      const sizeM = Number(r["Package M"] || r["Package M (400฿)"] || r["Size M"] || r["size_m"] || r[4] || 0);
+      const sizeL = Number(r["Package L"] || r["Package L (600฿)"] || r["Size L"] || r["size_l"] || r[5] || 0);
+      const sizeXL = Number(r["Package XL"] || r["Package XL (800฿)"] || r["Size XL"] || r["size_xl"] || r[6] || 0);
 
       const totalRevenue = Number(r["ยอดสุทธิ"] || r["ยอดรวม"] || r["total_revenue"] || r[7] || 0);
       const transferAmount = Number(r["ยอดเงินโอน"] || r["transfer_amount"] || r[8] || 0);
