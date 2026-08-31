@@ -306,7 +306,14 @@ export function ExpensesClient({ initialData }: { initialData: ExpensesPayload }
       if (res.success) {
         toast.success(`เพิ่มพนักงานใหม่ "${newStaffName}" สำเร็จเรียบร้อย`);
         setShowAddStaffModal(false);
-        // Refresh
+        const updated = await fetchAllExpensesData(data.timeRange);
+        setData(updated);
+      } else {
+        toast.error(res.error || "เกิดข้อผิดพลาดในการสร้างพนักงาน");
+      }
+    });
+  }
+
   // Create Expense Handler
   function handleCreateExpense(e: React.FormEvent) {
     e.preventDefault();
