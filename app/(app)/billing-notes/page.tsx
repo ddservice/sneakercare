@@ -2,8 +2,9 @@ import { requireProfile } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { thaiBahtText } from "@/lib/smartacc/baht-text";
 import { fetchShopProfile } from "@/app/actions/shop-settings";
+import { PrintButton } from "@/components/print-button";
 import { Button } from "@/components/ui/button";
-import { Printer, ArrowLeft, Layers, Plus } from "lucide-react";
+import { ArrowLeft, Layers, Plus } from "lucide-react";
 import Link from "next/link";
 
 export default async function BillingNotesPage() {
@@ -83,18 +84,12 @@ export default async function BillingNotesPage() {
           <ArrowLeft className="h-4 w-4" /> กลับหน้าออกเอกสาร
         </Link>
         <div className="flex gap-2">
-          <Button
-            size="sm"
-            onClick={() => {}}
-            className="bg-teal-700 hover:bg-teal-800 text-white text-xs gap-1.5"
-          >
-            <Printer className="h-4 w-4" /> สั่งพิมพ์ / บันทึก PDF (A4)
-          </Button>
+          <PrintButton label="สั่งพิมพ์ / บันทึก PDF (A4)" />
         </div>
       </div>
 
       {/* ── A4 Billing Note Render Template ── */}
-      <div className="max-w-[210mm] mx-auto bg-white border border-slate-200 shadow-sm p-8 rounded-lg text-slate-800 text-xs font-sans">
+      <div className="printable-area max-w-[210mm] mx-auto bg-white border border-slate-200 shadow-sm p-8 rounded-lg text-slate-800 text-xs font-sans">
         {/* Header with Shop Logo & Details */}
         <div className="flex justify-between items-start border-b border-slate-300 pb-4 mb-4">
           <div className="w-2/3 pr-4 flex items-start gap-3.5">

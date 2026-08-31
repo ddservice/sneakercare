@@ -29,6 +29,7 @@ import {
   Sparkles,
   ArrowRight,
   TrendingUp,
+  Printer,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -535,18 +536,28 @@ export function ReportsClient({
 
       {/* ── TAB 3: MONTHLY COGS TABLE ── */}
       {activeTab === "cogs" && (
-        <Card className="border-slate-200 shadow-sm">
+        <Card className="printable-area border-slate-200 shadow-sm">
           <CardHeader className="p-4 bg-slate-50 border-b border-slate-200 flex flex-wrap items-center justify-between gap-2">
             <div>
               <CardTitle className="text-sm font-bold text-slate-900">
                 รายงานต้นทุนวัสดุที่ใช้ไป (COGS) รายเดือน
               </CardTitle>
               <CardDescription className="text-xs text-slate-500">
-                สรุปบัญชีต้นทุนคลังสินค้าตามช่วงเดือนที่เลือก
+                สรุปบัญชีต้นทุนคลังสินค้าตามช่วงเดือนที่เลือก (Sneaker Care)
               </CardDescription>
             </div>
-            <div className="font-bold text-teal-900 text-sm">
-              รวมทั้งสิ้น: ฿{cogsData.total.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+            <div className="flex items-center gap-3">
+              <div className="font-bold text-teal-900 text-sm">
+                รวมทั้งสิ้น: ฿{cogsData.total.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+              </div>
+              <Button
+                size="sm"
+                onClick={() => window.print()}
+                variant="outline"
+                className="no-print h-8 text-xs font-bold gap-1.5"
+              >
+                <Printer className="h-3.5 w-3.5" /> พิมพ์รายงาน (A4)
+              </Button>
             </div>
           </CardHeader>
           <CardContent className="p-0">

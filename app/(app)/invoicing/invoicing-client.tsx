@@ -85,7 +85,9 @@ export function InvoicingClient({
   const [selectedDoIds, setSelectedDoIds] = useState<string[]>([]);
 
   // Catalog UI State
-  const [catalogSearch, setCatalogSearch] = useState("");
+  const [selectedCatalogCategory, setSelectedCatalogCategory] = useState<string>("all");
+  const [catalogSearch, setCatalogSearch] = useState<string>("all");
+  const [printingDoc, setPrintingDoc] = useState<any | null>(null);
   const [catalogCategoryTab, setCatalogCategoryTab] = useState<string>("all");
 
   const filteredCatalog = useMemo(() => {
@@ -873,6 +875,14 @@ export function InvoicingClient({
                           </td>
                           <td className="px-4 py-3 text-center">
                             <div className="flex items-center justify-center gap-1">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => setPrintingDoc(doc)}
+                                className="h-6 text-[10px] gap-1 px-2 border-teal-300 text-teal-800 hover:bg-teal-50 font-bold"
+                              >
+                                <Printer className="h-2.5 w-2.5" /> พิมพ์ A4
+                              </Button>
                               {nextTypes.map((nxt) => (
                                 <Button
                                   key={nxt}
@@ -880,7 +890,7 @@ export function InvoicingClient({
                                   variant="outline"
                                   disabled={isPending || doc.status === "CONVERTED"}
                                   onClick={() => handleConvert(doc.id, nxt)}
-                                  className="h-6 text-[10px] gap-1 px-2 border-teal-200 text-teal-800 hover:bg-teal-50"
+                                  className="h-6 text-[10px] gap-1 px-2 border-slate-200 text-slate-700 hover:bg-slate-50"
                                 >
                                   <Repeat className="h-2.5 w-2.5" /> ➔ {DOC_TYPE_CONFIG[nxt].prefix}
                                 </Button>
@@ -896,6 +906,148 @@ export function InvoicingClient({
             </div>
           </CardContent>
         </Card>
+      )}
+
+      {/* ── OFFICIAL A4 DOCUMENT PRINT MODAL (INVOICE / TAX INVOICE / DO / RECEIPT) ── */}
+      {printingDoc && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs overflow-y-auto">
+          <div className="w-full max-w-4xl rounded-2xl bg-white p-6 shadow-2xl border border-slate-300 space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-200 pb-3 print:hidden">
+              <div className="flex items-center gap-2">
+                <FileText className="h-5 w-5 text-teal-700" />
+                <span className="text-sm font-bold text-slate-900">
+                  {DOC_TYPE_CONFIG[printingDoc.doc_type as DocumentType]?.labelTh || "เอกสารทางการ"} ({printingDoc.doc_number})
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  size="sm"
+                  onClick={() => window.print()}
+                  className="bg-teal-700 hover:bg-teal-800 text-white font-bold text-xs gap-1.5 shadow-md"
+                >
+                  <Printer className="h-4 w-4" /> พิมพ์เอกสาร A4
+                </Button>
+                <button
+                  onClick={() => setPrintingDoc(null)}
+                  className="rounded-full p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+
+            {/* Printable A4 Document Canvas */}
+            <div className="printable-area space-y-4 text-slate-950 font-sans border-2 border-slate-900 p-8 rounded-xl bg-white">
+              {/* Header: Company & Doc Type */}
+              <div className="flex justify-between items-start border-b-2 border-slate-900 pb-4">
+                <div className="space-y-1">
+                  <h1 className="text-lg font-black tracking-tight uppercase">{shopProfile?.name || "SneakerCare"}</h1>
+                  <div className="text-xs text-slate-700">{shopProfile?.address || "เชียงใหม่"}</div>
+                  <div className="text-xs text-slate-700">
+                    เลขประจำตัวผู้เสียภาษี: <strong className="font-mono">{shopProfile?.taxId || "0505566000000"}</strong> {shopProfile?.phone ? `· โทร. ${shopProfile.phone}` : ""}
+                  </div>
+                </div>
+                <div className="text-right space-y-1">
+                  <div className="text-lg font-black text-slate-900">
+                    {DOC_TYPE_CONFIG[printingDoc.doc_type as DocumentType]?.labelTh || printingDoc.doc_type}
+                  </div>
+                  <div className="text-xs font-mono font-bold">เลขที่: {printingDoc.doc_number}</div>
+                  <div className="text-xs text-slate-600">วันที่: {printingDoc.issue_date}</div>
+                  {printingDoc.due_date && <div className="text-xs text-rose-700 font-semibold">ครบกำหนด: {printingDoc.due_date}</div>}
+                </div>
+              </div>
+
+              {/* Customer Box */}
+              <div className="border border-slate-300 rounded-lg p-3 text-xs bg-slate-50 space-y-1">
+                <div className="font-bold text-slate-800">ข้อมูลลูกค้า / ผู้รับบริการ:</div>
+                <div className="font-bold text-sm">{printingDoc.ext_contacts?.company_name || "ลูกค้าทั่วไป"}</div>
+                <div className="flex justify-between text-slate-600">
+                  <span>เลขประจำตัวผู้เสียภาษี: <strong className="font-mono text-slate-900">{printingDoc.ext_contacts?.tax_id || "-"}</strong></span>
+                  <span>สาขา: {printingDoc.ext_contacts?.branch_code || "00000"}</span>
+                </div>
+                <div className="text-slate-600">ที่อยู่: {printingDoc.ext_contacts?.address || "-"}</div>
+              </div>
+
+              {/* Items Table */}
+              <table className="w-full text-xs border border-slate-900 text-left">
+                <thead className="bg-slate-100 font-bold border-b border-slate-900">
+                  <tr>
+                    <th className="p-2 w-12 text-center border-r border-slate-300">ลำดับ</th>
+                    <th className="p-2 border-r border-slate-300">รายการสินค้า / บริการ</th>
+                    <th className="p-2 w-20 text-right border-r border-slate-300">จำนวน</th>
+                    <th className="p-2 w-28 text-right border-r border-slate-300">ราคาต่อหน่วย</th>
+                    <th className="p-2 w-32 text-right">จำนวนเงิน (บาท)</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-200">
+                  {printingDoc.ext_document_items?.map((it: any, idx: number) => (
+                    <tr key={it.id || idx}>
+                      <td className="p-2 text-center font-mono border-r border-slate-300">{idx + 1}</td>
+                      <td className="p-2 font-medium border-r border-slate-300">{it.item_name}</td>
+                      <td className="p-2 text-right font-mono border-r border-slate-300">{it.quantity}</td>
+                      <td className="p-2 text-right font-mono border-r border-slate-300">
+                        {Number(it.unit_price).toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+                      </td>
+                      <td className="p-2 text-right font-mono font-bold">
+                        {Number(it.line_total || it.quantity * it.unit_price).toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+                      </td>
+                    </tr>
+                  )) || (
+                    <tr>
+                      <td className="p-2 text-center font-mono border-r border-slate-300">1</td>
+                      <td className="p-2 font-medium border-r border-slate-300">บริการทำความสะอาดและดูแลรักษารองเท้า</td>
+                      <td className="p-2 text-right font-mono border-r border-slate-300">1</td>
+                      <td className="p-2 text-right font-mono border-r border-slate-300">
+                        {Number(printingDoc.grand_total).toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+                      </td>
+                      <td className="p-2 text-right font-mono font-bold">
+                        {Number(printingDoc.grand_total).toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+                <tfoot className="border-t-2 border-slate-900 bg-slate-50 text-xs">
+                  <tr>
+                    <td colSpan={3} rowSpan={3} className="p-3 border-r border-slate-300 align-top">
+                      <div className="font-bold text-slate-700">จำนวนเงินรวมทั้งสิ้น (ตัวอักษร):</div>
+                      <div className="font-bold text-sm text-slate-950 mt-1">
+                        ({thaiBahtText(Number(printingDoc.grand_total || 0))})
+                      </div>
+                    </td>
+                    <td className="p-2 text-right border-r border-slate-300 font-semibold">รวมมูลค่าสินค้า:</td>
+                    <td className="p-2 text-right font-mono font-bold">
+                      {Number(printingDoc.subtotal_amount || printingDoc.grand_total).toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+                    </td>
+                  </tr>
+                  <tr>
+                    <td className="p-2 text-right border-r border-slate-300 font-semibold">ภาษีมูลค่าเพิ่ม (VAT 7%):</td>
+                    <td className="p-2 text-right font-mono font-bold">
+                      {Number(printingDoc.vat_amount || 0).toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+                    </td>
+                  </tr>
+                  <tr className="border-t border-slate-300 font-black text-sm">
+                    <td className="p-2 text-right border-r border-slate-300">ยอดรวมสุทธิ:</td>
+                    <td className="p-2 text-right font-mono">
+                      ฿{Number(printingDoc.grand_total).toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+                    </td>
+                  </tr>
+                </tfoot>
+              </table>
+
+              {/* Signatures */}
+              <div className="grid grid-cols-2 gap-8 pt-8 text-xs text-center">
+                <div className="border-t border-slate-400 pt-2 space-y-1">
+                  <div>ลงชื่อ .............................................................. ผู้รับบริการ / ลูกค้า</div>
+                  <div className="text-slate-500 font-medium">วันที่ ......./......./.......</div>
+                </div>
+                <div className="border-t border-slate-400 pt-2 space-y-1">
+                  <div>ลงชื่อ .............................................................. ผู้มีอำนาจลงนาม</div>
+                  <div className="text-slate-500 font-medium">({shopProfile?.name || "SneakerCare"})</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

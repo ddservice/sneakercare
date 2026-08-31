@@ -327,7 +327,7 @@ export function RosterClient() {
       </div>
 
       {/* ── Employee Shift Rules Summary Cards ── */}
-      <div className="grid gap-4 md:grid-cols-3 print:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-3 print:hidden">
         {EMPLOYEES.map((emp) => (
           <Card key={emp.id} className="border-slate-200 shadow-2xs overflow-hidden">
             <CardHeader className="p-4 bg-slate-50 border-b border-slate-100">
@@ -371,7 +371,7 @@ export function RosterClient() {
       </div>
 
       {/* ── Month Selector & Calendar Header ── */}
-      <Card className="border-slate-200 shadow-sm">
+      <Card className="printable-area border-slate-200 shadow-sm">
         <CardHeader className="p-4 bg-slate-50 border-b border-slate-200">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-3">

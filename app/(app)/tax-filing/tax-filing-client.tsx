@@ -31,6 +31,7 @@ export function TaxFilingClient({
 }) {
   const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().slice(0, 7));
   const [activeTab, setActiveTab] = useState<"efiling" | "tawi50" | "etax_xml">("efiling");
+  const [selectedWhtCert, setSelectedWhtCert] = useState<WhtRecord | null>(null);
 
   // Calculate real VAT and WHT from database records
   const filteredSales = initialSalesDocs.filter((d) =>
@@ -356,11 +357,11 @@ export function TaxFilingClient({
                         <td className="px-4 py-3 text-center">
                           <Button
                             size="sm"
-                            onClick={() => window.print()}
+                            onClick={() => setSelectedWhtCert(r)}
                             variant="outline"
-                            className="h-7 text-[11px] gap-1"
+                            className="h-7 text-[11px] gap-1 text-teal-800 hover:bg-teal-50 border-teal-200 font-bold"
                           >
-                            <Printer className="h-3 w-3" /> พิมพ์ 50 ทวิ
+                            <Printer className="h-3 w-3" /> พิมพ์ 50 ทวิ (A4)
                           </Button>
                         </td>
                       </tr>
@@ -408,6 +409,123 @@ export function TaxFilingClient({
             </pre>
           </CardContent>
         </Card>
+      )}
+
+      {/* ── OFFICIAL 50 TAWI PRINT MODAL (A4 ISOLATION) ── */}
+      {selectedWhtCert && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs overflow-y-auto">
+          <div className="w-full max-w-3xl rounded-2xl bg-white p-6 shadow-2xl border border-slate-300 space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-200 pb-3 print:hidden">
+              <div className="flex items-center gap-2">
+                <Landmark className="h-5 w-5 text-teal-700" />
+                <span className="text-sm font-bold text-slate-900">
+                  หนังสือรับรองการหักภาษี ณ ที่จ่าย (ตามมาตรา 50 ทวิ)
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  size="sm"
+                  onClick={() => window.print()}
+                  className="bg-teal-700 hover:bg-teal-800 text-white font-bold text-xs gap-1.5 shadow-md"
+                >
+                  <Printer className="h-4 w-4" /> พิมพ์เอกสาร A4
+                </Button>
+                <button
+                  onClick={() => setSelectedWhtCert(null)}
+                  className="rounded-full p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+
+            {/* Printable A4 Form Container */}
+            <div className="printable-area space-y-3 text-slate-950 font-sans border-2 border-slate-900 p-6 rounded-xl bg-white">
+              <div className="flex justify-between items-start border-b-2 border-slate-900 pb-3">
+                <div>
+                  <div className="text-xs font-bold uppercase tracking-wider text-slate-600">แบบ 50 ทวิ</div>
+                  <h1 className="text-base font-black">หนังสือรับรองการหักภาษี ณ ที่จ่าย</h1>
+                  <div className="text-[11px] text-slate-600">ตามมาตรา 50 ทวิ แห่งประมวลรัษฎากร</div>
+                </div>
+                <div className="text-right text-xs">
+                  <div className="font-mono font-bold">เล่มที่ / เลขที่: 50T-{selectedMonth.replace("-", "")}-{String(selectedWhtCert.sequence).padStart(4, "0")}</div>
+                  <div className="text-slate-600">วันที่ออก: {selectedWhtCert.date}</div>
+                </div>
+              </div>
+
+              {/* Payer Information */}
+              <div className="text-xs border border-slate-300 p-3 rounded-lg bg-slate-50/50 space-y-1">
+                <div className="font-bold text-slate-800">1. ผู้มีหน้าที่หักภาษี ณ ที่จ่าย (ผู้จ่ายเงิน):</div>
+                <div className="font-bold text-sm">บริษัท รวยรับทรัพย์168 จำกัด (สำนักงานใหญ่)</div>
+                <div className="flex justify-between text-slate-600">
+                  <span>เลขประจำตัวผู้เสียภาษีอากร: <strong className="font-mono text-slate-900">0-5035-67004-98-1</strong></span>
+                  <span>สาขาที่: 00000</span>
+                </div>
+                <div className="text-slate-600">ที่อยู่: 552/4 ถ.เชียงใหม่-ลำพูน ต.หนองหอย อ.เมืองเชียงใหม่ จ.เชียงใหม่ 50000</div>
+              </div>
+
+              {/* Payee Information */}
+              <div className="text-xs border border-slate-300 p-3 rounded-lg bg-slate-50/50 space-y-1">
+                <div className="font-bold text-slate-800">2. ผู้ถูกหักภาษี ณ ที่จ่าย (ผู้รับเงิน):</div>
+                <div className="font-bold text-sm">{selectedWhtCert.name}</div>
+                <div className="flex justify-between text-slate-600">
+                  <span>เลขประจำตัวผู้เสียภาษีอากร / เลข ปชช: <strong className="font-mono text-slate-900">{selectedWhtCert.taxId}</strong></span>
+                  <span>สาขาที่: 00000</span>
+                </div>
+                <div className="text-slate-600">ที่อยู่: {selectedWhtCert.address}</div>
+              </div>
+
+              {/* Income Table */}
+              <table className="w-full text-xs border border-slate-900 text-left">
+                <thead className="bg-slate-100 font-bold border-b border-slate-900">
+                  <tr>
+                    <th className="p-2 border-r border-slate-300">ประเภทเงินได้พึงประเมินที่จ่าย</th>
+                    <th className="p-2 border-r border-slate-300 text-center w-28">วัน เดือน ปี ที่จ่าย</th>
+                    <th className="p-2 border-r border-slate-300 text-right w-32">จำนวนเงินที่จ่าย (บาท)</th>
+                    <th className="p-2 text-right w-32">ภาษีที่หักและนำส่ง (บาท)</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-200">
+                  <tr>
+                    <td className="p-2 border-r border-slate-300 font-medium">
+                      {selectedWhtCert.incomeType} (อัตราภาษี {selectedWhtCert.whtRate}%)
+                    </td>
+                    <td className="p-2 border-r border-slate-300 text-center font-mono">{selectedWhtCert.date}</td>
+                    <td className="p-2 border-r border-slate-300 text-right font-mono font-bold">
+                      {selectedWhtCert.baseAmount.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+                    </td>
+                    <td className="p-2 text-right font-mono font-bold">
+                      {selectedWhtCert.taxAmount.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+                    </td>
+                  </tr>
+                </tbody>
+                <tfoot className="bg-slate-50 font-bold border-t-2 border-slate-900">
+                  <tr>
+                    <td colSpan={2} className="p-2 text-right border-r border-slate-300">รวมเงินภาษีที่หักและนำส่งสุทธิ:</td>
+                    <td className="p-2 text-right font-mono border-r border-slate-300">
+                      {selectedWhtCert.baseAmount.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+                    </td>
+                    <td className="p-2 text-right font-mono text-sm">
+                      ฿{selectedWhtCert.taxAmount.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+                    </td>
+                  </tr>
+                </tfoot>
+              </table>
+
+              {/* Signatures */}
+              <div className="grid grid-cols-2 gap-8 pt-6 text-xs text-center">
+                <div className="border-t border-slate-400 pt-2 space-y-1">
+                  <div>ลงชื่อ .............................................................. ผู้มีหน้าที่หักภาษี</div>
+                  <div className="text-slate-500 font-medium">(บริษัท รวยรับทรัพย์168 จำกัด)</div>
+                </div>
+                <div className="border-t border-slate-400 pt-2 space-y-1">
+                  <div>ลงชื่อ .............................................................. ผู้รับเงิน</div>
+                  <div className="text-slate-500 font-medium">({selectedWhtCert.name})</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
