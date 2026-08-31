@@ -57,7 +57,7 @@ const remoteCommands = [
   `echo "==> [2/4] Pull โค้ดล่าสุดจาก origin/master"`,
   `git pull origin master`,
   `echo "==> [3/4] ติดตั้ง dependencies และ Clean Build (ห้ามถอด --webpack)"`,
-  `npm ci`,
+  `npm install`,
   `rm -rf .next`,
   `npm run build`,
   `echo "==> [4/4] รีสตาร์ต PM2 Process '${pm2App}'"`,
