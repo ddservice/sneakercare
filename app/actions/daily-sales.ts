@@ -87,13 +87,11 @@ export async function saveDailySale(data: DailySaleInput) {
   const arPaidSum = (existingAr || []).reduce((sum: number, p: any) => sum + Number(p.amount || 0), 0);
   const totalPaidAll = actualPaid + arPaidSum;
 
-  // Derive payment status
+  // Derive payment status strictly to 'ชำระครบ' vs 'ค้างชำระ' (matching legacy 100%)
   let paymentStatus = data.payment_status;
-  if (!paymentStatus) {
+  if (!paymentStatus || paymentStatus === "ชำระบางส่วน") {
     if (totalPaidAll >= netTotal && netTotal > 0) {
       paymentStatus = "ชำระครบ";
-    } else if (totalPaidAll > 0) {
-      paymentStatus = "ชำระบางส่วน";
     } else {
       paymentStatus = "ค้างชำระ";
     }
@@ -200,9 +198,7 @@ export async function fetchRecentDailySales(limit: number = 300): Promise<DailyS
     let status = s.payment_status || "ชำระครบ";
     if (outstanding <= 0 && netRevenue > 0) {
       status = "ชำระครบ";
-    } else if (totalPaid > 0 && outstanding > 0) {
-      status = "ชำระบางส่วน";
-    } else if (totalPaid === 0 && netRevenue > 0) {
+    } else if (outstanding > 0) {
       status = "ค้างชำระ";
     }
 
@@ -282,7 +278,7 @@ export async function recordArPayment(data: {
     const netRevenue = Number(sale.total_revenue || (Number(sale.grand_total || 0) - Number(sale.discount || 0)));
     const totalPaidAll = initialPaid + totalAr;
 
-    const newStatus = totalPaidAll >= netRevenue ? "ชำระครบ" : "ชำระบางส่วน";
+    const newStatus = totalPaidAll >= netRevenue ? "ชำระครบ" : "ค้างชำระ";
     await (supabase.from("sc_sales" as any) as any)
       .update({
         payment_status: newStatus,
@@ -335,7 +331,7 @@ export async function deleteArPayment(paymentId: number, saleDate: string) {
     const netRevenue = Number(sale.total_revenue || (Number(sale.grand_total || 0) - Number(sale.discount || 0)));
     const totalPaidAll = initialPaid + totalAr;
 
-    const newStatus = totalPaidAll >= netRevenue ? "ชำระครบ" : (totalPaidAll > 0 ? "ชำระบางส่วน" : "ค้างชำระ");
+    const newStatus = totalPaidAll >= netRevenue ? "ชำระครบ" : "ค้างชำระ";
     await (supabase.from("sc_sales" as any) as any)
       .update({
         payment_status: newStatus,

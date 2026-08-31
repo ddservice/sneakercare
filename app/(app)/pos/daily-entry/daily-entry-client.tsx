@@ -38,9 +38,15 @@ import {
   Check,
   ChevronDown,
   ChevronUp,
+  ChevronLeft,
+  ChevronRight,
   X,
   CreditCard,
   DollarSign,
+  CalendarDays,
+  CalendarRange,
+  BarChart3,
+  Filter,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -69,6 +75,8 @@ type ExtraLine = {
   qty: number;
 };
 
+type ViewPeriod = "all" | "day" | "week" | "month" | "custom";
+
 export function DailyEntryClient({ initialRecords }: { initialRecords: DailySaleWithPayments[] }) {
   const [records, setRecords] = useState<DailySaleWithPayments[]>(initialRecords);
   const [isPending, startTransition] = useTransition();
@@ -87,10 +95,10 @@ export function DailyEntryClient({ initialRecords }: { initialRecords: DailySale
   const [customExtraPrice, setCustomExtraPrice] = useState<number | "">("");
 
   // Payment Breakdown
-  const [cashAmount, setCashAmount] = useState<number>(0);
   const [transferAmount, setTransferAmount] = useState<number>(0);
+  const [cashAmount, setCashAmount] = useState<number>(0);
   const [discount, setDiscount] = useState<number>(0);
-  const [paymentStatusManual, setPaymentStatusManual] = useState<string | null>(null);
+  const [paymentStatusManual, setPaymentStatusManual] = useState<"ชำระครบ" | "ค้างชำระ" | null>(null);
 
   // AR Payment Modal State
   const [collectTarget, setCollectTarget] = useState<DailySaleWithPayments | null>(null);
@@ -99,12 +107,18 @@ export function DailyEntryClient({ initialRecords }: { initialRecords: DailySale
   const [collectMethod, setCollectMethod] = useState<"โอน" | "เงินสด" | "อื่นๆ">("โอน");
   const [collectNotes, setCollectNotes] = useState("");
 
-  // Filters & Search for history
+  // View Period & Filters State
+  const [viewPeriod, setViewPeriod] = useState<ViewPeriod>("month");
+  const [filterDate, setFilterDate] = useState(new Date().toISOString().slice(0, 10));
+  const [customStartDate, setCustomStartDate] = useState(
+    new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10)
+  );
+  const [customEndDate, setCustomEndDate] = useState(new Date().toISOString().slice(0, 10));
   const [searchTerm, setSearchTerm] = useState("");
-  const [activeTab, setActiveTab] = useState<"all" | "outstanding" | "completed">("all");
+  const [statusTab, setStatusTab] = useState<"all" | "outstanding" | "completed">("all");
   const [expandedRecordId, setExpandedRecordId] = useState<number | null>(null);
 
-  // Calculations
+  // Calculations for Form
   const totalPairs = Number(sizeS || 0) + Number(sizeM || 0) + Number(sizeL || 0) + Number(sizeXL || 0);
   const sizeGross =
     Number(sizeS || 0) * SIZE_PRICES.s +
@@ -116,15 +130,14 @@ export function DailyEntryClient({ initialRecords }: { initialRecords: DailySale
   const grossTotal = sizeGross + extraServicesTotal;
   const netTotal = Math.max(0, grossTotal - Number(discount || 0));
 
-  const actualReceived = Number(cashAmount || 0) + Number(transferAmount || 0);
+  const actualReceived = Number(transferAmount || 0) + Number(cashAmount || 0);
   const outstandingAmount = Math.max(0, netTotal - actualReceived);
 
-  // Auto payment status
-  const currentPaymentStatus = useMemo(() => {
+  // Auto payment status (Strictly 2 states: 'ชำระครบ' vs 'ค้างชำระ')
+  const currentPaymentStatus: "ชำระครบ" | "ค้างชำระ" = useMemo(() => {
     if (paymentStatusManual) return paymentStatusManual;
-    if (netTotal === 0 && actualReceived === 0) return "ชำระครบ";
     if (actualReceived >= netTotal && netTotal > 0) return "ชำระครบ";
-    if (actualReceived > 0) return "ชำระบางส่วน";
+    if (netTotal === 0 && actualReceived === 0) return "ชำระครบ";
     return "ค้างชำระ";
   }, [paymentStatusManual, actualReceived, netTotal]);
 
@@ -205,15 +218,15 @@ export function DailyEntryClient({ initialRecords }: { initialRecords: DailySale
 
   function autoFillHalfSplit() {
     const half = Math.round((netTotal / 2) * 100) / 100;
-    setCashAmount(half);
-    setTransferAmount(netTotal - half);
+    setTransferAmount(half);
+    setCashAmount(netTotal - half);
     setPaymentStatusManual("ชำระครบ");
-    toast.info("แบ่งยอดเงินสดและเงินโอน 50/50 เรียบร้อย");
+    toast.info("แบ่งยอดเงินโอนและเงินสด 50/50 เรียบร้อย");
   }
 
   function autoFillPendingAll() {
-    setCashAmount(0);
     setTransferAmount(0);
+    setCashAmount(0);
     setPaymentStatusManual("ค้างชำระ");
     toast.warning("ตั้งค่าเป็นยอดค้างชำระทั้งหมด");
   }
@@ -251,7 +264,6 @@ export function DailyEntryClient({ initialRecords }: { initialRecords: DailySale
 
       if (res.success) {
         toast.success(`บันทึกการรับชำระยอดค้าง ${collectAmount.toLocaleString()} ฿ เรียบร้อย`);
-        // Update local state
         setRecords((prev) =>
           prev.map((r) => {
             if (r.date === collectTarget.date) {
@@ -271,7 +283,7 @@ export function DailyEntryClient({ initialRecords }: { initialRecords: DailySale
               const newArPaid = r.total_ar_paid + collectAmount;
               const newTotalPaid = r.amount_paid + newArPaid;
               const newOutstanding = Math.max(0, r.total_revenue - newTotalPaid);
-              const newStatus = newOutstanding <= 0 ? "ชำระครบ" : "ชำระบางส่วน";
+              const newStatus = newOutstanding <= 0 ? "ชำระครบ" : "ค้างชำระ";
 
               return {
                 ...r,
@@ -307,7 +319,7 @@ export function DailyEntryClient({ initialRecords }: { initialRecords: DailySale
               const newArPaid = Math.max(0, r.total_ar_paid - amount);
               const newTotalPaid = r.amount_paid + newArPaid;
               const newOutstanding = Math.max(0, r.total_revenue - newTotalPaid);
-              const newStatus = newOutstanding <= 0 ? "ชำระครบ" : (newTotalPaid > 0 ? "ชำระบางส่วน" : "ค้างชำระ");
+              const newStatus = newOutstanding <= 0 ? "ชำระครบ" : "ค้างชำระ";
 
               return {
                 ...r,
@@ -335,12 +347,11 @@ export function DailyEntryClient({ initialRecords }: { initialRecords: DailySale
     setSizeM(Number(record.size_m || 0));
     setSizeL(Number(record.size_l || 0));
     setSizeXL(Number(record.size_xl || 0));
-    setCashAmount(Number(record.cash_amount || 0));
     setTransferAmount(Number(record.transfer_amount || 0));
+    setCashAmount(Number(record.cash_amount || 0));
     setDiscount(Number(record.discount || 0));
-    setPaymentStatusManual(record.payment_status || null);
+    setPaymentStatusManual(record.outstanding > 0 ? "ค้างชำระ" : "ชำระครบ");
 
-    // Parse extra items string if present
     if (record.extra_items && record.extra_items.trim()) {
       try {
         if (record.extra_items.startsWith("[")) {
@@ -376,8 +387,8 @@ export function DailyEntryClient({ initialRecords }: { initialRecords: DailySale
     setExtraLines([]);
     setCustomExtraName("");
     setCustomExtraPrice("");
-    setCashAmount(0);
     setTransferAmount(0);
+    setCashAmount(0);
     setDiscount(0);
     setPaymentStatusManual(null);
   }
@@ -403,8 +414,8 @@ export function DailyEntryClient({ initialRecords }: { initialRecords: DailySale
         size_m: sizeM,
         size_l: sizeL,
         size_xl: sizeXL,
-        cash_amount: cashAmount,
         transfer_amount: transferAmount,
+        cash_amount: cashAmount,
         amount_paid: actualReceived,
         discount,
         gross_amount: grossTotal,
@@ -429,6 +440,8 @@ export function DailyEntryClient({ initialRecords }: { initialRecords: DailySale
                     total_revenue: netTotal,
                     amount_paid: actualReceived,
                     grand_total: grossTotal,
+                    transfer_amount: transferAmount,
+                    cash_amount: cashAmount,
                     total_paid: actualReceived + (r.total_ar_paid || 0),
                     outstanding: Math.max(0, netTotal - (actualReceived + (r.total_ar_paid || 0))),
                     payment_status: currentPaymentStatus,
@@ -443,6 +456,8 @@ export function DailyEntryClient({ initialRecords }: { initialRecords: DailySale
                 total_revenue: netTotal,
                 amount_paid: actualReceived,
                 grand_total: grossTotal,
+                transfer_amount: transferAmount,
+                cash_amount: cashAmount,
                 payments: [],
                 total_ar_paid: 0,
                 total_paid: actualReceived,
@@ -475,42 +490,108 @@ export function DailyEntryClient({ initialRecords }: { initialRecords: DailySale
     });
   }
 
-  // Filtered list
+  // Period Date Navigation
+  function shiftPeriod(delta: number) {
+    const cur = new Date(filterDate);
+    if (viewPeriod === "day") {
+      cur.setDate(cur.getDate() + delta);
+      setFilterDate(cur.toISOString().slice(0, 10));
+    } else if (viewPeriod === "week") {
+      cur.setDate(cur.getDate() + delta * 7);
+      setFilterDate(cur.toISOString().slice(0, 10));
+    } else if (viewPeriod === "month") {
+      cur.setMonth(cur.getMonth() + delta);
+      setFilterDate(cur.toISOString().slice(0, 10));
+    }
+  }
+
+  // Filter records by Period, Status, and Search
   const filteredRecords = useMemo(() => {
+    const baseDate = new Date(filterDate);
+
+    // Week boundaries (Monday to Sunday)
+    const dayOfWeek = baseDate.getDay();
+    const diffToMonday = (dayOfWeek + 6) % 7;
+    const monday = new Date(baseDate);
+    monday.setDate(baseDate.getDate() - diffToMonday);
+    const sunday = new Date(monday);
+    sunday.setDate(monday.getDate() + 6);
+    const monStr = monday.toISOString().slice(0, 10);
+    const sunStr = sunday.toISOString().slice(0, 10);
+
+    // Month boundary (YYYY-MM)
+    const monthPrefix = filterDate.slice(0, 7);
+
     return records.filter((r) => {
+      // 1. Period Match
+      let matchesPeriod = true;
+      if (viewPeriod === "day") {
+        matchesPeriod = r.date === filterDate;
+      } else if (viewPeriod === "week") {
+        matchesPeriod = r.date >= monStr && r.date <= sunStr;
+      } else if (viewPeriod === "month") {
+        matchesPeriod = r.date.startsWith(monthPrefix);
+      } else if (viewPeriod === "custom") {
+        matchesPeriod = r.date >= customStartDate && r.date <= customEndDate;
+      }
+
+      // 2. Status Match (Strictly 2: ชำระครบ vs ค้างชำระ)
+      let matchesStatus = true;
+      if (statusTab === "outstanding") {
+        matchesStatus = r.outstanding > 0 || r.payment_status === "ค้างชำระ";
+      } else if (statusTab === "completed") {
+        matchesStatus = r.outstanding === 0 && r.payment_status === "ชำระครบ";
+      }
+
+      // 3. Search Match
       const matchesSearch =
         r.date.includes(searchTerm) ||
         (r.extra_items && r.extra_items.toLowerCase().includes(searchTerm.toLowerCase())) ||
         (r.recorded_by && r.recorded_by.toLowerCase().includes(searchTerm.toLowerCase()));
 
-      let matchesTab = true;
-      if (activeTab === "outstanding") {
-        matchesTab = r.outstanding > 0 || r.payment_status === "ชำระบางส่วน" || r.payment_status === "ค้างชำระ";
-      } else if (activeTab === "completed") {
-        matchesTab = r.outstanding === 0 && r.payment_status === "ชำระครบ";
-      }
-
-      return matchesSearch && matchesTab;
+      return matchesPeriod && matchesStatus && matchesSearch;
     });
-  }, [records, searchTerm, activeTab]);
+  }, [records, viewPeriod, filterDate, customStartDate, customEndDate, statusTab, searchTerm]);
 
-  // Overall Statistics from all records
-  const overallStats = useMemo(() => {
-    return records.reduce(
+  // Statistics for the CURRENT SELECTED VIEW
+  const viewStats = useMemo(() => {
+    return filteredRecords.reduce(
       (acc, r) => {
         acc.pairs += (r.size_s || 0) + (r.size_m || 0) + (r.size_l || 0) + (r.size_xl || 0);
         acc.revenue += Number(r.total_revenue || r.grand_total || 0);
-        acc.cash += Number(r.cash_amount || 0);
         acc.transfer += Number(r.transfer_amount || 0);
+        acc.cash += Number(r.cash_amount || 0);
         acc.arPaid += Number(r.total_ar_paid || 0);
         acc.totalPaid += Number(r.total_paid || 0);
         acc.outstanding += Number(r.outstanding || 0);
         if (r.outstanding > 0) acc.outstandingCount += 1;
         return acc;
       },
-      { pairs: 0, revenue: 0, cash: 0, transfer: 0, arPaid: 0, totalPaid: 0, outstanding: 0, outstandingCount: 0 }
+      { pairs: 0, revenue: 0, transfer: 0, cash: 0, arPaid: 0, totalPaid: 0, outstanding: 0, outstandingCount: 0 }
     );
-  }, [records]);
+  }, [filteredRecords]);
+
+  // Format header period label
+  const periodDisplayLabel = useMemo(() => {
+    if (viewPeriod === "all") return "ภาพรวมทั้งหมด (ย้อนหลังทั้งหมด)";
+    if (viewPeriod === "day") return `รายวัน: ${filterDate}`;
+    if (viewPeriod === "week") {
+      const baseDate = new Date(filterDate);
+      const diffToMonday = (baseDate.getDay() + 6) % 7;
+      const mon = new Date(baseDate);
+      mon.setDate(baseDate.getDate() - diffToMonday);
+      const sun = new Date(mon);
+      sun.setDate(mon.getDate() + 6);
+      return `รายสัปดาห์: ${mon.toISOString().slice(0, 10)} ถึง ${sun.toISOString().slice(0, 10)}`;
+    }
+    if (viewPeriod === "month") {
+      const [y, m] = filterDate.slice(0, 7).split("-");
+      const monthNames = ["มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน", "กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม"];
+      return `รายเดือน: ${monthNames[parseInt(m) - 1]} ${parseInt(y) + 543} (${filterDate.slice(0, 7)})`;
+    }
+    if (viewPeriod === "custom") return `ช่วงวันที่: ${customStartDate} ถึง ${customEndDate}`;
+    return "";
+  }, [viewPeriod, filterDate, customStartDate, customEndDate]);
 
   return (
     <div className="space-y-8">
@@ -519,53 +600,174 @@ export function DailyEntryClient({ initialRecords }: { initialRecords: DailySale
         <div className="space-y-1">
           <div className="inline-flex items-center gap-2 rounded-full bg-teal-500/20 px-3 py-1 text-xs font-semibold text-teal-200 ring-1 ring-teal-400/30">
             <Footprints className="h-3.5 w-3.5" />
-            SneakerCare POS & AR Management
+            SneakerCare POS & Multi-Period View
           </div>
-          <h2 className="text-2xl font-bold tracking-tight">บันทึกยอดขาย & ติดตามยอดค้างชำระ (AR)</h2>
+          <h2 className="text-2xl font-bold tracking-tight">บันทึกยอดขาย & สรุปภาพรวมย้อนหลัง</h2>
           <p className="text-xs sm:text-sm text-teal-100/80">
-            Package มาตรฐาน S 200฿ | M 400฿ | L 600฿ | XL 800฿, บริการเสริม, สรุปยอดเงินสด/โอน และระบบรับชำระยอดค้างครบถ้วน
+            เลือกดูรายวัน รายสัปดาห์ รายเดือน ภาพรวม และกำหนดช่วงเวลาย้อนหลังได้ทั้งระบบ
           </p>
         </div>
 
         <div className="flex items-center gap-2">
           <Link href="/statistics">
             <Button variant="outline" className="bg-white/10 text-white hover:bg-white/20 border-white/20 text-xs gap-1.5 h-9">
-              <TrendingUp className="h-4 w-4" /> ดูสถิติสรุป
+              <TrendingUp className="h-4 w-4" /> กราฟสรุปสถิติ
+            </Button>
+          </Link>
+          <Link href="/reports">
+            <Button variant="outline" className="bg-white/10 text-white hover:bg-white/20 border-white/20 text-xs gap-1.5 h-9">
+              <BarChart3 className="h-4 w-4" /> รายงานสรุปผล
             </Button>
           </Link>
           <Link href="/pos">
             <Button variant="outline" className="bg-white/10 text-white hover:bg-white/20 border-white/20 text-xs gap-1.5 h-9">
-              <Receipt className="h-4 w-4" /> เปิดบิลรับงาน (POS)
+              <Receipt className="h-4 w-4" /> เปิดบิลหน้าร้าน
             </Button>
           </Link>
         </div>
       </div>
 
-      {/* ── Outstanding Receivables Quick Alert Banner ── */}
-      {overallStats.outstanding > 0 && (
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-300 bg-amber-50 p-4 text-amber-900 shadow-xs">
-          <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-full bg-amber-500 text-white flex items-center justify-center font-bold shrink-0">
-              <AlertCircle className="h-5 w-5" />
+      {/* ── Period Selector & View Toolbar ── */}
+      <Card className="border-teal-200 bg-teal-50/40 shadow-xs">
+        <CardContent className="p-4 space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            {/* Period Buttons */}
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="text-xs font-bold text-teal-950 flex items-center gap-1 mr-1">
+                <CalendarRange className="h-3.5 w-3.5 text-teal-700" /> เลือกมุมมอง:
+              </span>
+              <Button
+                type="button"
+                size="sm"
+                variant={viewPeriod === "day" ? "default" : "outline"}
+                onClick={() => setViewPeriod("day")}
+                className={`h-8 text-xs font-bold ${
+                  viewPeriod === "day" ? "bg-teal-700 text-white" : "bg-white text-slate-700"
+                }`}
+              >
+                🗓️ รายวัน
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant={viewPeriod === "week" ? "default" : "outline"}
+                onClick={() => setViewPeriod("week")}
+                className={`h-8 text-xs font-bold ${
+                  viewPeriod === "week" ? "bg-teal-700 text-white" : "bg-white text-slate-700"
+                }`}
+              >
+                📅 รายสัปดาห์
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant={viewPeriod === "month" ? "default" : "outline"}
+                onClick={() => setViewPeriod("month")}
+                className={`h-8 text-xs font-bold ${
+                  viewPeriod === "month" ? "bg-teal-700 text-white" : "bg-white text-slate-700"
+                }`}
+              >
+                📆 รายเดือน
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant={viewPeriod === "all" ? "default" : "outline"}
+                onClick={() => setViewPeriod("all")}
+                className={`h-8 text-xs font-bold ${
+                  viewPeriod === "all" ? "bg-teal-700 text-white" : "bg-white text-slate-700"
+                }`}
+              >
+                🌐 ภาพรวมทั้งหมด
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant={viewPeriod === "custom" ? "default" : "outline"}
+                onClick={() => setViewPeriod("custom")}
+                className={`h-8 text-xs font-bold ${
+                  viewPeriod === "custom" ? "bg-teal-700 text-white" : "bg-white text-slate-700"
+                }`}
+              >
+                🔍 กำหนดช่วงวันเอง
+              </Button>
             </div>
-            <div>
-              <div className="font-extrabold text-sm text-amber-950">
-                มียอดค้างชำระสะสมทั้งหมด {overallStats.outstanding.toLocaleString()} บาท ({overallStats.outstandingCount} รายการ)
+
+            {/* Date Navigator for Day / Week / Month */}
+            {viewPeriod !== "all" && viewPeriod !== "custom" && (
+              <div className="flex items-center gap-1.5 bg-white p-1 rounded-lg border border-teal-200 shadow-2xs">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => shiftPeriod(-1)}
+                  className="h-7 w-7 p-0 text-teal-800 hover:bg-teal-50"
+                  title="ช่วงก่อนหน้า"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+                <Input
+                  type={viewPeriod === "month" ? "month" : "date"}
+                  value={viewPeriod === "month" ? filterDate.slice(0, 7) : filterDate}
+                  onChange={(e) => {
+                    if (viewPeriod === "month") {
+                      setFilterDate(e.target.value + "-01");
+                    } else {
+                      setFilterDate(e.target.value);
+                    }
+                  }}
+                  className="h-7 text-xs font-medium border-0 focus-visible:ring-0 w-36 text-center"
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => shiftPeriod(1)}
+                  className="h-7 w-7 p-0 text-teal-800 hover:bg-teal-50"
+                  title="ช่วงถัดไป"
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setFilterDate(new Date().toISOString().slice(0, 10))}
+                  className="h-7 text-[11px] px-2 text-teal-900 border-teal-200 hover:bg-teal-50"
+                >
+                  ช่วงปัจจุบัน
+                </Button>
               </div>
-              <div className="text-xs text-amber-800">
-                คุณสามารถกดดูเฉพาะรายการที่ค้างชำระ และกดปุ่ม <strong>[💰 รับชำระเงิน]</strong> เพื่อตัดยอดรับเงินได้ทันที
+            )}
+
+            {/* Custom Date Range Picker */}
+            {viewPeriod === "custom" && (
+              <div className="flex items-center gap-2 bg-white p-1.5 rounded-lg border border-teal-200 shadow-2xs text-xs">
+                <span className="text-slate-500 font-semibold">ตั้งแต่:</span>
+                <Input
+                  type="date"
+                  value={customStartDate}
+                  onChange={(e) => setCustomStartDate(e.target.value)}
+                  className="h-7 text-xs w-32"
+                />
+                <span className="text-slate-500 font-semibold">ถึง:</span>
+                <Input
+                  type="date"
+                  value={customEndDate}
+                  onChange={(e) => setCustomEndDate(e.target.value)}
+                  className="h-7 text-xs w-32"
+                />
               </div>
-            </div>
+            )}
           </div>
-          <Button
-            type="button"
-            onClick={() => setActiveTab("outstanding")}
-            className="bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold gap-1.5 h-8.5 px-3.5 shadow-xs"
-          >
-            <Clock className="h-4 w-4" /> ดูรายการค้างชำระทั้งหมด
-          </Button>
-        </div>
-      )}
+
+          {/* Active Period Label */}
+          <div className="flex items-center justify-between text-xs text-teal-950 font-bold border-t border-teal-200/60 pt-2">
+            <span>📊 กำลังแสดงผล: <span className="text-teal-800 font-extrabold">{periodDisplayLabel}</span></span>
+            <span className="text-slate-500">พบข้อมูล {filteredRecords.length} รายการ</span>
+          </div>
+        </CardContent>
+      </Card>
 
       <div className="grid gap-8 lg:grid-cols-12">
         {/* ── LEFT COLUMN: Input Form (6 Cols) ── */}
@@ -584,7 +786,7 @@ export function DailyEntryClient({ initialRecords }: { initialRecords: DailySale
                 )}
               </div>
               <CardDescription className="text-xs text-teal-800/80">
-                กรอกจำนวนคู่ตาม Package ไซส์, บริการเสริม, ยอดเงินสด/โอน และสถานะการชำระเงิน
+                กรอกจำนวนคู่ตาม Package ไซส์, บริการเสริม, ยอดเงินโอน/เงินสด และสถานะการชำระเงิน
               </CardDescription>
             </CardHeader>
 
@@ -888,11 +1090,11 @@ export function DailyEntryClient({ initialRecords }: { initialRecords: DailySale
                   )}
                 </div>
 
-                {/* 4. Financial Breakdown & Payment Split */}
+                {/* 4. Financial Breakdown & Payment Split (Transfer & Cash) */}
                 <div className="space-y-3 rounded-xl border border-teal-200 bg-teal-50/30 p-4">
                   <div className="flex items-center justify-between border-b border-teal-100 pb-2">
                     <Label className="text-xs font-bold text-teal-950 flex items-center gap-1.5">
-                      <Wallet className="h-3.5 w-3.5 text-teal-700" /> สรุปยอดเงินและวิธีชำระ (เงินสด / เงินโอน / ยอดรับจริง)
+                      <Wallet className="h-3.5 w-3.5 text-teal-700" /> สรุปยอดเงินและวิธีชำระ (เงินโอน / เงินสด / ยอดรับจริง)
                     </Label>
                   </div>
 
@@ -926,7 +1128,7 @@ export function DailyEntryClient({ initialRecords }: { initialRecords: DailySale
                     />
                   </div>
 
-                  {/* Cash & Transfer Inputs */}
+                  {/* Transfer & Cash Inputs */}
                   <div className="grid grid-cols-2 gap-3 pt-1">
                     <div className="space-y-1.5">
                       <Label className="text-xs font-bold text-blue-900 flex items-center gap-1">
@@ -1033,10 +1235,10 @@ export function DailyEntryClient({ initialRecords }: { initialRecords: DailySale
                     )}
                   </div>
 
-                  {/* Payment Status Selector */}
+                  {/* Payment Status Selector (Strictly 2 States: ชำระครบ vs ค้างชำระ) */}
                   <div className="space-y-1.5 pt-1">
                     <Label className="text-xs font-bold text-slate-700">สถานะการชำระเงิน</Label>
-                    <div className="grid grid-cols-3 gap-2">
+                    <div className="grid grid-cols-2 gap-2">
                       <button
                         type="button"
                         onClick={() => setPaymentStatusManual("ชำระครบ")}
@@ -1050,17 +1252,6 @@ export function DailyEntryClient({ initialRecords }: { initialRecords: DailySale
                       </button>
                       <button
                         type="button"
-                        onClick={() => setPaymentStatusManual("ชำระบางส่วน")}
-                        className={`rounded-lg border py-2 px-3 text-xs font-bold text-center transition-all ${
-                          currentPaymentStatus === "ชำระบางส่วน"
-                            ? "bg-amber-500 text-white border-amber-500 shadow-xs"
-                            : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
-                        }`}
-                      >
-                        ⏱ ชำระบางส่วน
-                      </button>
-                      <button
-                        type="button"
                         onClick={() => setPaymentStatusManual("ค้างชำระ")}
                         className={`rounded-lg border py-2 px-3 text-xs font-bold text-center transition-all ${
                           currentPaymentStatus === "ค้างชำระ"
@@ -1068,7 +1259,7 @@ export function DailyEntryClient({ initialRecords }: { initialRecords: DailySale
                             : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
                         }`}
                       >
-                        ✕ ค้างชำระ
+                        ⏳ ค้างชำระ
                       </button>
                     </div>
                   </div>
@@ -1106,17 +1297,18 @@ export function DailyEntryClient({ initialRecords }: { initialRecords: DailySale
           </Card>
         </div>
 
-        {/* ── RIGHT COLUMN: Historical Log, AR & Analytics (6 Cols) ── */}
+        {/* ── RIGHT COLUMN: Historical Log, AR & View Analytics (6 Cols) ── */}
         <div className="lg:col-span-6 space-y-6">
           <Card className="border-slate-200 shadow-sm">
             <CardHeader className="p-4 bg-slate-50 border-b border-slate-200 space-y-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div>
-                  <CardTitle className="text-sm font-bold text-slate-900">
-                    ประวัติยอดขายและรายการค้างชำระ ({filteredRecords.length} วัน)
+                  <CardTitle className="text-sm font-bold text-slate-900 flex items-center gap-1.5">
+                    <BarChart3 className="h-4 w-4 text-teal-700" />
+                    สรุปยอดขาย ({filteredRecords.length} วัน)
                   </CardTitle>
                   <CardDescription className="text-xs text-slate-500">
-                    รวม {overallStats.pairs} คู่ | ยอดขายรวม {overallStats.revenue.toLocaleString()} ฿ | ค้างชำระรวม {overallStats.outstanding.toLocaleString()} ฿
+                    รวม {viewStats.pairs} คู่ | ยอดขายรวม {viewStats.revenue.toLocaleString()} ฿ | ค้างชำระ {viewStats.outstanding.toLocaleString()} ฿
                   </CardDescription>
                 </div>
 
@@ -1132,35 +1324,35 @@ export function DailyEntryClient({ initialRecords }: { initialRecords: DailySale
                 </div>
               </div>
 
-              {/* Filter Tabs */}
+              {/* Filter Tabs (Strictly 2 Status Filters: ชำระครบ vs ค้างชำระ) */}
               <div className="flex items-center gap-1.5 border-t border-slate-200/80 pt-2">
                 <button
                   type="button"
-                  onClick={() => setActiveTab("all")}
+                  onClick={() => setStatusTab("all")}
                   className={`rounded-lg px-3 py-1 text-xs font-bold transition-all ${
-                    activeTab === "all"
+                    statusTab === "all"
                       ? "bg-teal-800 text-white shadow-2xs"
                       : "bg-white text-slate-600 hover:bg-slate-200/70"
                   }`}
                 >
-                  ทั้งหมด ({records.length})
+                  ทั้งหมด ({filteredRecords.length})
                 </button>
                 <button
                   type="button"
-                  onClick={() => setActiveTab("outstanding")}
+                  onClick={() => setStatusTab("outstanding")}
                   className={`rounded-lg px-3 py-1 text-xs font-bold flex items-center gap-1 transition-all ${
-                    activeTab === "outstanding"
-                      ? "bg-amber-600 text-white shadow-2xs"
-                      : "bg-white text-amber-800 border border-amber-200 hover:bg-amber-50"
+                    statusTab === "outstanding"
+                      ? "bg-rose-600 text-white shadow-2xs"
+                      : "bg-white text-rose-800 border border-rose-200 hover:bg-rose-50"
                   }`}
                 >
-                  <Clock className="h-3 w-3" /> ค้างชำระ ({overallStats.outstandingCount})
+                  <Clock className="h-3 w-3" /> ⏳ ค้างชำระ ({viewStats.outstandingCount})
                 </button>
                 <button
                   type="button"
-                  onClick={() => setActiveTab("completed")}
+                  onClick={() => setStatusTab("completed")}
                   className={`rounded-lg px-3 py-1 text-xs font-bold transition-all ${
-                    activeTab === "completed"
+                    statusTab === "completed"
                       ? "bg-emerald-700 text-white shadow-2xs"
                       : "bg-white text-slate-600 hover:bg-slate-200/70"
                   }`}
@@ -1171,30 +1363,30 @@ export function DailyEntryClient({ initialRecords }: { initialRecords: DailySale
             </CardHeader>
 
             <CardContent className="p-4 space-y-4">
-              {/* Stat Pills */}
+              {/* Stat Summary Cards for Current View */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center text-xs">
                 <div className="rounded-lg bg-blue-50 border border-blue-200 p-2.5">
-                  <div className="text-[10px] text-blue-600 font-semibold">เงินโอนสะสม</div>
-                  <div className="font-extrabold text-blue-950 font-mono text-sm">
-                    {overallStats.transfer.toLocaleString()} ฿
+                  <div className="text-[10px] text-blue-700 font-bold">📱 เงินโอน (Transfer)</div>
+                  <div className="font-black text-blue-950 font-mono text-sm">
+                    {viewStats.transfer.toLocaleString()} ฿
                   </div>
                 </div>
                 <div className="rounded-lg bg-emerald-50 border border-emerald-200 p-2.5">
-                  <div className="text-[10px] text-emerald-600 font-semibold">เงินสดสะสม</div>
-                  <div className="font-extrabold text-emerald-950 font-mono text-sm">
-                    {overallStats.cash.toLocaleString()} ฿
+                  <div className="text-[10px] text-emerald-700 font-bold">💵 เงินสด (Cash)</div>
+                  <div className="font-black text-emerald-950 font-mono text-sm">
+                    {viewStats.cash.toLocaleString()} ฿
                   </div>
                 </div>
                 <div className="rounded-lg bg-teal-50 border border-teal-200 p-2.5">
-                  <div className="text-[10px] text-teal-700 font-semibold">ยอดรับจริงรวม</div>
-                  <div className="font-extrabold text-teal-950 font-mono text-sm">
-                    {overallStats.totalPaid.toLocaleString()} ฿
+                  <div className="text-[10px] text-teal-800 font-bold">💰 รับชำระจริงรวม</div>
+                  <div className="font-black text-teal-950 font-mono text-sm">
+                    {viewStats.totalPaid.toLocaleString()} ฿
                   </div>
                 </div>
                 <div className="rounded-lg bg-rose-50 border border-rose-200 p-2.5">
-                  <div className="text-[10px] text-rose-700 font-semibold">ยอดค้างชำระสะสม</div>
-                  <div className="font-extrabold text-rose-950 font-mono text-sm">
-                    {overallStats.outstanding.toLocaleString()} ฿
+                  <div className="text-[10px] text-rose-700 font-bold">⏳ ยอดค้างชำระ</div>
+                  <div className="font-black text-rose-950 font-mono text-sm">
+                    {viewStats.outstanding.toLocaleString()} ฿
                   </div>
                 </div>
               </div>
@@ -1207,7 +1399,7 @@ export function DailyEntryClient({ initialRecords }: { initialRecords: DailySale
                       <tr>
                         <th className="px-3 py-2.5 text-left">วันที่</th>
                         <th className="px-2 py-2.5 text-center">ไซส์ (S/M/L/XL)</th>
-                        <th className="px-2.5 py-2.5 text-right">ยอดรับจริง / สุทธิ</th>
+                        <th className="px-2.5 py-2.5 text-right">เงินโอน / เงินสด / ยอดรับ</th>
                         <th className="px-2.5 py-2.5 text-center">สถานะ / ค้างชำระ</th>
                         <th className="px-2 py-2.5 text-center">จัดการ</th>
                       </tr>
@@ -1222,14 +1414,13 @@ export function DailyEntryClient({ initialRecords }: { initialRecords: DailySale
 
                         const hasPayments = (record.payments || []).length > 0;
                         const isExpanded = expandedRecordId === record.id;
-
-                        const isPendingRow = record.outstanding > 0 || record.payment_status === "ชำระบางส่วน" || record.payment_status === "ค้างชำระ";
+                        const isPendingRow = record.outstanding > 0 || record.payment_status === "ค้างชำระ";
 
                         return (
                           <tr
                             key={record.id}
                             className={`transition-colors ${
-                              isPendingRow ? "bg-amber-50/30 hover:bg-amber-50/70" : "hover:bg-slate-50/80"
+                              isPendingRow ? "bg-rose-50/30 hover:bg-rose-50/70" : "hover:bg-slate-50/80"
                             }`}
                           >
                             <td className="px-3 py-2.5 font-bold text-slate-900 whitespace-nowrap">
@@ -1282,22 +1473,25 @@ export function DailyEntryClient({ initialRecords }: { initialRecords: DailySale
                             </td>
 
                             <td className="px-2.5 py-2.5 text-right font-mono whitespace-nowrap">
-                              <div className="font-black text-slate-900">{record.total_paid.toLocaleString()} ฿</div>
-                              <div className="text-[10px] text-slate-500">
-                                สุทธิ {record.total_revenue.toLocaleString()} ฿
+                              <div className="font-black text-slate-900">รับ: {record.total_paid.toLocaleString()} ฿</div>
+                              <div className="text-[10px] text-blue-700 font-semibold">
+                                📱 โอน: {Number(record.transfer_amount || 0).toLocaleString()} ฿
+                              </div>
+                              <div className="text-[10px] text-emerald-700 font-semibold">
+                                💵 สด: {Number(record.cash_amount || 0).toLocaleString()} ฿
                               </div>
                               {record.total_ar_paid > 0 && (
-                                <div className="text-[10px] text-emerald-700 font-semibold">
+                                <div className="text-[10px] text-teal-800 font-bold">
                                   (รับเพิ่ม +{record.total_ar_paid.toLocaleString()}฿)
                                 </div>
                               )}
                             </td>
 
-                            <td className="px-2 py-2.5 text-center whitespace-nowrap">
+                            <td className="px-2.5 py-2.5 text-center whitespace-nowrap">
                               {record.outstanding > 0 ? (
                                 <div className="space-y-1">
-                                  <Badge variant="outline" className="bg-amber-100 text-amber-900 border-amber-300 font-bold text-[10px]">
-                                    ค้าง {record.outstanding.toLocaleString()} ฿
+                                  <Badge variant="outline" className="bg-rose-100 text-rose-900 border-rose-300 font-bold text-[10px]">
+                                    ⏳ ค้าง {record.outstanding.toLocaleString()} ฿
                                   </Badge>
                                   <div>
                                     <Button
@@ -1346,7 +1540,7 @@ export function DailyEntryClient({ initialRecords }: { initialRecords: DailySale
                       {filteredRecords.length === 0 && (
                         <tr>
                           <td colSpan={5} className="px-4 py-8 text-center text-slate-400">
-                            ยังไม่มีรายการบันทึกยอดขาย
+                            ไม่พบรายการยอดขายในช่วงเวลาที่เลือก
                           </td>
                         </tr>
                       )}
@@ -1391,9 +1585,9 @@ export function DailyEntryClient({ initialRecords }: { initialRecords: DailySale
                 <span>ชำระไปแล้วก่อนหน้า:</span>
                 <span className="font-bold text-emerald-700">{collectTarget.total_paid.toLocaleString()} บาท</span>
               </div>
-              <div className="flex justify-between border-t border-slate-200 pt-1.5 text-amber-900 font-bold">
+              <div className="flex justify-between border-t border-slate-200 pt-1.5 text-rose-900 font-bold">
                 <span>ยอดคงค้างชำระ:</span>
-                <span className="font-black text-amber-700 font-mono text-sm">
+                <span className="font-black text-rose-600 font-mono text-sm">
                   {collectTarget.outstanding.toLocaleString()} บาท
                 </span>
               </div>
