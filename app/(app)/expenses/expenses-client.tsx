@@ -328,35 +328,35 @@ export function ExpensesClient({ initialData }: { initialData: ExpensesPayload }
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 pt-2">
               <div className="rounded-xl bg-white/10 p-3.5 backdrop-blur-xs space-y-1">
                 <div className="text-xs text-teal-200 flex items-center justify-between">
-                  <span>1. เชียง (ช่างหลัก)</span>
+                  <span>1. นายธีรภัทร ทาแผ (เชียง)</span>
                   <Badge className="bg-teal-600 text-white text-[10px]">พนักงานประจำ</Badge>
                 </div>
                 <div className="text-lg font-black text-teal-300">
-                  ฿{data.payslips.find((p) => p.employeeName.includes("เชียง"))?.netPay.toLocaleString("th-TH", { minimumFractionDigits: 2 }) || "11,900.00"}
+                  ฿{data.payslips.find((p) => p.employeeName.includes("ธีรภัทร") || p.employeeName.includes("เชียง"))?.netPay.toLocaleString("th-TH", { minimumFractionDigits: 2 }) || "11,900.00"}
                 </div>
                 <div className="text-[10px] text-teal-200/80">ฐาน 12,000 + เบี้ยขยัน 500 − ปกส. 600</div>
               </div>
 
               <div className="rounded-xl bg-white/10 p-3.5 backdrop-blur-xs space-y-1">
                 <div className="text-xs text-teal-200 flex items-center justify-between">
-                  <span>2. มิ้ว (ผู้จัดการหน้าร้าน)</span>
+                  <span>2. น.ส.สุทธินันท์ นนทจันทร์ (มิ้ว)</span>
                   <Badge className="bg-indigo-600 text-white text-[10px]">พนักงานประจำ</Badge>
                 </div>
                 <div className="text-lg font-black text-teal-300">
-                  ฿{data.payslips.find((p) => p.employeeName.includes("มิ้ว"))?.netPay.toLocaleString("th-TH", { minimumFractionDigits: 2 }) || "11,900.00"}
+                  ฿{data.payslips.find((p) => p.employeeName.includes("สุทธินันท์") || p.employeeName.includes("มิ้ว"))?.netPay.toLocaleString("th-TH", { minimumFractionDigits: 2 }) || "11,900.00"}
                 </div>
                 <div className="text-[10px] text-teal-200/80">ฐาน 12,000 + เบี้ยขยัน 500 − ปกส. 600</div>
               </div>
 
               <div className="rounded-xl bg-white/10 p-3.5 backdrop-blur-xs space-y-1">
                 <div className="text-xs text-teal-200 flex items-center justify-between">
-                  <span>3. เจ (ช่างสปา)</span>
+                  <span>3. เจ (พนักงานทดลองงาน)</span>
                   <Badge className="bg-amber-500 text-slate-950 font-bold text-[10px]">ทดลองงาน 350฿/วัน</Badge>
                 </div>
                 <div className="text-lg font-black text-amber-300">
-                  ฿{data.payslips.find((p) => p.employeeName.includes("เจ") || p.employeeName.includes("ธีรภัทร"))?.netPay.toLocaleString("th-TH", { minimumFractionDigits: 2 }) || "10,275.00"}
+                  ฿{data.payslips.find((p) => p.employeeName === "เจ (พนักงานทดลองงาน)")?.netPay.toLocaleString("th-TH", { minimumFractionDigits: 2 }) || "9,600.00"}
                 </div>
-                <div className="text-[10px] text-teal-200/80">ทำงาน 26 วัน x 350฿ + เบี้ยขยัน + OT (ไม่หัก ปกส.)</div>
+                <div className="text-[10px] text-teal-200/80">ทำงาน 26 วัน x 350฿ + เบี้ยขยัน (ไม่หัก ปกส.)</div>
               </div>
             </div>
           </div>

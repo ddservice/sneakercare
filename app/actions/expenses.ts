@@ -154,11 +154,11 @@ export async function fetchAllExpensesData(timeRange: string = "this_month"): Pr
   const staffMap: Record<string, StaffPayslip> = {};
 
   // Initialize the 3 real shop staff members:
-  // 1. เชียง: พนักงานประจำ (เงินเดือน) - หยุดพุธ
-  // 2. มิ้ว: พนักงานประจำ (เงินเดือน) - หยุดอาทิตย์
-  // 3. เจ: พนักงานทดลองงาน (วันละ 350฿ x 26 วัน) - หยุดศุกร์
-  staffMap["เชียง"] = {
-    employeeName: "เชียง",
+  // 1. นายธีรภัทร ทาแผ (เชียง): พนักงานประจำ (เงินเดือน) - หยุดพุธ
+  // 2. น.ส.สุทธินันท์ นนทจันทร์ (มิ้ว): พนักงานประจำ (เงินเดือน) - หยุดอาทิตย์
+  // 3. เจ (พนักงานทดลองงาน): วันละ 350฿ x 26 วัน - หยุดศุกร์
+  staffMap["นายธีรภัทร ทาแผ (เชียง)"] = {
+    employeeName: "นายธีรภัทร ทาแผ (เชียง)",
     month: targetMonthFilter,
     employmentType: "monthly",
     baseSalary: 12000,
@@ -174,8 +174,8 @@ export async function fetchAllExpensesData(timeRange: string = "this_month"): Pr
     employeeRole: "พนักงานประจำ / ช่างหลัก",
   };
 
-  staffMap["มิ้ว"] = {
-    employeeName: "มิ้ว",
+  staffMap["น.ส.สุทธินันท์ นนทจันทร์ (มิ้ว)"] = {
+    employeeName: "น.ส.สุทธินันท์ นนทจันทร์ (มิ้ว)",
     month: targetMonthFilter,
     employmentType: "monthly",
     baseSalary: 12000,
@@ -191,21 +191,21 @@ export async function fetchAllExpensesData(timeRange: string = "this_month"): Pr
     employeeRole: "พนักงานประจำ / ผู้จัดการหน้าร้าน",
   };
 
-  staffMap["นายธีรภัทร ทาแผ (เจ)"] = {
-    employeeName: "นายธีรภัทร ทาแผ (เจ)",
+  staffMap["เจ (พนักงานทดลองงาน)"] = {
+    employeeName: "เจ (พนักงานทดลองงาน)",
     month: targetMonthFilter,
     employmentType: "probation_daily",
     dailyWage: 350,
     daysWorked: 26,
     baseSalary: 9100, // 26 * 350
     diligence: 500,
-    ot: 675,
+    ot: 0,
     commPct: 0,
     commission: 0,
     wht: 0,
     ssoDeduction: 0, // ยกเว้นประกันสังคมช่วงทดลองงาน
     otherDeductions: 0,
-    netPay: 10275, // 9100 + 500 + 675
+    netPay: 9600, // 9100 + 500
     payMethod: "บัญชีร้าน (โอน)",
     employeeRole: "พนักงานทดลองงาน / ช่างสปา (350฿/วัน)",
   };
@@ -217,14 +217,12 @@ export async function fetchAllExpensesData(timeRange: string = "this_month"): Pr
 
     // Normalize name to our 3 staff members if matched
     let empName = rawEmp;
-    if (rawEmp.includes("ธีรภัทร") || rawEmp.includes("เจ")) {
-      empName = "นายธีรภัทร ทาแผ (เจ)";
-    } else if (rawEmp.includes("เชียง")) {
-      empName = "เชียง";
-    } else if (rawEmp.includes("มิ้ว")) {
-      empName = "มิ้ว";
-    } else if (rawEmp.includes("สุทธินันท์")) {
-      empName = "เชียง"; // Map legacy manager name to Chiang
+    if (rawEmp.includes("ธีรภัทร") || rawEmp.includes("เชียง")) {
+      empName = "นายธีรภัทร ทาแผ (เชียง)";
+    } else if (rawEmp.includes("สุทธินันท์") || rawEmp.includes("มิ้ว")) {
+      empName = "น.ส.สุทธินันท์ นนทจันทร์ (มิ้ว)";
+    } else if (rawEmp.includes("เจ")) {
+      empName = "เจ (พนักงานทดลองงาน)";
     }
 
     if (!staffMap[empName]) {

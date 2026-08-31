@@ -52,7 +52,7 @@ type EmployeeInfo = {
 const EMPLOYEES: EmployeeInfo[] = [
   {
     id: "chiang",
-    name: "เชียง",
+    name: "เชียง (นายธีรภัทร ทาแผ)",
     type: "monthly",
     role: "พนักงานประจำ / ช่างหลัก",
     wageNote: "เงินเดือนประจำ (12,000 ฿)",
@@ -62,7 +62,7 @@ const EMPLOYEES: EmployeeInfo[] = [
   },
   {
     id: "milk",
-    name: "มิ้ว",
+    name: "มิ้ว (น.ส.สุทธินันท์ นนทจันทร์)",
     type: "monthly",
     role: "พนักงานประจำ / ผู้จัดการหน้าร้าน",
     wageNote: "เงินเดือนประจำ (12,000 ฿)",
@@ -72,7 +72,7 @@ const EMPLOYEES: EmployeeInfo[] = [
   },
   {
     id: "jae",
-    name: "เจ (ธีรภัทร)",
+    name: "เจ (พนักงานทดลองงาน)",
     type: "daily",
     role: "พนักงานทดลองงาน / ช่างสปา",
     wageNote: "วันละ 350 บาท (คำนวณตามวันทำจริง)",
