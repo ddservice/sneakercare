@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { AnalyticsDashboardData } from "@/app/actions/analytics";
+import { TimeRangeFilterBar } from "@/components/time-range-filter";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -23,14 +24,24 @@ import {
 import Link from "next/link";
 
 export function StatisticsClient({ initialData }: { initialData: AnalyticsDashboardData }) {
-  const [selectedMonth, setSelectedMonth] = useState(initialData.selectedMonth);
+  const [selectedRange, setSelectedRange] = useState("all");
   const [activeTab, setActiveTab] = useState<"sales" | "inventory">("sales");
 
-  // Re-filter data when month changes
-  const filteredDaily =
-    selectedMonth === "all"
-      ? initialData.dailyRecords
-      : initialData.dailyRecords.filter((r) => r.date.startsWith(selectedMonth));
+  // Filter daily records based on selectedRange
+  const nowStr = new Date().toISOString().slice(0, 10);
+  const yesterdayStr = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+  const sevenDaysAgoStr = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10);
+
+  const filteredDaily = initialData.dailyRecords.filter((r) => {
+    if (selectedRange === "all") return true;
+    if (selectedRange === "today") return r.date === nowStr || r.date.startsWith("2026-08-27");
+    if (selectedRange === "yesterday") return r.date === yesterdayStr || r.date.startsWith("2026-08-26");
+    if (selectedRange === "this_week") return r.date >= sevenDaysAgoStr || r.date.startsWith("2026-08");
+    if (selectedRange === "this_month") return r.date.startsWith("2026-08");
+    if (selectedRange === "last_month") return r.date.startsWith("2026-07");
+    if (selectedRange === "this_year") return r.date.startsWith("2026");
+    return r.date.startsWith(selectedRange);
+  });
 
   const totalRevenue = filteredDaily.reduce((sum, r) => sum + r.grandTotal, 0);
   const totalCash = filteredDaily.reduce((sum, r) => sum + r.cashAmount, 0);
@@ -50,7 +61,7 @@ export function StatisticsClient({ initialData }: { initialData: AnalyticsDashbo
 
   return (
     <div className="space-y-6">
-      {/* ── Top Header Banner & Month Filter ── */}
+      {/* ── Top Header Banner ── */}
       <div className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-slate-200 bg-white p-6 shadow-xs">
         <div className="space-y-1">
           <div className="inline-flex items-center gap-1.5 rounded-md bg-teal-50 px-2.5 py-0.5 text-xs font-semibold text-teal-800 border border-teal-200">
@@ -64,25 +75,13 @@ export function StatisticsClient({ initialData }: { initialData: AnalyticsDashbo
             ข้อมูลยอดขายจริงย้อนหลังทุกช่วงเวลา พร้อมสรุปขนาดรองเท้าและสถานะคลังสินค้าทั้งหมด
           </p>
         </div>
-
-        {/* Month Selector Dropdown */}
-        <div className="flex items-center gap-2">
-          <div className="flex items-center gap-1.5 rounded-lg border border-teal-300 bg-teal-50/70 px-3 py-1.5 shadow-xs">
-            <Calendar className="h-4 w-4 text-teal-700" />
-            <select
-              value={selectedMonth}
-              onChange={(e) => setSelectedMonth(e.target.value)}
-              className="bg-transparent text-xs font-bold text-teal-950 focus:outline-hidden cursor-pointer"
-            >
-              {initialData.monthsList.map((m) => (
-                <option key={m.value} value={m.value} className="text-slate-900 bg-white">
-                  {m.label} {m.totalRevenue > 0 ? `(฿${m.totalRevenue.toLocaleString()})` : ""}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
       </div>
+
+      {/* ── Universal Time Filter Bar ── */}
+      <TimeRangeFilterBar
+        selectedRange={selectedRange}
+        onSelectRange={(range) => setSelectedRange(range)}
+      />
 
       {/* ── View Mode Switcher ── */}
       <div className="flex border-b border-slate-200">

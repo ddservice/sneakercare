@@ -383,7 +383,7 @@ export function InvoicingClient({
                       <Input
                         value={companyName}
                         onChange={(e) => setCompanyName(e.target.value)}
-                        placeholder="เช่น บริษัท เชียงใหม่ สตาร์ทอัพ จำกัด หรือ คุณสมชาย ใจดี"
+                        placeholder="เช่น บริษัท เอสเทีย เชียงใหม่ จำกัด หรือ บริษัท รวยรับทรัพย์168 จำกัด"
                         className="text-xs h-9"
                         required
                       />
