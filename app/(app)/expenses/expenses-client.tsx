@@ -74,6 +74,14 @@ export function ExpensesClient({ initialData }: { initialData: ExpensesPayload }
   const [newStaffType, setNewStaffType] = useState<"monthly" | "probation_daily">("probation_daily");
   const [newStaffSalary, setNewStaffSalary] = useState<number>(350);
 
+  // Add Expense Modal State
+  const [showAddExpenseModal, setShowAddExpenseModal] = useState(false);
+  const [expCategory, setExpCategory] = useState("ค่าดำเนินการ");
+  const [expTitle, setExpTitle] = useState("");
+  const [expAmount, setExpAmount] = useState<number>(0);
+  const [expPayMethod, setExpPayMethod] = useState("บัญชีร้าน (โอน)");
+  const [expDate, setExpDate] = useState(new Date().toISOString().slice(0, 10));
+
   // Interactive Live Values State for Staff (Keyed by employeeName)
   const [staffDrafts, setStaffDrafts] = useState<
     Record<
@@ -299,10 +307,52 @@ export function ExpensesClient({ initialData }: { initialData: ExpensesPayload }
         toast.success(`เพิ่มพนักงานใหม่ "${newStaffName}" สำเร็จเรียบร้อย`);
         setShowAddStaffModal(false);
         // Refresh
+  // Create Expense Handler
+  function handleCreateExpense(e: React.FormEvent) {
+    e.preventDefault();
+    if (!expTitle.trim()) {
+      toast.error("กรุณาระบุชื่อรายการค่าใช้จ่าย");
+      return;
+    }
+    if (expAmount <= 0) {
+      toast.error("กรุณาระบุจำนวนเงินที่ถูกต้อง");
+      return;
+    }
+
+    startTransition(async () => {
+      const formData = new FormData();
+      formData.set("title", expTitle.trim());
+      formData.set("category", expCategory);
+      formData.set("amount", String(expAmount));
+      formData.set("pay_method", expPayMethod);
+      formData.set("expense_date", expDate);
+
+      const res = await addExpense(undefined, formData);
+      if (res.success) {
+        toast.success(`บันทึกค่าใช้จ่าย "${expTitle}" สำเร็จเรียบร้อย`);
+        setShowAddExpenseModal(false);
+        setExpTitle("");
+        setExpAmount(0);
         const updated = await fetchAllExpensesData(data.timeRange);
         setData(updated);
       } else {
-        toast.error(res.error || "เกิดข้อผิดพลาดในการสร้างพนักงาน");
+        toast.error(res.error || "เกิดข้อผิดพลาดในการบันทึก");
+      }
+    });
+  }
+
+  // Delete Expense Handler
+  function handleDeleteExpense(id: string | number, name: string) {
+    if (!confirm(`คุณต้องการลบรายการค่าใช้จ่าย "${name}" ใช่หรือไม่?`)) return;
+
+    startTransition(async () => {
+      try {
+        await deleteExpense(id);
+        toast.success(`ลบรายการ "${name}" เรียบร้อยแล้ว`);
+        const updated = await fetchAllExpensesData(data.timeRange);
+        setData(updated);
+      } catch (err: any) {
+        toast.error(err.message || "ไม่สามารถลบรายการได้");
       }
     });
   }
@@ -322,7 +372,13 @@ export function ExpensesClient({ initialData }: { initialData: ExpensesPayload }
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            onClick={() => setShowAddExpenseModal(true)}
+            className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs gap-1.5 shadow-xs h-9"
+          >
+            <Plus className="h-4 w-4" /> บันทึกค่าใช้จ่ายใหม่
+          </Button>
           <Button
             onClick={() => setShowAddStaffModal(true)}
             className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs gap-1.5 shadow-xs h-9"
@@ -635,13 +691,21 @@ export function ExpensesClient({ initialData }: { initialData: ExpensesPayload }
         <Card className="border-slate-200 shadow-sm">
           <CardHeader className="p-4 bg-slate-50 border-b border-slate-200 flex flex-wrap items-center justify-between gap-2">
             <div>
-              <CardTitle className="text-sm font-bold text-slate-900">
+              <CardTitle className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                <Building2 className="h-4 w-4 text-amber-700" />
                 รายการค่าใช้จ่ายดำเนินงานร้าน (OPEX)
               </CardTitle>
               <CardDescription className="text-xs text-slate-500">
                 ค่าน้ำประปา, ไฟฟ้า, อินเทอร์เน็ต, ภาษี, ค่าเช่าสถานที่ และรายจ่ายทั่วไป
               </CardDescription>
             </div>
+            <Button
+              size="sm"
+              onClick={() => setShowAddExpenseModal(true)}
+              className="bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs gap-1.5 h-8 shadow-xs"
+            >
+              <Plus className="h-3.5 w-3.5" /> บันทึกค่าใช้จ่ายใหม่
+            </Button>
           </CardHeader>
           <CardContent className="p-0">
             <table className="w-full text-xs">
@@ -652,6 +716,7 @@ export function ExpensesClient({ initialData }: { initialData: ExpensesPayload }
                   <th className="px-3 py-2.5 text-left">รายการ</th>
                   <th className="px-3 py-2.5 text-left">ช่องทางชำระ</th>
                   <th className="px-4 py-2.5 text-right">จำนวนเงิน (บาท)</th>
+                  <th className="px-3 py-2.5 text-center">จัดการ</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200">
@@ -668,12 +733,150 @@ export function ExpensesClient({ initialData }: { initialData: ExpensesPayload }
                     <td className="px-4 py-2.5 text-right font-mono font-bold text-amber-900">
                       ฿{item.amount.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
                     </td>
+                    <td className="px-3 py-2.5 text-center">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleDeleteExpense(item.id, item.name)}
+                        className="h-7 w-7 p-0 text-slate-400 hover:text-rose-600"
+                        title="ลบรายการค่าใช้จ่าย"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </td>
                   </tr>
                 ))}
+
+                {data.opexList.length === 0 && (
+                  <tr>
+                    <td colSpan={6} className="px-4 py-8 text-center text-slate-400">
+                      ไม่พบรายการค่าใช้จ่ายในงวดนี้
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </CardContent>
         </Card>
+      )}
+
+      {/* ── ADD EXPENSE MODAL ── */}
+      {showAddExpenseModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between border-b border-slate-200 pb-3">
+              <div className="flex items-center gap-2">
+                <div className="h-8 w-8 rounded-full bg-amber-100 text-amber-800 flex items-center justify-center font-bold">
+                  <Plus className="h-4 w-4" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-slate-900">บันทึกค่าใช้จ่ายใหม่</h3>
+                  <p className="text-xs text-slate-500">บันทึกรายจ่ายดำเนินงานร้าน ค่าน้ำ ค่าไฟ หรืออื่นๆ</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowAddExpenseModal(false)}
+                className="rounded-full p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateExpense} className="space-y-4 text-xs">
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-1">
+                  <Label className="font-bold text-slate-700">วันที่ทำรายการ *</Label>
+                  <Input
+                    type="date"
+                    value={expDate}
+                    onChange={(e) => setExpDate(e.target.value)}
+                    className="h-9 text-xs"
+                    required
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="font-bold text-slate-700">หมวดหมู่ค่าใช้จ่าย *</Label>
+                  <select
+                    value={expCategory}
+                    onChange={(e) => setExpCategory(e.target.value)}
+                    className="w-full h-9 rounded-md border border-slate-300 bg-white px-2.5 text-xs font-medium text-slate-900"
+                  >
+                    <option value="ค่าดำเนินการ">ค่าดำเนินการ</option>
+                    <option value="ค่าน้ำประปา">ค่าน้ำประปา</option>
+                    <option value="ค่าไฟฟ้า">ค่าไฟฟ้า</option>
+                    <option value="ค่าอินเทอร์เน็ต">ค่าอินเทอร์เน็ต</option>
+                    <option value="ภาษี">ภาษี</option>
+                    <option value="ค่าเช่าร้าน">ค่าเช่าร้าน</option>
+                    <option value="ค่าการตลาด">ค่าการตลาด</option>
+                    <option value="น้ำยา/เคมี">น้ำยา/เคมี</option>
+                    <option value="ทั่วไป">ทั่วไป / เบ็ดเตล็ด</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <Label className="font-bold text-slate-700">ชื่อรายการค่าใช้จ่าย *</Label>
+                <Input
+                  type="text"
+                  value={expTitle}
+                  onChange={(e) => setExpTitle(e.target.value)}
+                  placeholder="เช่น ซื้อแปรงขัดพิเศษ, ค่าน้ำมันรถส่งรองเท้า"
+                  className="h-9 text-xs font-medium"
+                  required
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-1">
+                  <Label className="font-bold text-slate-700">จำนวนเงิน (บาท) *</Label>
+                  <Input
+                    type="number"
+                    step="any"
+                    value={expAmount || ""}
+                    onChange={(e) => setExpAmount(parseFloat(e.target.value) || 0)}
+                    placeholder="0.00"
+                    className="h-9 text-xs font-mono font-bold text-amber-950 bg-amber-50/40 border-amber-300"
+                    required
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="font-bold text-slate-700">ช่องทางชำระเงิน *</Label>
+                  <select
+                    value={expPayMethod}
+                    onChange={(e) => setExpPayMethod(e.target.value)}
+                    className="w-full h-9 rounded-md border border-slate-300 bg-white px-2.5 text-xs font-medium text-slate-900"
+                  >
+                    <option value="บัญชีร้าน (โอน)">บัญชีร้าน (โอน)</option>
+                    <option value="เงินสดหน้าร้าน">เงินสดหน้าร้าน</option>
+                    <option value="พร้อมเพย์">พร้อมเพย์</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-200">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowAddExpenseModal(false)}
+                  className="text-xs h-9"
+                >
+                  ยกเลิก
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={isPending}
+                  size="sm"
+                  className="bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs h-9 px-4 gap-1 shadow-xs"
+                >
+                  <Check className="h-4 w-4" /> บันทึกค่าใช้จ่าย
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
 
       {/* ── EDIT STAFF PROFILE & STATUS MODAL ── */}
