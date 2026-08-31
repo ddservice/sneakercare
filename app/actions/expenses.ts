@@ -192,15 +192,15 @@ export async function fetchAllExpensesData(timeRange: string = "this_month"): Pr
     employeeRole: "พนักงานประจำ / ผู้จัดการหน้าร้าน",
   };
 
-  // 3. เจ (พนักงานทดลองงาน): เริ่มงาน 24 ส.ค. 2569 (ทำงาน 7 วัน @ 350฿) - หยุดศุกร์
+  // 3. เจ (พนักงานทดลองงาน): เริ่มงาน 24 ส.ค. 2569 (ทำงานครบ 8 วัน @ 350฿ รวมศุกร์ไม่หยุด)
   staffMap["เจ (พนักงานทดลองงาน)"] = {
     employeeName: "เจ (พนักงานทดลองงาน)",
     nickname: "เจ",
     month: targetMonthFilter,
     employmentType: "probation_daily",
     dailyWage: 350,
-    daysWorked: 7, // 24 ส.ค. - 31 ส.ค. 2569 (8 วัน - วันหยุดศุกร์ 1 วัน = 7 วัน)
-    baseSalary: 2450, // 7 * 350
+    daysWorked: 8, // 24 ส.ค. - 31 ส.ค. 2569 (8 วันเต็ม ศุกร์ 28 ส.ค. ไม่หยุด)
+    baseSalary: 2800, // 8 * 350
     diligence: 0,
     ot: 0,
     commPct: 0,
@@ -208,7 +208,7 @@ export async function fetchAllExpensesData(timeRange: string = "this_month"): Pr
     wht: 0,
     ssoDeduction: 0, // ยกเว้นประกันสังคมช่วงทดลองงาน
     otherDeductions: 0,
-    netPay: 2450, // 2,450 ฿
+    netPay: 2800, // 2,800 ฿
     payMethod: "บัญชีร้าน (โอน)",
     employeeRole: "พนักงานทดลองงาน / ช่างสปา (350฿/วัน เริ่ม 24 ส.ค.)",
   };
