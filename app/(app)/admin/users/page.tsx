@@ -45,7 +45,7 @@ export default async function AdminUsersPage() {
               <TableRow key={user.id}>
                 <TableCell>{user.display_name}</TableCell>
                 <TableCell>{user.username}</TableCell>
-                <TableCell>{ROLE_LABEL[user.role]}</TableCell>
+                <TableCell>{ROLE_LABEL[user.role as Role] ?? user.role}</TableCell>
                 <TableCell>{user.branch_id ? branchName.get(user.branch_id) ?? "—" : "ทุกสาขา"}</TableCell>
                 <TableCell>
                   <Badge variant={user.is_active ? "default" : "outline"}>
