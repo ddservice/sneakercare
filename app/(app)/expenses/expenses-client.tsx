@@ -1624,7 +1624,7 @@ export function ExpensesClient({ initialData }: { initialData: ExpensesPayload }
             </div>
 
             {/* ── OFFICIAL PAYSLIP VOUCHER CONTAINER ── */}
-            <div className="space-y-4 text-slate-900 font-sans border-2 border-slate-800 p-6 rounded-xl print:border-2 print:border-slate-900 print:p-6 bg-white">
+            <div className="space-y-4 text-slate-900 dark:text-slate-950 font-sans border-2 border-slate-800 p-6 rounded-xl print:border-2 print:border-slate-900 print:p-6 bg-white dark:bg-white shadow-lg">
               {/* Header: Company Name & Tax Registration */}
               <div className="flex items-start justify-between border-b-2 border-slate-800 pb-4">
                 <div className="space-y-1">
