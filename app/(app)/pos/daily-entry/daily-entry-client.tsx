@@ -1,7 +1,15 @@
 "use client";
 
 import { useState, useTransition, useMemo } from "react";
-import { saveDailySale, deleteDailySale, type DailySaleInput } from "@/app/actions/daily-sales";
+import {
+  saveDailySale,
+  deleteDailySale,
+  recordArPayment,
+  deleteArPayment,
+  type DailySaleInput,
+  type DailySaleWithPayments,
+  type ArPaymentRecord,
+} from "@/app/actions/daily-sales";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -26,29 +34,15 @@ import {
   RotateCcw,
   Tag,
   Layers,
-  ArrowUpDown,
   Search,
+  Check,
+  ChevronDown,
+  ChevronUp,
+  X,
+  CreditCard,
+  DollarSign,
 } from "lucide-react";
 import Link from "next/link";
-
-export type DailySaleRow = {
-  id: number;
-  date: string;
-  size_s: number;
-  size_m: number;
-  size_l: number;
-  size_xl: number;
-  cash_amount: number;
-  transfer_amount: number;
-  amount_paid?: number;
-  discount: number;
-  grand_total: number;
-  total_revenue?: number;
-  payment_status?: string;
-  extra_items?: string;
-  recorded_by?: string;
-  created_at?: string;
-};
 
 // Size price presets based on official SneakerCare package standards
 export const SIZE_PRICES = {
@@ -75,8 +69,8 @@ type ExtraLine = {
   qty: number;
 };
 
-export function DailyEntryClient({ initialRecords }: { initialRecords: DailySaleRow[] }) {
-  const [records, setRecords] = useState<DailySaleRow[]>(initialRecords);
+export function DailyEntryClient({ initialRecords }: { initialRecords: DailySaleWithPayments[] }) {
+  const [records, setRecords] = useState<DailySaleWithPayments[]>(initialRecords);
   const [isPending, startTransition] = useTransition();
 
   // Form State
@@ -98,9 +92,17 @@ export function DailyEntryClient({ initialRecords }: { initialRecords: DailySale
   const [discount, setDiscount] = useState<number>(0);
   const [paymentStatusManual, setPaymentStatusManual] = useState<string | null>(null);
 
+  // AR Payment Modal State
+  const [collectTarget, setCollectTarget] = useState<DailySaleWithPayments | null>(null);
+  const [collectDate, setCollectDate] = useState(new Date().toISOString().slice(0, 10));
+  const [collectAmount, setCollectAmount] = useState<number>(0);
+  const [collectMethod, setCollectMethod] = useState<"โอน" | "เงินสด" | "อื่นๆ">("โอน");
+  const [collectNotes, setCollectNotes] = useState("");
+
   // Filters & Search for history
   const [searchTerm, setSearchTerm] = useState("");
-  const [selectedMonth, setSelectedMonth] = useState<string>("all");
+  const [activeTab, setActiveTab] = useState<"all" | "outstanding" | "completed">("all");
+  const [expandedRecordId, setExpandedRecordId] = useState<number | null>(null);
 
   // Calculations
   const totalPairs = Number(sizeS || 0) + Number(sizeM || 0) + Number(sizeL || 0) + Number(sizeXL || 0);
@@ -216,8 +218,117 @@ export function DailyEntryClient({ initialRecords }: { initialRecords: DailySale
     toast.warning("ตั้งค่าเป็นยอดค้างชำระทั้งหมด");
   }
 
+  // Open AR Collect Payment Modal
+  function openCollectModal(record: DailySaleWithPayments) {
+    setCollectTarget(record);
+    setCollectDate(new Date().toISOString().slice(0, 10));
+    setCollectAmount(record.outstanding > 0 ? record.outstanding : 0);
+    setCollectMethod("โอน");
+    setCollectNotes("");
+  }
+
+  function closeCollectModal() {
+    setCollectTarget(null);
+  }
+
+  // Handle AR payment submit
+  async function handleCollectSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!collectTarget) return;
+    if (collectAmount <= 0) {
+      toast.error("กรุณาระบุจำนวนเงินที่รับชำระ");
+      return;
+    }
+
+    startTransition(async () => {
+      const res = await recordArPayment({
+        sale_date: collectTarget.date,
+        received_date: collectDate,
+        amount: collectAmount,
+        pay_method: collectMethod,
+        notes: collectNotes,
+      });
+
+      if (res.success) {
+        toast.success(`บันทึกการรับชำระยอดค้าง ${collectAmount.toLocaleString()} ฿ เรียบร้อย`);
+        // Update local state
+        setRecords((prev) =>
+          prev.map((r) => {
+            if (r.date === collectTarget.date) {
+              const newPayments: ArPaymentRecord[] = [
+                {
+                  id: Date.now(),
+                  sale_date: collectTarget.date,
+                  received_date: collectDate,
+                  amount: collectAmount,
+                  pay_method: collectMethod,
+                  notes: collectNotes,
+                  recorded_by: "คุณ",
+                  created_at: new Date().toISOString(),
+                },
+                ...(r.payments || []),
+              ];
+              const newArPaid = r.total_ar_paid + collectAmount;
+              const newTotalPaid = r.amount_paid + newArPaid;
+              const newOutstanding = Math.max(0, r.total_revenue - newTotalPaid);
+              const newStatus = newOutstanding <= 0 ? "ชำระครบ" : "ชำระบางส่วน";
+
+              return {
+                ...r,
+                payments: newPayments,
+                total_ar_paid: newArPaid,
+                total_paid: newTotalPaid,
+                outstanding: newOutstanding,
+                payment_status: newStatus,
+              };
+            }
+            return r;
+          })
+        );
+        closeCollectModal();
+      } else {
+        toast.error(res.error || "เกิดข้อผิดพลาดในการบันทึกการรับชำระ");
+      }
+    });
+  }
+
+  // Delete AR payment
+  async function handleDeleteArPayment(paymentId: number, saleDate: string, amount: number) {
+    if (!confirm(`คุณต้องการลบประวัติการรับชำระ ${amount.toLocaleString()} ฿ ใช่หรือไม่?`)) return;
+
+    startTransition(async () => {
+      const res = await deleteArPayment(paymentId, saleDate);
+      if (res.success) {
+        toast.success("ลบประวัติการรับชำระเงินเรียบร้อย");
+        setRecords((prev) =>
+          prev.map((r) => {
+            if (r.date === saleDate) {
+              const newPayments = (r.payments || []).filter((p) => p.id !== paymentId);
+              const newArPaid = Math.max(0, r.total_ar_paid - amount);
+              const newTotalPaid = r.amount_paid + newArPaid;
+              const newOutstanding = Math.max(0, r.total_revenue - newTotalPaid);
+              const newStatus = newOutstanding <= 0 ? "ชำระครบ" : (newTotalPaid > 0 ? "ชำระบางส่วน" : "ค้างชำระ");
+
+              return {
+                ...r,
+                payments: newPayments,
+                total_ar_paid: newArPaid,
+                total_paid: newTotalPaid,
+                outstanding: newOutstanding,
+                payment_status: newStatus,
+              };
+            }
+            return r;
+          })
+        );
+      } else {
+        toast.error(res.error || "ไม่สามารถลบรายการได้");
+      }
+    });
+  }
+
   // Edit record
-  function handleEdit(record: DailySaleRow) {
+  function handleEdit(record: DailySaleWithPayments) {
     setEditingId(record.id);
     setDate(record.date);
     setSizeS(Number(record.size_s || 0));
@@ -235,7 +346,6 @@ export function DailyEntryClient({ initialRecords }: { initialRecords: DailySale
         if (record.extra_items.startsWith("[")) {
           setExtraLines(JSON.parse(record.extra_items));
         } else {
-          // Plain text fallback
           setExtraLines([
             {
               id: `parsed-${Date.now()}`,
@@ -281,7 +391,6 @@ export function DailyEntryClient({ initialRecords }: { initialRecords: DailySale
       return;
     }
 
-    // Format extra items string for summary
     const extraSummaryStr = extraLines.length > 0
       ? extraLines.map((item) => `${item.name} x${item.qty} (${item.price * item.qty}฿)`).join(", ")
       : "";
@@ -309,7 +418,6 @@ export function DailyEntryClient({ initialRecords }: { initialRecords: DailySale
         toast.success(editingId ? "อัปเดตบันทึกยอดขายรายวันสำเร็จ" : "บันทึกยอดขายประจำวันสำเร็จ");
         handleReset();
 
-        // Update local state smoothly
         setRecords((prev) => {
           if (editingId) {
             return prev.map((r) =>
@@ -321,6 +429,9 @@ export function DailyEntryClient({ initialRecords }: { initialRecords: DailySale
                     total_revenue: netTotal,
                     amount_paid: actualReceived,
                     grand_total: grossTotal,
+                    total_paid: actualReceived + (r.total_ar_paid || 0),
+                    outstanding: Math.max(0, netTotal - (actualReceived + (r.total_ar_paid || 0))),
+                    payment_status: currentPaymentStatus,
                   }
                 : r
             );
@@ -332,8 +443,13 @@ export function DailyEntryClient({ initialRecords }: { initialRecords: DailySale
                 total_revenue: netTotal,
                 amount_paid: actualReceived,
                 grand_total: grossTotal,
+                payments: [],
+                total_ar_paid: 0,
+                total_paid: actualReceived,
+                outstanding: Math.max(0, netTotal - actualReceived),
+                payment_status: currentPaymentStatus,
                 recorded_by: "คุณ",
-              } as DailySaleRow,
+              } as DailySaleWithPayments,
               ...prev,
             ];
           }
@@ -367,28 +483,34 @@ export function DailyEntryClient({ initialRecords }: { initialRecords: DailySale
         (r.extra_items && r.extra_items.toLowerCase().includes(searchTerm.toLowerCase())) ||
         (r.recorded_by && r.recorded_by.toLowerCase().includes(searchTerm.toLowerCase()));
 
-      const matchesMonth =
-        selectedMonth === "all" || r.date.startsWith(selectedMonth);
+      let matchesTab = true;
+      if (activeTab === "outstanding") {
+        matchesTab = r.outstanding > 0 || r.payment_status === "ชำระบางส่วน" || r.payment_status === "ค้างชำระ";
+      } else if (activeTab === "completed") {
+        matchesTab = r.outstanding === 0 && r.payment_status === "ชำระครบ";
+      }
 
-      return matchesSearch && matchesMonth;
+      return matchesSearch && matchesTab;
     });
-  }, [records, searchTerm, selectedMonth]);
+  }, [records, searchTerm, activeTab]);
 
-  // Overall Statistics from filtered records
-  const totalStats = useMemo(() => {
-    return filteredRecords.reduce(
+  // Overall Statistics from all records
+  const overallStats = useMemo(() => {
+    return records.reduce(
       (acc, r) => {
         acc.pairs += (r.size_s || 0) + (r.size_m || 0) + (r.size_l || 0) + (r.size_xl || 0);
         acc.revenue += Number(r.total_revenue || r.grand_total || 0);
         acc.cash += Number(r.cash_amount || 0);
         acc.transfer += Number(r.transfer_amount || 0);
-        acc.paid += Number(r.amount_paid || (Number(r.cash_amount || 0) + Number(r.transfer_amount || 0)));
-        acc.discount += Number(r.discount || 0);
+        acc.arPaid += Number(r.total_ar_paid || 0);
+        acc.totalPaid += Number(r.total_paid || 0);
+        acc.outstanding += Number(r.outstanding || 0);
+        if (r.outstanding > 0) acc.outstandingCount += 1;
         return acc;
       },
-      { pairs: 0, revenue: 0, cash: 0, transfer: 0, paid: 0, discount: 0 }
+      { pairs: 0, revenue: 0, cash: 0, transfer: 0, arPaid: 0, totalPaid: 0, outstanding: 0, outstandingCount: 0 }
     );
-  }, [filteredRecords]);
+  }, [records]);
 
   return (
     <div className="space-y-8">
@@ -397,11 +519,11 @@ export function DailyEntryClient({ initialRecords }: { initialRecords: DailySale
         <div className="space-y-1">
           <div className="inline-flex items-center gap-2 rounded-full bg-teal-500/20 px-3 py-1 text-xs font-semibold text-teal-200 ring-1 ring-teal-400/30">
             <Footprints className="h-3.5 w-3.5" />
-            SneakerCare POS Daily Sales Entry
+            SneakerCare POS & AR Management
           </div>
-          <h2 className="text-2xl font-bold tracking-tight">บันทึกยอดขายและงานบริการประจำวัน</h2>
+          <h2 className="text-2xl font-bold tracking-tight">บันทึกยอดขาย & ติดตามยอดค้างชำระ (AR)</h2>
           <p className="text-xs sm:text-sm text-teal-100/80">
-            ระบบคำนวณตาม Package มาตรฐาน (S 200฿ | M 400฿ | L 600฿ | XL 800฿), เพิ่มตัวเลือกบริการเสริม, แยกยอดเงินสด-เงินโอน และยอดรับจริงอัตโนมัติ
+            Package มาตรฐาน S 200฿ | M 400฿ | L 600฿ | XL 800฿, บริการเสริม, สรุปยอดเงินสด/โอน และระบบรับชำระยอดค้างครบถ้วน
           </p>
         </div>
 
@@ -418,6 +540,32 @@ export function DailyEntryClient({ initialRecords }: { initialRecords: DailySale
           </Link>
         </div>
       </div>
+
+      {/* ── Outstanding Receivables Quick Alert Banner ── */}
+      {overallStats.outstanding > 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-300 bg-amber-50 p-4 text-amber-900 shadow-xs">
+          <div className="flex items-center gap-3">
+            <div className="h-10 w-10 rounded-full bg-amber-500 text-white flex items-center justify-center font-bold shrink-0">
+              <AlertCircle className="h-5 w-5" />
+            </div>
+            <div>
+              <div className="font-extrabold text-sm text-amber-950">
+                มียอดค้างชำระสะสมทั้งหมด {overallStats.outstanding.toLocaleString()} บาท ({overallStats.outstandingCount} รายการ)
+              </div>
+              <div className="text-xs text-amber-800">
+                คุณสามารถกดดูเฉพาะรายการที่ค้างชำระ และกดปุ่ม <strong>[💰 รับชำระเงิน]</strong> เพื่อตัดยอดรับเงินได้ทันที
+              </div>
+            </div>
+          </div>
+          <Button
+            type="button"
+            onClick={() => setActiveTab("outstanding")}
+            className="bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold gap-1.5 h-8.5 px-3.5 shadow-xs"
+          >
+            <Clock className="h-4 w-4" /> ดูรายการค้างชำระทั้งหมด
+          </Button>
+        </div>
+      )}
 
       <div className="grid gap-8 lg:grid-cols-12">
         {/* ── LEFT COLUMN: Input Form (6 Cols) ── */}
@@ -630,7 +778,7 @@ export function DailyEntryClient({ initialRecords }: { initialRecords: DailySale
                   </div>
                 </div>
 
-                {/* 3. Add-on Services & Extra Options (บริการอื่นๆ / เพิ่มเติม) */}
+                {/* 3. Add-on Services & Extra Options */}
                 <div className="space-y-3 rounded-xl border border-amber-200 bg-amber-50/40 p-4">
                   <div className="flex items-center justify-between">
                     <Label className="text-xs font-bold text-amber-950 flex items-center gap-1.5">
@@ -958,33 +1106,67 @@ export function DailyEntryClient({ initialRecords }: { initialRecords: DailySale
           </Card>
         </div>
 
-        {/* ── RIGHT COLUMN: Historical Log & Analytics (6 Cols) ── */}
+        {/* ── RIGHT COLUMN: Historical Log, AR & Analytics (6 Cols) ── */}
         <div className="lg:col-span-6 space-y-6">
-          {/* Filter & Metric Summary Card */}
           <Card className="border-slate-200 shadow-sm">
-            <CardHeader className="p-4 bg-slate-50 border-b border-slate-200">
+            <CardHeader className="p-4 bg-slate-50 border-b border-slate-200 space-y-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div>
                   <CardTitle className="text-sm font-bold text-slate-900">
-                    สรุปยอดบันทึกย้อนหลัง ({filteredRecords.length} วัน)
+                    ประวัติยอดขายและรายการค้างชำระ ({filteredRecords.length} วัน)
                   </CardTitle>
                   <CardDescription className="text-xs text-slate-500">
-                    รวม {totalStats.pairs} คู่ | ยอดขายรวม {totalStats.revenue.toLocaleString()} ฿
+                    รวม {overallStats.pairs} คู่ | ยอดขายรวม {overallStats.revenue.toLocaleString()} ฿ | ค้างชำระรวม {overallStats.outstanding.toLocaleString()} ฿
                   </CardDescription>
                 </div>
 
-                <div className="flex items-center gap-2">
-                  <div className="relative">
-                    <Search className="h-3.5 w-3.5 absolute left-2.5 top-2 text-slate-400" />
-                    <Input
-                      type="text"
-                      placeholder="ค้นหาวันที่ / บริการ..."
-                      value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
-                      className="h-8 text-xs pl-8 w-44 bg-white"
-                    />
-                  </div>
+                <div className="relative">
+                  <Search className="h-3.5 w-3.5 absolute left-2.5 top-2 text-slate-400" />
+                  <Input
+                    type="text"
+                    placeholder="ค้นหาวันที่ / บริการ..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="h-8 text-xs pl-8 w-44 bg-white"
+                  />
                 </div>
+              </div>
+
+              {/* Filter Tabs */}
+              <div className="flex items-center gap-1.5 border-t border-slate-200/80 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setActiveTab("all")}
+                  className={`rounded-lg px-3 py-1 text-xs font-bold transition-all ${
+                    activeTab === "all"
+                      ? "bg-teal-800 text-white shadow-2xs"
+                      : "bg-white text-slate-600 hover:bg-slate-200/70"
+                  }`}
+                >
+                  ทั้งหมด ({records.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab("outstanding")}
+                  className={`rounded-lg px-3 py-1 text-xs font-bold flex items-center gap-1 transition-all ${
+                    activeTab === "outstanding"
+                      ? "bg-amber-600 text-white shadow-2xs"
+                      : "bg-white text-amber-800 border border-amber-200 hover:bg-amber-50"
+                  }`}
+                >
+                  <Clock className="h-3 w-3" /> ค้างชำระ ({overallStats.outstandingCount})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab("completed")}
+                  className={`rounded-lg px-3 py-1 text-xs font-bold transition-all ${
+                    activeTab === "completed"
+                      ? "bg-emerald-700 text-white shadow-2xs"
+                      : "bg-white text-slate-600 hover:bg-slate-200/70"
+                  }`}
+                >
+                  ✓ ชำระครบแล้ว
+                </button>
               </div>
             </CardHeader>
 
@@ -994,40 +1176,39 @@ export function DailyEntryClient({ initialRecords }: { initialRecords: DailySale
                 <div className="rounded-lg bg-blue-50 border border-blue-200 p-2.5">
                   <div className="text-[10px] text-blue-600 font-semibold">เงินโอนสะสม</div>
                   <div className="font-extrabold text-blue-950 font-mono text-sm">
-                    {totalStats.transfer.toLocaleString()} ฿
+                    {overallStats.transfer.toLocaleString()} ฿
                   </div>
                 </div>
                 <div className="rounded-lg bg-emerald-50 border border-emerald-200 p-2.5">
                   <div className="text-[10px] text-emerald-600 font-semibold">เงินสดสะสม</div>
                   <div className="font-extrabold text-emerald-950 font-mono text-sm">
-                    {totalStats.cash.toLocaleString()} ฿
+                    {overallStats.cash.toLocaleString()} ฿
                   </div>
                 </div>
                 <div className="rounded-lg bg-teal-50 border border-teal-200 p-2.5">
                   <div className="text-[10px] text-teal-700 font-semibold">ยอดรับจริงรวม</div>
                   <div className="font-extrabold text-teal-950 font-mono text-sm">
-                    {totalStats.paid.toLocaleString()} ฿
+                    {overallStats.totalPaid.toLocaleString()} ฿
                   </div>
                 </div>
-                <div className="rounded-lg bg-amber-50 border border-amber-200 p-2.5">
-                  <div className="text-[10px] text-amber-700 font-semibold">ส่วนลดรวม</div>
-                  <div className="font-extrabold text-amber-950 font-mono text-sm">
-                    {totalStats.discount.toLocaleString()} ฿
+                <div className="rounded-lg bg-rose-50 border border-rose-200 p-2.5">
+                  <div className="text-[10px] text-rose-700 font-semibold">ยอดค้างชำระสะสม</div>
+                  <div className="font-extrabold text-rose-950 font-mono text-sm">
+                    {overallStats.outstanding.toLocaleString()} ฿
                   </div>
                 </div>
               </div>
 
               {/* Records Table */}
               <div className="rounded-xl border border-slate-200 bg-white overflow-hidden shadow-2xs">
-                <div className="max-h-[560px] overflow-y-auto">
+                <div className="max-h-[580px] overflow-y-auto">
                   <table className="w-full text-xs">
                     <thead className="sticky top-0 bg-slate-100/90 backdrop-blur-xs text-slate-700 font-bold border-b border-slate-200 z-10">
                       <tr>
                         <th className="px-3 py-2.5 text-left">วันที่</th>
                         <th className="px-2 py-2.5 text-center">ไซส์ (S/M/L/XL)</th>
-                        <th className="px-2.5 py-2.5 text-right">เงินโอน / เงินสด</th>
                         <th className="px-2.5 py-2.5 text-right">ยอดรับจริง / สุทธิ</th>
-                        <th className="px-2 py-2.5 text-center">สถานะ</th>
+                        <th className="px-2.5 py-2.5 text-center">สถานะ / ค้างชำระ</th>
                         <th className="px-2 py-2.5 text-center">จัดการ</th>
                       </tr>
                     </thead>
@@ -1039,55 +1220,103 @@ export function DailyEntryClient({ initialRecords }: { initialRecords: DailySale
                           (record.size_l || 0) +
                           (record.size_xl || 0);
 
-                        const recPaid = Number(
-                          record.amount_paid !== undefined
-                            ? record.amount_paid
-                            : (Number(record.cash_amount || 0) + Number(record.transfer_amount || 0))
-                        );
-                        const recNet = Number(record.total_revenue || record.grand_total || 0);
+                        const hasPayments = (record.payments || []).length > 0;
+                        const isExpanded = expandedRecordId === record.id;
 
-                        const statusBadge =
-                          record.payment_status === "ชำระครบ" ? (
-                            <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-300 text-[10px]">
-                              ชำระครบ
-                            </Badge>
-                          ) : record.payment_status === "ชำระบางส่วน" ? (
-                            <Badge variant="outline" className="bg-amber-50 text-amber-800 border-amber-300 text-[10px]">
-                              ชำระบางส่วน
-                            </Badge>
-                          ) : (
-                            <Badge variant="outline" className="bg-rose-50 text-rose-700 border-rose-300 text-[10px]">
-                              ค้างชำระ
-                            </Badge>
-                          );
+                        const isPendingRow = record.outstanding > 0 || record.payment_status === "ชำระบางส่วน" || record.payment_status === "ค้างชำระ";
 
                         return (
-                          <tr key={record.id} className="hover:bg-slate-50/80 transition-colors">
+                          <tr
+                            key={record.id}
+                            className={`transition-colors ${
+                              isPendingRow ? "bg-amber-50/30 hover:bg-amber-50/70" : "hover:bg-slate-50/80"
+                            }`}
+                          >
                             <td className="px-3 py-2.5 font-bold text-slate-900 whitespace-nowrap">
-                              <div>{record.date}</div>
+                              <div className="flex items-center gap-1.5">
+                                <span>{record.date}</span>
+                                {hasPayments && (
+                                  <button
+                                    type="button"
+                                    onClick={() => setExpandedRecordId(isExpanded ? null : record.id)}
+                                    className="rounded p-0.5 text-slate-400 hover:text-teal-700"
+                                    title="ดูประวัติการรับชำระเงิน"
+                                  >
+                                    {isExpanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                                  </button>
+                                )}
+                              </div>
                               {record.extra_items && (
                                 <div className="text-[10px] text-amber-700 font-normal truncate max-w-[140px]" title={record.extra_items}>
                                   + {record.extra_items}
                                 </div>
                               )}
+                              {/* Expanded Payment History */}
+                              {isExpanded && hasPayments && (
+                                <div className="mt-2 p-2 rounded bg-white border border-teal-200 text-[10px] text-slate-700 space-y-1">
+                                  <div className="font-bold text-teal-900">ประวัติการรับชำระเงินภายหลัง:</div>
+                                  {record.payments.map((p) => (
+                                    <div key={p.id} className="flex items-center justify-between border-b border-slate-100 pb-0.5">
+                                      <span>
+                                        📅 {p.received_date}: <strong>{Number(p.amount).toLocaleString()} ฿</strong> ({p.pay_method})
+                                      </span>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleDeleteArPayment(p.id, record.date, Number(p.amount))}
+                                        className="text-rose-500 hover:text-rose-700"
+                                        title="ลบรายการรับเงินนี้"
+                                      >
+                                        <Trash2 className="h-3 w-3" />
+                                      </button>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
                             </td>
+
                             <td className="px-2 py-2.5 text-center">
                               <div className="font-bold text-teal-900 font-mono">{recPairs} คู่</div>
                               <div className="text-[10px] text-slate-500 font-mono">
                                 S:{record.size_s || 0} M:{record.size_m || 0} L:{record.size_l || 0} XL:{record.size_xl || 0}
                               </div>
                             </td>
+
                             <td className="px-2.5 py-2.5 text-right font-mono whitespace-nowrap">
-                              <div className="text-blue-700 font-semibold">โอน: {Number(record.transfer_amount || 0).toLocaleString()}฿</div>
-                              <div className="text-emerald-700">สด: {Number(record.cash_amount || 0).toLocaleString()}฿</div>
-                            </td>
-                            <td className="px-2.5 py-2.5 text-right font-mono whitespace-nowrap">
-                              <div className="font-black text-slate-900">{recPaid.toLocaleString()} ฿</div>
-                              {recNet !== recPaid && (
-                                <div className="text-[10px] text-slate-400">สุทธิ {recNet.toLocaleString()}฿</div>
+                              <div className="font-black text-slate-900">{record.total_paid.toLocaleString()} ฿</div>
+                              <div className="text-[10px] text-slate-500">
+                                สุทธิ {record.total_revenue.toLocaleString()} ฿
+                              </div>
+                              {record.total_ar_paid > 0 && (
+                                <div className="text-[10px] text-emerald-700 font-semibold">
+                                  (รับเพิ่ม +{record.total_ar_paid.toLocaleString()}฿)
+                                </div>
                               )}
                             </td>
-                            <td className="px-2 py-2.5 text-center whitespace-nowrap">{statusBadge}</td>
+
+                            <td className="px-2 py-2.5 text-center whitespace-nowrap">
+                              {record.outstanding > 0 ? (
+                                <div className="space-y-1">
+                                  <Badge variant="outline" className="bg-amber-100 text-amber-900 border-amber-300 font-bold text-[10px]">
+                                    ค้าง {record.outstanding.toLocaleString()} ฿
+                                  </Badge>
+                                  <div>
+                                    <Button
+                                      type="button"
+                                      size="sm"
+                                      onClick={() => openCollectModal(record)}
+                                      className="h-6 text-[10px] bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-2 gap-1 shadow-2xs"
+                                    >
+                                      <DollarSign className="h-3 w-3" /> รับชำระ
+                                    </Button>
+                                  </div>
+                                </div>
+                              ) : (
+                                <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-300 text-[10px]">
+                                  ✓ ชำระครบ
+                                </Badge>
+                              )}
+                            </td>
+
                             <td className="px-2 py-2.5 text-center whitespace-nowrap">
                               <div className="flex items-center justify-center gap-1">
                                 <Button
@@ -1116,7 +1345,7 @@ export function DailyEntryClient({ initialRecords }: { initialRecords: DailySale
 
                       {filteredRecords.length === 0 && (
                         <tr>
-                          <td colSpan={6} className="px-4 py-8 text-center text-slate-400">
+                          <td colSpan={5} className="px-4 py-8 text-center text-slate-400">
                             ยังไม่มีรายการบันทึกยอดขาย
                           </td>
                         </tr>
@@ -1129,6 +1358,120 @@ export function DailyEntryClient({ initialRecords }: { initialRecords: DailySale
           </Card>
         </div>
       </div>
+
+      {/* ── AR Collect Payment Modal ── */}
+      {collectTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-xs">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between border-b border-slate-200 pb-3">
+              <div className="flex items-center gap-2">
+                <div className="h-8 w-8 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center">
+                  <DollarSign className="h-4 w-4" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-slate-900">บันทึกรับชำระยอดค้าง (AR)</h3>
+                  <p className="text-xs text-slate-500">บิลวันที่ {collectTarget.date}</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={closeCollectModal}
+                className="rounded-full p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="rounded-xl bg-slate-50 p-3.5 border border-slate-200 space-y-1.5 text-xs">
+              <div className="flex justify-between text-slate-600">
+                <span>ยอดสุทธิของบิล:</span>
+                <span className="font-bold">{collectTarget.total_revenue.toLocaleString()} บาท</span>
+              </div>
+              <div className="flex justify-between text-slate-600">
+                <span>ชำระไปแล้วก่อนหน้า:</span>
+                <span className="font-bold text-emerald-700">{collectTarget.total_paid.toLocaleString()} บาท</span>
+              </div>
+              <div className="flex justify-between border-t border-slate-200 pt-1.5 text-amber-900 font-bold">
+                <span>ยอดคงค้างชำระ:</span>
+                <span className="font-black text-amber-700 font-mono text-sm">
+                  {collectTarget.outstanding.toLocaleString()} บาท
+                </span>
+              </div>
+            </div>
+
+            <form onSubmit={handleCollectSubmit} className="space-y-3.5">
+              <div className="space-y-1">
+                <Label className="text-xs font-bold text-slate-700">วันที่รับเงิน</Label>
+                <Input
+                  type="date"
+                  value={collectDate}
+                  onChange={(e) => setCollectDate(e.target.value)}
+                  className="h-9 text-xs"
+                  required
+                />
+              </div>
+
+              <div className="space-y-1">
+                <Label className="text-xs font-bold text-slate-700">จำนวนเงินที่รับชำระ (บาท)</Label>
+                <Input
+                  type="number"
+                  min="0.01"
+                  step="0.01"
+                  max={collectTarget.outstanding || undefined}
+                  value={collectAmount || ""}
+                  onChange={(e) => setCollectAmount(parseFloat(e.target.value) || 0)}
+                  className="h-9 text-xs font-mono font-bold text-emerald-800"
+                  required
+                />
+              </div>
+
+              <div className="space-y-1">
+                <Label className="text-xs font-bold text-slate-700">ช่องทางการรับเงิน</Label>
+                <select
+                  value={collectMethod}
+                  onChange={(e) => setCollectMethod(e.target.value as any)}
+                  className="w-full h-9 rounded-md border border-slate-300 bg-white px-3 text-xs font-medium focus:border-teal-600 focus:outline-none"
+                >
+                  <option value="โอน">โอนเงินเข้าบัญชี (Transfer)</option>
+                  <option value="เงินสด">เงินสด (Cash)</option>
+                  <option value="อื่นๆ">อื่นๆ</option>
+                </select>
+              </div>
+
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold text-slate-700">หมายเหตุ / อ้างอิงสลิป</Label>
+                <Input
+                  type="text"
+                  placeholder="เช่น โอนผ่าน PromptPay ธ.กสิกรไทย"
+                  value={collectNotes}
+                  onChange={(e) => setCollectNotes(e.target.value)}
+                  className="h-9 text-xs"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-200">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={closeCollectModal}
+                  className="text-xs h-9"
+                >
+                  ยกเลิก
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={isPending}
+                  size="sm"
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs h-9 px-4 gap-1.5"
+                >
+                  {isPending ? "กำลังบันทึก..." : <><Check className="h-4 w-4" /> ยืนยันรับชำระเงิน</>}
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
