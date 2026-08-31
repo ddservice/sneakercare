@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useMemo, useTransition } from "react";
 import {
   fetchAllExpensesData,
   addExpense,
@@ -10,7 +10,14 @@ import {
   createStaffMember,
   type ExpensesPayload,
   type StaffPayslip,
+  type RealExpenseRecord,
 } from "@/app/actions/expenses";
+import {
+  EXPENSE_CATEGORIES,
+  CATEGORY_LIST,
+  classifyExpenseCategory,
+  type ExpenseCategoryKey,
+} from "@/lib/expense-categories";
 import { thaiBahtText } from "@/lib/bahttext";
 import { TimeRangeFilterBar } from "@/components/time-range-filter";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -26,7 +33,6 @@ import {
   Plus,
   Trash2,
   Receipt,
-  Home,
   CheckCircle2,
   Sparkles,
   Printer,
@@ -41,11 +47,16 @@ import {
   ShieldCheck,
   Building,
   Check,
+  Filter,
+  Layers,
+  PieChart,
+  Download,
 } from "lucide-react";
 
 export function ExpensesClient({ initialData }: { initialData: ExpensesPayload }) {
   const [data, setData] = useState<ExpensesPayload>(initialData);
-  const [activeTab, setActiveTab] = useState<"payroll" | "opex" | "misc" | "rental">("payroll");
+  const [activeTab, setActiveTab] = useState<"overview" | "payroll" | "opex">("overview");
+  const [selectedCategoryFilter, setSelectedCategoryFilter] = useState<ExpenseCategoryKey | "all">("all");
   const [isPending, startTransition] = useTransition();
 
   // Print Payslip Modal State
@@ -76,7 +87,7 @@ export function ExpensesClient({ initialData }: { initialData: ExpensesPayload }
 
   // Add Expense Modal State
   const [showAddExpenseModal, setShowAddExpenseModal] = useState(false);
-  const [expCategory, setExpCategory] = useState("ค่าดำเนินการ");
+  const [expCategory, setExpCategory] = useState<ExpenseCategoryKey>("facility_utilities");
   const [expTitle, setExpTitle] = useState("");
   const [expAmount, setExpAmount] = useState<number>(0);
   const [expPayMethod, setExpPayMethod] = useState("บัญชีร้าน (โอน)");
@@ -107,6 +118,47 @@ export function ExpensesClient({ initialData }: { initialData: ExpensesPayload }
     });
     return initial;
   });
+
+  // Calculate 6-Category Aggregation
+  const categoryBreakdown = useMemo(() => {
+    const map: Record<ExpenseCategoryKey, { total: number; count: number }> = {
+      payroll: { total: data.totalPayroll, count: data.payslips.length },
+      facility_utilities: { total: 0, count: 0 },
+      supplies_cogs: { total: 0, count: 0 },
+      marketing: { total: 0, count: 0 },
+      tax_professional: { total: 0, count: 0 },
+      admin_general: { total: 0, count: 0 },
+    };
+
+    (data.opexList || []).forEach((item) => {
+      const standardCat = classifyExpenseCategory(item.category, item.name);
+      if (standardCat !== "payroll") {
+        map[standardCat].total += item.amount;
+        map[standardCat].count += 1;
+      }
+    });
+
+    const net = data.netExpenses || 1;
+    return CATEGORY_LIST.map((cat) => {
+      const stats = map[cat.key];
+      const pct = (stats.total / net) * 100;
+      return {
+        ...cat,
+        total: stats.total,
+        count: stats.count,
+        percentage: Math.round(pct * 10) / 10,
+      };
+    });
+  }, [data]);
+
+  // Filter OPEX items by selected category filter
+  const filteredOpexList = useMemo(() => {
+    if (selectedCategoryFilter === "all") return data.opexList;
+    return data.opexList.filter((item) => {
+      const itemCat = classifyExpenseCategory(item.category, item.name);
+      return itemCat === selectedCategoryFilter;
+    });
+  }, [data.opexList, selectedCategoryFilter]);
 
   function handleFilterRange(range: string) {
     startTransition(async () => {
@@ -247,7 +299,6 @@ export function ExpensesClient({ initialData }: { initialData: ExpensesPayload }
 
       if (res.success) {
         toast.success(`อัปเดตข้อมูลและประเภทพนักงาน "${editFullName}" เรียบร้อยแล้ว`);
-        // Update local state
         setData((prev) => ({
           ...prev,
           payslips: prev.payslips.map((p) =>
@@ -283,7 +334,7 @@ export function ExpensesClient({ initialData }: { initialData: ExpensesPayload }
     });
   }
 
-  // Create Staff Member (4th, 5th, etc.)
+  // Create Staff Member
   function handleCreateStaff(e: React.FormEvent) {
     e.preventDefault();
     if (!newStaffName.trim()) {
@@ -326,10 +377,13 @@ export function ExpensesClient({ initialData }: { initialData: ExpensesPayload }
       return;
     }
 
+    const categoryMeta = EXPENSE_CATEGORIES[expCategory];
+    const categoryName = categoryMeta ? categoryMeta.shortLabel : "ค่าดำเนินการ";
+
     startTransition(async () => {
       const formData = new FormData();
       formData.set("title", expTitle.trim());
-      formData.set("category", expCategory);
+      formData.set("category", categoryName);
       formData.set("amount", String(expAmount));
       formData.set("pay_method", expPayMethod);
       formData.set("expense_date", expDate);
@@ -366,23 +420,23 @@ export function ExpensesClient({ initialData }: { initialData: ExpensesPayload }
 
   return (
     <div className="space-y-8">
-      {/* ── Page Header ── */}
+      {/* ── Page Header Banner ── */}
       <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl bg-gradient-to-r from-teal-800 via-teal-900 to-slate-900 p-6 text-white shadow-md print:hidden">
         <div className="space-y-1">
           <div className="inline-flex items-center gap-2 rounded-full bg-teal-500/20 px-3 py-1 text-xs font-semibold text-teal-200 ring-1 ring-teal-400/30">
             <Wallet className="h-3.5 w-3.5" />
-            Financial & Payroll Management
+            SneakerCare Standard Expense & Payroll Hub
           </div>
-          <h2 className="text-2xl font-bold tracking-tight">ระบบบันทึกค่าใช้จ่าย & บัญชีเงินเดือนพนักงาน</h2>
+          <h2 className="text-2xl font-bold tracking-tight">ระบบบันทึกค่าใช้จ่าย & จัดการเงินเดือนมาตรฐาน</h2>
           <p className="text-xs sm:text-sm text-teal-100/80">
-            จัดการเงินเดือน คำนวณเบี้ยขยัน/OT/คอมมิชชั่น ออกสลิปเงินเดือนทางการสำหรับธุรกรรมธนาคาร และควบคุมค่าใช้จ่าย OPEX
+            โครงสร้างค่าใช้จ่าย 6 หมวดหมู่มาตรฐาน ออกสลิปเงินเดือนทางการสำหรับธุรกรรมธนาคาร และควบคุมต้นทุนครบวงจร
           </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
           <Button
             onClick={() => setShowAddExpenseModal(true)}
-            className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs gap-1.5 shadow-xs h-9"
+            className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs gap-1.5 shadow-sm h-9"
           >
             <Plus className="h-4 w-4" /> บันทึกค่าใช้จ่ายใหม่
           </Button>
@@ -395,18 +449,18 @@ export function ExpensesClient({ initialData }: { initialData: ExpensesPayload }
         </div>
       </div>
 
-      {/* ── Time Range Selector & Overall Summary ── */}
+      {/* ── Time Range Selector Bar ── */}
       <div className="print:hidden">
         <TimeRangeFilterBar selectedRange={data.timeRange} onSelectRange={handleFilterRange} />
       </div>
 
-      {/* ── Metric Summary Cards ── */}
+      {/* ── Top Level Metric Summary Cards ── */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 print:hidden">
         <Card className="border-teal-200 shadow-xs">
           <CardContent className="p-4 flex items-center justify-between">
             <div className="space-y-1">
-              <span className="text-xs font-semibold text-slate-500">ยอดขายประจำเดือน</span>
-              <div className="text-xl font-bold text-teal-800 font-mono">
+              <span className="text-xs font-semibold text-slate-500">ยอดขายบริการ (Revenue Base)</span>
+              <div className="text-xl font-black text-teal-800 font-mono">
                 ฿{data.totalMonthlySales.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
               </div>
               <div className="text-[10px] text-slate-400">ฐานคำนวณค่าคอมมิชชั่น</div>
@@ -420,8 +474,8 @@ export function ExpensesClient({ initialData }: { initialData: ExpensesPayload }
         <Card className="border-indigo-200 shadow-xs">
           <CardContent className="p-4 flex items-center justify-between">
             <div className="space-y-1">
-              <span className="text-xs font-semibold text-slate-500">ค่าแรง & เงินเดือนรวม</span>
-              <div className="text-xl font-bold text-indigo-700 font-mono">
+              <span className="text-xs font-semibold text-slate-500">ค่าแรง & เงินเดือนรวม (Payroll)</span>
+              <div className="text-xl font-black text-indigo-700 font-mono">
                 ฿{data.totalPayroll.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
               </div>
               <div className="text-[10px] text-slate-400">พนักงาน {data.payslips.length} ท่าน</div>
@@ -435,11 +489,11 @@ export function ExpensesClient({ initialData }: { initialData: ExpensesPayload }
         <Card className="border-amber-200 shadow-xs">
           <CardContent className="p-4 flex items-center justify-between">
             <div className="space-y-1">
-              <span className="text-xs font-semibold text-slate-500">ค่าดำเนินการ (OPEX)</span>
-              <div className="text-xl font-bold text-amber-700 font-mono">
+              <span className="text-xs font-semibold text-slate-500">ค่าดำเนินการดำเนินงาน (OPEX)</span>
+              <div className="text-xl font-black text-amber-700 font-mono">
                 ฿{data.totalOpex.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
               </div>
-              <div className="text-[10px] text-slate-400">ค่าน้ำ, ค่าไฟ, อินเทอร์เน็ต, ฯลฯ</div>
+              <div className="text-[10px] text-slate-400">สาธารณูปโภค, ค่าเช่า, การตลาด, ฯลฯ</div>
             </div>
             <div className="rounded-xl bg-amber-50 p-2.5 text-amber-700">
               <Building2 className="h-5 w-5" />
@@ -450,11 +504,11 @@ export function ExpensesClient({ initialData }: { initialData: ExpensesPayload }
         <Card className="border-slate-300 shadow-xs bg-slate-900 text-white">
           <CardContent className="p-4 flex items-center justify-between">
             <div className="space-y-1">
-              <span className="text-xs font-semibold text-slate-400">รวมค่าใช้จ่ายทั้งหมด</span>
+              <span className="text-xs font-semibold text-slate-400">รวมค่าใช้จ่ายทั้งหมด (Total Expenses)</span>
               <div className="text-xl font-black text-emerald-400 font-mono">
                 ฿{data.netExpenses.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
               </div>
-              <div className="text-[10px] text-slate-400">เงินเดือน + ค่าดำเนินการ</div>
+              <div className="text-[10px] text-slate-400">เงินเดือน + ค่าดำเนินการ 6 หมวด</div>
             </div>
             <div className="rounded-xl bg-slate-800 p-2.5 text-emerald-400">
               <Wallet className="h-5 w-5" />
@@ -463,29 +517,189 @@ export function ExpensesClient({ initialData }: { initialData: ExpensesPayload }
         </Card>
       </div>
 
-      {/* ── Main Tab Navigation ── */}
-      <div className="flex items-center gap-2 border-b border-slate-200 pb-2 print:hidden">
-        <Button
-          variant={activeTab === "payroll" ? "default" : "ghost"}
-          size="sm"
-          onClick={() => setActiveTab("payroll")}
-          className={`text-xs font-bold ${activeTab === "payroll" ? "bg-teal-800 text-white" : "text-slate-600"}`}
-        >
-          <Users className="h-3.5 w-3.5 mr-1" /> บัญชีเงินเดือนพนักงาน ({data.payslips.length})
-        </Button>
-        <Button
-          variant={activeTab === "opex" ? "default" : "ghost"}
-          size="sm"
-          onClick={() => setActiveTab("opex")}
-          className={`text-xs font-bold ${activeTab === "opex" ? "bg-teal-800 text-white" : "text-slate-600"}`}
-        >
-          <Building2 className="h-3.5 w-3.5 mr-1" /> ค่าดำเนินการร้าน ({data.opexList.length})
-        </Button>
+      {/* ── 6-CATEGORY VISUAL BREAKDOWN SECTION ── */}
+      <Card className="border-slate-200 shadow-sm print:hidden">
+        <CardHeader className="p-4 bg-slate-50 border-b border-slate-200 flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <CardTitle className="text-sm font-bold text-slate-900 flex items-center gap-2">
+              <PieChart className="h-4 w-4 text-teal-700" />
+              โครงสร้างการแจกแจงค่าใช้จ่าย 6 หมวดหมู่มาตรฐาน (Expense Breakdown)
+            </CardTitle>
+            <CardDescription className="text-xs text-slate-500">
+              วิเคราะห์สัดส่วนและยอดค่าใช้จ่ายที่เกิดขึ้นจริงในแต่ละประเภทธุรกิจ
+            </CardDescription>
+          </div>
+          <div className="text-xs font-semibold text-slate-600 bg-white px-3 py-1 rounded-full border border-slate-200 shadow-2xs">
+            รวม 6 หมวด: <strong className="text-slate-900 font-mono">฿{data.netExpenses.toLocaleString()}</strong>
+          </div>
+        </CardHeader>
+
+        <CardContent className="p-4 space-y-4">
+          {/* Visual Percentage Distribution Progress Bar */}
+          <div className="space-y-1.5">
+            <div className="h-4 w-full rounded-full bg-slate-100 flex overflow-hidden shadow-inner border border-slate-200">
+              {categoryBreakdown.map((cat) => {
+                if (cat.percentage <= 0) return null;
+                return (
+                  <div
+                    key={cat.key}
+                    style={{ width: `${Math.max(cat.percentage, 2)}%` }}
+                    className={`${cat.colorClass.bar} transition-all duration-300 hover:opacity-80 cursor-pointer`}
+                    title={`${cat.shortLabel}: ฿${cat.total.toLocaleString()} (${cat.percentage}%)`}
+                    onClick={() => {
+                      setSelectedCategoryFilter(cat.key);
+                      if (cat.key === "payroll") setActiveTab("payroll");
+                      else setActiveTab("opex");
+                    }}
+                  />
+                );
+              })}
+            </div>
+          </div>
+
+          {/* 6 Category Interactive Grid Cards */}
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {categoryBreakdown.map((cat) => {
+              const isSelected = selectedCategoryFilter === cat.key;
+              return (
+                <div
+                  key={cat.key}
+                  onClick={() => {
+                    if (selectedCategoryFilter === cat.key) {
+                      setSelectedCategoryFilter("all");
+                    } else {
+                      setSelectedCategoryFilter(cat.key);
+                      if (cat.key === "payroll") setActiveTab("payroll");
+                      else setActiveTab("opex");
+                    }
+                  }}
+                  className={`rounded-xl border p-3.5 transition-all cursor-pointer ${
+                    isSelected
+                      ? "ring-2 ring-teal-600 shadow-md bg-white border-teal-600"
+                      : `${cat.colorClass.bg} ${cat.colorClass.border} hover:shadow-xs hover:border-slate-400`
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-lg">{cat.icon}</span>
+                      <div>
+                        <div className="font-bold text-xs text-slate-900">{cat.shortLabel}</div>
+                        <div className="text-[10px] text-slate-500 font-medium line-clamp-1">
+                          {cat.count} รายการ
+                        </div>
+                      </div>
+                    </div>
+                    <Badge variant="outline" className={`text-[10px] font-black shrink-0 ${cat.colorClass.badge}`}>
+                      {cat.percentage}%
+                    </Badge>
+                  </div>
+
+                  <div className="mt-3 flex items-baseline justify-between">
+                    <div className="text-base font-black font-mono text-slate-900">
+                      ฿{cat.total.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+                    </div>
+                    <span className="text-[10px] font-semibold text-teal-800 hover:underline">
+                      {isSelected ? "แสดงทั้งหมด" : "ดูรายการ →"}
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* ── Main Tab Navigation & Category Filter Pills ── */}
+      <div className="space-y-3 print:hidden">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 pb-2">
+          <div className="flex items-center gap-2">
+            <Button
+              variant={activeTab === "overview" ? "default" : "ghost"}
+              size="sm"
+              onClick={() => {
+                setActiveTab("overview");
+                setSelectedCategoryFilter("all");
+              }}
+              className={`text-xs font-bold ${activeTab === "overview" ? "bg-teal-800 text-white" : "text-slate-600"}`}
+            >
+              <Layers className="h-3.5 w-3.5 mr-1" /> รวมค่าใช้จ่ายทั้งหมด
+            </Button>
+            <Button
+              variant={activeTab === "payroll" ? "default" : "ghost"}
+              size="sm"
+              onClick={() => {
+                setActiveTab("payroll");
+                setSelectedCategoryFilter("payroll");
+              }}
+              className={`text-xs font-bold ${activeTab === "payroll" ? "bg-teal-800 text-white" : "text-slate-600"}`}
+            >
+              <Users className="h-3.5 w-3.5 mr-1" /> บัญชีเงินเดือนพนักงาน ({data.payslips.length})
+            </Button>
+            <Button
+              variant={activeTab === "opex" ? "default" : "ghost"}
+              size="sm"
+              onClick={() => {
+                setActiveTab("opex");
+                if (selectedCategoryFilter === "payroll") setSelectedCategoryFilter("all");
+              }}
+              className={`text-xs font-bold ${activeTab === "opex" ? "bg-teal-800 text-white" : "text-slate-600"}`}
+            >
+              <Building2 className="h-3.5 w-3.5 mr-1" /> ค่าดำเนินการร้าน ({data.opexList.length})
+            </Button>
+          </div>
+        </div>
+
+        {/* Quick Filter Pill Buttons */}
+        <div className="flex flex-wrap items-center gap-1.5 bg-slate-50 p-2 rounded-xl border border-slate-200">
+          <span className="text-[11px] font-bold text-slate-500 flex items-center gap-1 mr-1">
+            <Filter className="h-3.5 w-3.5 text-slate-600" /> กรองหมวด:
+          </span>
+          <Button
+            type="button"
+            size="sm"
+            variant={selectedCategoryFilter === "all" ? "default" : "outline"}
+            onClick={() => setSelectedCategoryFilter("all")}
+            className={`h-7 text-[11px] font-bold ${
+              selectedCategoryFilter === "all" ? "bg-slate-900 text-white" : "bg-white text-slate-700"
+            }`}
+          >
+            🌐 ทั้งหมด ({data.opexList.length + data.payslips.length})
+          </Button>
+
+          {CATEGORY_LIST.map((cat) => (
+            <Button
+              key={cat.key}
+              type="button"
+              size="sm"
+              variant={selectedCategoryFilter === cat.key ? "default" : "outline"}
+              onClick={() => {
+                setSelectedCategoryFilter(cat.key);
+                if (cat.key === "payroll") setActiveTab("payroll");
+                else if (activeTab === "payroll") setActiveTab("opex");
+              }}
+              className={`h-7 text-[11px] font-bold gap-1 ${
+                selectedCategoryFilter === cat.key ? "bg-teal-800 text-white" : "bg-white text-slate-700"
+              }`}
+            >
+              <span>{cat.icon}</span> {cat.shortLabel}
+            </Button>
+          ))}
+        </div>
       </div>
 
-      {/* ── TAB 1: PAYROLL / STAFF SECTION ── */}
-      {activeTab === "payroll" && (
-        <div className="space-y-6">
+      {/* ── VIEW 1: PAYROLL SECTION (When active or filtered) ── */}
+      {(activeTab === "payroll" || (activeTab === "overview" && (selectedCategoryFilter === "all" || selectedCategoryFilter === "payroll"))) && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+              <Users className="h-4 w-4 text-teal-700" />
+              1. หมวดค่าแรงและบัญชีเงินเดือนพนักงาน (Staff & Payroll)
+            </h3>
+            <span className="text-xs font-semibold text-slate-500">
+              รวม: <strong className="text-teal-900 font-mono">฿{data.totalPayroll.toLocaleString()}</strong>
+            </span>
+          </div>
+
           <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
             {data.payslips.map((p) => {
               const draft = staffDrafts[p.employeeName] || {
@@ -693,93 +907,107 @@ export function ExpensesClient({ initialData }: { initialData: ExpensesPayload }
         </div>
       )}
 
-      {/* ── TAB 2: OPEX SECTION ── */}
-      {activeTab === "opex" && (
+      {/* ── VIEW 2: OPEX / EXPENSES TABLE SECTION (When active or filtered) ── */}
+      {(activeTab === "opex" || (activeTab === "overview" && selectedCategoryFilter !== "payroll")) && (
         <Card className="border-slate-200 shadow-sm">
           <CardHeader className="p-4 bg-slate-50 border-b border-slate-200 flex flex-wrap items-center justify-between gap-2">
             <div>
               <CardTitle className="text-sm font-bold text-slate-900 flex items-center gap-2">
                 <Building2 className="h-4 w-4 text-amber-700" />
-                รายการค่าใช้จ่ายดำเนินงานร้าน (OPEX)
+                รายการค่าใช้จ่ายดำเนินงานร้าน ({filteredOpexList.length} รายการ)
               </CardTitle>
               <CardDescription className="text-xs text-slate-500">
-                ค่าน้ำประปา, ไฟฟ้า, อินเทอร์เน็ต, ภาษี, ค่าเช่าสถานที่ และรายจ่ายทั่วไป
+                {selectedCategoryFilter === "all"
+                  ? "แสดงรายการค่าใช้จ่ายทั้งหมดในงวดนี้"
+                  : `กำลังกรองหมวด: ${EXPENSE_CATEGORIES[selectedCategoryFilter as ExpenseCategoryKey]?.label || selectedCategoryFilter}`}
               </CardDescription>
             </div>
-            <Button
-              size="sm"
-              onClick={() => setShowAddExpenseModal(true)}
-              className="bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs gap-1.5 h-8 shadow-xs"
-            >
-              <Plus className="h-3.5 w-3.5" /> บันทึกค่าใช้จ่ายใหม่
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button
+                size="sm"
+                onClick={() => setShowAddExpenseModal(true)}
+                className="bg-amber-500 hover:bg-amber-600 text-slate-950 font-black text-xs gap-1.5 h-8 shadow-xs"
+              >
+                <Plus className="h-3.5 w-3.5" /> บันทึกค่าใช้จ่ายใหม่
+              </Button>
+            </div>
           </CardHeader>
-          <CardContent className="p-0">
-            <table className="w-full text-xs">
-              <thead className="bg-slate-100 text-slate-700 font-bold border-b border-slate-200">
-                <tr>
-                  <th className="px-4 py-2.5 text-left">งวดเดือน</th>
-                  <th className="px-3 py-2.5 text-left">หมวดหมู่</th>
-                  <th className="px-3 py-2.5 text-left">รายการ</th>
-                  <th className="px-3 py-2.5 text-left">ช่องทางชำระ</th>
-                  <th className="px-4 py-2.5 text-right">จำนวนเงิน (บาท)</th>
-                  <th className="px-3 py-2.5 text-center">จัดการ</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-200">
-                {data.opexList.map((item) => (
-                  <tr key={item.id} className="hover:bg-slate-50">
-                    <td className="px-4 py-2.5 font-mono text-slate-600">{item.month}</td>
-                    <td className="px-3 py-2.5">
-                      <span className="rounded-md bg-slate-100 px-2 py-0.5 font-medium text-slate-700">
-                        {item.category}
-                      </span>
-                    </td>
-                    <td className="px-3 py-2.5 font-bold text-slate-900">{item.name}</td>
-                    <td className="px-3 py-2.5 text-slate-600">{item.payMethod}</td>
-                    <td className="px-4 py-2.5 text-right font-mono font-bold text-amber-900">
-                      ฿{item.amount.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
-                    </td>
-                    <td className="px-3 py-2.5 text-center">
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleDeleteExpense(item.id, item.name)}
-                        className="h-7 w-7 p-0 text-slate-400 hover:text-rose-600"
-                        title="ลบรายการค่าใช้จ่าย"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </Button>
-                    </td>
-                  </tr>
-                ))}
 
-                {data.opexList.length === 0 && (
+          <CardContent className="p-0">
+            <div className="max-h-[500px] overflow-y-auto">
+              <table className="w-full text-xs">
+                <thead className="sticky top-0 bg-slate-100 text-slate-700 font-bold border-b border-slate-200 z-10">
                   <tr>
-                    <td colSpan={6} className="px-4 py-8 text-center text-slate-400">
-                      ไม่พบรายการค่าใช้จ่ายในงวดนี้
-                    </td>
+                    <th className="px-4 py-2.5 text-left">งวดเดือน</th>
+                    <th className="px-3 py-2.5 text-left">หมวดหมู่มาตรฐาน</th>
+                    <th className="px-3 py-2.5 text-left">ชื่อรายการค่าใช้จ่าย</th>
+                    <th className="px-3 py-2.5 text-left">ช่องทางชำระ</th>
+                    <th className="px-4 py-2.5 text-right">จำนวนเงิน (บาท)</th>
+                    <th className="px-3 py-2.5 text-center">จัดการ</th>
                   </tr>
-                )}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-slate-200">
+                  {filteredOpexList.map((item) => {
+                    const catKey = classifyExpenseCategory(item.category, item.name);
+                    const catMeta = EXPENSE_CATEGORIES[catKey] || EXPENSE_CATEGORIES.admin_general;
+
+                    return (
+                      <tr key={item.id} className="hover:bg-slate-50/80">
+                        <td className="px-4 py-2.5 font-mono text-slate-600">{item.month}</td>
+                        <td className="px-3 py-2.5">
+                          <span
+                            className={`inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[11px] font-bold border ${catMeta.colorClass.badge}`}
+                          >
+                            <span>{catMeta.icon}</span> {catMeta.shortLabel}
+                          </span>
+                        </td>
+                        <td className="px-3 py-2.5 font-bold text-slate-900">{item.name}</td>
+                        <td className="px-3 py-2.5 text-slate-600">{item.payMethod}</td>
+                        <td className="px-4 py-2.5 text-right font-mono font-bold text-slate-950">
+                          ฿{item.amount.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+                        </td>
+                        <td className="px-3 py-2.5 text-center">
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleDeleteExpense(item.id, item.name)}
+                            className="h-7 w-7 p-0 text-slate-400 hover:text-rose-600 hover:bg-rose-50"
+                            title="ลบรายการค่าใช้จ่าย"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+
+                  {filteredOpexList.length === 0 && (
+                    <tr>
+                      <td colSpan={6} className="px-4 py-8 text-center text-slate-400">
+                        ไม่พบรายการค่าใช้จ่ายในหมวดหมู่นี้
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
           </CardContent>
         </Card>
       )}
 
-      {/* ── ADD EXPENSE MODAL ── */}
+      {/* ── ADD EXPENSE MODAL (WITH 6 STANDARD CATEGORIES & PRESETS) ── */}
       {showAddExpenseModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs">
-          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-150">
+          <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-150">
             <div className="flex items-center justify-between border-b border-slate-200 pb-3">
               <div className="flex items-center gap-2">
                 <div className="h-8 w-8 rounded-full bg-amber-100 text-amber-800 flex items-center justify-center font-bold">
                   <Plus className="h-4 w-4" />
                 </div>
                 <div>
-                  <h3 className="text-base font-bold text-slate-900">บันทึกค่าใช้จ่ายใหม่</h3>
-                  <p className="text-xs text-slate-500">บันทึกรายจ่ายดำเนินงานร้าน ค่าน้ำ ค่าไฟ หรืออื่นๆ</p>
+                  <h3 className="text-base font-bold text-slate-900">บันทึกค่าใช้จ่ายใหม่ (6 หมวดหมู่มาตรฐาน)</h3>
+                  <p className="text-xs text-slate-500">บันทึกรายจ่ายดำเนินงานร้าน ค่าน้ำ ค่าไฟ เคมีภัณฑ์ หรือการตลาด</p>
                 </div>
               </div>
               <button
@@ -799,27 +1027,40 @@ export function ExpensesClient({ initialData }: { initialData: ExpensesPayload }
                     type="date"
                     value={expDate}
                     onChange={(e) => setExpDate(e.target.value)}
-                    className="h-9 text-xs"
+                    className="h-9 text-xs font-mono"
                     required
                   />
                 </div>
                 <div className="space-y-1">
-                  <Label className="font-bold text-slate-700">หมวดหมู่ค่าใช้จ่าย *</Label>
+                  <Label className="font-bold text-slate-700">หมวดหมู่มาตรฐาน *</Label>
                   <select
                     value={expCategory}
-                    onChange={(e) => setExpCategory(e.target.value)}
-                    className="w-full h-9 rounded-md border border-slate-300 bg-white px-2.5 text-xs font-medium text-slate-900"
+                    onChange={(e) => setExpCategory(e.target.value as ExpenseCategoryKey)}
+                    className="w-full h-9 rounded-md border border-slate-300 bg-white px-2.5 text-xs font-bold text-slate-900"
                   >
-                    <option value="ค่าดำเนินการ">ค่าดำเนินการ</option>
-                    <option value="ค่าน้ำประปา">ค่าน้ำประปา</option>
-                    <option value="ค่าไฟฟ้า">ค่าไฟฟ้า</option>
-                    <option value="ค่าอินเทอร์เน็ต">ค่าอินเทอร์เน็ต</option>
-                    <option value="ภาษี">ภาษี</option>
-                    <option value="ค่าเช่าร้าน">ค่าเช่าร้าน</option>
-                    <option value="ค่าการตลาด">ค่าการตลาด</option>
-                    <option value="น้ำยา/เคมี">น้ำยา/เคมี</option>
-                    <option value="ทั่วไป">ทั่วไป / เบ็ดเตล็ด</option>
+                    {CATEGORY_LIST.filter((c) => c.key !== "payroll").map((c) => (
+                      <option key={c.key} value={c.key}>
+                        {c.icon} {c.label}
+                      </option>
+                    ))}
                   </select>
+                </div>
+              </div>
+
+              {/* Predefined Presets Chips */}
+              <div className="space-y-1">
+                <Label className="text-[11px] font-bold text-slate-500">⚡ เลือกรายการด่วน:</Label>
+                <div className="flex flex-wrap gap-1.5 max-h-20 overflow-y-auto p-1 bg-slate-50 rounded-lg border border-slate-200">
+                  {EXPENSE_CATEGORIES[expCategory]?.presets.map((preset) => (
+                    <button
+                      key={preset}
+                      type="button"
+                      onClick={() => setExpTitle(preset)}
+                      className="rounded-md bg-white px-2 py-1 text-[10px] font-semibold text-slate-700 border border-slate-200 hover:bg-teal-50 hover:text-teal-900 hover:border-teal-300 transition-all"
+                    >
+                      + {preset}
+                    </button>
+                  ))}
                 </div>
               </div>
 
@@ -829,7 +1070,7 @@ export function ExpensesClient({ initialData }: { initialData: ExpensesPayload }
                   type="text"
                   value={expTitle}
                   onChange={(e) => setExpTitle(e.target.value)}
-                  placeholder="เช่น ซื้อแปรงขัดพิเศษ, ค่าน้ำมันรถส่งรองเท้า"
+                  placeholder="เช่น ค่าน้ำประปาประจำเดือน, ซื้อแปรงขนม้า 3 อัน"
                   className="h-9 text-xs font-medium"
                   required
                 />
@@ -948,7 +1189,6 @@ export function ExpensesClient({ initialData }: { initialData: ExpensesPayload }
                 </div>
               </div>
 
-              {/* Full Name & Nickname */}
               <div className="grid grid-cols-3 gap-2">
                 <div className="col-span-2 space-y-1">
                   <Label className="font-bold text-slate-700">ชื่อ-นามสกุล จริง *</Label>
@@ -971,7 +1211,6 @@ export function ExpensesClient({ initialData }: { initialData: ExpensesPayload }
                 </div>
               </div>
 
-              {/* ID Card */}
               <div className="space-y-1">
                 <Label className="font-bold text-slate-700">เลขบัตรประจำตัวประชาชน (13 หลัก) *</Label>
                 <Input
@@ -984,7 +1223,6 @@ export function ExpensesClient({ initialData }: { initialData: ExpensesPayload }
                 />
               </div>
 
-              {/* Position */}
               <div className="space-y-1">
                 <Label className="font-bold text-slate-700">ตำแหน่งงาน</Label>
                 <Input
@@ -996,7 +1234,6 @@ export function ExpensesClient({ initialData }: { initialData: ExpensesPayload }
                 />
               </div>
 
-              {/* Bank & Account */}
               <div className="grid grid-cols-2 gap-2">
                 <div className="space-y-1">
                   <Label className="font-bold text-slate-700">ธนาคาร</Label>
@@ -1018,7 +1255,6 @@ export function ExpensesClient({ initialData }: { initialData: ExpensesPayload }
                 </div>
               </div>
 
-              {/* Wage / Salary Input */}
               {editEmpType === "monthly" ? (
                 <div className="space-y-1">
                   <Label className="font-bold text-teal-900">ฐานเงินเดือนประจำ (บาท/เดือน)</Label>
@@ -1065,7 +1301,7 @@ export function ExpensesClient({ initialData }: { initialData: ExpensesPayload }
         </div>
       )}
 
-      {/* ── CREATE NEW STAFF MEMBER MODAL (4th, 5th, etc.) ── */}
+      {/* ── CREATE NEW STAFF MEMBER MODAL ── */}
       {showAddStaffModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs">
           <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-150">
@@ -1225,7 +1461,7 @@ export function ExpensesClient({ initialData }: { initialData: ExpensesPayload }
         </div>
       )}
 
-      {/* ── OFFICIAL STANDARD PAYSLIP VOUCHER MODAL (FOR BANKING & FORMAL USE) ── */}
+      {/* ── OFFICIAL STANDARD PAYSLIP VOUCHER MODAL ── */}
       {selectedPayslip && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-xs print:p-0 print:bg-white print:static">
           <div className="w-full max-w-2xl rounded-2xl bg-white p-8 shadow-2xl border border-slate-300 print:shadow-none print:border-none print:p-0 print:max-w-none print:w-full space-y-6">
