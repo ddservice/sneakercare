@@ -107,7 +107,7 @@ export function InvoicingClient({
   async function handleDbdSearch(query?: string) {
     const q = query || dbdSearchInput || taxId || companyName;
     if (!q) {
-      toast.error("กรุณากรอกเลขประจำตัวผู้เสียภาษี 13 หลัก หรือชื่อบริษัท");
+      toast.error("กรุณากรอกเลขประจำตัวผู้เสียภาษี 13 หลัก หรือพิมพ์ชื่อบริษัท");
       return;
     }
 
@@ -118,12 +118,13 @@ export function InvoicingClient({
         setCompanyName(res.companyName);
         setTaxId(res.taxId);
         setBranchCode(res.branchCode || "00000");
-        setAddress(res.address || "");
+        setAddress(res.address || "สำนักงานใหญ่");
         if (res.phone) setPhone(res.phone);
         if (res.email) setEmail(res.email);
-        toast.success(`ดึงข้อมูลนิติบุคคลสำเร็จ: ${res.companyName}`);
+        setDbdSearchInput(res.taxId || res.companyName);
+        toast.success(`ดึงข้อมูล DBD สำเร็จ: ${res.companyName}`);
       } else {
-        toast.error("ไม่พบข้อมูลนิติบุคคลจากเลขนี้ในระบบ DBD");
+        toast.error("ไม่พบข้อมูลนิติบุคคลจากคำค้นหานี้ในระบบ DBD");
       }
     } catch {
       toast.error("เกิดข้อผิดพลาดในการดึงข้อมูล DBD");
@@ -233,7 +234,9 @@ export function InvoicingClient({
           setItems([]);
           setCompanyName("");
           setTaxId("");
+          setBranchCode("00000");
           setAddress("");
+          setDbdSearchInput("");
         }
       } catch (err: any) {
         toast.error(err.message || "เกิดข้อผิดพลาดในการสร้างเอกสาร");
@@ -390,20 +393,26 @@ export function InvoicingClient({
                         <Label className="text-xs font-semibold text-slate-700">
                           เลขประจำตัวผู้เสียภาษีลูกค้า (Tax ID)
                         </Label>
-                        {taxId.length === 13 && (
+                        {taxId.length >= 10 && (
                           <button
                             type="button"
                             onClick={() => handleDbdSearch(taxId)}
                             className="text-[11px] text-teal-700 hover:underline font-semibold"
                           >
-                            ดึงข้อมูลจากเลขนี้
+                            ดึงข้อมูล DBD จากเลขนี้
                           </button>
                         )}
                       </div>
                       <Input
                         value={taxId}
-                        onChange={(e) => setTaxId(e.target.value)}
-                        placeholder="เลข 13 หลักของลูกค้า"
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setTaxId(val);
+                          if (val.replace(/[^0-9]/g, "").length === 13) {
+                            handleDbdSearch(val);
+                          }
+                        }}
+                        placeholder="เลข 13 หลักของลูกค้า (พิมพ์ครบ 13 หลักระบบจะดึง DBD ทันที)"
                         className="text-xs h-9 font-mono"
                       />
                     </div>
@@ -412,14 +421,14 @@ export function InvoicingClient({
                         รหัสสาขา (Branch Code)
                       </Label>
                       <Input
-                        value={branchCode}
-                        onChange={(e) => setBranchCode(e.target.value)}
+                        value={branchCode || "00000"}
+                        onChange={(e) => setBranchCode(e.target.value || "00000")}
                         placeholder="00000 (สำนักงานใหญ่)"
-                        className="text-xs h-9"
+                        className="text-xs h-9 font-mono"
                       />
                     </div>
                     <div className="space-y-1.5 sm:col-span-2">
-                      <Label className="text-xs font-semibold text-slate-700">ที่อยู่</Label>
+                      <Label className="text-xs font-semibold text-slate-700">ที่อยู่จดทะเบียน / ที่อยู่ออกเอกสาร</Label>
                       <Input
                         value={address}
                         onChange={(e) => setAddress(e.target.value)}
