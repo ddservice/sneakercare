@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import type { AnalyticsDashboardData } from "@/app/actions/analytics";
 import { TimeRangeFilterBar } from "@/components/time-range-filter";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -40,10 +40,11 @@ export function StatisticsClient({ initialData }: { initialData: AnalyticsDashbo
     if (selectedRange === "this_month") return r.date.startsWith("2026-08");
     if (selectedRange === "last_month") return r.date.startsWith("2026-07");
     if (selectedRange === "this_year") return r.date.startsWith("2026");
-    return r.date.startsWith(selectedRange);
+    if (selectedRange.includes("-")) return r.date.startsWith(selectedRange);
+    return true;
   });
 
-  const totalRevenue = filteredDaily.reduce((sum, r) => sum + r.grandTotal, 0);
+  const totalRevenue = filteredDaily.reduce((sum, r) => sum + r.totalRevenue, 0);
   const totalCash = filteredDaily.reduce((sum, r) => sum + r.cashAmount, 0);
   const totalTransfer = filteredDaily.reduce((sum, r) => sum + r.transferAmount, 0);
   const totalDiscount = filteredDaily.reduce((sum, r) => sum + r.discount, 0);
@@ -58,6 +59,17 @@ export function StatisticsClient({ initialData }: { initialData: AnalyticsDashbo
 
   // Max month revenue for bar scaling
   const maxMonthRevenue = Math.max(...initialData.monthlyTrends.map((m) => m.revenue), 1);
+
+  // Statistics Inventory Tab Filter
+  const [statInventoryFilter, setStatInventoryFilter] = useState<"all" | "low_stock">("all");
+  const filteredStatInventoryItems = useMemo(() => {
+    if (statInventoryFilter === "low_stock") {
+      return initialData.inventory.items.filter(
+        (it) => it.status === "LOW_STOCK" || it.status === "OUT_OF_STOCK" || it.currentQty <= it.minStock
+      );
+    }
+    return initialData.inventory.items;
+  }, [initialData.inventory.items, statInventoryFilter]);
 
   return (
     <div className="space-y-6">
@@ -361,10 +373,18 @@ export function StatisticsClient({ initialData }: { initialData: AnalyticsDashbo
         <div className="space-y-6">
           {/* Inventory KPI Summary */}
           <div className="grid gap-4 sm:grid-cols-3">
-            <Card className="border-slate-200 shadow-xs">
+            <Card
+              onClick={() => setStatInventoryFilter("all")}
+              className={`border-slate-200 shadow-xs cursor-pointer transition-all ${
+                statInventoryFilter === "all"
+                  ? "ring-2 ring-teal-500 bg-teal-50/40 border-teal-300"
+                  : "hover:border-teal-300"
+              }`}
+              title="คลิกเพื่อดูสินค้าทั้งหมด"
+            >
               <CardContent className="p-5 flex items-center justify-between">
                 <div className="space-y-1">
-                  <span className="text-xs font-semibold text-slate-500">จำนวนสินค้าทั้งหมด</span>
+                  <span className="text-xs font-semibold text-slate-500">จำนวนรายการสินค้าทั้งหมด</span>
                   <div className="text-2xl font-black text-slate-900">
                     {initialData.inventory.totalItemsCount} รายการ
                   </div>
@@ -376,14 +396,31 @@ export function StatisticsClient({ initialData }: { initialData: AnalyticsDashbo
               </CardContent>
             </Card>
 
-            <Card className="border-slate-200 shadow-xs">
+            <Card
+              onClick={() => setStatInventoryFilter(statInventoryFilter === "low_stock" ? "all" : "low_stock")}
+              className={`border-slate-200 shadow-xs cursor-pointer transition-all ${
+                statInventoryFilter === "low_stock"
+                  ? "ring-2 ring-rose-500 bg-rose-50/50 border-rose-300 shadow-md"
+                  : "hover:border-rose-300"
+              }`}
+              title={statInventoryFilter === "low_stock" ? "คลิกเพื่อยกเลิกการกรอง" : "คลิกเพื่อดูเฉพาะรายการใกล้หมด"}
+            >
               <CardContent className="p-5 flex items-center justify-between">
                 <div className="space-y-1">
-                  <span className="text-xs font-semibold text-slate-500">สินค้าใกล้หมด / วิกฤต</span>
+                  <span className="text-xs font-semibold text-slate-500 flex items-center gap-1">
+                    สินค้าใกล้หมด / วิกฤต
+                    {statInventoryFilter === "low_stock" && (
+                      <Badge variant="outline" className="text-[10px] bg-rose-600 text-white font-bold px-1.5 py-0">
+                        กำลังกรอง
+                      </Badge>
+                    )}
+                  </span>
                   <div className="text-2xl font-black text-rose-600">
                     {initialData.inventory.lowStockCount} รายการ
                   </div>
-                  <div className="text-[11px] text-rose-600 font-semibold">ต่ำกว่าจุดสั่งซื้อขั้นต่ำ</div>
+                  <div className="text-[11px] text-rose-600 font-semibold">
+                    {statInventoryFilter === "low_stock" ? "คลิกเพื่อดูทั้งหมด" : "คลิกเพื่อกรองเฉพาะใกล้หมด"}
+                  </div>
                 </div>
                 <div className="rounded-xl bg-rose-50 p-3 text-rose-600 border border-rose-100">
                   <AlertTriangle className="h-6 w-6" />
@@ -407,22 +444,38 @@ export function StatisticsClient({ initialData }: { initialData: AnalyticsDashbo
             </Card>
           </div>
 
-          {/* Full 46 Items Table */}
+          {/* Full Items Table */}
           <Card className="border-slate-200 shadow-xs">
             <CardHeader className="border-b border-slate-100 pb-3 flex flex-row items-center justify-between">
               <div>
                 <CardTitle className="text-sm font-bold text-slate-900">
-                  ตารางแสดงสต๊อกสินค้าทั้งหมด ({initialData.inventory.totalItemsCount} รายการ)
+                  {statInventoryFilter === "low_stock"
+                    ? `รายการสินค้าใกล้หมด / ต่ำกว่า Min Alert (${filteredStatInventoryItems.length} รายการ)`
+                    : `ตารางแสดงสต๊อกสินค้าทั้งหมด (${initialData.inventory.totalItemsCount} รายการ)`}
                 </CardTitle>
                 <CardDescription className="text-xs">
-                  รายการน้ำยา สี กาว และอุปกรณ์ในระบบ Sneaker Care
+                  {statInventoryFilter === "low_stock"
+                    ? "กรองเฉพาะสินค้าที่ต้องสั่งซื้อเพิ่มเร่งด่วน"
+                    : "รายการน้ำยา สี กาว และอุปกรณ์ในระบบ Sneaker Care"}
                 </CardDescription>
               </div>
-              <Link href="/inventory">
-                <Button size="sm" className="bg-teal-700 hover:bg-teal-800 text-white text-xs h-8 gap-1">
-                  จัดการคลังสินค้า <ArrowUpRight className="h-3.5 w-3.5" />
-                </Button>
-              </Link>
+              <div className="flex items-center gap-2">
+                {statInventoryFilter === "low_stock" && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setStatInventoryFilter("all")}
+                    className="text-xs h-8 text-rose-700 border-rose-300 bg-rose-50 hover:bg-rose-100 font-bold"
+                  >
+                    ✕ แสดงทั้งหมด
+                  </Button>
+                )}
+                <Link href="/inventory">
+                  <Button size="sm" className="bg-teal-700 hover:bg-teal-800 text-white text-xs h-8 gap-1">
+                    จัดการคลังสินค้า <ArrowUpRight className="h-3.5 w-3.5" />
+                  </Button>
+                </Link>
+              </div>
             </CardHeader>
             <CardContent className="p-0">
               <div className="overflow-x-auto max-h-[500px]">
@@ -439,16 +492,20 @@ export function StatisticsClient({ initialData }: { initialData: AnalyticsDashbo
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {initialData.inventory.items.map((it) => (
-                      <tr key={it.id} className="hover:bg-slate-50/80">
-                        <td className="px-4 py-2.5 font-bold text-slate-900">{it.name}</td>
-                        <td className="px-4 py-2.5 text-slate-500">{it.category}</td>
-                        <td className="px-4 py-2.5 text-right font-mono font-bold text-slate-900">
-                          {it.currentQty.toLocaleString()} {it.baseUnit}
-                        </td>
-                        <td className="px-4 py-2.5 text-right font-mono text-slate-400">
-                          {it.minStock} {it.baseUnit}
-                        </td>
+                    {filteredStatInventoryItems.map((it) => {
+                      const isLow = it.status === "LOW_STOCK" || it.status === "OUT_OF_STOCK" || it.currentQty <= it.minStock;
+                      return (
+                        <tr key={it.id} className={`hover:bg-slate-50/80 ${isLow ? "bg-rose-50/20" : ""}`}>
+                          <td className="px-4 py-2.5 font-bold text-slate-900">{it.name}</td>
+                          <td className="px-4 py-2.5 text-slate-500">{it.category}</td>
+                          <td className="px-4 py-2.5 text-right font-mono font-bold text-slate-900">
+                            <span className={isLow ? "text-rose-600 font-black" : ""}>
+                              {it.currentQty.toLocaleString()} {it.baseUnit}
+                            </span>
+                          </td>
+                          <td className="px-4 py-2.5 text-right font-mono text-slate-400">
+                            {it.minStock} {it.baseUnit}
+                          </td>
                         <td className="px-4 py-2.5 text-right font-mono text-slate-600">
                           ฿{it.unitCost.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
                         </td>
@@ -473,7 +530,8 @@ export function StatisticsClient({ initialData }: { initialData: AnalyticsDashbo
                           </Badge>
                         </td>
                       </tr>
-                    ))}
+                    );
+                  })}
                   </tbody>
                 </table>
               </div>

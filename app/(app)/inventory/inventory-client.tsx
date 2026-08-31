@@ -305,12 +305,24 @@ export function InventoryClient({
 
       {/* ── KPI Summary Cards ── */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        <Card className="border-slate-200 shadow-xs">
+        <Card
+          onClick={() => {
+            setFilterLowStockOnly(false);
+            setCategoryFilter("all");
+            setSearchTerm("");
+          }}
+          className={`border-slate-200 shadow-xs cursor-pointer transition-all ${
+            !filterLowStockOnly && categoryFilter === "all" && !searchTerm
+              ? "ring-2 ring-teal-500 bg-teal-50/40 border-teal-300 shadow-md"
+              : "hover:border-teal-300 hover:shadow-xs"
+          }`}
+          title="คลิกเพื่อแสดงสินค้าทั้งหมด"
+        >
           <CardContent className="p-5 flex items-center justify-between">
             <div className="space-y-1">
               <span className="text-xs font-semibold text-slate-500">จำนวนรายการสินค้าทั้งหมด</span>
               <div className="text-2xl font-bold text-slate-900">{items.length} รายการ</div>
-              <div className="text-[11px] text-slate-400">ครอบคลุมน้ำยาและอะไหล่</div>
+              <div className="text-[11px] text-slate-400">ครอบคลุมน้ำยาและอะไหล่ทั้งหมด</div>
             </div>
             <div className="rounded-xl bg-slate-50 p-3 text-slate-700">
               <Boxes className="h-6 w-6" />
@@ -318,10 +330,32 @@ export function InventoryClient({
           </CardContent>
         </Card>
 
-        <Card className="border-slate-200 shadow-xs">
+        <Card
+          onClick={() => {
+            const nextState = !filterLowStockOnly;
+            setFilterLowStockOnly(nextState);
+            if (nextState) {
+              setCategoryFilter("all");
+              setSearchTerm("");
+            }
+          }}
+          className={`border-slate-200 shadow-xs cursor-pointer transition-all ${
+            filterLowStockOnly
+              ? "ring-2 ring-rose-500 bg-rose-50/50 border-rose-300 shadow-md"
+              : "hover:border-rose-300 hover:shadow-xs"
+          }`}
+          title={filterLowStockOnly ? "คลิกเพื่อยกเลิกการกรอง" : "คลิกเพื่อดูเฉพาะรายการใกล้หมด"}
+        >
           <CardContent className="p-5 flex items-center justify-between">
             <div className="space-y-1">
-              <span className="text-xs font-semibold text-slate-500">สินค้าใกล้หมด (ต่ำกว่า Min Alert)</span>
+              <span className="text-xs font-semibold text-slate-500 flex items-center gap-1.5">
+                สินค้าใกล้หมด (ต่ำกว่า Min Alert)
+                {filterLowStockOnly && (
+                  <Badge variant="outline" className="text-[10px] bg-rose-600 text-white font-bold px-1.5 py-0 border-rose-700">
+                    กำลังแสดงผล
+                  </Badge>
+                )}
+              </span>
               <div className="text-2xl font-bold">
                 {lowStockCount > 0 ? (
                   <span className="text-rose-600">{lowStockCount} รายการ</span>
@@ -329,7 +363,9 @@ export function InventoryClient({
                   <span className="text-emerald-600">พร้อมใช้งานทุกรายการ</span>
                 )}
               </div>
-              <div className="text-[11px] text-slate-400">ต้องสั่งซื้อเพิ่ม</div>
+              <div className="text-[11px] text-slate-400">
+                {filterLowStockOnly ? "คลิกเพื่อยกเลิกการกรอง" : "คลิกเพื่อดูเฉพาะรายการใกล้หมด"}
+              </div>
             </div>
             <div
               className={`rounded-xl p-3 ${
@@ -391,9 +427,16 @@ export function InventoryClient({
               type="button"
               variant={filterLowStockOnly ? "default" : "outline"}
               size="sm"
-              onClick={() => setFilterLowStockOnly(!filterLowStockOnly)}
+              onClick={() => {
+                const nextState = !filterLowStockOnly;
+                setFilterLowStockOnly(nextState);
+                if (nextState) {
+                  setCategoryFilter("all");
+                  setSearchTerm("");
+                }
+              }}
               className={`h-8.5 text-xs font-bold gap-1.5 ${
-                filterLowStockOnly ? "bg-rose-600 text-white" : "bg-white text-rose-800 border-rose-200"
+                filterLowStockOnly ? "bg-rose-600 text-white shadow-xs" : "bg-white text-rose-800 border-rose-200 hover:bg-rose-50"
               }`}
             >
               <AlertTriangle className="h-3.5 w-3.5" /> เฉพาะใกล้หมด ({lowStockCount})
@@ -409,6 +452,31 @@ export function InventoryClient({
           </div>
         </CardContent>
       </Card>
+
+      {/* ── Active Low Stock Filter Banner ── */}
+      {filterLowStockOnly && (
+        <div className="flex flex-wrap items-center justify-between gap-2 bg-rose-50 border border-rose-200 rounded-xl p-3 text-xs text-rose-900 font-medium shadow-2xs">
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="h-4 w-4 text-rose-600 shrink-0" />
+            <span>
+              กำลังแสดงเฉพาะสินค้าที่สต๊อกต่ำกว่าหรือเท่ากับเกณฑ์ Min Alert (พบ <strong>{filteredItems.length}</strong> รายการ)
+            </span>
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              setFilterLowStockOnly(false);
+              setCategoryFilter("all");
+              setSearchTerm("");
+            }}
+            className="h-7 text-xs bg-white text-rose-800 border-rose-300 hover:bg-rose-100 font-bold"
+          >
+            ✕ ล้างตัวกรอง (แสดงทั้งหมด {items.length} รายการ)
+          </Button>
+        </div>
+      )}
 
       {/* ── Inventory Items Table with Edit Actions ── */}
       <Card className="border-slate-200 shadow-sm overflow-hidden">
@@ -460,7 +528,7 @@ export function InventoryClient({
                     {item.min_stock_level} {item.base_unit}
                   </td>
                   {isCostVisible && (
-                    <td className="px-3 py-3 text-right font-mono font-medium text-slate-700">
+                    <td className="px-3 py-3 text-right font-mono text-slate-700">
                       ฿{item.avg_unit_cost.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
                     </td>
                   )}
@@ -469,13 +537,13 @@ export function InventoryClient({
                       ฿{item.total_value.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
                     </td>
                   )}
-                  <td className="px-3 py-3 text-center whitespace-nowrap">
+                  <td className="px-3 py-3 text-center">
                     {item.is_low_stock ? (
-                      <Badge variant="outline" className="bg-rose-50 text-rose-700 border-rose-300 text-[10px] font-bold">
+                      <Badge className="bg-rose-100 text-rose-700 border-rose-200 text-[10px] font-bold">
                         ⚠️ ใกล้หมด
                       </Badge>
                     ) : (
-                      <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-300 text-[10px]">
+                      <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200 text-[10px] font-bold">
                         ✓ ปกติ
                       </Badge>
                     )}
