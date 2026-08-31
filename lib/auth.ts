@@ -13,41 +13,60 @@ export type Profile = {
 };
 
 export const requireProfile = cache(async (): Promise<Profile> => {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  try {
+    const supabase = await createClient();
+    let user = null;
 
-  if (!user) {
+    try {
+      const { data, error } = await supabase.auth.getUser();
+      if (!error && data?.user) {
+        user = data.user;
+      }
+    } catch {
+      // Stale refresh token or auth error -> redirect to login
+      redirect("/login");
+    }
+
+    if (!user) {
+      redirect("/login");
+    }
+
+    const { data: profile, error } = await supabase
+      .from("profiles")
+      .select("id, username, display_name, role, branch_id, is_active")
+      .eq("id", user.id)
+      .single();
+
+    if (error || !profile) {
+      redirect("/login");
+    }
+
+    if (!profile.is_active) {
+      try {
+        await supabase.auth.signOut();
+      } catch {
+        // ignore
+      }
+      redirect("/login");
+    }
+
+    const rawRole = String(profile.role ?? "staff").toLowerCase().replace("-", "_");
+    const role: "admin" | "co_admin" | "staff" =
+      rawRole === "admin" ? "admin" : rawRole === "co_admin" ? "co_admin" : "staff";
+
+    return {
+      id: profile.id,
+      username: profile.username,
+      display_name: profile.display_name || profile.username || "ผู้ใช้",
+      role,
+      branch_id: profile.branch_id,
+    };
+  } catch (err: any) {
+    if (err?.digest?.startsWith("NEXT_REDIRECT")) {
+      throw err;
+    }
     redirect("/login");
   }
-
-  const { data: profile, error } = await supabase
-    .from("profiles")
-    .select("id, username, display_name, role, branch_id, is_active")
-    .eq("id", user.id)
-    .single();
-
-  if (error || !profile) {
-    redirect("/login");
-  }
-
-  if (!profile.is_active) {
-    await supabase.auth.signOut();
-    redirect("/login");
-  }
-
-  const rawRole = String(profile.role ?? "staff").toLowerCase().replace("-", "_");
-  const role: "admin" | "co_admin" | "staff" =
-    rawRole === "admin" ? "admin" : rawRole === "co_admin" ? "co_admin" : "staff";
-
-  return {
-    id: profile.id,
-    username: profile.username,
-    display_name: profile.display_name || profile.username || "ผู้ใช้",
-    role,
-    branch_id: profile.branch_id,
-  };
 });
 
 export function requireAdmin(profile: Profile) {
