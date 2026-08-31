@@ -87,7 +87,7 @@ export default async function HistoryPage({
 
   if (branchId) q = q.eq("branch_id", branchId);
   if (resolvedParams.txnType && resolvedParams.txnType !== "all") {
-    q = q.eq("txn_type", resolvedParams.txnType);
+    q = q.eq("txn_type", resolvedParams.txnType as any);
   }
   if (startDate) q = q.gte("created_at", startDate);
   if (endDate) q = q.lte("created_at", endDate);
@@ -333,7 +333,7 @@ export default async function HistoryPage({
         </CardContent>
       </Card>
 
-      <Pagination info={info} />
+      <Pagination info={info} basePath="/history" />
     </div>
   );
 }
