@@ -4,6 +4,8 @@ import { useState, useMemo } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { toast } from "sonner";
+import * as XLSX from "xlsx";
 import {
   Calendar as CalendarIcon,
   ChevronLeft,
@@ -18,6 +20,7 @@ import {
   Info,
   Building,
   CheckCircle2,
+  Download,
 } from "lucide-react";
 
 // Official Thai Public & Labor Holidays (2026-09 to 2027-08)
@@ -248,6 +251,48 @@ export function RosterClient() {
     }
   }
 
+  function handlePrint() {
+    window.print();
+  }
+
+  function exportRosterToExcel() {
+    // 1. Employee Payroll & Rule Summary Sheet
+    const staffSummaryData = EMPLOYEES.map((emp) => {
+      const isJae = emp.id === "jae";
+      return {
+        "รหัส/ชื่อเล่น": emp.id,
+        "ชื่อ-นามสกุล (พนักงาน)": emp.name,
+        "ตำแหน่ง": emp.role,
+        "ประเภทสัญญา": emp.type === "monthly" ? "พนักงานประจำ" : "พนักงานทดลองงาน",
+        "อัตราค่าจ้าง": emp.wageNote,
+        "วันหยุดประจำสัปดาห์": emp.offDayName,
+        "วันทำงานในเดือนนี้": isJae ? `${monthlyStats.jaeWorkDays} วัน` : "26 วัน (โดยประมาณ)",
+        "ประมาณการเงินเดือน/ค่าจ้าง": isJae ? monthlyStats.jaeEstimatedWage : 12000,
+      };
+    });
+
+    // 2. Daily Schedule Matrix Sheet
+    const dailyScheduleData = (calendarDays.filter(Boolean) as any[]).map((d) => ({
+      "วันที่": d.dateStr,
+      "วัน": WEEKLY_SHIFTS[d.dayOfWeek]?.dayName || "",
+      "กะเช้า (08:30-17:30)": d.morning.join(", "),
+      "กะสาย (10:30-19:30)": d.late.join(", "),
+      "วันหยุด": d.off.join(", ") || "ไม่มี",
+      "หมายเหตุวันหยุดแรงงาน": d.holiday || "",
+    }));
+
+    const wb = XLSX.utils.book_new();
+    const wsStaff = XLSX.utils.json_to_sheet(staffSummaryData);
+    const wsSchedule = XLSX.utils.json_to_sheet(dailyScheduleData);
+
+    XLSX.utils.book_append_sheet(wb, wsStaff, "สรุปพนักงานและเงินเดือน");
+    XLSX.utils.book_append_sheet(wb, wsSchedule, `ตารางกะ_${MONTH_NAMES_THAI[currentMonth]}`);
+
+    const fileName = `SneakerCare_Roster_${MONTH_NAMES_THAI[currentMonth]}_${currentYear + 543}.xlsx`;
+    XLSX.writeFile(wb, fileName);
+    toast.success(`ดาวน์โหลดไฟล์ ${fileName} เรียบร้อยแล้ว`);
+  }
+
   return (
     <div className="space-y-8 print:p-0">
       {/* ── Page Banner (Hidden on Print) ── */}
@@ -265,8 +310,16 @@ export function RosterClient() {
 
         <div className="flex items-center gap-2">
           <Button
-            onClick={() => window.print()}
-            className="bg-white text-slate-950 hover:bg-slate-100 font-bold text-xs gap-1.5 shadow-sm"
+            variant="outline"
+            onClick={exportRosterToExcel}
+            className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold border-none text-xs gap-1.5 shadow-xs"
+          >
+            <Download className="h-4 w-4" /> Export ตารางเวร & เงินเดือน (Excel)
+          </Button>
+          <Button
+            variant="outline"
+            onClick={handlePrint}
+            className="bg-white/10 text-white hover:bg-white/20 border-white/20 text-xs gap-1.5"
           >
             <Printer className="h-4 w-4" /> พิมพ์ตารางงาน (Print A4)
           </Button>
