@@ -24,7 +24,7 @@ export const requireProfile = cache(async (): Promise<Profile> => {
       }
     } catch {
       // Stale refresh token or auth error -> redirect to login
-      redirect("/login");
+      user = null;
     }
 
     if (!user) {
@@ -37,11 +37,7 @@ export const requireProfile = cache(async (): Promise<Profile> => {
       .eq("id", user.id)
       .single();
 
-    if (error || !profile) {
-      redirect("/login");
-    }
-
-    if (!profile.is_active) {
+    if (error || !profile || !profile.is_active) {
       try {
         await supabase.auth.signOut();
       } catch {

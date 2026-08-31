@@ -31,30 +31,50 @@ export async function updateSession(request: NextRequest) {
   );
 
   const pathname = request.nextUrl.pathname;
-  const isAuthOrStatic =
-    pathname === "/login" ||
+  const isStatic =
     pathname.startsWith("/_next") ||
     pathname.startsWith("/api") ||
     pathname.includes(".");
 
-  try {
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+  if (isStatic) {
+    return supabaseResponse;
+  }
 
-    // If unauthenticated and requesting private route
-    if (!user && !isAuthOrStatic && pathname !== "/") {
-      const url = request.nextUrl.clone();
-      url.pathname = "/login";
-      return NextResponse.redirect(url);
+  let user = null;
+  let authFailed = false;
+
+  try {
+    const { data, error } = await supabase.auth.getUser();
+    if (error || !data?.user) {
+      authFailed = true;
+    } else {
+      user = data.user;
     }
   } catch {
-    // If token error or stale refresh token, redirect smoothly to /login
-    if (!isAuthOrStatic && pathname !== "/") {
-      const url = request.nextUrl.clone();
-      url.pathname = "/login";
-      return NextResponse.redirect(url);
+    authFailed = true;
+  }
+
+  // If auth failed, clear all Supabase auth cookies from response
+  if (authFailed) {
+    const allCookies = request.cookies.getAll();
+    allCookies.forEach((c) => {
+      if (c.name.includes("sb-") || c.name.includes("auth-token")) {
+        supabaseResponse.cookies.delete(c.name);
+      }
+    });
+
+    if (pathname !== "/login") {
+      const redirectResponse = NextResponse.redirect(new URL("/login", request.url));
+      allCookies.forEach((c) => {
+        if (c.name.includes("sb-") || c.name.includes("auth-token")) {
+          redirectResponse.cookies.delete(c.name);
+        }
+      });
+      return redirectResponse;
     }
+  } else if (user && pathname === "/login") {
+    // If already logged in and visiting /login, redirect to /dashboard
+    return NextResponse.redirect(new URL("/dashboard", request.url));
   }
 
   return supabaseResponse;
