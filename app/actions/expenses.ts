@@ -7,6 +7,9 @@ import { revalidatePath } from "next/cache";
 export type StaffPayslip = {
   employeeName: string;
   nickname?: string;
+  idCardNo?: string;
+  bankName?: string;
+  accountNo?: string;
   month: string;
   employmentType: "monthly" | "probation_daily";
   dailyWage?: number;
@@ -79,6 +82,7 @@ function extractCleanEmployeeName(key: string, name: string): string | null {
     "empd_wht_",
     "empd_deduct_total_",
     "empd_deduct_json_",
+    "empd_profile_",
     "emp_",
   ];
   for (const p of prefixes) {
@@ -158,6 +162,9 @@ export async function fetchAllExpensesData(timeRange: string = "this_month"): Pr
   staffMap["นายธีรภัทร ทาแผ (เชียง)"] = {
     employeeName: "นายธีรภัทร ทาแผ (เชียง)",
     nickname: "เชียง",
+    idCardNo: "1-5099-01234-56-7",
+    bankName: "กสิกรไทย (KBANK)",
+    accountNo: "123-2-34567-8",
     month: targetMonthFilter,
     employmentType: "monthly",
     baseSalary: 12000,
@@ -177,6 +184,9 @@ export async function fetchAllExpensesData(timeRange: string = "this_month"): Pr
   staffMap["น.ส.สุทธินันท์ นนทจันทร์ (มิ้ว)"] = {
     employeeName: "น.ส.สุทธินันท์ นนทจันทร์ (มิ้ว)",
     nickname: "มิ้ว",
+    idCardNo: "1-5099-09876-54-3",
+    bankName: "กสิกรไทย (KBANK)",
+    accountNo: "987-1-23456-7",
     month: targetMonthFilter,
     employmentType: "monthly",
     baseSalary: 12000,
@@ -196,6 +206,9 @@ export async function fetchAllExpensesData(timeRange: string = "this_month"): Pr
   staffMap["เจ (พนักงานทดลองงาน)"] = {
     employeeName: "เจ (พนักงานทดลองงาน)",
     nickname: "เจ",
+    idCardNo: "1-5099-05555-12-3",
+    bankName: "กสิกรไทย / พร้อมเพย์",
+    accountNo: "089-xxx-xxxx",
     month: targetMonthFilter,
     employmentType: "probation_daily",
     dailyWage: 350,
@@ -264,6 +277,17 @@ export async function fetchAllExpensesData(timeRange: string = "this_month"): Pr
       p.wht = amt;
     } else if (r.key?.startsWith("empd_deduct_total_")) {
       p.otherDeductions = amt;
+    } else if (r.key?.startsWith("empd_profile_") && r.name) {
+      try {
+        const parsed = JSON.parse(r.name);
+        if (parsed.idCardNo) p.idCardNo = parsed.idCardNo;
+        if (parsed.bankName) p.bankName = parsed.bankName;
+        if (parsed.accountNo) p.accountNo = parsed.accountNo;
+        if (parsed.nickname) p.nickname = parsed.nickname;
+        if (parsed.employeeRole) p.employeeRole = parsed.employeeRole;
+      } catch {
+        // ignore
+      }
     }
   });
 
@@ -360,6 +384,55 @@ export async function fetchAllExpensesData(timeRange: string = "this_month"): Pr
   };
 }
 
+export async function saveStaffProfileInfo(payload: {
+  employeeKeyName: string;
+  fullName: string;
+  nickname: string;
+  idCardNo: string;
+  bankName: string;
+  accountNo: string;
+  employeeRole: string;
+}): Promise<ExpenseActionState> {
+  const profile = await requireProfile();
+  const supabase = createAdminClient();
+
+  let cleanKeyName = payload.employeeKeyName;
+  if (cleanKeyName.includes("ธีรภัทร")) cleanKeyName = "นายธีรภัทร ทาแผ";
+  else if (cleanKeyName.includes("สุทธินันท์")) cleanKeyName = "น.ส.สุทธินันท์ นนทจันทร์";
+  else if (cleanKeyName.includes("เจ")) cleanKeyName = "เจ";
+
+  const profileData = {
+    fullName: payload.fullName,
+    nickname: payload.nickname,
+    idCardNo: payload.idCardNo,
+    bankName: payload.bankName,
+    accountNo: payload.accountNo,
+    employeeRole: payload.employeeRole,
+  };
+
+  const key = `empd_profile_${cleanKeyName}`;
+
+  // Delete existing profile entry
+  await (supabase.from("sc_opex" as any) as any)
+    .delete()
+    .eq("key", key);
+
+  // Insert updated profile entry
+  await (supabase.from("sc_opex" as any) as any).insert({
+    month: "08/2026",
+    category: "payslip_detail",
+    key,
+    name: JSON.stringify(profileData),
+    amount: 0,
+    pay_method: "-",
+    recorded_by: profile.display_name,
+    last_updated: new Date().toISOString(),
+  });
+
+  revalidatePath("/expenses");
+  return { success: true };
+}
+
 export async function saveStaffPayrollAdjustment(payload: {
   month: string;
   employeeName: string;
@@ -379,7 +452,6 @@ export async function saveStaffPayrollAdjustment(payload: {
   const supabase = createAdminClient();
 
   const m = payload.month;
-  // Get pure name for key without brackets e.g. "นายธีรภัทร ทาแผ"
   let cleanKeyName = payload.employeeName;
   if (cleanKeyName.includes("ธีรภัทร")) cleanKeyName = "นายธีรภัทร ทาแผ";
   else if (cleanKeyName.includes("สุทธินันท์")) cleanKeyName = "น.ส.สุทธินันท์ นนทจันทร์";

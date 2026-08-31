@@ -6,6 +6,7 @@ import {
   addExpense,
   deleteExpense,
   saveStaffPayrollAdjustment,
+  saveStaffProfileInfo,
   type ExpensesPayload,
   type StaffPayslip,
 } from "@/app/actions/expenses";
@@ -33,6 +34,8 @@ import {
   Save,
   TrendingUp,
   Percent,
+  IdCard,
+  Edit,
 } from "lucide-react";
 
 export function ExpensesClient({ initialData }: { initialData: ExpensesPayload }) {
@@ -43,11 +46,14 @@ export function ExpensesClient({ initialData }: { initialData: ExpensesPayload }
   // Print Payslip Modal State
   const [selectedPayslip, setSelectedPayslip] = useState<StaffPayslip | null>(null);
 
+  // Edit Staff Profile (ID Card, Bank, Full Name) Modal State
+  const [editingProfileStaff, setEditingProfileStaff] = useState<StaffPayslip | null>(null);
+
   // New Staff Modal State
   const [showAddStaffModal, setShowAddStaffModal] = useState(false);
   const [staffFormType, setStaffFormType] = useState<"monthly" | "probation_daily">("probation_daily");
   const [dailyRate, setDailyRate] = useState<number>(350);
-  const [daysWorked, setDaysWorked] = useState<number>(26);
+  const [daysWorked, setDaysWorked] = useState<number>(8);
 
   // Interactive Live Values State for Staff (Keyed by employeeName)
   const [staffDrafts, setStaffDrafts] = useState<
@@ -68,7 +74,7 @@ export function ExpensesClient({ initialData }: { initialData: ExpensesPayload }
         diligence: p.diligence,
         ot: p.ot,
         commPct: p.commPct || 0,
-        daysWorked: p.daysWorked || 26,
+        daysWorked: p.daysWorked || 8,
         otherDeductions: p.otherDeductions || 0,
       };
     });
@@ -85,7 +91,7 @@ export function ExpensesClient({ initialData }: { initialData: ExpensesPayload }
           diligence: p.diligence,
           ot: p.ot,
           commPct: p.commPct || 0,
-          daysWorked: p.daysWorked || 26,
+          daysWorked: p.daysWorked || 8,
           otherDeductions: p.otherDeductions || 0,
         };
       });
@@ -105,7 +111,7 @@ export function ExpensesClient({ initialData }: { initialData: ExpensesPayload }
           diligence: 500,
           ot: 0,
           commPct: 0,
-          daysWorked: 26,
+          daysWorked: 8,
           otherDeductions: 0,
         }),
         [field]: val,
@@ -119,12 +125,12 @@ export function ExpensesClient({ initialData }: { initialData: ExpensesPayload }
       diligence: p.diligence,
       ot: p.ot,
       commPct: p.commPct || 0,
-      daysWorked: p.daysWorked || 26,
+      daysWorked: p.daysWorked || 8,
       otherDeductions: p.otherDeductions || 0,
     };
 
     const isDaily = p.employmentType === "probation_daily";
-    const base = isDaily ? (draft.daysWorked || 26) * 350 : p.baseSalary;
+    const base = isDaily ? (draft.daysWorked || 8) * 350 : p.baseSalary;
     const comm = Math.round((data.totalMonthlySales * draft.commPct) / 100);
     const wht = Math.round(comm * 0.03);
     const sso = isDaily ? 0 : 600;
@@ -145,7 +151,7 @@ export function ExpensesClient({ initialData }: { initialData: ExpensesPayload }
     };
   }
 
-  // Save changes to database (sc_opex)
+  // Save payroll adjustments to database (sc_opex)
   async function handleSaveStaff(p: StaffPayslip) {
     const computed = getComputedPayslip(p);
     startTransition(async () => {
@@ -169,6 +175,40 @@ export function ExpensesClient({ initialData }: { initialData: ExpensesPayload }
         toast.error(res.error);
       } else {
         toast.success(`บันทึกยอดเงินเดือนของ ${computed.employeeName} สำเร็จแล้ว`);
+        const updated = await fetchAllExpensesData(data.timeRange);
+        setData(updated);
+      }
+    });
+  }
+
+  // Save profile info (ID card, bank, position) to database
+  async function handleSaveProfileInfo(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (!editingProfileStaff) return;
+    const form = e.currentTarget;
+    const fullName = (form.elements.namedItem("prof_fullname") as HTMLInputElement)?.value.trim();
+    const nickname = (form.elements.namedItem("prof_nickname") as HTMLInputElement)?.value.trim();
+    const idCardNo = (form.elements.namedItem("prof_idcard") as HTMLInputElement)?.value.trim();
+    const bankName = (form.elements.namedItem("prof_bank") as HTMLInputElement)?.value.trim();
+    const accountNo = (form.elements.namedItem("prof_account") as HTMLInputElement)?.value.trim();
+    const employeeRole = (form.elements.namedItem("prof_role") as HTMLInputElement)?.value.trim();
+
+    startTransition(async () => {
+      const res = await saveStaffProfileInfo({
+        employeeKeyName: editingProfileStaff.employeeName,
+        fullName,
+        nickname,
+        idCardNo,
+        bankName,
+        accountNo,
+        employeeRole,
+      });
+
+      if (res?.error) {
+        toast.error(res.error);
+      } else {
+        toast.success(`บันทึกข้อมูลและเลขบัตรประชาชนของ ${fullName} เรียบร้อยแล้ว`);
+        setEditingProfileStaff(null);
         const updated = await fetchAllExpensesData(data.timeRange);
         setData(updated);
       }
@@ -213,7 +253,7 @@ export function ExpensesClient({ initialData }: { initialData: ExpensesPayload }
           </div>
           <h2 className="text-2xl font-bold tracking-tight">ค่าใช้จ่าย & ระบบจ่ายเงินเดือนพนักงาน</h2>
           <p className="text-sm text-teal-100/80">
-            จัดการเงินเดือนพนักงานประจำ (นายธีรภัทร / น.ส.สุทธินันท์), ค่าจ้างทดลองงานรายวัน (เจ - 350฿/วัน), เบี้ยขยัน, ค่าคอมมิชชั่น % ยอดขาย และหัก ณ ที่จ่าย 3%
+            จัดการข้อมูลพนักงาน เลขบัตรประชาชน 13 หลัก บัญชีธนาคาร เงินเดือนประจำ ค่าจ้างรายวัน เบี้ยขยัน ค่าคอม % ยอดขาย และพิมพ์สลิปเงินเดือน A4
           </p>
         </div>
 
@@ -424,7 +464,7 @@ export function ExpensesClient({ initialData }: { initialData: ExpensesPayload }
                 diligence: p.diligence,
                 ot: p.ot,
                 commPct: p.commPct || 0,
-                daysWorked: p.daysWorked || 26,
+                daysWorked: p.daysWorked || 8,
                 otherDeductions: p.otherDeductions || 0,
               };
 
@@ -454,6 +494,27 @@ export function ExpensesClient({ initialData }: { initialData: ExpensesPayload }
                         >
                           {p.employmentType === "probation_daily" ? "ทดลองงาน (350฿/วัน)" : "พนักงานประจำ"}
                         </Badge>
+                      </div>
+
+                      {/* Employee Profile Quick Details (ID Card & Bank) */}
+                      <div className="mt-2.5 rounded-lg bg-teal-50/60 p-2 border border-teal-100/80 flex items-center justify-between text-[11px] text-slate-700">
+                        <div className="space-y-0.5">
+                          <div className="flex items-center gap-1 font-mono text-[10px] text-teal-950">
+                            <IdCard className="h-3 w-3 text-teal-700 shrink-0" />
+                            <span>เลขบัตร: <strong>{p.idCardNo || "ยังไม่ได้ระบุ"}</strong></span>
+                          </div>
+                          <div className="text-[10px] text-slate-500 truncate max-w-[200px]">
+                            {p.bankName || "ธนาคาร"}: {p.accountNo || "-"}
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setEditingProfileStaff(p)}
+                          className="rounded p-1 text-teal-700 hover:bg-teal-100 text-[10px] font-bold flex items-center gap-0.5 shrink-0"
+                          title="แก้ไขเลขบัตรประชาชนและข้อมูลพนักงาน"
+                        >
+                          <Edit className="h-3 w-3" /> แก้ไข
+                        </button>
                       </div>
                     </CardHeader>
 
@@ -858,6 +919,101 @@ export function ExpensesClient({ initialData }: { initialData: ExpensesPayload }
         </div>
       )}
 
+      {/* ── EDIT STAFF PROFILE & ID CARD MODAL ── */}
+      {editingProfileStaff && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-xs">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl border border-slate-200 space-y-5">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                <IdCard className="h-4 w-4 text-teal-700" />
+                แก้ไขข้อมูล & เลขบัตรประชาชน: {editingProfileStaff.employeeName}
+              </h3>
+              <button
+                onClick={() => setEditingProfileStaff(null)}
+                className="text-slate-400 hover:text-slate-600"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveProfileInfo} className="space-y-3.5 text-xs">
+              <div className="space-y-1">
+                <Label className="font-semibold">ชื่อ-นามสกุลจริง (ตามบัตรประชาชน)</Label>
+                <Input
+                  name="prof_fullname"
+                  defaultValue={editingProfileStaff.employeeName}
+                  required
+                  className="h-9"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-1">
+                  <Label className="font-semibold">ชื่อเล่น</Label>
+                  <Input
+                    name="prof_nickname"
+                    defaultValue={editingProfileStaff.nickname || ""}
+                    placeholder="เช่น เชียง, มิ้ว, เจ"
+                    className="h-9"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="font-semibold">ตำแหน่งงาน</Label>
+                  <Input
+                    name="prof_role"
+                    defaultValue={editingProfileStaff.employeeRole || "พนักงาน"}
+                    placeholder="เช่น ช่างหลัก, ผู้จัดการ"
+                    className="h-9"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <Label className="font-semibold text-teal-900 flex items-center gap-1">
+                  <IdCard className="h-3.5 w-3.5 text-teal-700" /> เลขประจำตัวประชาชน 13 หลัก
+                </Label>
+                <Input
+                  name="prof_idcard"
+                  defaultValue={editingProfileStaff.idCardNo || ""}
+                  placeholder="เช่น 1-5099-01234-56-7"
+                  className="h-9 font-mono text-xs border-teal-300"
+                />
+                <span className="text-[10px] text-slate-400">ใช้สำหรับพิมพ์ใบสลิปเงินเดือน A4, ภ.ง.ด.1 และประกันสังคม</span>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-1">
+                  <Label className="font-semibold">ธนาคาร</Label>
+                  <Input
+                    name="prof_bank"
+                    defaultValue={editingProfileStaff.bankName || "กสิกรไทย (KBANK)"}
+                    placeholder="เช่น กสิกรไทย"
+                    className="h-9"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="font-semibold">เลขที่บัญชี</Label>
+                  <Input
+                    name="prof_account"
+                    defaultValue={editingProfileStaff.accountNo || ""}
+                    placeholder="xxx-x-xxxxx-x"
+                    className="h-9 font-mono"
+                  />
+                </div>
+              </div>
+
+              <Button
+                type="submit"
+                disabled={isPending}
+                className="w-full bg-teal-800 hover:bg-teal-900 text-white font-bold h-9 gap-1.5"
+              >
+                <Save className="h-4 w-4" /> {isPending ? "กำลังบันทึก..." : "บันทึกข้อมูลพนักงาน"}
+              </Button>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* ── ADD NEW STAFF MODAL ── */}
       {showAddStaffModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-xs">
@@ -996,18 +1152,18 @@ export function ExpensesClient({ initialData }: { initialData: ExpensesPayload }
                   <span className="font-bold">{selectedPayslip.employeeName}</span>
                 </div>
                 <div>
-                  <span className="text-slate-500">สถานะ: </span>
+                  <span className="text-slate-500">เลขบัตรประชาชน: </span>
+                  <span className="font-mono font-semibold text-slate-900">{selectedPayslip.idCardNo || "1-5099-xxxxx-xx-x"}</span>
+                </div>
+                <div>
+                  <span className="text-slate-500">สถานะ/ตำแหน่ง: </span>
                   <span className="font-semibold">
-                    {selectedPayslip.employmentType === "probation_daily" ? "พนักงานทดลองงาน" : "พนักงานประจำ"}
+                    {selectedPayslip.employeeRole || (selectedPayslip.employmentType === "probation_daily" ? "พนักงานทดลองงาน" : "พนักงานประจำ")}
                   </span>
                 </div>
                 <div>
-                  <span className="text-slate-500">รอบการจ่าย: </span>
-                  <span>สิ้นเดือน ({selectedPayslip.month})</span>
-                </div>
-                <div>
-                  <span className="text-slate-500">ช่องทาง: </span>
-                  <span>{selectedPayslip.payMethod}</span>
+                  <span className="text-slate-500">ธนาคาร & เลขบัญชี: </span>
+                  <span className="font-mono">{selectedPayslip.bankName || "กสิกรไทย"} {selectedPayslip.accountNo || ""}</span>
                 </div>
               </div>
 
@@ -1025,7 +1181,7 @@ export function ExpensesClient({ initialData }: { initialData: ExpensesPayload }
                       <div className="flex justify-between">
                         <span>
                           {selectedPayslip.employmentType === "probation_daily"
-                            ? `ค่าจ้างรายวัน (${selectedPayslip.daysWorked || 26} วัน @ ${selectedPayslip.dailyWage || 350}฿):`
+                            ? `ค่าจ้างรายวัน (${selectedPayslip.daysWorked || 8} วัน @ ${selectedPayslip.dailyWage || 350}฿):`
                             : "เงินเดือนพื้นฐาน:"}
                         </span>
                         <span className="font-mono font-semibold">฿{selectedPayslip.baseSalary.toLocaleString()}</span>
