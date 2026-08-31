@@ -1108,9 +1108,9 @@ export function DailyEntryClient({ initialRecords }: { initialRecords: DailySale
                       <div className="text-[10px] text-amber-700 font-semibold">ส่วนลดรวม</div>
                       <div className="text-xs sm:text-sm font-bold text-amber-700">-{(Number(discount || 0)).toLocaleString()} ฿</div>
                     </div>
-                    <div className="rounded-lg bg-teal-900 p-2 text-white shadow-2xs">
-                      <div className="text-[10px] text-teal-200 font-semibold">ยอดสุทธิที่ต้องรับ</div>
-                      <div className="text-xs sm:text-sm font-black text-teal-100">{netTotal.toLocaleString()} ฿</div>
+                    <div className="rounded-lg bg-teal-700 p-2 text-white shadow-2xs">
+                      <div className="text-[10px] text-teal-100 font-semibold">ยอดสุทธิที่ต้องรับ</div>
+                      <div className="text-xs sm:text-sm font-black text-white">{netTotal.toLocaleString()} ฿</div>
                     </div>
                   </div>
 

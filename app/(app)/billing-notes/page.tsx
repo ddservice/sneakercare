@@ -141,7 +141,7 @@ export default async function BillingNotesPage() {
         {/* Line Items Table */}
         <table className="w-full border-collapse mb-4 text-[11px]">
           <thead>
-            <tr className="bg-teal-900 text-white text-left">
+            <tr className="bg-teal-800 text-white text-left">
               <th className="p-2 text-center w-8">#</th>
               <th className="p-2">รายละเอียดรายการ / เลขที่ใบส่งของ (DO)</th>
               <th className="p-2 text-right w-32">มูลค่ารวม</th>

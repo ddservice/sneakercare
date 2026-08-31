@@ -309,7 +309,7 @@ export function ReportsClient({
               <CardContent className="p-4 pt-3">
                 <Button
                   onClick={exportStock}
-                  className="w-full bg-slate-800 hover:bg-slate-900 text-white font-bold text-xs h-8.5 gap-1.5 shadow-xs"
+                  className="w-full bg-slate-700 hover:bg-slate-800 text-white font-bold text-xs h-8.5 gap-1.5 shadow-xs"
                 >
                   <Download className="h-3.5 w-3.5" /> ดาวน์โหลด Excel (.xlsx)
                 </Button>

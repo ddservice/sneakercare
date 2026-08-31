@@ -516,11 +516,11 @@ export function RosterClient() {
       </Card>
 
       {/* ── Thai Labor Law & Shop Notice Footer ── */}
-      <div className="rounded-2xl bg-slate-900 p-6 text-white space-y-3 print:bg-white print:text-slate-900 print:border print:border-slate-300">
-        <div className="flex items-center gap-2 text-teal-400 font-bold text-sm">
+      <div className="rounded-2xl bg-teal-900 p-6 text-white space-y-3 print:bg-white print:text-slate-900 print:border print:border-slate-300">
+        <div className="flex items-center gap-2 text-teal-300 font-bold text-sm">
           <Info className="h-4 w-4" /> หมายเหตุและแนวทางปฏิบัติตามกฎหมายแรงงานไทย (SneakerCare Shop Policy)
         </div>
-        <ul className="text-xs text-slate-300 space-y-1.5 list-disc list-inside print:text-slate-700">
+        <ul className="text-xs text-teal-100 space-y-1.5 list-disc list-inside print:text-slate-700">
           <li>
             <strong>วันหยุดประจำสัปดาห์ (1 วัน/สัปดาห์):</strong> พนักงานทุกคนมีวันหยุดประจำสัปดาห์คนละ 1 วันแน่นอนตามตาราง (เชียง: พุธ, เจ: ศุกร์, มิ้ว: อาทิตย์)
           </li>

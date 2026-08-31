@@ -56,7 +56,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
               <span className="font-semibold text-teal-700 dark:text-teal-300">
                 {ROLE_LABEL[profile.role]}
               </span>
-              <span className="text-slate-300 dark:text-slate-600">|</span>
+              <span className="text-slate-400 dark:text-slate-600">|</span>
               <span className="font-medium">{profile.display_name}</span>
             </div>
 

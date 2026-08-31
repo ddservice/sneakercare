@@ -217,8 +217,8 @@ export default async function HistoryPage({
                 <span className="font-bold text-amber-700 font-mono">-{totalStockOut} หน่วย</span>
               </div>
               {showCost && (
-                <div className="rounded-md bg-teal-900 text-white px-2.5 py-1 shadow-2xs">
-                  <span className="text-teal-200">มูลค่าต้นทุน: </span>
+                <div className="rounded-md bg-teal-700 text-white px-2.5 py-1 shadow-2xs">
+                  <span className="text-teal-100">มูลค่าต้นทุน: </span>
                   <span className="font-bold font-mono">
                     {totalCostPeriod.toLocaleString("th-TH", { minimumFractionDigits: 2 })} ฿
                   </span>

@@ -559,7 +559,7 @@ export function ExpensesClient({ initialData }: { initialData: ExpensesPayload }
                 onClick={() => handleSelectMonth("all")}
                 disabled={isPending}
                 className={`h-8 text-xs font-bold ${
-                  selectedMonth === "all" ? "bg-slate-900 text-white" : "bg-white text-slate-700 border-slate-300"
+                  selectedMonth === "all" ? "bg-teal-700 text-white" : "bg-white text-slate-700 border-slate-300"
                 }`}
               >
                 🌐 รวมสะสมทุกงวด
@@ -634,16 +634,16 @@ export function ExpensesClient({ initialData }: { initialData: ExpensesPayload }
           </CardContent>
         </Card>
 
-        <Card className="border-slate-300 shadow-xs bg-slate-900 text-white">
+        <Card className="border-teal-300 shadow-xs bg-teal-800 text-white">
           <CardContent className="p-4 flex items-center justify-between">
             <div className="space-y-1">
-              <span className="text-xs font-semibold text-slate-400">รวมค่าใช้จ่ายทั้งหมด (Total Expenses)</span>
-              <div className="text-xl font-black text-emerald-400 font-mono">
+              <span className="text-xs font-semibold text-teal-200">รวมค่าใช้จ่ายทั้งหมด (Total Expenses)</span>
+              <div className="text-xl font-black text-white font-mono">
                 ฿{data.netExpenses.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
               </div>
-              <div className="text-[10px] text-slate-400">เงินเดือน + ค่าดำเนินการ 6 หมวด</div>
+              <div className="text-[10px] text-teal-200">เงินเดือน + ค่าดำเนินการ 6 หมวด</div>
             </div>
-            <div className="rounded-xl bg-slate-800 p-2.5 text-emerald-400">
+            <div className="rounded-xl bg-teal-700/60 p-2.5 text-teal-100">
               <Wallet className="h-5 w-5" />
             </div>
           </CardContent>
@@ -793,7 +793,7 @@ export function ExpensesClient({ initialData }: { initialData: ExpensesPayload }
             variant={selectedCategoryFilter === "all" ? "default" : "outline"}
             onClick={() => setSelectedCategoryFilter("all")}
             className={`h-7 text-[11px] font-bold ${
-              selectedCategoryFilter === "all" ? "bg-slate-900 text-white" : "bg-white text-slate-700"
+              selectedCategoryFilter === "all" ? "bg-teal-700 text-white" : "bg-white text-slate-700"
             }`}
           >
             🌐 ทั้งหมด ({data.opexList.length + data.payslips.length})
@@ -1003,12 +1003,12 @@ export function ExpensesClient({ initialData }: { initialData: ExpensesPayload }
                     </div>
 
                     {/* Net Pay Box */}
-                    <div className="rounded-xl bg-slate-900 p-3 text-white flex items-center justify-between">
+                    <div className="rounded-xl bg-teal-800 p-3 text-white flex items-center justify-between">
                       <div>
-                        <div className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">
+                        <div className="text-[10px] text-teal-200 uppercase font-bold tracking-wider">
                           ยอดจ่ายสุทธิ (Net Pay)
                         </div>
-                        <div className="text-lg font-black text-emerald-400 font-mono">
+                        <div className="text-lg font-black text-white font-mono">
                           ฿{p.netPay.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
                         </div>
                       </div>
@@ -1787,15 +1787,15 @@ export function ExpensesClient({ initialData }: { initialData: ExpensesPayload }
                   </tr>
 
                   {/* Grand Net Pay */}
-                  <tr className="bg-slate-900 text-white font-bold">
+                  <tr className="bg-teal-800 text-white font-bold">
                     <td colSpan={2} className="p-3">
                       <div className="flex justify-between items-center text-sm">
                         <span>จำนวนเงินจ่ายสุทธิ (NET PAY AMOUNT):</span>
-                        <span className="text-base font-black text-emerald-300 font-mono">
+                        <span className="text-base font-black text-teal-100 font-mono">
                           ฿{selectedPayslip.netPay.toLocaleString("th-TH", { minimumFractionDigits: 2 })} บาท
                         </span>
                       </div>
-                      <div className="text-xs font-normal text-slate-300 pt-1 text-right italic">
+                      <div className="text-xs font-normal text-teal-200 pt-1 text-right italic">
                         ({thaiBahtText(selectedPayslip.netPay)})
                       </div>
                     </td>
