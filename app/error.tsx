@@ -38,14 +38,12 @@ export default function Error({
             <RefreshCw className="h-4 w-4" /> ลองโหลดใหม่
           </Button>
 
-          <Button
-            asChild
-            className="flex-1 bg-teal-600 hover:bg-teal-500 text-white font-bold text-xs gap-2 h-10 rounded-xl"
+          <Link
+            href="/login"
+            className="flex-1 flex items-center justify-center bg-teal-600 hover:bg-teal-500 text-white font-bold text-xs gap-2 h-10 rounded-xl transition-all"
           >
-            <Link href="/login">
-              <LogIn className="h-4 w-4" /> ไปหน้าเข้าสู่ระบบ
-            </Link>
-          </Button>
+            <LogIn className="h-4 w-4" /> ไปหน้าเข้าสู่ระบบ
+          </Link>
         </div>
       </div>
     </div>
