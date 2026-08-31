@@ -61,29 +61,71 @@ export async function createStockIn(_prev: StockActionState, formData: FormData)
   requireModuleWrite(profile, "stock-in");
   const supabase = await createClient();
 
-  const itemId = String(formData.get("item_id") ?? "");
+  const isNewItem = formData.get("is_new_item") === "true";
+  let itemId = String(formData.get("item_id") ?? "");
   const purchaseQty = Number(formData.get("purchase_qty"));
   const totalCost = Number(formData.get("total_cost"));
   const referenceNote = String(formData.get("reference_note") ?? "").trim();
 
-  if (!itemId || !Number.isFinite(purchaseQty) || purchaseQty <= 0 || !Number.isFinite(totalCost) || totalCost < 0) {
-    return { error: "กรุณาเลือกสินค้าและกรอกจำนวน/ยอดที่จ่ายให้ถูกต้อง" };
+  if (!Number.isFinite(purchaseQty) || purchaseQty <= 0 || !Number.isFinite(totalCost) || totalCost < 0) {
+    return { error: "กรุณากรอกจำนวนที่ซื้อและยอดที่จ่ายให้ถูกต้อง" };
   }
+
   const branch = resolveBranch(profile, formData);
   if ("error" in branch) return branch;
   const { branchId } = branch;
 
-  const { data: item, error: itemError } = await supabase
-    .from("items")
-    .select("purchase_unit_qty")
-    .eq("id", itemId)
-    .single();
+  let purchaseUnitQty = 1;
 
-  if (itemError || !item) {
-    return { error: "ไม่พบสินค้านี้ในระบบ" };
+  if (isNewItem) {
+    const newItemName = String(formData.get("new_item_name") ?? "").trim();
+    const newItemCategory = String(formData.get("new_item_category") ?? "อุปกรณ์ทำความสะอาด").trim();
+    const newItemUnit = String(formData.get("new_item_unit") ?? "ชิ้น").trim();
+    const newMinStock = Number(formData.get("new_min_stock") ?? 1);
+
+    if (!newItemName) {
+      return { error: "กรุณาระบุชื่อสินค้าใหม่" };
+    }
+
+    const { data: createdItem, error: createErr } = await supabase
+      .from("items")
+      .insert({
+        name: newItemName,
+        category: newItemCategory,
+        base_unit: newItemUnit,
+        purchase_unit: newItemUnit,
+        purchase_unit_qty: 1,
+        default_min_stock_level: newMinStock,
+        item_type: "inventory",
+        is_active: true,
+      })
+      .select("id, purchase_unit_qty")
+      .single();
+
+    if (createErr || !createdItem) {
+      return { error: `สร้างสินค้าใหม่ไม่สำเร็จ: ${createErr?.message}` };
+    }
+
+    itemId = createdItem.id;
+    purchaseUnitQty = createdItem.purchase_unit_qty || 1;
+  } else {
+    if (!itemId) {
+      return { error: "กรุณาเลือกสินค้าที่ต้องการรับเข้า" };
+    }
+
+    const { data: item, error: itemError } = await supabase
+      .from("items")
+      .select("purchase_unit_qty")
+      .eq("id", itemId)
+      .single();
+
+    if (itemError || !item) {
+      return { error: "ไม่พบสินค้านี้ในระบบ" };
+    }
+    purchaseUnitQty = item.purchase_unit_qty || 1;
   }
 
-  const baseQty = purchaseQty * item.purchase_unit_qty;
+  const baseQty = purchaseQty * purchaseUnitQty;
   const unitCost = totalCost / baseQty;
 
   const { error } = await supabase.from("stock_transactions").insert({
@@ -101,7 +143,7 @@ export async function createStockIn(_prev: StockActionState, formData: FormData)
     return { error: `บันทึกไม่สำเร็จ: ${error.message}` };
   }
 
-  revalidateStock(["/stock-in"]);
+  revalidateStock(["/stock-in", "/inventory"]);
   return { success: true };
 }
 

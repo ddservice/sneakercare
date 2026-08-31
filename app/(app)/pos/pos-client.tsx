@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState, useTransition } from "react";
 import { createServiceOrder, updateOrderStatus, type PosActionState } from "@/app/actions/pos";
 import { Button } from "@/components/ui/button";
@@ -199,7 +200,12 @@ export function PosClient({ initialOrders }: { initialOrders: OrderItem[] }) {
             บันทึกรับงานรองเท้า ออกใบรับฝาก คำนวณราคา และติดตามสถานะงานซัก-ซ่อมแบบเรียลไทม์
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
+          <Link href="/pos/daily-entry">
+            <Button className="bg-teal-400 font-black hover:bg-teal-300 text-slate-950 text-xs gap-1.5 shadow-sm">
+              <Footprints className="h-4 w-4" /> 📝 สลับไปกรอกยอดสรุปรายวัน
+            </Button>
+          </Link>
           <div className="rounded-xl bg-white/10 p-3 text-center backdrop-blur-sm">
             <div className="text-xs text-teal-200">งานค้างวันนี้</div>
             <div className="text-xl font-bold text-white">

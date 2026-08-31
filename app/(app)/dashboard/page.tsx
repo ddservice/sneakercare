@@ -88,9 +88,14 @@ export default async function DashboardPage() {
 
         {/* Fast Action Buttons */}
         <div className="flex flex-wrap items-center gap-2.5">
+          <Link href="/pos/daily-entry">
+            <Button className="bg-teal-400 font-black hover:bg-teal-300 text-slate-950 gap-2 shadow-xs">
+              <Plus className="h-4 w-4" /> บันทึกยอดขายรายวัน
+            </Button>
+          </Link>
           <Link href="/pos">
-            <Button className="bg-teal-500 font-bold hover:bg-teal-400 text-slate-950 gap-2 shadow-xs">
-              <Plus className="h-4 w-4" /> รับงานรองเท้า (POS)
+            <Button variant="outline" className="bg-white/10 text-white hover:bg-white/20 border-white/20 gap-2">
+              <Sparkles className="h-4 w-4" /> POS รายบิล
             </Button>
           </Link>
           <Link href="/stock-out">

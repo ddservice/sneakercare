@@ -25,29 +25,39 @@ export default async function InventoryHubPage() {
   const supabase = await createClient();
   const isCostVisible = canSeeCost(profile.role);
 
-  // 1. Fetch low stock items
-  let lowStockQuery = supabase.from("v_low_stock").select("*");
-  if (selectedBranchId) lowStockQuery = lowStockQuery.eq("branch_id", selectedBranchId);
-  const { data: lowStockItems } = await lowStockQuery;
+  // 1. Fetch all items joined with item_stock
+  const { data: rawItems } = await supabase
+    .from("items")
+    .select("*, item_stock(*)")
+    .order("name");
 
-  // 2. Fetch inventory values (for Admin/Co-Admin)
-  let totalValuation = 0;
-  if (isCostVisible) {
-    let valueQuery = supabase.from("v_inventory_value").select("*");
-    if (selectedBranchId) valueQuery = valueQuery.eq("branch_id", selectedBranchId);
-    const { data: valData } = await valueQuery;
-    if (valData) {
-      totalValuation = valData.reduce((acc, row) => acc + Number(row.total_value ?? 0), 0);
-    }
-  }
+  const stockItems = (rawItems || []).map((item: any) => {
+    const stockRow = Array.isArray(item.item_stock) ? item.item_stock[0] : item.item_stock;
+    const currentQty = Number(stockRow?.current_qty ?? 0);
+    const minStock = Number(stockRow?.min_stock_level ?? item.default_min_stock_level ?? 1);
+    const unitCost = Number(stockRow?.avg_unit_cost ?? 0);
+    return {
+      id: item.id,
+      item_id: item.id,
+      name: item.name,
+      item_type: item.item_type,
+      category: item.category,
+      base_unit: item.base_unit,
+      purchase_unit: item.purchase_unit,
+      current_qty: currentQty,
+      min_stock_level: minStock,
+      avg_unit_cost: unitCost,
+      total_value: currentQty * unitCost,
+      is_low_stock: currentQty <= minStock,
+      is_active: item.is_active,
+    };
+  });
 
-  // 3. Fetch current stock items list
-  let itemsQuery = supabase.from("v_item_stock").select("*").order("name");
-  if (selectedBranchId) itemsQuery = itemsQuery.eq("branch_id", selectedBranchId);
-  const { data: stockItems } = await itemsQuery;
+  const lowStockItems = stockItems.filter((i) => i.is_low_stock);
+  const lowStockCount = lowStockItems.length;
+  const totalItemsCount = stockItems.length;
 
-  const lowStockCount = lowStockItems?.length ?? 0;
-  const totalItemsCount = stockItems?.length ?? 0;
+  const totalValuation = stockItems.reduce((acc, row) => acc + (row.total_value || 0), 0);
 
   return (
     <div className="space-y-8">
