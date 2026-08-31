@@ -60,7 +60,7 @@ const remoteCommands = [
   `git reset --hard origin/master`,
   `echo "==> [3/4] ติดตั้ง dependencies และ Clean Build (ห้ามถอด --webpack)"`,
   `npm install`,
-  `rm -rf .next`,
+  `rm -rf .next 2>/dev/null || true`,
   `npm run build`,
   `echo "==> [4/4] รีสตาร์ต PM2 Process '${pm2App}'"`,
   `pm2 restart "${pm2App}"`,
