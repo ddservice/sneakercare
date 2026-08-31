@@ -2,12 +2,6 @@ import "server-only";
 import { createClient } from "@/lib/supabase/server";
 import { boundsFor, type MonthRange } from "@/lib/reports-range";
 
-// query ของหน้ารายงาน อยู่ที่นี่ที่เดียว เพราะทั้งหน้าเว็บและปุ่มดาวน์โหลด CSV ต้องได้ข้อมูล
-// "ชุดเดียวกันเป๊ะ" — ถ้าปล่อยให้แต่ละที่เขียน query เอง วันหนึ่งตัวเลขบนจอกับในไฟล์จะไม่ตรงกัน
-// โดยไม่มีใครรู้ ซึ่งเป็นบั๊กประเภทที่หาสาเหตุยากที่สุด
-//
-// ตรรกะช่วงเดือนกับการจัดรูปแบบอยู่ที่ lib/reports-range.ts (ไม่มี dependency ฝั่งเซิร์ฟเวอร์
-// จึงเขียนเทสต์ได้) — re-export ต่อจากที่นี่เพื่อให้ผู้เรียกเดิม import ที่เดียวได้เหมือนเดิม
 export {
   DEFAULT_MONTHS_BACK,
   formatMonthLabel,
@@ -27,14 +21,37 @@ export async function fetchMonthlyCogs(range: MonthRange, branchId: string | nul
   const { gte, lt } = boundsFor(range);
 
   let query = supabase
-    .from("v_monthly_cogs")
-    .select("branch_id, month, cogs")
-    .gte("month", gte)
-    .lt("month", lt)
-    .order("month", { ascending: false });
+    .from("stock_transactions")
+    .select("created_at, total_cost, branch_id, txn_type")
+    .gte("created_at", gte)
+    .lt("created_at", lt)
+    .order("created_at", { ascending: false });
 
   if (branchId) query = query.eq("branch_id", branchId);
 
-  const { data, error } = await query;
-  return { rows: (data ?? []) as MonthlyCogsRow[], error };
+  const { data: txns, error } = await query;
+
+  if (error) {
+    return { rows: [] as MonthlyCogsRow[], error };
+  }
+
+  // Aggregate monthly COGS
+  const monthlyMap: Record<string, number> = {};
+  const defaultBranchId = branchId || "cb8dcf5d-7e5e-4671-be42-aca79469a19b";
+
+  for (const t of txns || []) {
+    const monthKey = t.created_at.slice(0, 7) + "-01";
+    const cost = Math.abs(Number(t.total_cost || 0));
+    monthlyMap[monthKey] = (monthlyMap[monthKey] || 0) + cost;
+  }
+
+  const rows: MonthlyCogsRow[] = Object.keys(monthlyMap)
+    .sort((a, b) => b.localeCompare(a))
+    .map((month) => ({
+      branch_id: defaultBranchId,
+      month,
+      cogs: monthlyMap[month],
+    }));
+
+  return { rows, error: null };
 }
