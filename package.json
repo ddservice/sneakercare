@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "next dev --webpack",
     "build": "next build --webpack",
-    "start": "next start --hostname 127.0.0.1",
+    "start": "next start -p 3003 -H 127.0.0.1",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
     "test:legacy": "node scripts/test-legacy-estimate-banner.mjs",
