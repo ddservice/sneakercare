@@ -1,5 +1,10 @@
 #!/usr/bin/env bash
-# สำรองข้อมูล Postgres ของ Supabase project นี้ (shoe-care-inventory) แบบ logical dump ทุกวัน
+# สำรองข้อมูล Postgres ของ Supabase project "SneakerCareDB" (ref mdlxogfkpwejnqpzhmoy) แบบ logical dump ทุกวัน
+#
+# ⚠️ (2026-09-01) ยืนยันแล้วว่า "shoe-care-inventory" (ref tecrcoienazmtbynuqpg) ที่เอกสารรุ่นก่อนอ้างถึง
+# ไม่มีอยู่แล้ว — `supabase projects list` คืนโปรเจกต์เดียวในบัญชีนี้คือ SneakerCareDB เท่านั้น และ
+# DNS ของ tecrcoienazmtbynuqpg.supabase.co resolve ไม่ได้แล้ว ข้อมูลจริงทั้งหมด (sc_sales, sc_opex,
+# items, ...) อยู่ที่ SneakerCareDB นี้เพียงที่เดียว — SUPABASE_DB_URL ด้านล่างต้องชี้มาที่นี่เสมอ
 # แล้วอัปโหลดไป Cloudflare R2 เป็น off-site disaster recovery
 #
 # ทำไมต้องมีสคริปต์นี้: project อยู่บน Supabase Free plan ซึ่ง "ไม่มี" automated backup/PITR ให้เลย
@@ -12,7 +17,7 @@
 # ── ติดตั้งครั้งแรก (ทำเองบน VPS ผมเข้าไม่ถึงเครื่องนี้) ──────────────────────────
 #   1. ติดตั้ง postgresql-client ให้ major version ตรงกับ Postgres ของ Supabase (ปัจจุบัน 17):
 #        sudo apt install postgresql-client-17
-#      เช็ค `SHOW server_version;` ที่ SQL Editor ของ dashboard project shoe-care-inventory ถ้าเปลี่ยนเวอร์ชัน
+#      เช็ค `SHOW server_version;` ที่ SQL Editor ของ dashboard project SneakerCareDB ถ้าเปลี่ยนเวอร์ชัน
 #   2. ติดตั้ง AWS CLI (ใช้ยิง R2 เพราะ R2 คุย S3 API ได้): sudo apt install awscli
 #   3. สร้างไฟล์ /etc/rrs-backup.env (chmod 600, เจ้าของเป็น user ที่รัน cron เท่านั้น) ใส่:
 #        SUPABASE_DB_URL=postgresql://postgres:<password>@<host>:5432/postgres   # ดูข้อ 4

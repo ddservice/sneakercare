@@ -19,14 +19,27 @@ repo ทำแทนไม่ได้: PostgREST รัน DDL ไม่ได�
 ระหว่างที่ยังไม่รัน: การกระทำฝั่งการเงิน **ไม่ถูกบันทึกลง audit เลย** และ index ของ `sc_sales."date"` ยังไม่มี
 หน้า `/admin/audit` จะขึ้นแถบเตือนสีเหลืองบอกไว้ให้ ไม่ได้พังเงียบ
 
-### 2. ⚠️ ตรวจว่า backup บน VPS ชี้ไปฐานข้อมูลที่ถูกต้อง — ต้องถามเจ้าของก่อนแก้
-บรรทัดเดิมของเอกสารนี้ (งานที่ 2) เขียนว่าให้เปลี่ยน `SUPABASE_DB_URL` บน VPS ไปที่
-`tecrcoienazmtbynuqpg` (`shoe-care-inventory`) **แต่จากการตรวจ `.env.local` และ query ฐานข้อมูลจริง
-เมื่อ 2026-09-01 พบว่าแอปตัวจริงอ่าน/เขียนที่ `mdlxogfkpwejnqpzhmoy` (`SneakerCareDB`) ทั้งหมด**
-— `sc_sales` 287 แถว, `sc_opex` 334 แถว, `items` 46 แถว, `audit_logs` 688 แถว อยู่ที่นั่น
+### 2. [ตรวจแล้ว 2026-09-01] `shoe-care-inventory` ไม่มีอยู่จริงแล้ว — SneakerCareDB คือโปรเจกต์เดียว
 
-ถ้า cron สำรอง `shoe-care-inventory` จริง แปลว่ากำลังสำรองฐานข้อมูลที่ไม่มีข้อมูลร้านอยู่เลย
-**อย่าเพิ่งแก้เอง** — ยืนยันกับเจ้าของโปรเจกต์ก่อนว่าตั้งใจให้ชี้ไปที่ไหน แล้วค่อยแก้ทั้ง env และเอกสาร
+รันแล้ว: `supabase projects list` (CLI login อยู่แล้ว) — บัญชีนี้มีโปรเจกต์เดียวคือ `SneakerCareDB`
+(ref `mdlxogfkpwejnqpzhmoy`) เท่านั้น ไม่มี `shoe-care-inventory` / `tecrcoienazmtbynuqpg` อีกต่อไป
+และ DNS ของ `tecrcoienazmtbynuqpg.supabase.co` resolve ไม่ได้แล้ว (ลบไปแล้วหรือไม่เคยมีจริง)
+
+- **`SUPABASE_DB_URL` บน VPS (`/home/ddservice/sneakercare-backup.env`) ถูกต้องอยู่แล้ว**
+  ชี้ไป `postgres.mdlxogfkpwejnqpzhmoy` ผ่าน pooler — ไม่ต้องแก้ (คำแนะนำเดิมในเอกสารรุ่นก่อนผิด
+  ตอนเขียนไว้ ได้แก้ข้อความให้ตรงแล้ว) — รัน `verify-backup.sh` บน VPS ยืนยันว่ากู้คืนได้ 77 ตาราง
+- **แต่พบบั๊กจริงที่เกิดจากความสับสนนี้:** migration `0002_schedule_low_stock_alert.sql` (apply ไปแล้ว)
+  ตั้ง pg_cron ให้ยิง Edge Function ไปที่ `tecrcoienazmtbynuqpg.supabase.co` ที่ไม่มีอยู่แล้ว
+  **แจ้งเตือนสต๊อกต่ำผ่าน Telegram หยุดทำงานเงียบๆ มา 5 วัน** (`inv_notification_log` แถวล่าสุด
+  `2026-08-27T02:00Z`, ตอนพบปัญหาคือ `2026-09-01`) — สร้างไว้ให้แล้วที่
+  `supabase/migrations/0012_fix_low_stock_alert_cron_url.sql` **แต่ยังไม่ได้ deploy Edge Function
+  หรือรัน migration นี้** เพราะเป็นการเปลี่ยนแปลง production (deploy function + แก้ cron job) ต้องขอ
+  ผู้ใช้ยืนยันก่อนตามนโยบาย ไม่ใช่ทำเองเงียบๆ ขั้นตอนที่ต้องทำ (คนหรือ agent ที่ได้รับอนุญาตแล้ว):
+  ```bash
+  supabase functions deploy low-stock-alert --project-ref mdlxogfkpwejnqpzhmoy
+  ```
+  แล้วรัน `supabase/migrations/0012_fix_low_stock_alert_cron_url.sql` ที่ SQL Editor
+  (เช็คก่อนว่า `vault.decrypted_secrets` มี `service_role_key` อยู่แล้ว — ดูคอมเมนต์ในไฟล์)
 
 ---
 
@@ -143,8 +156,12 @@ supabase test db         # ถ้าแตะ SQL/migration (ต้องมี 
 - **`legacy/` ไม่ใช่โฟลเดอร์ตายแล้ว** หน้าการเงิน/payroll ยังใช้ทุกวัน เพราะระบบใหม่ยังไม่มีหน้าพวกนี้
   แต่ `legacy/SneakerCare_GAS.js` กับ `legacy/sneakercare_gas_backend.js` **ห้ามแก้จาก repo นี้**
   ตัวจริงอยู่ในโปรเจกต์ Apps Script
-- **มี Supabase 2 โปรเจกต์ที่สับสนกันได้ง่ายมาก** — `shoe-care-inventory` (repo นี้ link อยู่) กับ
-  `SneakerCareDB` (ข้อมูลขายจริงจากระบบเดิม) เช็คให้แน่ทุกครั้งก่อนรันอะไรที่เขียนข้อมูล
+- **[แก้ความเข้าใจผิด 2026-09-01] ไม่มี Supabase 2 โปรเจกต์แล้ว** — `shoe-care-inventory`
+  (`tecrcoienazmtbynuqpg`) ที่เอกสารรุ่นก่อนเข้าใจว่า repo นี้ link อยู่ ไม่มีอยู่จริงแล้ว
+  (ยืนยันด้วย `supabase projects list`) บัญชีนี้เหลือโปรเจกต์เดียวคือ `SneakerCareDB`
+  (`mdlxogfkpwejnqpzhmoy`) — ทุกอย่างอ่าน/เขียนที่นี่ที่เดียว ไม่ต้องเช็คสองโปรเจกต์อีกต่อไป
+  แต่ `supabase/.temp/project-ref` ในเครื่อง dev ยังค้างชี้ไป ref เก่าที่ตายแล้ว (ไม่กระทบอะไร
+  เพราะไฟล์นี้ไม่ได้ commit และใช้แค่ตอน `supabase db push/pull` ซึ่งไม่มีใครควรรันอยู่แล้ว)
 - **Staff ต้องไม่เห็นต้นทุนเด็ดขาด** — query ต้องผ่าน view ที่ตัดคอลัมน์ต้นทุนเท่านั้น
   ตาราง `item_stock`/`stock_transactions` ถูก `REVOKE SELECT` ไว้แล้ว
 - **`audit_logs` ห้ามมี UPDATE/DELETE จากโค้ดแอปเด็ดขาด** แม้แต่ endpoint ที่ role เป็น admin

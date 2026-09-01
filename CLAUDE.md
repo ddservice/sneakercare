@@ -37,7 +37,17 @@ opex ไม่ครบ (ค่าเช่าห้อง + ประกัน�
   (2) มี FK จาก `inv_audit_logs`, `inv_stock_transactions`, `inv_integration_secrets` โยงไป `sc_users(user_id)`
   (3) ตาราง `inv_*` มีข้อมูลจริง (items 46 แถว, stock_transactions 108 แถว, audit_logs 393 แถว)
   **ข้อสรุป: ห้าม DROP ตาราง `inv_*` แบบสุ่มสี่สุ่มห้า หรือ CASCADE เด็ดขาด เพราะจะกระทบ `sc_users`**
-- Edge Function `low-stock-alert` deploy แล้ว และมี `pg_cron` เรียกทุก 30 นาที
+- **[แก้ไขความเข้าใจผิด 2026-09-01] มี Supabase โปรเจกต์เดียว ไม่ใช่สองโปรเจกต์อย่างที่เอกสารก่อนหน้าเข้าใจ**
+  ยืนยันด้วย `supabase projects list` (CLI login ค้างไว้อยู่แล้ว) — บัญชีนี้เหลือ `SneakerCareDB`
+  (`mdlxogfkpwejnqpzhmoy`) โปรเจกต์เดียว `shoe-care-inventory` (`tecrcoienazmtbynuqpg`) ที่เอกสาร
+  รุ่นก่อนอ้างถึงไม่มีอยู่แล้ว (DNS resolve ไม่ได้) ทุกอย่าง — แอป, VPS backup, migration ใหม่ — ต้องชี้
+  มาที่ `mdlxogfkpwejnqpzhmoy` ที่เดียว ไม่ต้องเช็คสองโปรเจกต์อีกต่อไป
+- **🔴 พบบั๊กจากความสับสนนี้: แจ้งเตือนสต๊อกต่ำผ่าน Telegram หยุดทำงานเงียบๆ มาตั้งแต่ 2026-08-27**
+  (5 วันก่อนพบ) เพราะ `pg_cron` (migration `0002`) ยิง Edge Function ไปที่โปรเจกต์เก่าที่ตายแล้ว
+  แก้ไว้ที่ `supabase/migrations/0012_fix_low_stock_alert_cron_url.sql` **แต่ยังไม่ deploy/apply**
+  เพราะต้อง deploy Edge Function ไปที่โปรเจกต์ที่ถูกต้องก่อน (`supabase functions deploy
+  low-stock-alert --project-ref mdlxogfkpwejnqpzhmoy`) แล้วค่อยรัน migration — ทั้งสองเป็นการเปลี่ยน
+  production จึงรอการยืนยันจากเจ้าของก่อนทำ ไม่ทำเองเงียบๆ
 
 ## กฎทางธุรกิจที่ต้องไม่ละเมิด (Non-negotiable business rules)
 

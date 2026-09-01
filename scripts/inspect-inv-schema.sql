@@ -10,7 +10,9 @@
 -- ⚠️ วิธีใช้ — อ่านให้ครบก่อนรัน:
 --   1. ไฟล์นี้ **อ่านอย่างเดียวทั้งไฟล์** ไม่มี DROP/DELETE/ALTER สักบรรทัด รันได้ปลอดภัย
 --   2. รันใน Supabase Dashboard → SQL Editor ของโปรเจกต์ **SneakerCareDB** เท่านั้น
---      (ไม่ใช่ shoe-care-inventory / tecrcoienazmtbynuqpg ที่ repo นี้ link อยู่)
+--      (SneakerCareDB เป็นโปรเจกต์ Supabase โปรเจกต์เดียวที่มีอยู่จริงในบัญชีนี้ — ยืนยันแล้ว 2026-09-01
+--      ด้วย `supabase projects list`; "shoe-care-inventory" / tecrcoienazmtbynuqpg ที่เอกสารเก่าอ้างถึง
+--      ถูกลบไปแล้วหรือไม่เคยมีอยู่จริง DNS ของโดเมนนั้น resolve ไม่ได้แล้ว)
 --   3. ห้าม `supabase link` ไปที่ SneakerCareDB เพื่อรันไฟล์นี้ — เปิด SQL Editor บนเว็บพอ
 --   4. อ่านผลทั้ง 6 ส่วนก่อนตัดสินใจลบอะไร โดยเฉพาะ §3 (FK) และ §5 (จำนวนแถว)
 --   5. คำสั่งลบอยู่ท้ายไฟล์แบบคอมเมนต์ไว้ — ต้องแก้ด้วยมือทีละบรรทัด ไม่มี auto-drop
