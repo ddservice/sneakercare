@@ -7,19 +7,17 @@
 
 ---
 
-## 🔴 สองเรื่องที่ต้องจัดการก่อน (ค้างอยู่ ณ 2026-09-01)
+## ✅ สรุปสิ่งที่ทำเสร็จแล้วในเซสชัน 2026-09-01 (อ่านก่อนเชื่อหัวข้อ "งานที่" ด้านล่าง — บางอันทำไปแล้ว)
 
-### 1. รัน migration 0011 ที่ SneakerCareDB
-เปิด Supabase SQL Editor ของ project `SneakerCareDB` (ref `mdlxogfkpwejnqpzhmoy`) แล้ววาง
-`supabase/migrations/0011_sc_audit_logs_and_indexes.sql` ทั้งไฟล์รันหนึ่งครั้ง
+1. **migration 0011 apply บน SneakerCareDB แล้ว** (ยืนยันโดยผู้ใช้ + เช็คตรงว่ามีตาราง/index/trigger
+   ครบผ่าน psql) — audit ฝั่งการเงินบันทึกได้แล้ว แถบเหลืองที่ `/admin/audit` ควรหายไป
+2. **pgTAP รันผ่านจริงแล้ว 15/15 ข้อ** — ดูรายละเอียดที่ "งานที่ 5" ด้านล่าง ระหว่างนั้นแก้ migration
+   0011 เพิ่มอีกรอบ (guard การสร้าง index บนตาราง sc_* ที่ยังไม่ถูก track เป็น migration) — เป็นการ
+   แก้ไฟล์ migration ที่ apply แล้ว มีเหตุผลกำกับไว้ในไฟล์และ CLAUDE.md ว่าทำไมปลอดภัย
+3. **[ยังไม่เสร็จ] ตรวจหน้าเว็บจริงบนเบราว์เซอร์** — `claude-in-chrome` extension ไม่เชื่อมต่อในทั้งสอง
+   รอบที่ลอง ต้องให้ผู้ใช้ติดตั้ง/เชื่อมต่อที่ claude.ai/chrome ก่อน ดูหัวข้อ "งานที่ 4" ด้านล่าง
 
-repo ทำแทนไม่ได้: PostgREST รัน DDL ไม่ได้ ไม่มี RPC สำหรับ SQL และ repo ห้าม `supabase link`
-ไป `SneakerCareDB` — SQL ไฟล์นี้รันจริงบน Postgres ผ่านแล้ว (`npm run test:migration`) รวมทั้งทดสอบรันซ้ำ
-
-ระหว่างที่ยังไม่รัน: การกระทำฝั่งการเงิน **ไม่ถูกบันทึกลง audit เลย** และ index ของ `sc_sales."date"` ยังไม่มี
-หน้า `/admin/audit` จะขึ้นแถบเตือนสีเหลืองบอกไว้ให้ ไม่ได้พังเงียบ
-
-### 2. [ตรวจแล้ว 2026-09-01] `shoe-care-inventory` ไม่มีอยู่จริงแล้ว — SneakerCareDB คือโปรเจกต์เดียว
+### [ตรวจแล้ว 2026-09-01] `shoe-care-inventory` ไม่มีอยู่จริงแล้ว — SneakerCareDB คือโปรเจกต์เดียว
 
 รันแล้ว: `supabase projects list` (CLI login อยู่แล้ว) — บัญชีนี้มีโปรเจกต์เดียวคือ `SneakerCareDB`
 (ref `mdlxogfkpwejnqpzhmoy`) เท่านั้น ไม่มี `shoe-care-inventory` / `tecrcoienazmtbynuqpg` อีกต่อไป
@@ -93,7 +91,11 @@ repo ทำแทนไม่ได้: PostgREST รัน DDL ไม่ได�
 
 ---
 
-## งานที่ 4 — ตรวจหน้าตาบนเบราว์เซอร์ (ยังไม่มีใครเห็น)
+## งานที่ 4 — ตรวจหน้าตาบนเบราว์เซอร์ [ยังทำไม่ได้ — extension ไม่เชื่อมต่อ 2026-09-01]
+
+ลองผ่าน `claude-in-chrome` MCP tool สองรอบ (เช้า/เย็น) ได้ข้อความเดิม: "Browser extension is not
+connected" — ต้องให้ผู้ใช้ติดตั้ง extension ที่ claude.ai/chrome, ล็อกอินบัญชีเดียวกับ Claude Code,
+รีสตาร์ต Chrome ถ้าเพิ่งติดตั้งครั้งแรก แล้วลองใหม่ หรือผู้ใช้ตรวจเองด้วยตาตามตารางด้านล่าง
 
 logic ผ่านเทสต์หมดแล้ว แต่ CSS/layout ยังไม่มีใครตรวจ ต้องดู:
 
@@ -111,19 +113,27 @@ logic ผ่านเทสต์หมดแล้ว แต่ CSS/layout ย�
 
 ---
 
-## งานที่ 5 — รัน pgTAP (ยังไม่เคยรันในรอบนี้)
+## งานที่ 5 — รัน pgTAP [เสร็จแล้ว 2026-09-01]
 
+รันจริงแล้วผ่าน Docker บน VPS (clone แยกใน `/tmp`, ลบทิ้งหลังรันเสร็จ ไม่กระทบ production หรือ
+container ของโปรเจกต์อื่นบนเครื่องเดียวกัน) — **ผ่านครบ 15/15 ข้อ ใน 3 ไฟล์** (moving_average_cost,
+approve_adjustment, staff_safe_views) เป็นครั้งแรกที่ suite นี้ถูกรันจริงตั้งแต่เขียนขึ้นมา
 
-ต้องเปิด Docker Desktop ก่อน แล้ว:
-
+ระหว่างรันเจอว่า migration `0011` (ที่ apply บน production ไปแล้ว) ทำให้ `supabase start` พังบน
+ฐานข้อมูลที่สร้างใหม่จากศูนย์ เพราะ `sc_sales`/`sc_payments`/`sc_opex` ไม่เคยถูก track ใน
+migrations เลย (ดูรายละเอียดเต็มใน CLAUDE.md) — **แก้ไฟล์ 0011 โดยตรง** ห่อการสร้าง index ด้วย
+guard เช็คว่าตารางมีอยู่ก่อน พิสูจน์แล้วว่า no-op บน production เพราะตารางมีอยู่แล้วที่นั่นเสมอ
+**ถ้าจะรันซ้ำในอนาคต (เช่นใน CI):**
 ```bash
-supabase start
+supabase start --exclude gotrue,realtime,storage-api,imgproxy,kong,mailpit,postgrest,postgres-meta,studio,edge-runtime,logflare,vector,supavisor
 supabase test db
 supabase stop --no-backup
 ```
+flag `--exclude` ตัดบริการที่ไม่จำเป็นสำหรับ pgTAP ออก (analytics/logflare มักไม่ผ่าน health check
+ในสภาพแวดล้อมที่ไม่มี env ครบ เช่น STRIPE_WEBHOOK_SECRET) เหลือแค่ Postgres ที่ pgTAP ต้องใช้จริง
 
 ครอบคลุม: ต้นทุนถัวเฉลี่ยเคลื่อนที่, `fn_approve_adjustment`, staff-safe cost views
-ถ้าชุด staff-safe fail = **ข้อมูลต้นทุนรั่วถึง Staff จริง** ไม่ใช่แค่ test แดง ให้หยุดแล้วแจ้งทันที
+ถ้าชุด staff-safe fail ในอนาคต = **ข้อมูลต้นทุนรั่วถึง Staff จริง** ไม่ใช่แค่ test แดง ให้หยุดแล้วแจ้งทันที
 
 ---
 

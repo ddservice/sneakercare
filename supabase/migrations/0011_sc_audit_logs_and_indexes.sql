@@ -100,6 +100,32 @@ create index if not exists idx_sc_audit_logs_action     on sc_audit_logs (action
 --                         (ใส่ double quote เพราะ date เป็นคำสงวนชนิดข้อมูลของ Postgres)
 -- sc_payments.sale_date : ใช้ join ยอดค้างชำระกลับไปที่ sc_sales
 -- sc_opex.month         : หน้า /expenses กรองด้วย month ('MM/YYYY') ทุกครั้ง
-create index if not exists idx_sc_sales_date         on sc_sales ("date" desc);
-create index if not exists idx_sc_payments_sale_date on sc_payments (sale_date);
-create index if not exists idx_sc_opex_month         on sc_opex (month);
+--
+-- ⚠️ [แก้ 2026-09-01 หลัง migration นี้ apply บน production ไปแล้ว] ตาราง sc_sales/sc_payments/
+-- sc_opex ไม่เคยถูกใส่ไว้ใน supabase/migrations/ เลย (ถูกสร้างบน SneakerCareDB โดยตรงนอกระบบ
+-- migration ตอนพัฒนาโมดูล POS/เงินเดือน — ดูรายละเอียดเต็มใน CLAUDE.md/HANDOFF.md) เดิม statement
+-- ด้านล่างไม่มี guard เลยจึง error "relation does not exist" ทันทีที่รันบนฐานข้อมูลใหม่ที่สร้างจาก
+-- migrations ล้วนๆ (local dev / CI ผ่าน `supabase start`) ทำให้ migration chain รันไม่จบทั้งหมด —
+-- พบตอนรัน pgTAP suite ครั้งแรกผ่าน CI-like environment ห่อด้วย DO block ให้ "ข้าม" การสร้าง index
+-- เมื่อตารางยังไม่มี แทนที่จะ error ทั้งกระบวนการ
+--
+-- ทำไมแก้ไฟล์นี้ได้ทั้งที่ apply ไปแล้ว (ปกติห้ามแก้ migration ที่ apply แล้ว): การแก้นี้พิสูจน์แล้วว่า
+-- เป็น no-op สนิทบน production — ตาราง sc_* มีอยู่แล้วที่นั่น เงื่อนไข exists() จึงเป็นจริงเสมอ และ
+-- CREATE INDEX IF NOT EXISTS ก็ยังทำงานเหมือนเดิมทุกประการ (พิสูจน์ด้วยการรันจริงผ่าน psql แล้ว
+-- index ทั้ง 3 ตัวยังอยู่ครบ) การแก้นี้เปลี่ยนพฤติกรรมเฉพาะฐานข้อมูลที่ยังไม่มีตาราง sc_* เท่านั้น
+-- (local dev / CI) supabase_migrations.schema_migrations ก็ยังคง track ว่า version นี้ apply แล้ว
+-- ไม่มีการรันซ้ำบน production ไม่ว่ากรณีใด
+do $$
+begin
+  if exists (select 1 from pg_tables where schemaname = 'public' and tablename = 'sc_sales') then
+    execute 'create index if not exists idx_sc_sales_date on sc_sales ("date" desc)';
+  end if;
+
+  if exists (select 1 from pg_tables where schemaname = 'public' and tablename = 'sc_payments') then
+    execute 'create index if not exists idx_sc_payments_sale_date on sc_payments (sale_date)';
+  end if;
+
+  if exists (select 1 from pg_tables where schemaname = 'public' and tablename = 'sc_opex') then
+    execute 'create index if not exists idx_sc_opex_month on sc_opex (month)';
+  end if;
+end $$;

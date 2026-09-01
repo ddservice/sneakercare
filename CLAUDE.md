@@ -203,7 +203,40 @@ SQL ไฟล์นี้ผ่านการรันจริงบน Postgr
 **⚠️ โค้ดที่ deploy อยู่บน production ตอนนี้ (commit `3d6449a`) รอ migration นี้อยู่แล้ว**
 เว็บใช้งานได้ปกติทุกหน้า ไม่พัง แต่ audit ฝั่งการเงินจะยังว่างจนกว่าจะรัน SQL
 
-## สถานะงานล่าสุด (2026-09-01)
+## สถานะงานล่าสุด (2026-09-01, รอบเย็น — ตรวจ pgTAP + browser)
+
+- **[แก้ไข] migration `0011` แก้แล้วให้ไม่ทำ `supabase start`/CI พังบนฐานข้อมูลใหม่** — ตรวจพบตอนรัน
+  `supabase start` จริงครั้งแรก (ผ่าน Docker บน VPS ชั่วคราว ไม่ใช่ production) ว่า migration 0011
+  error ทันทีที่สร้าง index บน `sc_sales`/`sc_payments`/`sc_opex` เพราะตารางกลุ่มนี้**ไม่เคยถูกใส่ไว้
+  ใน `supabase/migrations/` เลย** (ถูกสร้างบน SneakerCareDB โดยตรงตอนพัฒนาโมดูล POS/เงินเดือน
+  นอกระบบ migration ทั้งหมด) ทำให้ migration chain รันไม่จบบนฐานข้อมูลใหม่ (local dev / CI)
+  **นี่คือช่องว่างที่มีมาก่อนหน้านี้แล้ว** migration 0011 แค่เป็นตัวแรกที่ไปชนเข้า — แก้โดยห่อการสร้าง
+  index ทั้ง 3 ตัวด้วย `DO $$ ... exists(select 1 from pg_tables ...) $$` ให้ข้ามถ้าตารางยังไม่มี
+  **(หมายเหตุ: แก้ไฟล์ migration ที่ apply ไปแล้วบน production — ปกติห้ามทำ แต่พิสูจน์แล้วว่าเป็น no-op
+  สนิทบน production เพราะตารางมีอยู่แล้วที่นั่นเสมอ ไม่มีการรันซ้ำเพราะ CLI track ด้วย version ไม่ใช่
+  content hash)** ยืนยันด้วยการรัน `supabase start` จนสำเร็จ + `supabase test db` ผ่านครบ 15/15 ข้อ
+  ใน 3 ไฟล์ (moving_average_cost, approve_adjustment, staff_safe_views) — **นี่คือครั้งแรกที่ pgTAP
+  suite ของ repo นี้ถูกรันจริงตั้งแต่เขียนขึ้นมา**
+- **🔴 ช่องว่างที่ยังไม่ได้แก้ (ตั้งใจเก็บไว้เป็นงานแยก ไม่ทำตอนนี้เพราะใหญ่เกินขอบเขตงานที่ขอ):**
+  ตาราง `sc_employees`, `sc_opex`, `sc_payments`, `sc_sales`, `sc_settings`, `sc_users` และฟังก์ชัน
+  `sc_get_my_role()`, `inv_fn_write_audit_log()` (trigger ที่เขียน audit ของ 3 ตารางนี้ลง
+  `inv_audit_logs` อยู่แล้วตั้งแต่ก่อนเซสชันนี้ — ดูหมายเหตุด้านล่าง) **ไม่ถูก track ใน migrations เลย**
+  ผลคือ: กู้คืนขึ้นโปรเจกต์ Supabase ใหม่จากศูนย์โดยใช้แค่ `supabase/migrations/` จะไม่มีโมดูล POS/
+  เงินเดือน/ยอดขายเลย ต้องมี `pg_dump --schema-only` ของกลุ่มตารางนี้แล้วเขียนเป็น migration ใหม่
+  ถึงจะสมบูรณ์ — งานนี้ไม่ได้ทำตอนนี้ เพราะขอบเขตที่ขอคือ "รัน pgTAP ให้ได้" ซึ่งทำสำเร็จแล้วโดยไม่ต้อง
+  แก้ช่องว่างนี้ (pgTAP ไม่ได้ทดสอบตาราง sc_*) แต่ใครจะกู้คืนระบบทั้งชุดจากศูนย์ต้องรู้เรื่องนี้ไว้ก่อน
+- **[แก้ไขความเข้าใจ] audit ของ sc_sales/sc_opex/sc_payments ไม่ได้ "ไม่เคยทำงานเลย" อย่างที่เคยเข้าใจ
+  ตอนเช้า** — พบจาก `pg_dump --schema-only` ว่ามี trigger `sc_trg_audit_*` เขียนผ่าน
+  `inv_fn_write_audit_log()` ลง `inv_audit_logs` (ledger เดียวกับฝั่งคลังสินค้า) อยู่แล้วทุกครั้งที่
+  INSERT/UPDATE/DELETE บนตารางนี้ — เห็นแถวจริงล่าสุดวันที่ 31 ส.ค. ที่ผ่านมา สิ่งที่พังจริงคือแค่ชั้น
+  แอป (`lib/audit.ts` เดิม) ที่พยายามเขียน log แบบมี actor_name/detail ที่มนุษย์อ่านง่าย ไม่ใช่ระบบ
+  audit ทั้งระบบ — `sc_audit_logs` ที่สร้างใน migration 0011 ยังมีประโยชน์ (เก็บ actor/รายละเอียดที่
+  เข้าใจง่ายกว่า raw before/after JSON) แต่ไม่ใช่ audit trail เดียวที่มีอยู่อย่างที่เข้าใจผิดไปตอนแรก
+- **[ยังทำไม่ได้] ตรวจหน้าเว็บจริงบนเบราว์เซอร์** — `claude-in-chrome` extension ไม่ได้เชื่อมต่อในเซสชันนี้
+  (`tabs_context_mcp` ตอบ "Browser extension is not connected" ทั้งตอนเช้าและรอบนี้) ต้องให้ผู้ใช้ติดตั้ง/
+  เชื่อมต่อ extension ที่ claude.ai/chrome แล้วลองใหม่ หรือตรวจเองด้วยตา
+
+## สถานะงานล่าสุด (2026-09-01, รอบเช้า)
 
 0. **[Deploy แล้ว] production เป็น commit `3d6449a`** — push ขึ้น `origin/master` และ deploy ผ่าน
     `npm run deploy` เรียบร้อย · PM2 `sneakercare` (id 13) status `online`, unstable restarts = 0
