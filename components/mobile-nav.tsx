@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { usePathname } from "next/navigation";
 import { Menu, X, Footprints } from "lucide-react";
 import { NavItem } from "@/components/main-nav";
@@ -26,7 +27,14 @@ export function MobileNav({
   displayName,
 }: MobileNavProps) {
   const [open, setOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
   const pathname = usePathname();
+
+  // Portal target must be read after mount — `document` doesn't exist during SSR,
+  // and rendering the portal before mount would mismatch hydration.
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   // Close drawer on route change
   useEffect(() => {
@@ -49,6 +57,95 @@ export function MobileNav({
 
   const close = useCallback(() => setOpen(false), []);
 
+  // Backdrop + drawer render into document.body via a portal, not inline in the header's JSX.
+  //
+  // ทำไม: <header> ของ layout มี backdrop-blur-sm (backdrop-filter) ซึ่งตาม CSS spec จะสร้าง
+  // containing block ใหม่ให้ลูกที่เป็น position:fixed ทุกตัว — ถ้า drawer นี้ยังเป็นลูกของ
+  // header อยู่ใน DOM, "fixed inset-y-0" ของมันจะไปยึดกับกรอบของ <header> เอง (แค่สูงเท่า
+  // แถบเมนูบนสุด) แทนที่จะยึดกับทั้งหน้าจอ ทำให้ drawer เตี้ยจนเห็นแค่หัวข้อ ไม่มีรายการเมนู
+  // โผล่มาให้กด (บั๊กจริงที่เจอบน iPhone — ดู CLAUDE.md 2026-09-01) ใช้ portal ให้หลุดออกจาก
+  // DOM ของ header ไปแปะที่ <body> ตรงๆ กัน bug นี้แน่นอนไม่ว่า ancestor จะมี filter/transform
+  // อะไรอีกในอนาคต
+  const drawer = mounted
+    ? createPortal(
+        <>
+          {/* ── Backdrop ── */}
+          {open && (
+            <div
+              className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm lg:hidden"
+              onClick={close}
+              aria-hidden="true"
+            />
+          )}
+
+          {/* ── Drawer ── */}
+          <aside
+            role="dialog"
+            aria-modal="true"
+            aria-label="เมนูหลัก"
+            className={`fixed inset-y-0 left-0 z-50 flex w-72 flex-col bg-white dark:bg-slate-900 shadow-2xl border-r border-slate-200 dark:border-slate-800 transition-transform duration-300 ease-in-out lg:hidden ${
+              open ? "translate-x-0" : "-translate-x-full"
+            }`}
+          >
+            {/* Drawer header */}
+            <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 px-4 py-3.5">
+              <div className="flex items-center gap-3">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-400 to-emerald-600 text-white shadow-sm">
+                  <Footprints className="h-5 w-5" />
+                </div>
+                <div>
+                  <div className="text-sm font-bold text-slate-900 dark:text-white leading-tight">
+                    {brandName}
+                  </div>
+                  {(roleBadge || displayName) && (
+                    <div className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5">
+                      {roleBadge && (
+                        <span className="font-semibold text-emerald-600 dark:text-emerald-400">{roleBadge}</span>
+                      )}
+                      {roleBadge && displayName && <span className="mx-1">·</span>}
+                      {displayName}
+                    </div>
+                  )}
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={close}
+                aria-label="ปิดเมนู"
+                className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            {/* Nav items */}
+            <nav
+              aria-label="Mobile navigation"
+              className="flex-1 overflow-y-auto py-3 px-3 space-y-0.5"
+            >
+              {items.map((item) => (
+                <NavItem
+                  key={item.href}
+                  item={item}
+                  alertCount={alerts[item.key] ?? 0}
+                  onNavClick={close}
+                  variant="vertical"
+                />
+              ))}
+            </nav>
+
+            {/* Drawer footer */}
+            <div className="border-t border-slate-200 dark:border-slate-800 px-4 py-3">
+              <p className="text-[11px] text-slate-400 dark:text-slate-500 text-center">
+                Sneaker Care Management System
+              </p>
+            </div>
+          </aside>
+        </>,
+        document.body
+      )
+    : null;
+
   return (
     <>
       {/* ── Hamburger button (visible only on < lg) ── */}
@@ -62,78 +159,7 @@ export function MobileNav({
         <Menu className="h-5 w-5" />
       </button>
 
-      {/* ── Backdrop ── */}
-      {open && (
-        <div
-          className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm lg:hidden"
-          onClick={close}
-          aria-hidden="true"
-        />
-      )}
-
-      {/* ── Drawer ── */}
-      <aside
-        role="dialog"
-        aria-modal="true"
-        aria-label="เมนูหลัก"
-        className={`fixed inset-y-0 left-0 z-50 flex w-72 flex-col bg-white dark:bg-slate-900 shadow-2xl border-r border-slate-200 dark:border-slate-800 transition-transform duration-300 ease-in-out lg:hidden ${
-          open ? "translate-x-0" : "-translate-x-full"
-        }`}
-      >
-        {/* Drawer header */}
-        <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 px-4 py-3.5">
-          <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-400 to-emerald-600 text-white shadow-sm">
-              <Footprints className="h-5 w-5" />
-            </div>
-            <div>
-              <div className="text-sm font-bold text-slate-900 dark:text-white leading-tight">
-                {brandName}
-              </div>
-              {(roleBadge || displayName) && (
-                <div className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5">
-                  {roleBadge && (
-                    <span className="font-semibold text-emerald-600 dark:text-emerald-400">{roleBadge}</span>
-                  )}
-                  {roleBadge && displayName && <span className="mx-1">·</span>}
-                  {displayName}
-                </div>
-              )}
-            </div>
-          </div>
-          <button
-            type="button"
-            onClick={close}
-            aria-label="ปิดเมนู"
-            className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
-          >
-            <X className="h-4 w-4" />
-          </button>
-        </div>
-
-        {/* Nav items */}
-        <nav
-          aria-label="Mobile navigation"
-          className="flex-1 overflow-y-auto py-3 px-3 space-y-0.5"
-        >
-          {items.map((item) => (
-            <NavItem
-              key={item.href}
-              item={item}
-              alertCount={alerts[item.key] ?? 0}
-              onNavClick={close}
-              variant="vertical"
-            />
-          ))}
-        </nav>
-
-        {/* Drawer footer */}
-        <div className="border-t border-slate-200 dark:border-slate-800 px-4 py-3">
-          <p className="text-[11px] text-slate-400 dark:text-slate-500 text-center">
-            Sneaker Care Management System
-          </p>
-        </div>
-      </aside>
+      {drawer}
     </>
   );
 }

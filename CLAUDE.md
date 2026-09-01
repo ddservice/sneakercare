@@ -203,6 +203,34 @@ SQL ไฟล์นี้ผ่านการรันจริงบน Postgr
 **⚠️ โค้ดที่ deploy อยู่บน production ตอนนี้ (commit `3d6449a`) รอ migration นี้อยู่แล้ว**
 เว็บใช้งานได้ปกติทุกหน้า ไม่พัง แต่ audit ฝั่งการเงินจะยังว่างจนกว่าจะรัน SQL
 
+## สถานะงานล่าสุด (2026-09-01, ค่ำ — แก้เมนูมือถือใช้งานไม่ได้จริงบน iPhone)
+
+- **[แก้บั๊กจริง] เมนูแฮมเบอร์เกอร์บนมือถือเปิดแล้วไม่มีเมนูให้กด** — ผู้ใช้ส่งภาพจาก iPhone 17 จริง
+  มาให้ เห็นแค่หัว drawer (โลโก้ + ชื่อ + ปุ่มปิด) แต่รายการเมนูไม่โผล่ ทั้งที่พนักงานส่วนใหญ่ใช้มือถือ
+  ทำงานเป็นหลัก **สาเหตุ:** `<header>` ใน `app/(app)/layout.tsx` มี `backdrop-blur-sm`
+  (backdrop-filter) ซึ่งตาม CSS spec จะสร้าง **containing block ใหม่ให้ลูกที่เป็น
+  `position:fixed` ทุกตัว** — `MobileNav`'s drawer (`<aside className="fixed inset-y-0 ...">`)
+  เดิมเป็นลูกของ header (nested อยู่ในแถวโลโก้) จึงไปยึด `inset-y-0` กับกรอบของ header เอง
+  (สูงแค่แถบเมนูบนสุด ~70-90px) แทนที่จะยึดกับทั้งหน้าจอ — เห็นแค่หัว drawer เพราะพื้นที่ที่เหลือให้
+  รายการเมนูแทบไม่มีเลย นี่คือกับดัก CSS ที่รู้จักกันดี (filter/backdrop-filter/transform/
+  will-change:transform บน ancestor ใดๆ ก็สร้าง containing block แบบนี้ได้เหมือนกัน)
+  **แก้โดยใช้ `createPortal` ห่อ backdrop+drawer ไปแปะที่ `document.body` ตรงๆ**
+  (`components/mobile-nav.tsx`) ให้หลุดออกจาก DOM ของ header ไปเลย กัน bug คลาสนี้ได้แน่นอน
+  ไม่ว่า ancestor ไหนจะมี filter/transform อะไรเพิ่มในอนาคต — ยืนยันด้วย `npm run build` ผ่านปกติ
+  (ยังตรวจบนมือถือจริงไม่ได้เพราะ browser extension ไม่เชื่อมต่อ ต้องให้ผู้ใช้ลองซ้ำหลัง deploy)
+- **⚠️ รูปแบบเดียวกันมีอยู่ในหน้าอื่นด้วย (ยังไม่ตรวจ ไม่ใช่ตัวที่ผู้ใช้รายงาน)** — modal
+  `fixed inset-0 ... backdrop-blur-xs` ใน `expenses-client.tsx`, `inventory-client.tsx`,
+  `invoicing-client.tsx`, `daily-entry-client.tsx`, `roster-client.tsx`,
+  `tax-filing-client.tsx` เป็นลูกของ `<main>` (ไม่ใช่ `<header>` ที่ blur) จึงไม่ชนกับ containing
+  block ของ header — แต่ถ้าวันหลังเพิ่ม `backdrop-blur`/`transform`/`will-change` ให้ ancestor
+  ตัวไหนของ modal พวกนี้ ให้นึกถึงบั๊กนี้ก่อน (`components/ui/dialog.tsx` ปลอดภัยอยู่แล้วเพราะใช้
+  Radix `Portal` ทำแบบเดียวกันโดยธรรมชาติ)
+- **🔒 พบ secret จริงฝังอยู่ใน repo (แจ้งผู้ใช้แล้ว รอการยืนยันก่อนแก้):** `scripts/test-login.mjs`
+  มี Supabase `service_role` key แบบข้อความล้วน + รหัสผ่าน admin ฝังตรงในโค้ด (อยู่ใน git history
+  บน `master` มาตั้งแต่ commit `70f4472`) key นี้ข้าม RLS ได้ทั้งหมด — **ยังไม่ได้แก้/rotate**
+  เพราะเป็นการเปลี่ยนแปลง credential ของ production ต้องรอผู้ใช้ยืนยันก่อน (rotate key จะกระทบ
+  ทุกที่ที่ใช้ `SUPABASE_SERVICE_ROLE_KEY` อยู่ ต้องอัปเดตพร้อมกันทั้ง `.env.local` และ VPS)
+
 ## สถานะงานล่าสุด (2026-09-01, รอบเย็น — ตรวจ pgTAP + browser)
 
 - **[แก้ไข] migration `0011` แก้แล้วให้ไม่ทำ `supabase start`/CI พังบนฐานข้อมูลใหม่** — ตรวจพบตอนรัน
