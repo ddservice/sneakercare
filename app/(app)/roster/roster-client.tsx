@@ -157,9 +157,12 @@ const MONTH_NAMES_THAI = [
 ];
 
 export function RosterClient() {
-  // Start from September 2026 (Month index 8 in 0-indexed JS Date)
-  const [currentYear, setCurrentYear] = useState<number>(2026);
-  const [currentMonth, setCurrentMonth] = useState<number>(8); // 8 = September
+  // ⚠️ (แก้ 2026-09-02) เดิม hardcode เริ่มที่ "กันยายน 2569" ตรงๆ (currentYear=2026, currentMonth=8)
+  // ตอนที่แก้ตรงกับเดือนปัจจุบันพอดีเลยยังไม่มีใครสังเกตว่าผิด แต่พอเข้าเดือนตุลาคมจะกลายเป็นบั๊ก
+  // เดียวกับที่เจอใน /expenses และ /statistics ทันที (ค้างที่กันยายนตลอดกาล) แก้ให้เริ่มที่เดือน
+  // ปัจจุบันจริงเสมอ
+  const [currentYear, setCurrentYear] = useState<number>(() => new Date().getFullYear());
+  const [currentMonth, setCurrentMonth] = useState<number>(() => new Date().getMonth());
   const [selectedDayDetail, setSelectedDayDetail] = useState<{
     dateStr: string;
     dayOfWeek: number;

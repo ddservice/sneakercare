@@ -28,18 +28,28 @@ export function StatisticsClient({ initialData }: { initialData: AnalyticsDashbo
   const [activeTab, setActiveTab] = useState<"sales" | "inventory">("sales");
 
   // Filter daily records based on selectedRange
-  const nowStr = new Date().toISOString().slice(0, 10);
+  //
+  // ⚠️ (แก้ 2026-09-02) เดิม "เดือนนี้"/"เดือนที่แล้ว"/"ปีนี้" hardcode เป็น "2026-08"/"2026-07"/
+  // "2026" ตรงๆ — บั๊กคลาสเดียวกับที่เจอในหน้า /expenses (ดู CLAUDE.md) พอเดือนเปลี่ยนไปเรื่อยๆ
+  // การ์ดสรุปยอดขายจะค้างแสดงข้อมูลสิงหาคมตลอดกาล ไม่ขยับตามวันที่จริงเลย แก้ให้คำนวณจากวันที่จริง
+  // (ตัด || r.date.startsWith("2026-08-27") ที่เป็น fallback วันเดียวออกด้วย — เขียนไว้ตอนทดสอบ
+  // วันที่ 27 ส.ค. ครั้งหนึ่ง ไม่มีประโยชน์อะไรอีกแล้วนอกจากทำให้งง)
+  const now = new Date();
+  const nowStr = now.toISOString().slice(0, 10);
   const yesterdayStr = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
   const sevenDaysAgoStr = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10);
+  const thisMonthPrefix = nowStr.slice(0, 7); // "YYYY-MM"
+  const lastMonthPrefix = new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString().slice(0, 7);
+  const thisYearPrefix = nowStr.slice(0, 4); // "YYYY"
 
   const filteredDaily = initialData.dailyRecords.filter((r) => {
     if (selectedRange === "all") return true;
-    if (selectedRange === "today") return r.date === nowStr || r.date.startsWith("2026-08-27");
-    if (selectedRange === "yesterday") return r.date === yesterdayStr || r.date.startsWith("2026-08-26");
-    if (selectedRange === "this_week") return r.date >= sevenDaysAgoStr || r.date.startsWith("2026-08");
-    if (selectedRange === "this_month") return r.date.startsWith("2026-08");
-    if (selectedRange === "last_month") return r.date.startsWith("2026-07");
-    if (selectedRange === "this_year") return r.date.startsWith("2026");
+    if (selectedRange === "today") return r.date === nowStr;
+    if (selectedRange === "yesterday") return r.date === yesterdayStr;
+    if (selectedRange === "this_week") return r.date >= sevenDaysAgoStr;
+    if (selectedRange === "this_month") return r.date.startsWith(thisMonthPrefix);
+    if (selectedRange === "last_month") return r.date.startsWith(lastMonthPrefix);
+    if (selectedRange === "this_year") return r.date.startsWith(thisYearPrefix);
     if (selectedRange.includes("-")) return r.date.startsWith(selectedRange);
     return true;
   });

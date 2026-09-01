@@ -46,10 +46,25 @@ export function DashboardClient({
   lowStock: any[];
 }) {
   // Period state
+  //
+  // ⚠️ (แก้ 2026-09-02) เดิม filterDate/customStartDate/customEndDate hardcode เป็นวันที่ตายตัว
+  // ในเดือนสิงหาคม — บั๊กคลาสเดียวกับที่เจอในหน้า /expenses และ /statistics (ดู CLAUDE.md) หน้า
+  // แดชบอร์ดเป็นหน้าแรกที่พนักงานเห็นทุกครั้งที่ล็อกอิน ถ้าค้างที่เดือนสิงหาคมตลอดกาลจะเห็นตัวเลข
+  // ผิดทันทีโดยไม่รู้ตัว ต้องกดเปลี่ยนวันที่เองทุกครั้งถึงจะเห็นข้อมูลจริง แก้ให้เริ่มที่วันนี้/เดือนนี้เสมอ
+  // (คำนวณจากเวลาเครื่องผู้ใช้ — คอมโพเนนต์นี้เป็น client component รันในเบราว์เซอร์จริง)
+  const toTodayLocal = () => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  };
+  const toFirstOfMonthLocal = () => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
+  };
+
   const [period, setPeriod] = useState<DashboardPeriod>("month");
-  const [filterDate, setFilterDate] = useState("2026-08-31");
-  const [customStartDate, setCustomStartDate] = useState("2026-08-01");
-  const [customEndDate, setCustomEndDate] = useState("2026-08-31");
+  const [filterDate, setFilterDate] = useState(toTodayLocal);
+  const [customStartDate, setCustomStartDate] = useState(toFirstOfMonthLocal);
+  const [customEndDate, setCustomEndDate] = useState(toTodayLocal);
 
   // Map AR Payments by sale_date
   const paymentsByDate = useMemo(() => {
