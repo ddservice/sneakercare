@@ -373,9 +373,9 @@ export async function fetchAllExpensesData(timeRange: string = "this_month"): Pr
     } else if (r.key?.startsWith("empd_ot_")) {
       p.ot = amt;
     } else if (r.key?.startsWith("empd_comm_pct_")) {
+      // commission/wht คำนวณจริงในรอบ "Calculate Net Pay for all staff" ด้านล่างเท่านั้น
+      // (สูตรเดียวกัน คำนวณซ้ำสองรอบไม่มีประโยชน์ — เอาออกกันงงว่าใครชนะ)
       p.commPct = amt;
-      p.commission = Math.round((totalMonthlySales * amt) / 100);
-      p.wht = Math.round(p.commission * 0.03);
     } else if (r.key?.startsWith("empd_wht_")) {
       p.wht = amt;
     } else if (r.key?.startsWith("empd_deduct_total_")) {
@@ -402,8 +402,10 @@ export async function fetchAllExpensesData(timeRange: string = "this_month"): Pr
             p.baseSalary = (parsed.dailyWage || 350) * (parsed.daysWorked || 8);
           }
         }
-      } catch {
-        // ignore
+      } catch (err) {
+        // ข้ามแถวนี้แถวเดียว ไม่ให้ทั้งหน้าพัง แต่ต้อง log ไว้ ไม่งั้นข้อมูลโปรไฟล์พัง
+        // (เช่น เลขบัญชีธนาคารหาย) จะเงียบเหมือนที่เคยเกิดกับ audit log มาก่อน
+        console.error(`[expenses] parse empd_profile JSON ล้มเหลว (key=${r.key}):`, err);
       }
     }
   });
@@ -452,8 +454,10 @@ export async function fetchAllExpensesData(timeRange: string = "this_month"): Pr
             });
           });
         }
-      } catch {
-        // ignore
+      } catch (err) {
+        // ข้ามแถวนี้แถวเดียว ไม่ให้ทั้งหน้าพัง แต่ log ไว้เพราะแปลว่ารายจ่ายบางรายการหายไปจาก
+        // ยอดรวมเงียบๆ (id ของแถวช่วยตามไปดูใน sc_opex ได้)
+        console.error(`[expenses] parse misc_items_json ล้มเหลว (row id=${r.id}):`, err);
       }
     });
 

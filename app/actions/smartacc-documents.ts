@@ -84,8 +84,9 @@ export async function lookupDbdCompany(taxIdOrKeyword: string): Promise<DbdCompa
         source: "database",
       };
     }
-  } catch {
-    // ignore
+  } catch (err) {
+    // ล้มเหลวได้ (เช่น extension_layer ยังไม่พร้อม) — ปล่อยให้ไปลองหาต่อในชั้นถัดไป แต่ log ไว้
+    console.error("[lookupDbdCompany] ค้นใน ext_contacts ล้มเหลว:", err);
   }
 
   // 2. Comprehensive Thai Juristic Business Registry Dictionary
@@ -209,8 +210,10 @@ export async function lookupDbdCompany(taxIdOrKeyword: string): Promise<DbdCompa
         };
       }
     }
-  } catch {
-    // ignore
+  } catch (err) {
+    // ล้มเหลวได้ (เช่น dbd_company_registry เป็น JSON ที่ parse ไม่ออก) — ปล่อยให้ไปลองหาต่อใน
+    // รายชื่อ built-in แต่ log ไว้เผื่อข้อมูลใน sc_settings เสียจริง
+    console.error("[lookupDbdCompany] อ่าน dbd_company_registry ล้มเหลว:", err);
   }
 
   // 4. Check matching in built-in Thai Registry
@@ -396,8 +399,10 @@ export async function createSmartAccDocument(payload: CreateDocumentPayload) {
         value: JSON.stringify(currentRegistry.slice(0, 100)),
         updated_at: new Date().toISOString(),
       });
-    } catch {
-      // ignore
+    } catch (err) {
+      // เอกสารหลักสร้างสำเร็จไปแล้ว แค่การ "จำลูกค้าไว้ค้นครั้งถัดไป" ล้มเหลว — ไม่ทำให้ทั้ง
+      // ฟังก์ชันพัง แต่ log ไว้ ไม่งั้นจะดูเหมือนฟีเจอร์จำลูกค้าใช้งานได้ทั้งที่จริงๆ เขียนไม่ลง
+      console.error("[createDocument] บันทึกลูกค้าลง dbd_company_registry ล้มเหลว:", err);
     }
   }
 

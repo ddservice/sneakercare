@@ -104,7 +104,10 @@ export async function login(_prevState: LoginState, formData: FormData): Promise
       }
 
       email = userData.user.email;
-    } catch {
+    } catch (err) {
+      // ผู้ใช้เห็นแค่ข้อความทั่วไป (ไม่บอกรายละเอียดเพื่อความปลอดภัย) แต่ log ไว้ฝั่งเซิร์ฟเวอร์
+      // เพราะ error ตรงนี้อาจเป็นบั๊กจริง (เช่น service_role key ผิด) ไม่ใช่แค่ "หา user ไม่เจอ"
+      console.error("[login] ตรวจสอบชื่อผู้ใช้ล้มเหลว:", err);
       return { error: "เกิดข้อผิดพลาดในการตรวจสอบชื่อผู้ใช้" };
     }
   }
