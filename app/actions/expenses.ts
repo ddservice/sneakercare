@@ -506,9 +506,7 @@ export async function saveStaffProfileInfo(payload: {
       .eq("id", existingEmp.id);
   }
 
-  revalidatePath("/expenses");
-  revalidatePath("/roster");
-  revalidatePath("/dashboard");
+  revalidatePath("/", "layout");
   return { success: true };
 }
 
@@ -575,9 +573,7 @@ export async function createStaffMember(payload: {
     last_updated: new Date().toISOString(),
   });
 
-  revalidatePath("/expenses");
-  revalidatePath("/roster");
-  revalidatePath("/dashboard");
+  revalidatePath("/", "layout");
   return { success: true };
 }
 
@@ -633,8 +629,7 @@ export async function saveStaffPayrollAdjustment(payload: {
     });
   }
 
-  revalidatePath("/expenses");
-  revalidatePath("/dashboard");
+  revalidatePath("/", "layout");
   return { success: true };
 }
 
@@ -672,8 +667,7 @@ export async function addExpense(
     return { error: `ไม่สามารถบันทึกได้: ${error.message}` };
   }
 
-  revalidatePath("/expenses");
-  revalidatePath("/dashboard");
+  revalidatePath("/", "layout");
   return { success: true };
 }
 
@@ -689,7 +683,7 @@ export async function deleteExpense(id: string | number) {
     throw new Error(`ไม่สามารถลบรายการได้: ${error.message}`);
   }
 
-  revalidatePath("/expenses");
-  revalidatePath("/dashboard");
+  revalidatePath("/", "layout");
   return { success: true };
 }
+

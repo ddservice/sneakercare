@@ -100,10 +100,32 @@ export async function fetchAnalyticsData(targetMonth: string = "all"): Promise<A
   await requireProfile();
   const supabase = createAdminClient();
 
-  // 1. Fetch all sales from sc_sales
-  const { data: salesRows } = await (supabase.from("sc_sales" as any) as any)
-    .select("*")
+  // 1. Fetch sales from sc_sales — only needed columns, with date range limit
+  // "all" mode: rolling 13-month window (12 months history + current month)
+  // Specific month: filter exact month range only
+  const NEEDED_COLS = "id, date, size_s, size_m, size_l, size_xl, cash_amount, transfer_amount, discount, grand_total, total_revenue, recorded_by, extra_items";
+
+  let salesQuery = (supabase.from("sc_sales" as any) as any)
+    .select(NEEDED_COLS)
     .order("date", { ascending: false });
+
+  if (targetMonth !== "all") {
+    // Specific month: e.g. "2026-08" → filter 2026-08-01 to 2026-08-31
+    const [yr, mo] = targetMonth.split("-").map(Number);
+    const monthStart = `${targetMonth}-01`;
+    const lastDay = new Date(yr, mo, 0).getDate();
+    const monthEnd = `${targetMonth}-${String(lastDay).padStart(2, "0")}`;
+    salesQuery = salesQuery.gte("date", monthStart).lte("date", monthEnd);
+  } else {
+    // "all" mode: last 13 months to avoid unbounded scans
+    const cutoff = new Date();
+    cutoff.setMonth(cutoff.getMonth() - 12);
+    cutoff.setDate(1);
+    salesQuery = salesQuery.gte("date", cutoff.toISOString().slice(0, 10));
+  }
+
+  const { data: salesRows } = await salesQuery;
+
 
   // 2. Fetch inventory items and stock
   const [itemsRes, stockRes] = await Promise.all([

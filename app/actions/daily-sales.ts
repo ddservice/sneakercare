@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireProfile } from "@/lib/auth";
+import { logAudit } from "@/lib/audit";
 
 export type DailySaleInput = {
   id?: number;
@@ -130,17 +131,13 @@ export async function saveDailySale(data: DailySaleInput) {
     return { success: false, error: error.message };
   }
 
-  revalidatePath("/dashboard");
-  revalidatePath("/statistics");
-  revalidatePath("/reports");
-  revalidatePath("/pos");
-  revalidatePath("/pos/daily-entry");
+  revalidatePath("/", "layout");
 
   return { success: true };
 }
 
 export async function deleteDailySale(id: number) {
-  await requireProfile();
+  const profile = await requireProfile();
   const supabase = createAdminClient();
 
   const { error } = await (supabase.from("sc_sales" as any) as any)
@@ -151,11 +148,16 @@ export async function deleteDailySale(id: number) {
     return { success: false, error: error.message };
   }
 
-  revalidatePath("/dashboard");
-  revalidatePath("/statistics");
-  revalidatePath("/reports");
-  revalidatePath("/pos");
-  revalidatePath("/pos/daily-entry");
+  await logAudit({
+    action: "DELETE",
+    entity: "daily_sale",
+    entity_id: id,
+    actor_id: profile.id,
+    actor_name: profile.display_name,
+    detail: { sale_id: id },
+  });
+
+  revalidatePath("/", "layout");
 
   return { success: true };
 }
@@ -340,11 +342,7 @@ export async function deleteArPayment(paymentId: number, saleDate: string) {
       .eq("id", sale.id);
   }
 
-  revalidatePath("/dashboard");
-  revalidatePath("/statistics");
-  revalidatePath("/reports");
-  revalidatePath("/pos");
-  revalidatePath("/pos/daily-entry");
+  revalidatePath("/", "layout");
 
   return { success: true };
 }

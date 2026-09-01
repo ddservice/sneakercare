@@ -8,6 +8,7 @@ import { BranchPicker } from "@/components/branch-picker";
 import { MainNav } from "@/components/main-nav";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Footprints, LogOut, Shield } from "lucide-react";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const profile = await requireProfile();
@@ -21,6 +22,20 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   }
 
   const mainNav = mainNavItemsFor(profile.role);
+
+  // ── Low stock alert count for nav badge ──
+  let lowStockCount = 0;
+  try {
+    const adminDb = createAdminClient();
+    let q = (adminDb.from("item_stock" as any) as any).select("id, current_qty, min_stock_level", { count: "exact", head: false });
+    if (selectedBranchId) q = q.eq("branch_id", selectedBranchId);
+    const { data: stockRows } = await q;
+    lowStockCount = (stockRows || []).filter((s: any) =>
+      Number(s.current_qty ?? 0) <= Number(s.min_stock_level ?? 0)
+    ).length;
+  } catch {
+    // non-fatal — badge just won't show
+  }
 
   return (
     <div className="flex min-h-svh flex-col bg-slate-50 text-slate-900 antialiased dark:bg-slate-950 dark:text-slate-100">
@@ -80,7 +95,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         {/* Navigation Tabs Bar */}
         <div className="border-t border-slate-100 bg-slate-50/50 px-4 py-2 sm:px-6 dark:border-slate-800/60 dark:bg-slate-900/50">
           <div className="mx-auto max-w-7xl">
-            <MainNav items={mainNav} />
+            <MainNav items={mainNav} alerts={{ inventory: lowStockCount }} />
           </div>
         </div>
       </header>

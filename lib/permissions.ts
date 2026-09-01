@@ -17,7 +17,6 @@ export type ModuleKey =
   | "inventory"
   | "expenses"
   | "roster"
-  | "expenses-ocr"
   | "tax-filing"
   | "statistics"
   | "stock-out"
@@ -91,14 +90,6 @@ export const APP_MODULES: readonly AppModule[] = [
     isMainTab: true,
     viewRoles: ["admin", "co_admin", "staff"],
     writeRoles: ["admin", "co_admin"],
-  },
-  {
-    key: "expenses-ocr",
-    href: "/expenses-ocr",
-    label: "สแกนใบเสร็จ & สลิป",
-    isMainTab: true,
-    viewRoles: ["admin", "co_admin", "staff"],
-    writeRoles: ["admin", "co_admin", "staff"],
   },
   {
     key: "tax-filing",
