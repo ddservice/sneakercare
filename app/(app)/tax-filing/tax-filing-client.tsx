@@ -25,9 +25,12 @@ import {
 export function TaxFilingClient({
   initialSalesDocs,
   initialExpenses,
+  shopProfile,
 }: {
   initialSalesDocs: any[];
   initialExpenses: any[];
+  /** ข้อมูลบริษัทจริงจากหน้า /settings — ใช้พิมพ์หัวเอกสารทุกจุดในหน้านี้ ห้าม hardcode ทับ */
+  shopProfile?: { name: string; address: string; taxId: string; phone: string };
 }) {
   const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().slice(0, 7));
   const [activeTab, setActiveTab] = useState<"efiling" | "tawi50" | "etax_xml">("efiling");
@@ -118,10 +121,10 @@ export function TaxFilingClient({
     docTypeCode: "388",
     issueDate: new Date(),
     seller: {
-      taxId: "0105558000000",
+      taxId: shopProfile?.taxId || "-",
       branchCode: "00000",
-      name: "บริษัท สนีกเกอร์ แคร์ อินเตอร์เนชั่นแนล จำกัด",
-      address: "123/45 ถนนสุขุมวิท กรุงเทพมหานคร",
+      name: shopProfile?.name || "ยังไม่ได้ตั้งค่าชื่อกิจการ",
+      address: shopProfile?.address || "-",
     },
     buyer: {
       taxId: filteredSales[0]?.ext_contacts?.tax_id || "0505562000000",
@@ -456,12 +459,12 @@ export function TaxFilingClient({
               {/* Payer Information */}
               <div className="text-xs border border-slate-300 p-3 rounded-lg bg-slate-50/50 space-y-1">
                 <div className="font-bold text-slate-800">1. ผู้มีหน้าที่หักภาษี ณ ที่จ่าย (ผู้จ่ายเงิน):</div>
-                <div className="font-bold text-sm">บริษัท รวยรับทรัพย์168 จำกัด (สำนักงานใหญ่)</div>
+                <div className="font-bold text-sm">{shopProfile?.name || "ยังไม่ได้ตั้งค่าชื่อกิจการ — ไปที่ /settings"}</div>
                 <div className="flex justify-between text-slate-600">
-                  <span>เลขประจำตัวผู้เสียภาษีอากร: <strong className="font-mono text-slate-900">0-5035-67004-98-1</strong></span>
+                  <span>เลขประจำตัวผู้เสียภาษีอากร: <strong className="font-mono text-slate-900">{shopProfile?.taxId || "-"}</strong></span>
                   <span>สาขาที่: 00000</span>
                 </div>
-                <div className="text-slate-600">ที่อยู่: 552/4 ถ.เชียงใหม่-ลำพูน ต.หนองหอย อ.เมืองเชียงใหม่ จ.เชียงใหม่ 50000</div>
+                <div className="text-slate-600">ที่อยู่: {shopProfile?.address || "-"}</div>
               </div>
 
               {/* Payee Information */}
@@ -516,7 +519,7 @@ export function TaxFilingClient({
               <div className="grid grid-cols-2 gap-8 pt-6 text-xs text-center">
                 <div className="border-t border-slate-400 pt-2 space-y-1">
                   <div>ลงชื่อ .............................................................. ผู้มีหน้าที่หักภาษี</div>
-                  <div className="text-slate-500 font-medium">(บริษัท รวยรับทรัพย์168 จำกัด)</div>
+                  <div className="text-slate-500 font-medium">({shopProfile?.name || "SneakerCare"})</div>
                 </div>
                 <div className="border-t border-slate-400 pt-2 space-y-1">
                   <div>ลงชื่อ .............................................................. ผู้รับเงิน</div>

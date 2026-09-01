@@ -429,29 +429,29 @@
     padding: 0 !important;
   }
 
-  /* Hide screen chrome */
-  header,
-  nav,
-  aside,
-  footer,
-  button,
-  .no-print,
-  [role="navigation"],
-  .theme-toggle,
-  .toaster,
-  div[data-radix-popper-content-wrapper] {
-    display: none !important;
+  /* เดิมซ่อนแค่ header/nav/aside/footer/button ฯลฯ ตาม selector ตายตัว โดยหวังให้แต่ละหน้า
+     ไล่ใส่ print:hidden ครบทุกจุดเอง — พลาดจุดเดียว (เช่น การ์ด/ตารางพนักงานทั้งหมดในหน้า
+     /expenses) เนื้อหาส่วนนั้นจะโผล่มาพิมพ์ปนกับสลิปที่ต้องการจริง ผลคือกดพิมพ์สลิปคนเดียว
+     แต่ได้กระดาษที่มีข้อมูลพนักงานทุกคนติดมาด้วย เหมือนพิมพ์ทั้งหน้าจอ
+     แก้ด้วยรูปแบบมาตรฐาน: ซ่อนทุกอย่างในหน้าเป็นค่าเริ่มต้น แล้วเปิดเฉพาะ .printable-area
+     กับลูกของมันเท่านั้น — หน้าไหนลืมใส่ print:hidden ก็ไม่กระทบ เพราะถูกซ่อนอยู่แล้วโดยปริยาย */
+  body * {
+    visibility: hidden !important;
+  }
+  .printable-area,
+  .printable-area * {
+    visibility: visible !important;
   }
 
-  /* Printable area */
+  /* Printable area — position:fixed ให้ไม่ขึ้นกับพื้นที่ของ ancestor ที่ถูกซ่อนไว้ด้านบน
+     (โดยเฉพาะ modal สลิปเงินเดือนที่ .printable-area ซ้อนอยู่ในกล่อง fixed อีกชั้น) */
   .printable-area {
     display: block !important;
-    position: relative !important;
-    left: 0 !important;
-    top: 0 !important;
+    position: fixed !important;
+    inset: 0 !important;
     width: 100% !important;
     max-width: 100% !important;
-    margin: 0 auto !important;
+    margin: 0 !important;
     padding: 0 !important;
     background: #ffffff !important;
     color: #000000 !important;

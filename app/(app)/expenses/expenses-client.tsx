@@ -69,7 +69,14 @@ export const AVAILABLE_MONTHS = [
   { value: "all", iso: "all", label: "📊 ภาพรวมสะสมทุกงวด (All Time: 10 เดือน)", monthName: "ภาพรวมสะสมทั้งหมด (10 เดือน)" },
 ];
 
-export function ExpensesClient({ initialData }: { initialData: ExpensesPayload }) {
+export function ExpensesClient({
+  initialData,
+  shopProfile,
+}: {
+  initialData: ExpensesPayload;
+  /** ข้อมูลบริษัทจริงจากหน้า /settings — ใช้พิมพ์หัวเอกสารสลิปเงินเดือน ห้าม hardcode ทับ */
+  shopProfile?: { name: string; address: string; taxId: string; phone: string };
+}) {
   const [data, setData] = useState<ExpensesPayload>(initialData);
   const [selectedMonth, setSelectedMonth] = useState<string>(() => {
     if (initialData.timeRange && initialData.timeRange.includes("/")) return initialData.timeRange;
@@ -1629,13 +1636,14 @@ export function ExpensesClient({ initialData }: { initialData: ExpensesPayload }
               <div className="flex items-start justify-between border-b-2 border-slate-800 pb-4">
                 <div className="space-y-1">
                   <h1 className="text-lg font-black tracking-tight text-slate-950 uppercase">
-                    บริษัท รวยรับทรัพย์168 จำกัด (สำนักงานใหญ่)
+                    {shopProfile?.name || "ยังไม่ได้ตั้งค่าชื่อกิจการ — ไปที่ /settings"}
                   </h1>
                   <div className="text-xs text-slate-700 font-medium">
-                    สาขา SneakerCare: 552/4 ถ.เชียงใหม่-ลำพูน ต.หนองหอย อ.เมืองเชียงใหม่ จ.เชียงใหม่ 50000
+                    {shopProfile?.address || "ยังไม่ได้ตั้งค่าที่อยู่"}
                   </div>
                   <div className="text-xs text-slate-600 font-mono">
-                    เลขประจำตัวผู้เสียภาษีอากร: <strong>0-5035-67004-98-1</strong> · โทร. 088-251-5168
+                    เลขประจำตัวผู้เสียภาษีอากร: <strong>{shopProfile?.taxId || "-"}</strong>
+                    {shopProfile?.phone ? ` · โทร. ${shopProfile.phone}` : ""}
                   </div>
                 </div>
                 <div className="text-right">
@@ -1810,7 +1818,7 @@ export function ExpensesClient({ initialData }: { initialData: ExpensesPayload }
                   <div>
                     <div className="font-bold">ลงชื่อ ................................................................</div>
                     <div className="text-[11px] text-slate-600 pt-1">(ผู้มีอำนาจลงนาม / ฝ่ายการเงินและบัญชี)</div>
-                    <div className="text-[10px] text-slate-400">บริษัท รวยรับทรัพย์168 จำกัด</div>
+                    <div className="text-[10px] text-slate-400">{shopProfile?.name || "SneakerCare"}</div>
                   </div>
                 </div>
 
