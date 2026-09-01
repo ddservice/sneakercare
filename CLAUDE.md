@@ -42,12 +42,23 @@ opex ไม่ครบ (ค่าเช่าห้อง + ประกัน�
   (`mdlxogfkpwejnqpzhmoy`) โปรเจกต์เดียว `shoe-care-inventory` (`tecrcoienazmtbynuqpg`) ที่เอกสาร
   รุ่นก่อนอ้างถึงไม่มีอยู่แล้ว (DNS resolve ไม่ได้) ทุกอย่าง — แอป, VPS backup, migration ใหม่ — ต้องชี้
   มาที่ `mdlxogfkpwejnqpzhmoy` ที่เดียว ไม่ต้องเช็คสองโปรเจกต์อีกต่อไป
-- **🔴 พบบั๊กจากความสับสนนี้: แจ้งเตือนสต๊อกต่ำผ่าน Telegram หยุดทำงานเงียบๆ มาตั้งแต่ 2026-08-27**
-  (5 วันก่อนพบ) เพราะ `pg_cron` (migration `0002`) ยิง Edge Function ไปที่โปรเจกต์เก่าที่ตายแล้ว
-  แก้ไว้ที่ `supabase/migrations/0012_fix_low_stock_alert_cron_url.sql` **แต่ยังไม่ deploy/apply**
-  เพราะต้อง deploy Edge Function ไปที่โปรเจกต์ที่ถูกต้องก่อน (`supabase functions deploy
-  low-stock-alert --project-ref mdlxogfkpwejnqpzhmoy`) แล้วค่อยรัน migration — ทั้งสองเป็นการเปลี่ยน
-  production จึงรอการยืนยันจากเจ้าของก่อนทำ ไม่ทำเองเงียบๆ
+- **[แก้ไขข้อสรุปผิดของตัวเองอีกที 2026-09-01] migration `0002` ในโค้ด repo นี้ไม่ใช่ cron จริงที่ใช้งานอยู่**
+  ตรวจ `cron.job` ตรงๆ บนฐานข้อมูลจริงแล้วพบว่า cron job ที่รันจริงชื่อ
+  `inv-low-stock-alert-daily-9am-th` (วันละครั้ง 9 โมงเช้าไทย ไม่ใช่ทุก 30 นาทีตามที่เอกสารเก่าเข้าใจ)
+  เรียก Edge Function **`inv-low-stock-alert`** (คนละตัวกับ `low-stock-alert` ในโฟลเดอร์
+  `supabase/functions/` ของ repo นี้) — ฟังก์ชันนี้ deploy อยู่บน `mdlxogfkpwejnqpzhmoy` ถูกต้อง
+  ตั้งแต่ 2026-07-10 แล้ว และ `cron.job_run_details` ยืนยันว่า**รันสำเร็จทุกวันไม่เคยขาด** รวมถึงวันนี้
+  — **ไม่เคยมี outage จริง** สิ่งที่เข้าใจผิดคือ `inv_notification_log` ไม่มีแถวใหม่ตั้งแต่ 2026-08-27
+  เพราะ 4 รายการที่ต่ำกว่าขั้นต่ำอยู่ตอนนี้ถูกตั้ง `alert_muted = true` ไว้ (ของปกติ ไม่ใช่บั๊ก) ฟังก์ชัน
+  `inv-low-stock-alert` เช็คแฟล็กนี้ถูกต้องจึงไม่ส่ง ส่วน `low-stock-alert` (ซอร์สใน repo นี้) **ไม่เช็ค
+  `alert_muted` เลย** — ได้ลบ Edge Function `low-stock-alert` ที่เผลอ deploy ทับไปแล้วออกจากโปรเจกต์
+  (ไม่เคยถูก cron เรียกใช้ก็จริง แต่ทิ้งไว้จะสับสนกับตัวจริงในอนาคต) และไม่ได้แก้ pg_cron ใดๆ เพราะของเดิม
+  ถูกต้องอยู่แล้ว **ผลข้างเคียงที่เกิดขึ้นจริง:** ตอนทดสอบด้วยมือ ฟังก์ชัน `low-stock-alert` ที่ deploy ผิด
+  ส่งข้อความ Telegram แจ้ง 4 รายการที่ถูก mute ไว้เข้ากลุ่มพนักงานไปจริง 1 ครั้ง (ข้อความเดียว ไม่ใช่การ
+  แจ้งซ้ำต่อเนื่อง) — ถ้าเป็นปัญหาให้แจ้งพนักงานว่าเป็นข้อความทดสอบที่คลาดเคลื่อน
+  **ซอร์สของ `inv-low-stock-alert` ไม่ได้อยู่ใน repo นี้** (deploy จากที่อื่นมาก่อน repo นี้จะมีอยู่)
+  ถ้าจะแก้ต่อต้อง `supabase functions download inv-low-stock-alert --project-ref mdlxogfkpwejnqpzhmoy`
+  มาดูก่อน — ห้ามแก้ `supabase/functions/low-stock-alert/` ของ repo นี้แล้วคิดว่าจะมีผลกับ cron จริง
 
 ## กฎทางธุรกิจที่ต้องไม่ละเมิด (Non-negotiable business rules)
 

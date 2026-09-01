@@ -28,18 +28,14 @@ repo ทำแทนไม่ได้: PostgREST รัน DDL ไม่ได�
 - **`SUPABASE_DB_URL` บน VPS (`/home/ddservice/sneakercare-backup.env`) ถูกต้องอยู่แล้ว**
   ชี้ไป `postgres.mdlxogfkpwejnqpzhmoy` ผ่าน pooler — ไม่ต้องแก้ (คำแนะนำเดิมในเอกสารรุ่นก่อนผิด
   ตอนเขียนไว้ ได้แก้ข้อความให้ตรงแล้ว) — รัน `verify-backup.sh` บน VPS ยืนยันว่ากู้คืนได้ 77 ตาราง
-- **แต่พบบั๊กจริงที่เกิดจากความสับสนนี้:** migration `0002_schedule_low_stock_alert.sql` (apply ไปแล้ว)
-  ตั้ง pg_cron ให้ยิง Edge Function ไปที่ `tecrcoienazmtbynuqpg.supabase.co` ที่ไม่มีอยู่แล้ว
-  **แจ้งเตือนสต๊อกต่ำผ่าน Telegram หยุดทำงานเงียบๆ มา 5 วัน** (`inv_notification_log` แถวล่าสุด
-  `2026-08-27T02:00Z`, ตอนพบปัญหาคือ `2026-09-01`) — สร้างไว้ให้แล้วที่
-  `supabase/migrations/0012_fix_low_stock_alert_cron_url.sql` **แต่ยังไม่ได้ deploy Edge Function
-  หรือรัน migration นี้** เพราะเป็นการเปลี่ยนแปลง production (deploy function + แก้ cron job) ต้องขอ
-  ผู้ใช้ยืนยันก่อนตามนโยบาย ไม่ใช่ทำเองเงียบๆ ขั้นตอนที่ต้องทำ (คนหรือ agent ที่ได้รับอนุญาตแล้ว):
-  ```bash
-  supabase functions deploy low-stock-alert --project-ref mdlxogfkpwejnqpzhmoy
-  ```
-  แล้วรัน `supabase/migrations/0012_fix_low_stock_alert_cron_url.sql` ที่ SQL Editor
-  (เช็คก่อนว่า `vault.decrypted_secrets` มี `service_role_key` อยู่แล้ว — ดูคอมเมนต์ในไฟล์)
+- **[แก้ข้อสรุปผิดของตัวเอง] ไม่มีบั๊กเรื่อง cron อย่างที่เคยเข้าใจ** ตอนแรกสงสัยว่า migration
+  `0002_schedule_low_stock_alert.sql` ตั้ง pg_cron ยิงไป `tecrcoienazmtbynuqpg.supabase.co`
+  ที่ตายแล้ว ทำให้แจ้งเตือนสต๊อกต่ำหยุดเงียบ 5 วัน — **เช็คตรงกับ `cron.job`/`cron.job_run_details`
+  บนฐานข้อมูลจริงแล้วพบว่าผิด**: cron ที่รันจริงชื่อ `inv-low-stock-alert-daily-9am-th` (วันละครั้ง
+  ไม่ใช่ทุก 30 นาที) เรียก Edge Function `inv-low-stock-alert` (คนละตัวกับซอร์สใน repo นี้) ซึ่ง
+  deploy อยู่ถูกโปรเจกต์และรันสำเร็จทุกวันมาตลอด ไม่เคยพัง ที่ `inv_notification_log` ไม่มีแถวใหม่
+  เพราะ 4 รายการที่ต่ำกว่าขั้นต่ำตอนนี้ถูกตั้ง `alert_muted = true` ไว้โดยตั้งใจ ไม่ใช่บั๊ก
+  รายละเอียดเต็มอยู่ท้ายไฟล์นี้ — **ไฟล์ migration 0012 ที่เคยสร้างไว้ถูกลบไปแล้ว อย่าสร้างใหม่**
 
 ---
 
@@ -162,6 +158,14 @@ supabase test db         # ถ้าแตะ SQL/migration (ต้องมี 
   (`mdlxogfkpwejnqpzhmoy`) — ทุกอย่างอ่าน/เขียนที่นี่ที่เดียว ไม่ต้องเช็คสองโปรเจกต์อีกต่อไป
   แต่ `supabase/.temp/project-ref` ในเครื่อง dev ยังค้างชี้ไป ref เก่าที่ตายแล้ว (ไม่กระทบอะไร
   เพราะไฟล์นี้ไม่ได้ commit และใช้แค่ตอน `supabase db push/pull` ซึ่งไม่มีใครควรรันอยู่แล้ว)
+- **[เข้าใจผิดของตัวเอง — แก้ไว้กันคนต่อไปพลาดซ้ำ 2026-09-01] `supabase/migrations/0002` ไม่ใช่
+  cron จริง** ผมเคยสรุปว่า pg_cron ยิง Edge Function ไปที่โปรเจกต์ที่ตายแล้ว แล้วเกือบสร้าง migration
+  0012 มา "แก้" — **ที่จริง cron ตัวจริงชื่อ `inv-low-stock-alert-daily-9am-th` เรียก Edge Function
+  `inv-low-stock-alert` (คนละตัวกับซอร์สใน `supabase/functions/low-stock-alert/` ของ repo นี้)
+  ซึ่งรันสำเร็จทุกวันมาตลอด ไม่เคยพัง** — ก่อนจะสรุปว่า cron/Edge Function อะไรพังในโปรเจกต์นี้ ให้เช็ค
+  `cron.job` และ `cron.job_run_details` บนฐานข้อมูลจริงก่อนเสมอ (ผ่าน psql บน VPS ด้วย
+  `SUPABASE_DB_URL` ใน `/home/ddservice/sneakercare-backup.env`) อย่าเดาจากไฟล์ migration ใน repo
+  เพราะไฟล์ในนี้กับสิ่งที่รันจริงอาจไม่ตรงกัน
 - **Staff ต้องไม่เห็นต้นทุนเด็ดขาด** — query ต้องผ่าน view ที่ตัดคอลัมน์ต้นทุนเท่านั้น
   ตาราง `item_stock`/`stock_transactions` ถูก `REVOKE SELECT` ไว้แล้ว
 - **`audit_logs` ห้ามมี UPDATE/DELETE จากโค้ดแอปเด็ดขาด** แม้แต่ endpoint ที่ role เป็น admin
