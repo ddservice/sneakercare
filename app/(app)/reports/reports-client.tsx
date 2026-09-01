@@ -285,7 +285,7 @@ export function ReportsClient({
               <CardContent className="p-4 pt-3">
                 <Button
                   onClick={exportSales}
-                  className="w-full bg-teal-700 hover:bg-teal-800 text-white font-bold text-xs h-8.5 gap-1.5 shadow-xs"
+                  className="w-full bg-teal-700 hover:bg-emerald-600 text-white font-bold text-xs h-8.5 gap-1.5 shadow-xs"
                 >
                   <Download className="h-3.5 w-3.5" /> ดาวน์โหลด Excel (.xlsx)
                 </Button>
@@ -371,7 +371,7 @@ export function ReportsClient({
         <div className="grid gap-6 lg:grid-cols-12">
           {/* Left: Template Download & Select Type (4 Cols) */}
           <div className="lg:col-span-4 space-y-4">
-            <Card className="border-slate-200 shadow-xs">
+            <Card className="border-slate-200 dark:border-slate-700 shadow-sm">
               <CardHeader className="p-4 bg-slate-50 border-b border-slate-100">
                 <CardTitle className="text-sm font-bold text-slate-900 flex items-center gap-1.5">
                   <FileDown className="h-4 w-4 text-teal-700" /> ดาวน์โหลดเทมเพลต (Templates)
@@ -430,7 +430,7 @@ export function ReportsClient({
                       onClick={() => setImportType("sales")}
                       className={`p-2.5 rounded-lg border text-xs font-bold text-center transition-all ${
                         importType === "sales"
-                          ? "bg-teal-700 text-white border-teal-700 shadow-xs"
+                          ? "bg-emerald-500 text-white border-teal-700 shadow-xs"
                           : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
                       }`}
                     >
@@ -441,7 +441,7 @@ export function ReportsClient({
                       onClick={() => setImportType("stock")}
                       className={`p-2.5 rounded-lg border text-xs font-bold text-center transition-all ${
                         importType === "stock"
-                          ? "bg-teal-700 text-white border-teal-700 shadow-xs"
+                          ? "bg-emerald-500 text-white border-teal-700 shadow-xs"
                           : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
                       }`}
                     >
@@ -452,7 +452,7 @@ export function ReportsClient({
                       onClick={() => setImportType("expenses")}
                       className={`p-2.5 rounded-lg border text-xs font-bold text-center transition-all ${
                         importType === "expenses"
-                          ? "bg-teal-700 text-white border-teal-700 shadow-xs"
+                          ? "bg-emerald-500 text-white border-teal-700 shadow-xs"
                           : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
                       }`}
                     >

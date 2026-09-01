@@ -57,11 +57,11 @@ export function MainNav({ items, alerts = {} }: MainNavProps) {
             prefetch={true}
             className={`relative inline-flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs sm:text-sm font-medium transition-all whitespace-nowrap ${
               isActive
-                ? "bg-teal-700 text-white shadow-xs font-semibold hover:bg-teal-800"
-                : "text-slate-600 hover:bg-teal-50 hover:text-teal-800 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-teal-400"
+                ? "bg-emerald-500 text-white shadow-sm font-semibold hover:bg-emerald-600"
+                : "text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-800 dark:hover:text-slate-200"
             }`}
           >
-            <Icon className={`h-4 w-4 ${isActive ? "text-white" : "text-teal-600 dark:text-teal-400"}`} />
+            <Icon className={`h-4 w-4 ${isActive ? "text-white" : "text-slate-400 dark:text-slate-500"}`} />
             <span>{item.label}</span>
             {/* ── Alert badge (e.g. low stock count) ── */}
             {alertCount > 0 && (

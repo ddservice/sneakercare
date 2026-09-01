@@ -7,7 +7,7 @@ import { Toaster } from "@/components/ui/sonner";
 import { BranchPicker } from "@/components/branch-picker";
 import { MainNav } from "@/components/main-nav";
 import { ThemeToggle } from "@/components/theme-toggle";
-import { Footprints, LogOut, Shield } from "lucide-react";
+import { Footprints, LogOut, ShieldCheck } from "lucide-react";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
@@ -38,70 +38,80 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   }
 
   return (
-    <div className="flex min-h-svh flex-col bg-slate-50 text-slate-900 antialiased dark:bg-slate-950 dark:text-slate-100">
-      {/* ── Brand Banner & Header ── */}
-      <header className="border-b border-slate-200 bg-white shadow-xs dark:border-slate-800 dark:bg-slate-900">
-        <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-4 py-3 sm:px-6">
-          {/* Logo & Title */}
-          <div className="flex items-center gap-3.5">
-            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-teal-50 text-teal-600 ring-1 ring-teal-500/20 dark:bg-teal-950 dark:text-teal-400">
-              <Footprints className="h-6 w-6" />
+    <div className="flex min-h-svh flex-col bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 antialiased">
+
+      {/* ── Top Header ── */}
+      <header className="sticky top-0 z-40 border-b border-slate-200 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 backdrop-blur-sm shadow-sm">
+
+        {/* Brand row */}
+        <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-2.5 sm:px-6">
+
+          {/* Logo & Brand */}
+          <div className="flex items-center gap-3">
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-400 to-emerald-600 text-white shadow-sm">
+              <Footprints className="h-5 w-5" />
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h1 className="text-lg font-bold tracking-tight text-teal-900 dark:text-teal-100">Sneaker Care</h1>
-                <span className="rounded-md bg-teal-100/80 px-2 py-0.5 text-[11px] font-semibold text-teal-800 dark:bg-teal-900/60 dark:text-teal-300">
+                <span className="text-base font-bold tracking-tight text-slate-900 dark:text-white">
+                  Sneaker Care
+                </span>
+                <span className="hidden sm:inline-flex items-center rounded-md bg-emerald-50 dark:bg-emerald-900/30 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/40">
                   {branchName}
                 </span>
               </div>
-              <p className="text-xs text-slate-500 dark:text-slate-400">
-                ระบบบริหารจัดการร้านซักรองเท้าและควบคุมคลังสินค้าอัจฉริยะ
+              <p className="hidden sm:block text-[11px] text-slate-400 dark:text-slate-500 leading-none mt-0.5">
+                ระบบบริหารจัดการร้านซักรองเท้า
               </p>
             </div>
           </div>
 
-          {/* User badge & Actions */}
-          <div className="flex flex-wrap items-center gap-2.5 sm:gap-3">
+          {/* Right actions */}
+          <div className="flex items-center gap-2">
             {profile.role === "admin" && (
               <BranchPicker branches={branches ?? []} selectedBranchId={selectedBranchId} />
             )}
 
-            <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50/80 px-3 py-1.5 text-xs text-slate-700 dark:border-slate-800 dark:bg-slate-800/80 dark:text-slate-300">
-              <Shield className="h-3.5 w-3.5 text-teal-600 dark:text-teal-400" />
-              <span className="font-semibold text-teal-700 dark:text-teal-300">
+            {/* User badge */}
+            <div className="hidden sm:flex items-center gap-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-2.5 py-1.5 text-xs">
+              <ShieldCheck className="h-3.5 w-3.5 text-emerald-500 dark:text-emerald-400" />
+              <span className="font-semibold text-emerald-700 dark:text-emerald-300">
                 {ROLE_LABEL[profile.role]}
               </span>
-              <span className="text-slate-400 dark:text-slate-600">|</span>
-              <span className="font-medium">{profile.display_name}</span>
+              <span className="text-slate-300 dark:text-slate-600">·</span>
+              <span className="font-medium text-slate-600 dark:text-slate-300">
+                {profile.display_name}
+              </span>
             </div>
 
-            {/* Dark / Light Mode Icon-only Switch */}
+            {/* Theme toggle */}
             <ThemeToggle />
 
+            {/* Logout */}
             <form action={logout}>
               <Button
                 type="submit"
                 variant="ghost"
                 size="sm"
-                className="h-8 gap-1.5 text-xs text-rose-600 hover:bg-rose-50 hover:text-rose-700 dark:text-rose-400 dark:hover:bg-rose-950/50"
+                className="h-8 w-8 p-0 rounded-lg text-slate-400 dark:text-slate-500 hover:bg-rose-50 dark:hover:bg-rose-900/20 hover:text-rose-500 dark:hover:text-rose-400 transition-colors"
+                title="ออกจากระบบ"
               >
-                <LogOut className="h-3.5 w-3.5" />
-                <span className="hidden sm:inline">ออกจากระบบ</span>
+                <LogOut className="h-4 w-4" />
               </Button>
             </form>
           </div>
         </div>
 
-        {/* Navigation Tabs Bar */}
-        <div className="border-t border-slate-100 bg-slate-50/50 px-4 py-2 sm:px-6 dark:border-slate-800/60 dark:bg-slate-900/50">
+        {/* Nav row */}
+        <div className="border-t border-slate-100 dark:border-slate-800/70 bg-slate-50/60 dark:bg-slate-900/60 px-4 sm:px-6 py-1.5">
           <div className="mx-auto max-w-7xl">
             <MainNav items={mainNav} alerts={{ inventory: lowStockCount }} />
           </div>
         </div>
       </header>
 
-      {/* Main Content Area */}
-      <main className="flex-1 px-4 py-6 sm:px-6">
+      {/* ── Main Content ── */}
+      <main className="flex-1 px-4 py-5 sm:px-6">
         <div className="mx-auto max-w-7xl">{children}</div>
       </main>
 

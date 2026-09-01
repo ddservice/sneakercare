@@ -177,7 +177,7 @@ export function TaxFilingClient({
           onClick={() => setActiveTab("efiling")}
           className={`flex items-center gap-1.5 rounded-lg px-3.5 py-1.5 text-xs font-semibold transition-all ${
             activeTab === "efiling"
-              ? "bg-teal-700 text-white shadow-xs"
+              ? "bg-emerald-500 text-white shadow-xs"
               : "text-slate-600 hover:bg-slate-100"
           }`}
         >
@@ -187,7 +187,7 @@ export function TaxFilingClient({
           onClick={() => setActiveTab("tawi50")}
           className={`flex items-center gap-1.5 rounded-lg px-3.5 py-1.5 text-xs font-semibold transition-all ${
             activeTab === "tawi50"
-              ? "bg-teal-700 text-white shadow-xs"
+              ? "bg-emerald-500 text-white shadow-xs"
               : "text-slate-600 hover:bg-slate-100"
           }`}
         >
@@ -197,7 +197,7 @@ export function TaxFilingClient({
           onClick={() => setActiveTab("etax_xml")}
           className={`flex items-center gap-1.5 rounded-lg px-3.5 py-1.5 text-xs font-semibold transition-all ${
             activeTab === "etax_xml"
-              ? "bg-teal-700 text-white shadow-xs"
+              ? "bg-emerald-500 text-white shadow-xs"
               : "text-slate-600 hover:bg-slate-100"
           }`}
         >
@@ -208,7 +208,7 @@ export function TaxFilingClient({
       {/* ── TAB 1: E-FILING EXPORTS ── */}
       {activeTab === "efiling" && (
         <div className="grid gap-6 sm:grid-cols-3">
-          <Card className="border-slate-200 shadow-xs">
+          <Card className="border-slate-200 dark:border-slate-700 shadow-sm">
             <CardHeader className="pb-3">
               <CardTitle className="text-sm font-bold flex items-center justify-between">
                 <span>ภาษีมูลค่าเพิ่ม (ภ.พ.30)</span>
@@ -232,14 +232,14 @@ export function TaxFilingClient({
               <Button
                 onClick={handleDownloadPp30Text}
                 disabled={vatRecords.length === 0}
-                className="w-full bg-teal-700 hover:bg-teal-800 text-white text-xs font-semibold h-9 gap-1.5"
+                className="w-full bg-teal-700 hover:bg-emerald-600 text-white text-xs font-semibold h-9 gap-1.5"
               >
                 <Download className="h-3.5 w-3.5" /> ดาวน์โหลดไฟล์ ภ.พ.30 (.txt)
               </Button>
             </CardContent>
           </Card>
 
-          <Card className="border-slate-200 shadow-xs">
+          <Card className="border-slate-200 dark:border-slate-700 shadow-sm">
             <CardHeader className="pb-3">
               <CardTitle className="text-sm font-bold flex items-center justify-between">
                 <span>หัก ณ ที่จ่าย นิติบุคคล (ภ.ง.ด.53)</span>
@@ -263,14 +263,14 @@ export function TaxFilingClient({
               <Button
                 onClick={() => handleDownloadPndText("PND53")}
                 disabled={whtRecords.length === 0}
-                className="w-full bg-teal-700 hover:bg-teal-800 text-white text-xs font-semibold h-9 gap-1.5"
+                className="w-full bg-teal-700 hover:bg-emerald-600 text-white text-xs font-semibold h-9 gap-1.5"
               >
                 <Download className="h-3.5 w-3.5" /> ดาวน์โหลดไฟล์ ภ.ง.ด.53 (.txt)
               </Button>
             </CardContent>
           </Card>
 
-          <Card className="border-slate-200 shadow-xs">
+          <Card className="border-slate-200 dark:border-slate-700 shadow-sm">
             <CardHeader className="pb-3">
               <CardTitle className="text-sm font-bold flex items-center justify-between">
                 <span>หัก ณ ที่จ่าย บุคคลธรรมดา (ภ.ง.ด.3)</span>
@@ -306,7 +306,7 @@ export function TaxFilingClient({
 
       {/* ── TAB 2: 50 TAWI CERTIFICATES ── */}
       {activeTab === "tawi50" && (
-        <Card className="border-slate-200 shadow-xs">
+        <Card className="border-slate-200 dark:border-slate-700 shadow-sm">
           <CardHeader className="border-b border-slate-100 pb-3 flex flex-row items-center justify-between">
             <div>
               <CardTitle className="text-sm font-bold">
@@ -376,7 +376,7 @@ export function TaxFilingClient({
 
       {/* ── TAB 3: ETDA XML VIEWER ── */}
       {activeTab === "etax_xml" && (
-        <Card className="border-slate-200 shadow-xs">
+        <Card className="border-slate-200 dark:border-slate-700 shadow-sm">
           <CardHeader className="border-b border-slate-100 pb-3 flex flex-row items-center justify-between">
             <div>
               <CardTitle className="text-sm font-bold flex items-center gap-2">
@@ -398,7 +398,7 @@ export function TaxFilingClient({
                 a.click();
                 toast.success("ดาวน์โหลดไฟล์ ETDA XML เรียบร้อย");
               }}
-              className="bg-teal-700 hover:bg-teal-800 text-white text-xs h-8 gap-1.5"
+              className="bg-teal-700 hover:bg-emerald-600 text-white text-xs h-8 gap-1.5"
             >
               <Download className="h-3.5 w-3.5" /> ดาวน์โหลด XML
             </Button>
@@ -426,7 +426,7 @@ export function TaxFilingClient({
                 <Button
                   size="sm"
                   onClick={() => window.print()}
-                  className="bg-teal-700 hover:bg-teal-800 text-white font-bold text-xs gap-1.5 shadow-md"
+                  className="bg-teal-700 hover:bg-emerald-600 text-white font-bold text-xs gap-1.5 shadow-md"
                 >
                   <Printer className="h-4 w-4" /> พิมพ์เอกสาร A4
                 </Button>

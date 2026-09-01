@@ -125,24 +125,24 @@ export function StatisticsClient({ initialData }: { initialData: AnalyticsDashbo
         <>
           {/* ── KPI Grid ── */}
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <Card className="border-slate-200 shadow-xs">
+            <Card className="border-slate-200 dark:border-slate-700 shadow-sm">
               <CardContent className="p-5 flex items-center justify-between">
                 <div className="space-y-1">
                   <span className="text-xs font-semibold text-slate-500">ยอดขายรวมสุทธิ</span>
-                  <div className="text-2xl font-black text-teal-800">
+                  <div className="text-2xl font-black text-slate-900 dark:text-slate-100">
                     ฿{totalRevenue.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
                   </div>
                   <div className="text-[11px] text-slate-400">
                     เฉลี่ยวันละ ฿{dailyAvg.toLocaleString("th-TH", { maximumFractionDigits: 0 })}
                   </div>
                 </div>
-                <div className="rounded-xl bg-teal-50 p-3 text-teal-700 border border-teal-100">
+                <div className="rounded-xl sc-icon-badge-primary">
                   <Receipt className="h-6 w-6" />
                 </div>
               </CardContent>
             </Card>
 
-            <Card className="border-slate-200 shadow-xs">
+            <Card className="border-slate-200 dark:border-slate-700 shadow-sm">
               <CardContent className="p-5 flex items-center justify-between">
                 <div className="space-y-1">
                   <span className="text-xs font-semibold text-slate-500">จำนวนรองเท้าที่รับ</span>
@@ -153,30 +153,30 @@ export function StatisticsClient({ initialData }: { initialData: AnalyticsDashbo
                     เฉลี่ยคู่ละ ฿{avgPerShoe.toLocaleString("th-TH", { maximumFractionDigits: 0 })}
                   </div>
                 </div>
-                <div className="rounded-xl bg-teal-50 p-3 text-teal-700 border border-teal-100">
+                <div className="rounded-xl sc-icon-badge-primary">
                   <Footprints className="h-6 w-6" />
                 </div>
               </CardContent>
             </Card>
 
-            <Card className="border-slate-200 shadow-xs">
+            <Card className="border-slate-200 dark:border-slate-700 shadow-sm">
               <CardContent className="p-5 flex items-center justify-between">
                 <div className="space-y-1">
                   <span className="text-xs font-semibold text-slate-500">ช่องทางการชำระ</span>
-                  <div className="text-sm font-bold text-slate-900">
+                  <div className="text-sm font-bold text-slate-900 dark:text-slate-100">
                     โอนเงิน: <span className="text-teal-800 font-mono">฿{totalTransfer.toLocaleString()}</span>
                   </div>
                   <div className="text-xs text-slate-500">
                     เงินสด: <span className="font-mono">฿{totalCash.toLocaleString()}</span>
                   </div>
                 </div>
-                <div className="rounded-xl bg-slate-50 p-3 text-slate-600 border border-slate-200">
+                <div className="sc-icon-badge sc-icon-badge-slate rounded-xl border border-slate-200">
                   <Wallet className="h-6 w-6" />
                 </div>
               </CardContent>
             </Card>
 
-            <Card className="border-slate-200 shadow-xs">
+            <Card className="border-slate-200 dark:border-slate-700 shadow-sm">
               <CardContent className="p-5 flex items-center justify-between">
                 <div className="space-y-1">
                   <span className="text-xs font-semibold text-slate-500">จำนวนวันที่มีรายการ</span>
@@ -185,7 +185,7 @@ export function StatisticsClient({ initialData }: { initialData: AnalyticsDashbo
                     ส่วนลดรวม ฿{totalDiscount.toLocaleString()}
                   </div>
                 </div>
-                <div className="rounded-xl bg-emerald-50 p-3 text-emerald-700 border border-emerald-100">
+                <div className="sc-icon-badge sc-icon-badge-primary rounded-xl border border-emerald-100">
                   <CheckCircle2 className="h-6 w-6" />
                 </div>
               </CardContent>
@@ -319,10 +319,10 @@ export function StatisticsClient({ initialData }: { initialData: AnalyticsDashbo
           </Card>
 
           {/* ── Daily Sales Breakdown Table ── */}
-          <Card className="border-slate-200 shadow-xs">
+          <Card className="border-slate-200 dark:border-slate-700 shadow-sm">
             <CardHeader className="border-b border-slate-100 pb-3 flex flex-row items-center justify-between">
               <div>
-                <CardTitle className="text-sm font-bold text-slate-900">
+                <CardTitle className="text-sm font-bold text-slate-900 dark:text-slate-100">
                   รายละเอียดรายรับประจำวัน (Daily Records)
                 </CardTitle>
                 <CardDescription className="text-xs">
@@ -349,12 +349,12 @@ export function StatisticsClient({ initialData }: { initialData: AnalyticsDashbo
                   <tbody className="divide-y divide-slate-100">
                     {filteredDaily.map((d) => (
                       <tr key={d.id} className="hover:bg-slate-50/80">
-                        <td className="px-4 py-2.5 font-mono font-bold text-slate-900">{d.date}</td>
+                        <td className="px-4 py-2.5 font-mono font-bold text-slate-900 dark:text-slate-100">{d.date}</td>
                         <td className="px-4 py-2.5 text-center text-slate-600">{d.sizeS || "-"}</td>
                         <td className="px-4 py-2.5 text-center text-slate-600">{d.sizeM || "-"}</td>
                         <td className="px-4 py-2.5 text-center text-slate-600">{d.sizeL || "-"}</td>
                         <td className="px-4 py-2.5 text-center text-slate-600">{d.sizeXL || "-"}</td>
-                        <td className="px-4 py-2.5 text-center font-bold text-teal-800">{d.totalShoes}</td>
+                        <td className="px-4 py-2.5 text-center font-bold text-emerald-600 dark:text-emerald-400">{d.totalShoes}</td>
                         <td className="px-4 py-2.5 text-right font-mono text-slate-600">฿{d.cashAmount.toLocaleString()}</td>
                         <td className="px-4 py-2.5 text-right font-mono text-slate-600">฿{d.transferAmount.toLocaleString()}</td>
                         <td className="px-4 py-2.5 text-right font-mono font-bold text-teal-900">
@@ -390,7 +390,7 @@ export function StatisticsClient({ initialData }: { initialData: AnalyticsDashbo
                   </div>
                   <div className="text-[11px] text-slate-400">ครอบคลุมน้ำยาและอุปกรณ์</div>
                 </div>
-                <div className="rounded-xl bg-teal-50 p-3 text-teal-700 border border-teal-100">
+                <div className="rounded-xl sc-icon-badge-primary">
                   <Boxes className="h-6 w-6" />
                 </div>
               </CardContent>
@@ -422,17 +422,17 @@ export function StatisticsClient({ initialData }: { initialData: AnalyticsDashbo
                     {statInventoryFilter === "low_stock" ? "คลิกเพื่อดูทั้งหมด" : "คลิกเพื่อกรองเฉพาะใกล้หมด"}
                   </div>
                 </div>
-                <div className="rounded-xl bg-rose-50 p-3 text-rose-600 border border-rose-100">
+                <div className="sc-icon-badge sc-icon-badge-rose rounded-xl border border-rose-100">
                   <AlertTriangle className="h-6 w-6" />
                 </div>
               </CardContent>
             </Card>
 
-            <Card className="border-slate-200 shadow-xs">
+            <Card className="border-slate-200 dark:border-slate-700 shadow-sm">
               <CardContent className="p-5 flex items-center justify-between">
                 <div className="space-y-1">
                   <span className="text-xs font-semibold text-slate-500">มูลค่าสต๊อกคงเหลือรวม</span>
-                  <div className="text-2xl font-black text-teal-800 font-mono">
+                  <div className="text-2xl font-black text-slate-900 dark:text-slate-100 font-mono">
                     ฿{initialData.inventory.totalStockValuation.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
                   </div>
                   <div className="text-[11px] text-slate-400">คำนวณตาม Moving Average Cost</div>
@@ -445,10 +445,10 @@ export function StatisticsClient({ initialData }: { initialData: AnalyticsDashbo
           </div>
 
           {/* Full Items Table */}
-          <Card className="border-slate-200 shadow-xs">
+          <Card className="border-slate-200 dark:border-slate-700 shadow-sm">
             <CardHeader className="border-b border-slate-100 pb-3 flex flex-row items-center justify-between">
               <div>
-                <CardTitle className="text-sm font-bold text-slate-900">
+                <CardTitle className="text-sm font-bold text-slate-900 dark:text-slate-100">
                   {statInventoryFilter === "low_stock"
                     ? `รายการสินค้าใกล้หมด / ต่ำกว่า Min Alert (${filteredStatInventoryItems.length} รายการ)`
                     : `ตารางแสดงสต๊อกสินค้าทั้งหมด (${initialData.inventory.totalItemsCount} รายการ)`}
@@ -471,7 +471,7 @@ export function StatisticsClient({ initialData }: { initialData: AnalyticsDashbo
                   </Button>
                 )}
                 <Link href="/inventory">
-                  <Button size="sm" className="bg-teal-700 hover:bg-teal-800 text-white text-xs h-8 gap-1">
+                  <Button size="sm" className="bg-teal-700 hover:bg-emerald-600 text-white text-xs h-8 gap-1">
                     จัดการคลังสินค้า <ArrowUpRight className="h-3.5 w-3.5" />
                   </Button>
                 </Link>
@@ -496,9 +496,9 @@ export function StatisticsClient({ initialData }: { initialData: AnalyticsDashbo
                       const isLow = it.status === "LOW_STOCK" || it.status === "OUT_OF_STOCK" || it.currentQty <= it.minStock;
                       return (
                         <tr key={it.id} className={`hover:bg-slate-50/80 ${isLow ? "bg-rose-50/20" : ""}`}>
-                          <td className="px-4 py-2.5 font-bold text-slate-900">{it.name}</td>
+                          <td className="px-4 py-2.5 font-bold text-slate-900 dark:text-slate-100">{it.name}</td>
                           <td className="px-4 py-2.5 text-slate-500">{it.category}</td>
-                          <td className="px-4 py-2.5 text-right font-mono font-bold text-slate-900">
+                          <td className="px-4 py-2.5 text-right font-mono font-bold text-slate-900 dark:text-slate-100">
                             <span className={isLow ? "text-rose-600 font-black" : ""}>
                               {it.currentQty.toLocaleString()} {it.baseUnit}
                             </span>

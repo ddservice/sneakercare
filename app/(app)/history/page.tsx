@@ -135,7 +135,7 @@ export default async function HistoryPage({
         </div>
         <div className="flex items-center gap-2">
           <Link href="/stock-out">
-            <Button size="sm" className="bg-teal-700 hover:bg-teal-800 text-white text-xs gap-1.5 h-8.5">
+            <Button size="sm" className="bg-teal-700 hover:bg-emerald-600 text-white text-xs gap-1.5 h-8.5">
               <ArrowUpFromLine className="h-3.5 w-3.5" /> เบิกใช้งาน
             </Button>
           </Link>
@@ -153,7 +153,7 @@ export default async function HistoryPage({
       </div>
 
       {/* ── Period View Selector Toolbar ── */}
-      <Card className="border-teal-200 bg-teal-50/40 shadow-xs">
+      <Card className="border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50 shadow-xs">
         <CardContent className="p-4 space-y-3">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex flex-wrap items-center gap-1.5">
@@ -165,7 +165,7 @@ export default async function HistoryPage({
                   size="sm"
                   variant={period === "today" ? "default" : "outline"}
                   className={`h-8 text-xs font-bold ${
-                    period === "today" ? "bg-teal-700 text-white" : "bg-white text-slate-700"
+                    period === "today" ? "bg-emerald-500 text-white" : "bg-white text-slate-700"
                   }`}
                 >
                   🗓️ วันนี้
@@ -176,7 +176,7 @@ export default async function HistoryPage({
                   size="sm"
                   variant={period === "week" ? "default" : "outline"}
                   className={`h-8 text-xs font-bold ${
-                    period === "week" ? "bg-teal-700 text-white" : "bg-white text-slate-700"
+                    period === "week" ? "bg-emerald-500 text-white" : "bg-white text-slate-700"
                   }`}
                 >
                   📅 สัปดาห์นี้
@@ -187,7 +187,7 @@ export default async function HistoryPage({
                   size="sm"
                   variant={period === "month" ? "default" : "outline"}
                   className={`h-8 text-xs font-bold ${
-                    period === "month" ? "bg-teal-700 text-white" : "bg-white text-slate-700"
+                    period === "month" ? "bg-emerald-500 text-white" : "bg-white text-slate-700"
                   }`}
                 >
                   📆 เดือนนี้
@@ -198,7 +198,7 @@ export default async function HistoryPage({
                   size="sm"
                   variant={period === "all" ? "default" : "outline"}
                   className={`h-8 text-xs font-bold ${
-                    period === "all" ? "bg-teal-700 text-white" : "bg-white text-slate-700"
+                    period === "all" ? "bg-emerald-500 text-white" : "bg-white text-slate-700"
                   }`}
                 >
                   🌐 ภาพรวมทั้งหมด
@@ -217,7 +217,7 @@ export default async function HistoryPage({
                 <span className="font-bold text-amber-700 font-mono">-{totalStockOut} หน่วย</span>
               </div>
               {showCost && (
-                <div className="rounded-md bg-teal-700 text-white px-2.5 py-1 shadow-2xs">
+                <div className="rounded-md bg-emerald-500 text-white px-2.5 py-1 shadow-2xs">
                   <span className="text-teal-100">มูลค่าต้นทุน: </span>
                   <span className="font-bold font-mono">
                     {totalCostPeriod.toLocaleString("th-TH", { minimumFractionDigits: 2 })} ฿

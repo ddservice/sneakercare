@@ -205,7 +205,7 @@ export function PosClient({ initialOrders }: { initialOrders: OrderItem[] }) {
         </div>
         <div className="flex flex-wrap items-center gap-3">
           <Link href="/pos/daily-entry">
-            <Button className="bg-teal-400 font-black hover:bg-teal-300 text-slate-950 text-xs gap-1.5 shadow-sm">
+            <Button className="bg-emerald-500 font-bold hover:bg-emerald-600 text-white text-xs gap-1.5 shadow-sm">
               <Footprints className="h-4 w-4" /> 📝 สลับไปกรอกยอดสรุปรายวัน
             </Button>
           </Link>
@@ -440,7 +440,7 @@ export function PosClient({ initialOrders }: { initialOrders: OrderItem[] }) {
                           onClick={() => setPaymentMethod(m.id as any)}
                           className={`rounded-lg py-1.5 text-xs font-semibold transition-all ${
                             paymentMethod === m.id
-                              ? "bg-teal-700 text-white shadow-xs"
+                              ? "bg-emerald-500 text-white shadow-xs"
                               : "border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300"
                           }`}
                         >
@@ -461,7 +461,7 @@ export function PosClient({ initialOrders }: { initialOrders: OrderItem[] }) {
                 <Button
                   type="submit"
                   disabled={isPending || selectedServices.length === 0}
-                  className="w-full h-11 bg-teal-600 font-bold text-white hover:bg-teal-700 shadow-sm text-sm gap-2"
+                  className="w-full h-11 bg-teal-600 font-bold text-white hover:bg-emerald-600 shadow-sm text-sm gap-2"
                 >
                   <Receipt className="h-4 w-4" />
                   {isPending ? "กำลังบันทึกข้อมูล..." : "บันทึกรับงานรองเท้า (สร้างรายการ)"}
@@ -590,7 +590,7 @@ export function PosClient({ initialOrders }: { initialOrders: OrderItem[] }) {
                             size="sm"
                             variant="outline"
                             onClick={() => handleStatusChange(order.id, "delivered")}
-                            className="h-7 text-[11px] bg-teal-600 text-white hover:bg-teal-700"
+                            className="h-7 text-[11px] bg-teal-600 text-white hover:bg-emerald-600"
                           >
                             📦 ส่งมอบให้ลูกค้าแล้ว
                           </Button>

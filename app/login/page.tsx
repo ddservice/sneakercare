@@ -7,7 +7,7 @@ export default function LoginPage() {
       {/* ── Top Header Bar ── */}
       <header className="w-full max-w-5xl flex items-center justify-between py-2 border-b border-slate-200">
         <div className="flex items-center gap-2.5">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-teal-50 text-teal-700 border border-teal-200">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200">
             <Footprints className="h-4 w-4" />
           </div>
           <span className="text-sm font-bold tracking-wider text-slate-900 uppercase">

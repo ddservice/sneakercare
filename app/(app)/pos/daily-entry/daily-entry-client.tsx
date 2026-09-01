@@ -628,7 +628,7 @@ export function DailyEntryClient({ initialRecords }: { initialRecords: DailySale
       </div>
 
       {/* ── Period Selector & View Toolbar ── */}
-      <Card className="border-teal-200 bg-teal-50/40 shadow-xs">
+      <Card className="border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50 shadow-xs">
         <CardContent className="p-4 space-y-3">
           <div className="flex flex-wrap items-center justify-between gap-3">
             {/* Period Buttons */}
@@ -642,7 +642,7 @@ export function DailyEntryClient({ initialRecords }: { initialRecords: DailySale
                 variant={viewPeriod === "day" ? "default" : "outline"}
                 onClick={() => setViewPeriod("day")}
                 className={`h-8 text-xs font-bold ${
-                  viewPeriod === "day" ? "bg-teal-700 text-white" : "bg-white text-slate-700"
+                  viewPeriod === "day" ? "bg-emerald-500 text-white" : "bg-white text-slate-700"
                 }`}
               >
                 🗓️ รายวัน
@@ -653,7 +653,7 @@ export function DailyEntryClient({ initialRecords }: { initialRecords: DailySale
                 variant={viewPeriod === "week" ? "default" : "outline"}
                 onClick={() => setViewPeriod("week")}
                 className={`h-8 text-xs font-bold ${
-                  viewPeriod === "week" ? "bg-teal-700 text-white" : "bg-white text-slate-700"
+                  viewPeriod === "week" ? "bg-emerald-500 text-white" : "bg-white text-slate-700"
                 }`}
               >
                 📅 รายสัปดาห์
@@ -664,7 +664,7 @@ export function DailyEntryClient({ initialRecords }: { initialRecords: DailySale
                 variant={viewPeriod === "month" ? "default" : "outline"}
                 onClick={() => setViewPeriod("month")}
                 className={`h-8 text-xs font-bold ${
-                  viewPeriod === "month" ? "bg-teal-700 text-white" : "bg-white text-slate-700"
+                  viewPeriod === "month" ? "bg-emerald-500 text-white" : "bg-white text-slate-700"
                 }`}
               >
                 📆 รายเดือน
@@ -675,7 +675,7 @@ export function DailyEntryClient({ initialRecords }: { initialRecords: DailySale
                 variant={viewPeriod === "all" ? "default" : "outline"}
                 onClick={() => setViewPeriod("all")}
                 className={`h-8 text-xs font-bold ${
-                  viewPeriod === "all" ? "bg-teal-700 text-white" : "bg-white text-slate-700"
+                  viewPeriod === "all" ? "bg-emerald-500 text-white" : "bg-white text-slate-700"
                 }`}
               >
                 🌐 ภาพรวมทั้งหมด
@@ -686,7 +686,7 @@ export function DailyEntryClient({ initialRecords }: { initialRecords: DailySale
                 variant={viewPeriod === "custom" ? "default" : "outline"}
                 onClick={() => setViewPeriod("custom")}
                 className={`h-8 text-xs font-bold ${
-                  viewPeriod === "custom" ? "bg-teal-700 text-white" : "bg-white text-slate-700"
+                  viewPeriod === "custom" ? "bg-emerald-500 text-white" : "bg-white text-slate-700"
                 }`}
               >
                 🔍 กำหนดช่วงวันเอง
@@ -1280,7 +1280,7 @@ export function DailyEntryClient({ initialRecords }: { initialRecords: DailySale
                   <Button
                     type="submit"
                     disabled={isPending}
-                    className="h-10 flex-1 bg-teal-700 hover:bg-teal-800 text-white font-bold text-sm shadow-md gap-2"
+                    className="h-10 flex-1 bg-teal-700 hover:bg-emerald-600 text-white font-bold text-sm shadow-md gap-2"
                   >
                     {isPending ? (
                       "กำลังบันทึกข้อมูล..."

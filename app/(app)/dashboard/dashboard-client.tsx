@@ -229,7 +229,7 @@ export function DashboardClient({
         {/* Fast Action Buttons */}
         <div className="flex flex-wrap items-center gap-2">
           <Link href="/pos/daily-entry">
-            <Button className="bg-teal-400 font-black hover:bg-teal-300 text-slate-950 gap-2 shadow-xs text-xs h-9">
+            <Button className="bg-emerald-500 font-bold hover:bg-emerald-600 text-white gap-2 shadow-xs text-xs h-9">
               <Plus className="h-4 w-4" /> บันทึกยอดขายรายวัน
             </Button>
           </Link>
@@ -247,11 +247,11 @@ export function DashboardClient({
       </div>
 
       {/* ── Period Selector Toolbar ── */}
-      <Card className="border-teal-200 bg-teal-50/40 shadow-xs">
+      <Card className="border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50 shadow-xs">
         <CardContent className="p-4 space-y-3">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex flex-wrap items-center gap-1.5">
-              <span className="text-xs font-bold text-teal-950 flex items-center gap-1 mr-1">
+              <span className="text-xs font-semibold text-slate-600 dark:text-slate-300 flex items-center gap-1 mr-1">
                 <CalendarRange className="h-3.5 w-3.5 text-teal-700" /> เลือกช่วงเวลาย้อนหลัง:
               </span>
               <Button
@@ -260,7 +260,7 @@ export function DashboardClient({
                 variant={period === "day" ? "default" : "outline"}
                 onClick={() => setPeriod("day")}
                 className={`h-8 text-xs font-bold ${
-                  period === "day" ? "bg-teal-700 text-white" : "bg-white text-slate-700"
+                  period === "day" ? "bg-emerald-500 text-white" : "bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700"
                 }`}
               >
                 🗓️ รายวัน
@@ -271,7 +271,7 @@ export function DashboardClient({
                 variant={period === "week" ? "default" : "outline"}
                 onClick={() => setPeriod("week")}
                 className={`h-8 text-xs font-bold ${
-                  period === "week" ? "bg-teal-700 text-white" : "bg-white text-slate-700"
+                  period === "week" ? "bg-emerald-500 text-white" : "bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700"
                 }`}
               >
                 📅 รายสัปดาห์
@@ -282,7 +282,7 @@ export function DashboardClient({
                 variant={period === "month" ? "default" : "outline"}
                 onClick={() => setPeriod("month")}
                 className={`h-8 text-xs font-bold ${
-                  period === "month" ? "bg-teal-700 text-white" : "bg-white text-slate-700"
+                  period === "month" ? "bg-emerald-500 text-white" : "bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700"
                 }`}
               >
                 📆 รายเดือน
@@ -293,7 +293,7 @@ export function DashboardClient({
                 variant={period === "all" ? "default" : "outline"}
                 onClick={() => setPeriod("all")}
                 className={`h-8 text-xs font-bold ${
-                  period === "all" ? "bg-teal-700 text-white" : "bg-white text-slate-700"
+                  period === "all" ? "bg-emerald-500 text-white" : "bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700"
                 }`}
               >
                 🌐 ภาพรวมทั้งหมด
@@ -304,7 +304,7 @@ export function DashboardClient({
                 variant={period === "custom" ? "default" : "outline"}
                 onClick={() => setPeriod("custom")}
                 className={`h-8 text-xs font-bold ${
-                  period === "custom" ? "bg-teal-700 text-white" : "bg-white text-slate-700"
+                  period === "custom" ? "bg-emerald-500 text-white" : "bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700"
                 }`}
               >
                 🔍 กำหนดช่วงวันเอง
@@ -313,13 +313,13 @@ export function DashboardClient({
 
             {/* Date Navigator for Day / Week / Month */}
             {period !== "all" && period !== "custom" && (
-              <div className="flex items-center gap-1.5 bg-white p-1 rounded-lg border border-teal-200 shadow-2xs">
+              <div className="flex items-center gap-1.5 bg-white dark:bg-slate-800 p-1 rounded-lg border border-slate-200 dark:border-slate-700 shadow-sm">
                 <Button
                   type="button"
                   variant="ghost"
                   size="sm"
                   onClick={() => shiftPeriod(-1)}
-                  className="h-7 w-7 p-0 text-teal-800 hover:bg-teal-50"
+                  className="h-7 w-7 p-0 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700"
                   title="ช่วงก่อนหน้า"
                 >
                   <ChevronLeft className="h-4 w-4" />
@@ -341,7 +341,7 @@ export function DashboardClient({
                   variant="ghost"
                   size="sm"
                   onClick={() => shiftPeriod(1)}
-                  className="h-7 w-7 p-0 text-teal-800 hover:bg-teal-50"
+                  className="h-7 w-7 p-0 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700"
                   title="ช่วงถัดไป"
                 >
                   <ChevronRight className="h-4 w-4" />
@@ -351,7 +351,7 @@ export function DashboardClient({
                   variant="outline"
                   size="sm"
                   onClick={() => setFilterDate("2026-08-31")}
-                  className="h-7 text-[11px] px-2 text-teal-900 border-teal-200 hover:bg-teal-50"
+                  className="h-7 text-[11px] px-2 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700"
                 >
                   งวดปัจจุบัน
                 </Button>
@@ -360,7 +360,7 @@ export function DashboardClient({
 
             {/* Custom Date Range Picker */}
             {period === "custom" && (
-              <div className="flex items-center gap-2 bg-white p-1.5 rounded-lg border border-teal-200 shadow-2xs text-xs">
+              <div className="flex items-center gap-2 bg-white dark:bg-slate-800 p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 shadow-sm text-xs">
                 <span className="text-slate-500 font-semibold">ตั้งแต่:</span>
                 <Input
                   type="date"
@@ -379,8 +379,8 @@ export function DashboardClient({
             )}
           </div>
 
-          <div className="flex items-center justify-between text-xs text-teal-950 font-bold border-t border-teal-200/60 pt-2">
-            <span>📊 กำลังแสดงผลช่วงเวลา: <span className="text-teal-800 font-extrabold">{periodLabel}</span></span>
+          <div className="flex items-center justify-between text-xs text-slate-600 dark:text-slate-400 font-medium border-t border-slate-200 dark:border-slate-700 pt-2">
+            <span>📊 กำลังแสดงผลช่วงเวลา: <span className="text-emerald-600 dark:text-emerald-400 font-semibold">{periodLabel}</span></span>
             <span className="text-slate-500">บันทึกยอดขาย {filteredSales.length} วัน</span>
           </div>
         </CardContent>
@@ -411,11 +411,11 @@ export function DashboardClient({
       {/* ── Core KPI Grid (6 Metric Cards Including Net Profit) ── */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {/* 1. Net Revenue */}
-        <Card className="border-teal-200 shadow-xs">
+        <Card className="border-slate-200 dark:border-slate-700 shadow-sm">
           <CardContent className="p-5 flex items-center justify-between">
             <div className="space-y-1">
               <span className="text-xs font-semibold text-slate-500">รายรับสุทธิจากการบริการ (Net Sales)</span>
-              <div className="text-2xl font-black text-teal-800 font-mono">
+              <div className="text-2xl font-black text-slate-900 dark:text-slate-100 font-mono">
                 ฿{totalNetRevenue.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
               </div>
               <div className="flex items-center gap-2 text-[11px] text-slate-500 font-medium">
@@ -424,25 +424,25 @@ export function DashboardClient({
                 <span className="text-emerald-700 font-bold">สด ฿{totalCash.toLocaleString()}</span>
               </div>
             </div>
-            <div className="rounded-xl bg-teal-50 p-3 text-teal-700">
+            <div className="sc-icon-badge sc-icon-badge-primary rounded-xl">
               <Receipt className="h-6 w-6" />
             </div>
           </CardContent>
         </Card>
 
         {/* 2. Total Combined Expenses */}
-        <Card className="border-amber-200 shadow-xs">
+        <Card className="border-slate-200 dark:border-slate-700 shadow-sm">
           <CardContent className="p-5 flex items-center justify-between">
             <div className="space-y-1">
               <span className="text-xs font-semibold text-slate-500">ต้นทุน & ค่าใช้จ่ายรวม (Expenses & OPEX)</span>
-              <div className="text-2xl font-black text-amber-900 font-mono">
+              <div className="text-2xl font-black text-slate-900 dark:text-slate-100 font-mono">
                 ฿{totalExpensesForPeriod.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
               </div>
               <div className="text-[11px] text-amber-700">
                 ค่าดำเนินการ + เงินเดือนพนักงาน + ภาษี + ค่าเช่า
               </div>
             </div>
-            <div className="rounded-xl bg-amber-50 p-3 text-amber-700">
+            <div className="sc-icon-badge sc-icon-badge-amber rounded-xl">
               <Wallet className="h-6 w-6" />
             </div>
           </CardContent>
@@ -479,25 +479,25 @@ export function DashboardClient({
         </Card>
 
         {/* 4. Total Shoes Volume */}
-        <Card className="border-slate-200 shadow-xs">
+        <Card className="border-slate-200 dark:border-slate-700 shadow-sm">
           <CardContent className="p-5 flex items-center justify-between">
             <div className="space-y-1">
               <span className="text-xs font-semibold text-slate-500">จำนวนรองเท้าที่รับบริการ</span>
-              <div className="text-2xl font-black text-slate-900 font-mono">
+              <div className="text-2xl font-black text-slate-900 dark:text-slate-100 font-mono">
                 {totalShoes.toLocaleString()} คู่
               </div>
               <div className="text-[11px] text-slate-500">
                 S: {sizeSCount} | M: {sizeMCount} | L: {sizeLCount} | XL: {sizeXLCount}
               </div>
             </div>
-            <div className="rounded-xl bg-teal-50 p-3 text-teal-700">
+            <div className="sc-icon-badge sc-icon-badge-primary rounded-xl">
               <Footprints className="h-6 w-6" />
             </div>
           </CardContent>
         </Card>
 
         {/* 5. Total Stock Items */}
-        <Card className="border-slate-200 shadow-xs">
+        <Card className="border-slate-200 dark:border-slate-700 shadow-sm">
           <CardContent className="p-5 flex items-center justify-between">
             <div className="space-y-1">
               <span className="text-xs font-semibold text-slate-500">สต๊อกน้ำยา & อุปกรณ์กลาง</span>
@@ -519,7 +519,7 @@ export function DashboardClient({
         </Card>
 
         {/* 6. Outstanding Receivables (Factoring in AR Payments) */}
-        <Card className="border-slate-200 shadow-xs">
+        <Card className="border-slate-200 dark:border-slate-700 shadow-sm">
           <CardContent className="p-5 flex items-center justify-between">
             <div className="space-y-1">
               <span className="text-xs font-semibold text-slate-500">ยอดค้างชำระ (Outstanding AR)</span>
@@ -534,7 +534,7 @@ export function DashboardClient({
                 {totalOutstanding > 0 ? "ยอดคงเหลือหลังหักรับชำระเพิ่มแล้ว" : "ไม่มียอดค้างชำระในช่วงนี้"}
               </div>
             </div>
-            <div className="rounded-xl bg-rose-50 p-3 text-rose-600">
+            <div className="sc-icon-badge sc-icon-badge-rose rounded-xl">
               <Clock className="h-6 w-6" />
             </div>
           </CardContent>

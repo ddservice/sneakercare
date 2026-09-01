@@ -304,7 +304,7 @@ export function InvoicingClient({
             size="sm"
             variant={activeView === "create" ? "default" : "outline"}
             onClick={() => setActiveView("create")}
-            className={`text-xs gap-1.5 h-9 ${activeView === "create" ? "bg-teal-700 hover:bg-teal-800 text-white" : ""}`}
+            className={`text-xs gap-1.5 h-9 ${activeView === "create" ? "bg-teal-700 hover:bg-emerald-600 text-white" : ""}`}
           >
             <Plus className="h-3.5 w-3.5" /> ออกเอกสารใหม่
           </Button>
@@ -312,7 +312,7 @@ export function InvoicingClient({
             size="sm"
             variant={activeView === "history" ? "default" : "outline"}
             onClick={() => setActiveView("history")}
-            className={`text-xs gap-1.5 h-9 ${activeView === "history" ? "bg-teal-700 hover:bg-teal-800 text-white" : ""}`}
+            className={`text-xs gap-1.5 h-9 ${activeView === "history" ? "bg-teal-700 hover:bg-emerald-600 text-white" : ""}`}
           >
             <History className="h-3.5 w-3.5" /> ประวัติเอกสารทั้งหมด ({existingDocs.length})
           </Button>
@@ -329,7 +329,7 @@ export function InvoicingClient({
                 onClick={() => setDocType(type)}
                 className={`rounded-lg px-4 py-2 text-xs font-bold transition-all flex items-center gap-1.5 ${
                   docType === type
-                    ? "bg-teal-700 text-white shadow-xs"
+                    ? "bg-emerald-500 text-white shadow-xs"
                     : "text-slate-600 bg-slate-50 hover:bg-slate-100 border border-slate-200"
                 }`}
               >
@@ -345,7 +345,7 @@ export function InvoicingClient({
             {/* ── Left Column: Form Builder (7 cols) ── */}
             <div className="lg:col-span-7 space-y-6">
               {/* Customer Info Card */}
-              <Card className="border-slate-200 shadow-xs">
+              <Card className="border-slate-200 dark:border-slate-700 shadow-sm">
                 <CardHeader className="border-b border-slate-100 pb-3">
                   <div className="flex items-center justify-between">
                     <div>
@@ -392,7 +392,7 @@ export function InvoicingClient({
                         size="sm"
                         disabled={isSearchingDbd}
                         onClick={() => handleDbdSearch()}
-                        className="bg-teal-700 hover:bg-teal-800 text-white text-xs h-9 px-4 shrink-0 font-semibold gap-1"
+                        className="bg-teal-700 hover:bg-emerald-600 text-white text-xs h-9 px-4 shrink-0 font-semibold gap-1"
                       >
                         {isSearchingDbd ? "กำลังค้นหา..." : "ดึงข้อมูล DBD"}
                       </Button>
@@ -552,7 +552,7 @@ export function InvoicingClient({
                           <Button
                             type="button"
                             size="sm"
-                            className="h-7 px-2 text-[11px] font-bold bg-white text-slate-800 border border-slate-300 group-hover:bg-teal-700 group-hover:text-white group-hover:border-teal-700 shrink-0 shadow-2xs"
+                            className="h-7 px-2 text-[11px] font-bold bg-white text-slate-800 border border-slate-300 group-hover:bg-emerald-600 group-hover:text-white group-hover:border-teal-700 shrink-0 shadow-2xs"
                           >
                             <Plus className="h-3 w-3 mr-0.5" /> เพิ่ม
                           </Button>
@@ -571,7 +571,7 @@ export function InvoicingClient({
 
               {/* DO Picker Section for Billing Notes */}
               {docType === "BILLING_NOTE" && (
-                <Card className="border-teal-200 bg-teal-50/40 shadow-xs">
+                <Card className="border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50 shadow-xs">
                   <CardHeader className="border-b border-teal-100 pb-3">
                     <CardTitle className="text-sm font-bold text-teal-900 flex items-center gap-2">
                       <Layers className="h-4 w-4 text-teal-700" />
@@ -619,7 +619,7 @@ export function InvoicingClient({
               )}
 
               {/* Line Items Table */}
-              <Card className="border-slate-200 shadow-xs">
+              <Card className="border-slate-200 dark:border-slate-700 shadow-sm">
                 <CardHeader className="border-b border-slate-100 pb-3 flex flex-row items-center justify-between">
                   <div>
                     <CardTitle className="text-sm font-bold">รายการสินค้า / บริการ</CardTitle>
@@ -782,7 +782,7 @@ export function InvoicingClient({
                     type="button"
                     disabled={isPending}
                     onClick={handleCreateDocument}
-                    className="w-full h-11 bg-teal-700 hover:bg-teal-800 text-white font-bold text-sm shadow-xs"
+                    className="w-full h-11 bg-teal-700 hover:bg-emerald-600 text-white font-bold text-sm shadow-xs"
                   >
                     {isPending ? "กำลังบันทึกเอกสาร..." : `ออกเอกสาร ${DOC_TYPE_CONFIG[docType].labelTh}`}
                   </Button>
@@ -802,7 +802,7 @@ export function InvoicingClient({
         </>
       ) : (
         /* ── HISTORY & CONVERSION PIPELINE VIEW ── */
-        <Card className="border-slate-200 shadow-xs">
+        <Card className="border-slate-200 dark:border-slate-700 shadow-sm">
           <CardHeader className="border-b border-slate-100 pb-3 flex flex-row items-center justify-between">
             <div>
               <CardTitle className="text-sm font-bold">รายการเอกสารทั้งหมดในระบบ</CardTitle>
@@ -923,7 +923,7 @@ export function InvoicingClient({
                 <Button
                   size="sm"
                   onClick={() => window.print()}
-                  className="bg-teal-700 hover:bg-teal-800 text-white font-bold text-xs gap-1.5 shadow-md"
+                  className="bg-teal-700 hover:bg-emerald-600 text-white font-bold text-xs gap-1.5 shadow-md"
                 >
                   <Printer className="h-4 w-4" /> พิมพ์เอกสาร A4
                 </Button>

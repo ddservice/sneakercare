@@ -387,7 +387,7 @@ export function InventoryClient({
                 </div>
                 <div className="text-[11px] text-slate-400">คำนวณตามต้นทุนถัวเฉลี่ยจริง</div>
               </div>
-              <div className="rounded-xl bg-teal-50 p-3 text-teal-700">
+              <div className="sc-icon-badge sc-icon-badge-primary rounded-xl">
                 <TrendingDown className="h-6 w-6" />
               </div>
             </CardContent>
@@ -396,7 +396,7 @@ export function InventoryClient({
       </div>
 
       {/* ── Search & Filter Toolbar ── */}
-      <Card className="border-slate-200 shadow-xs">
+      <Card className="border-slate-200 dark:border-slate-700 shadow-sm">
         <CardContent className="p-4 flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-wrap items-center gap-2 flex-1">
             <div className="relative w-64">
@@ -702,7 +702,7 @@ export function InventoryClient({
                   type="submit"
                   disabled={isPending}
                   size="sm"
-                  className="bg-teal-700 hover:bg-teal-800 text-white font-bold text-xs h-9 px-4 gap-1.5"
+                  className="bg-teal-700 hover:bg-emerald-600 text-white font-bold text-xs h-9 px-4 gap-1.5"
                 >
                   {isPending ? "กำลังบันทึก..." : <><Check className="h-4 w-4" /> บันทึกการแก้ไข</>}
                 </Button>

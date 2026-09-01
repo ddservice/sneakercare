@@ -39,7 +39,7 @@ export function StockInForm({ items, branchId }: { items: ItemOption[]; branchId
           type="button"
           onClick={() => setIsNewItem(true)}
           className={`flex-1 py-1.5 px-3 rounded-md text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${
-            isNewItem ? "bg-teal-700 text-white shadow-xs" : "text-slate-600 hover:text-slate-900"
+            isNewItem ? "bg-emerald-500 text-white shadow-xs" : "text-slate-600 hover:text-slate-900"
           }`}
         >
           <PlusCircle className="h-3.5 w-3.5" />
@@ -66,7 +66,7 @@ export function StockInForm({ items, branchId }: { items: ItemOption[]; branchId
           </Select>
         </div>
       ) : (
-        <div className="rounded-xl border border-teal-200 bg-teal-50/40 p-4 space-y-3.5">
+        <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50 p-4 space-y-3.5">
           <div className="text-xs font-bold text-teal-900 flex items-center gap-1.5">
             <Package className="h-4 w-4 text-teal-700" />
             ข้อมูลสินค้าใหม่ (จะบันทึกเข้าแคตตาล็อกสินค้าอัตโนมัติ)
@@ -184,7 +184,7 @@ export function StockInForm({ items, branchId }: { items: ItemOption[]; branchId
       <Button
         type="submit"
         disabled={pending}
-        className="bg-teal-700 hover:bg-teal-800 text-white text-xs h-10 font-bold shadow-xs"
+        className="bg-teal-700 hover:bg-emerald-600 text-white text-xs h-10 font-bold shadow-xs"
       >
         {pending ? "กำลังบันทึก..." : isNewItem ? "+ สร้างสินค้าใหม่และรับเข้าสต๊อก" : "บันทึกรับของเข้า"}
       </Button>

@@ -61,7 +61,7 @@ const EMPLOYEES: EmployeeInfo[] = [
     wageNote: "เงินเดือนประจำ (12,000 ฿)",
     offDay: 3, // Wed
     offDayName: "วันพุธ",
-    color: "bg-teal-700 text-white",
+    color: "bg-emerald-500 text-white",
   },
   {
     id: "milk",
@@ -339,7 +339,7 @@ export function RosterClient() {
                 <Badge
                   className={
                     emp.type === "monthly"
-                      ? "bg-teal-700 text-white font-semibold text-[10px]"
+                      ? "bg-emerald-500 text-white font-semibold text-[10px]"
                       : "bg-amber-500 text-slate-950 font-bold text-[10px]"
                   }
                 >
@@ -379,7 +379,7 @@ export function RosterClient() {
                 <Clock className="h-5 w-5" />
               </div>
               <div>
-                <h3 className="text-base font-bold text-slate-900">
+                <h3 className="text-base font-bold text-slate-900 dark:text-slate-100">
                   ตารางงานประจำเดือน {MONTH_NAMES_THAI[currentMonth]} {currentYear + 543}
                 </h3>
                 <p className="text-xs text-slate-500">
@@ -485,7 +485,7 @@ export function RosterClient() {
                       {/* Morning Shift */}
                       <div className="flex items-start gap-1 text-[10px] text-slate-700">
                         <Sun className="h-3 w-3 text-amber-500 shrink-0 mt-0.5" />
-                        <span className="font-semibold text-teal-800">
+                        <span className="font-semibold text-emerald-600 dark:text-emerald-400">
                           เช้า: {day.morning.join(", ")}
                         </span>
                       </div>

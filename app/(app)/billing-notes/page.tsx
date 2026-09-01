@@ -62,7 +62,7 @@ export default async function BillingNotesPage() {
             </p>
           </div>
           <Link href="/invoicing">
-            <Button className="bg-teal-700 hover:bg-teal-800 text-white text-xs gap-1.5 h-9">
+            <Button className="bg-teal-700 hover:bg-emerald-600 text-white text-xs gap-1.5 h-9">
               <Plus className="h-4 w-4" /> ไปที่หน้าออกเอกสาร & วางบิล
             </Button>
           </Link>

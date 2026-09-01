@@ -547,7 +547,7 @@ export function ExpensesClient({ initialData }: { initialData: ExpensesPayload }
                 size="sm"
                 onClick={() => handleSelectMonth("08/2026")}
                 disabled={isPending || selectedMonth === "08/2026"}
-                className="h-8 text-xs font-bold bg-teal-800 hover:bg-teal-700 text-white shadow-2xs"
+                className="h-8 text-xs font-bold bg-teal-800 hover:bg-emerald-500 text-white shadow-2xs"
               >
                 🎯 งวดล่าสุด (ส.ค. 69)
               </Button>
@@ -559,7 +559,7 @@ export function ExpensesClient({ initialData }: { initialData: ExpensesPayload }
                 onClick={() => handleSelectMonth("all")}
                 disabled={isPending}
                 className={`h-8 text-xs font-bold ${
-                  selectedMonth === "all" ? "bg-teal-700 text-white" : "bg-white text-slate-700 border-slate-300"
+                  selectedMonth === "all" ? "bg-emerald-500 text-white" : "bg-white text-slate-700 border-slate-300"
                 }`}
               >
                 🌐 รวมสะสมทุกงวด
@@ -589,11 +589,11 @@ export function ExpensesClient({ initialData }: { initialData: ExpensesPayload }
 
       {/* ── Top Level Metric Summary Cards ── */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 print:hidden">
-        <Card className="border-teal-200 shadow-xs">
+        <Card className="border-slate-200 dark:border-slate-700 shadow-sm">
           <CardContent className="p-4 flex items-center justify-between">
             <div className="space-y-1">
               <span className="text-xs font-semibold text-slate-500">ยอดขายบริการ (Revenue Base)</span>
-              <div className="text-xl font-black text-teal-800 font-mono">
+              <div className="text-xl font-black text-slate-900 dark:text-slate-100 font-mono">
                 ฿{data.totalMonthlySales.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
               </div>
               <div className="text-[10px] text-slate-400">ฐานคำนวณค่าคอมมิชชั่น</div>
@@ -619,7 +619,7 @@ export function ExpensesClient({ initialData }: { initialData: ExpensesPayload }
           </CardContent>
         </Card>
 
-        <Card className="border-amber-200 shadow-xs">
+        <Card className="border-slate-200 dark:border-slate-700 shadow-sm">
           <CardContent className="p-4 flex items-center justify-between">
             <div className="space-y-1">
               <span className="text-xs font-semibold text-slate-500">ค่าดำเนินการดำเนินงาน (OPEX)</span>
@@ -793,7 +793,7 @@ export function ExpensesClient({ initialData }: { initialData: ExpensesPayload }
             variant={selectedCategoryFilter === "all" ? "default" : "outline"}
             onClick={() => setSelectedCategoryFilter("all")}
             className={`h-7 text-[11px] font-bold ${
-              selectedCategoryFilter === "all" ? "bg-teal-700 text-white" : "bg-white text-slate-700"
+              selectedCategoryFilter === "all" ? "bg-emerald-500 text-white" : "bg-white text-slate-700"
             }`}
           >
             🌐 ทั้งหมด ({data.opexList.length + data.payslips.length})
@@ -868,7 +868,7 @@ export function ExpensesClient({ initialData }: { initialData: ExpensesPayload }
                       <Badge
                         className={`text-[10px] font-bold shrink-0 ${
                           isMonthly
-                            ? "bg-teal-700 text-white hover:bg-teal-800"
+                            ? "bg-emerald-500 text-white hover:bg-emerald-600"
                             : "bg-amber-500 text-slate-950 hover:bg-amber-600"
                         }`}
                       >
@@ -957,7 +957,7 @@ export function ExpensesClient({ initialData }: { initialData: ExpensesPayload }
                         <Label className="font-bold text-teal-900 flex items-center gap-1">
                           <Percent className="h-3 w-3 text-teal-700" /> คอมมิชชั่น (%):
                         </Label>
-                        <span className="font-mono font-bold text-teal-800">+฿{p.commission.toLocaleString()}</span>
+                        <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400">+฿{p.commission.toLocaleString()}</span>
                       </div>
                       <select
                         value={draft.commPct}
@@ -1094,7 +1094,7 @@ export function ExpensesClient({ initialData }: { initialData: ExpensesPayload }
                             <span>{catMeta.icon}</span> {catMeta.shortLabel}
                           </span>
                         </td>
-                        <td className="px-3 py-2.5 font-bold text-slate-900">{item.name}</td>
+                        <td className="px-3 py-2.5 font-bold text-slate-900 dark:text-slate-100">{item.name}</td>
                         <td className="px-3 py-2.5 text-slate-600">{item.payMethod}</td>
                         <td className="px-4 py-2.5 text-right font-mono font-bold text-slate-950">
                           ฿{item.amount.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
@@ -1139,7 +1139,7 @@ export function ExpensesClient({ initialData }: { initialData: ExpensesPayload }
                   <Plus className="h-4 w-4" />
                 </div>
                 <div>
-                  <h3 className="text-base font-bold text-slate-900">บันทึกค่าใช้จ่ายใหม่ (6 หมวดหมู่มาตรฐาน)</h3>
+                  <h3 className="text-base font-bold text-slate-900 dark:text-slate-100">บันทึกค่าใช้จ่ายใหม่ (6 หมวดหมู่มาตรฐาน)</h3>
                   <p className="text-xs text-slate-500">บันทึกรายจ่ายดำเนินงานร้าน ค่าน้ำ ค่าไฟ เคมีภัณฑ์ หรือการตลาด</p>
                 </div>
               </div>
@@ -1270,7 +1270,7 @@ export function ExpensesClient({ initialData }: { initialData: ExpensesPayload }
                   <Edit className="h-4 w-4" />
                 </div>
                 <div>
-                  <h3 className="text-base font-bold text-slate-900">แก้ไขข้อมูล & สถานะพนักงาน</h3>
+                  <h3 className="text-base font-bold text-slate-900 dark:text-slate-100">แก้ไขข้อมูล & สถานะพนักงาน</h3>
                   <p className="text-xs text-slate-500">ปรับเปลี่ยนสถานะประจำ/ทดลองงาน และข้อมูลบัญชี</p>
                 </div>
               </div>
@@ -1296,7 +1296,7 @@ export function ExpensesClient({ initialData }: { initialData: ExpensesPayload }
                     }}
                     className={`p-3 rounded-xl border text-center font-bold transition-all ${
                       editEmpType === "monthly"
-                        ? "bg-teal-700 text-white border-teal-700 shadow-md ring-2 ring-teal-500/30"
+                        ? "bg-emerald-500 text-white border-teal-700 shadow-md ring-2 ring-teal-500/30"
                         : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100"
                     }`}
                   >
@@ -1424,7 +1424,7 @@ export function ExpensesClient({ initialData }: { initialData: ExpensesPayload }
                   type="submit"
                   disabled={isPending}
                   size="sm"
-                  className="bg-teal-700 hover:bg-teal-800 text-white font-bold text-xs h-9 px-4 gap-1"
+                  className="bg-teal-700 hover:bg-emerald-600 text-white font-bold text-xs h-9 px-4 gap-1"
                 >
                   <Check className="h-4 w-4" /> บันทึกการเปลี่ยนแปลง
                 </Button>
@@ -1444,7 +1444,7 @@ export function ExpensesClient({ initialData }: { initialData: ExpensesPayload }
                   <UserPlus className="h-4 w-4" />
                 </div>
                 <div>
-                  <h3 className="text-base font-bold text-slate-900">เพิ่มพนักงานใหม่เข้าสู่ระบบ</h3>
+                  <h3 className="text-base font-bold text-slate-900 dark:text-slate-100">เพิ่มพนักงานใหม่เข้าสู่ระบบ</h3>
                   <p className="text-xs text-slate-500">บันทึกข้อมูลพนักงานคนที่ 4, 5... พร้อมระบบเงินเดือน</p>
                 </div>
               </div>
@@ -1483,7 +1483,7 @@ export function ExpensesClient({ initialData }: { initialData: ExpensesPayload }
                     }}
                     className={`p-2.5 rounded-xl border text-center font-bold transition-all ${
                       newStaffType === "monthly"
-                        ? "bg-teal-700 text-white border-teal-700 shadow-xs"
+                        ? "bg-emerald-500 text-white border-teal-700 shadow-xs"
                         : "bg-slate-50 text-slate-700 border-slate-200"
                     }`}
                   >
@@ -1602,7 +1602,7 @@ export function ExpensesClient({ initialData }: { initialData: ExpensesPayload }
             <div className="flex items-center justify-between border-b border-slate-200 pb-3 print:hidden">
               <div className="flex items-center gap-2">
                 <ShieldCheck className="h-5 w-5 text-teal-700" />
-                <span className="text-sm font-bold text-slate-900">
+                <span className="text-sm font-bold text-slate-900 dark:text-slate-100">
                   ใบแจ้งเงินเดือน / สลิปเงินเดือนพนักงาน (Official Payslip Voucher)
                 </span>
               </div>
@@ -1610,7 +1610,7 @@ export function ExpensesClient({ initialData }: { initialData: ExpensesPayload }
                 <Button
                   size="sm"
                   onClick={() => window.print()}
-                  className="bg-teal-700 hover:bg-teal-800 text-white font-bold text-xs gap-1.5 shadow-md"
+                  className="bg-teal-700 hover:bg-emerald-600 text-white font-bold text-xs gap-1.5 shadow-md"
                 >
                   <Printer className="h-4 w-4" /> พิมพ์สลิปเงินเดือนทางการ (Print A4)
                 </Button>

@@ -5,7 +5,7 @@ import { Printer } from "lucide-react";
 
 export function PrintButton({
   label = "สั่งพิมพ์ / บันทึก PDF (A4)",
-  className = "bg-teal-700 hover:bg-teal-800 text-white text-xs gap-1.5 font-bold shadow-xs",
+  className = "bg-teal-700 hover:bg-emerald-600 text-white text-xs gap-1.5 font-bold shadow-xs",
 }: {
   label?: string;
   className?: string;
