@@ -171,7 +171,6 @@ CLAUDE.md                 คู่มือนี้ — อัปเดตท�
 - `npm run test:legacy` — ตรวจแถบเตือน "ประมาณการ" ในหน้าภาพรวมของ legacy
 - `npm run test:reports` — ตรวจตรรกะช่วงเดือน/CSV/เลขหน้า (46 ข้อ)
 - `npm run deploy` — คำสั่ง Deploy ไปยัง VPS (`157.85.108.84`) อัตโนมัติในคลิกเดียว
-- `node scripts/backup-db.mjs` — สคริปต์สำรองฐานข้อมูลอัตโนมัติบน VPS
 - `bash scripts/backup-db-to-r2.sh` — สำรอง DB แบบ `pg_dump` แล้วอัปโหลดไป Cloudflare R2 พร้อมลบไฟล์เก่าเกิน 90 วัน
 - `bash scripts/verify-backup.sh [--deep]` — ตรวจว่าไฟล์สำรองล่าสุดกู้คืนได้จริง
 - `npm run test:migration` — รัน migration 0011 ใส่ Postgres จริง (PGlite/WASM ไม่ต้องมี Docker)
@@ -350,11 +349,27 @@ SQL ไฟล์นี้ผ่านการรันจริงบน Postgr
   block ของ header — แต่ถ้าวันหลังเพิ่ม `backdrop-blur`/`transform`/`will-change` ให้ ancestor
   ตัวไหนของ modal พวกนี้ ให้นึกถึงบั๊กนี้ก่อน (`components/ui/dialog.tsx` ปลอดภัยอยู่แล้วเพราะใช้
   Radix `Portal` ทำแบบเดียวกันโดยธรรมชาติ)
-- **🔒 พบ secret จริงฝังอยู่ใน repo (แจ้งผู้ใช้แล้ว รอการยืนยันก่อนแก้):** `scripts/test-login.mjs`
-  มี Supabase `service_role` key แบบข้อความล้วน + รหัสผ่าน admin ฝังตรงในโค้ด (อยู่ใน git history
-  บน `master` มาตั้งแต่ commit `70f4472`) key นี้ข้าม RLS ได้ทั้งหมด — **ยังไม่ได้แก้/rotate**
-  เพราะเป็นการเปลี่ยนแปลง credential ของ production ต้องรอผู้ใช้ยืนยันก่อน (rotate key จะกระทบ
-  ทุกที่ที่ใช้ `SUPABASE_SERVICE_ROLE_KEY` อยู่ ต้องอัปเดตพร้อมกันทั้ง `.env.local` และ VPS)
+- **🔒 [แก้บางส่วน 2026-09-02] secret จริงที่เคยฝังอยู่ใน repo** — พบ 3 ไฟล์ที่ hardcode ค่าจริง
+  ตรงในโค้ด: `scripts/test-login.mjs` และ `scripts/set-admin-pw.mjs` มี Supabase `service_role`
+  key แบบข้อความล้วน + อีเมล/รหัสผ่าน admin จริง (`admin@ddserviceth.com` / `password123`), และ
+  `scripts/backup-db.mjs` มี connection string ของ Postgres แบบเต็มรวมรหัสผ่าน (สคริปต์นี้ล้าสมัย
+  แล้ว ถูกแทนที่ด้วย `backup-db-to-r2.sh` ไปนานแล้ว — **ลบไฟล์ทิ้งไปเลย** ไม่ใช่แก้)
+  **ทำไปแล้ว:** แก้ทั้งสองไฟล์ให้อ่านจาก env var/argument แทน hardcode (ตรวจแล้วว่า login ได้จริง
+  ด้วยรหัสผ่านใหม่) และ **rotate รหัสผ่านจริงของบัญชี `admin` แล้ว** (รหัสสุ่มใหม่ 20 ตัวอักษร
+  ผ่าน `sb.auth.admin.updateUserById()`) บัญชี `milo@ddserviceth.com` (แอดมินอีกคน) ไม่ได้แตะ
+  เพราะรหัสผ่านของบัญชีนั้นไม่เคยหลุดในโค้ด
+  **ยังไม่ได้ทำ (ต้องขอผู้ใช้ยืนยันก่อน — เสี่ยงกระทบ production ถ้าทำผิดขั้นตอน):** rotate
+  Supabase `service_role` key ตัวจริง (ตัวที่เคยหลุดอยู่ใน 2 ไฟล์ข้างบน) — key นี้ยังใช้งานได้อยู่จน
+  กว่าจะไป disable ที่ Supabase Dashboard (Project Settings → API Keys → legacy `service_role`)
+  โปรเจกต์นี้มี key แบบใหม่ (`sb_secret_...`) ที่ทำหน้าที่แทนได้โดยไม่ต้องรัน JWT secret ทั้งระบบ
+  (ไม่กระทบ session ของผู้ใช้ที่ login ค้างอยู่) แต่การสลับ `.env.local`/VPS ไปใช้ key ใหม่ + restart
+  + verify ก่อน disable key เก่า เป็นขั้นตอนที่พลาดแล้วกระทบแอปทั้งระบบทันที จึงรอให้ผู้ใช้ยืนยันชัดเจน
+  ก่อนเริ่ม — เช่นเดียวกับรหัสผ่าน database (`SUPABASE_DB_URL` ที่หลุดใน `backup-db.mjs` เดิม อาจ
+  เป็นรหัสเดียวกับที่ backup-db-to-r2.sh ใช้จริงบน VPS อยู่ตอนนี้ ถ้า rotate ต้องอัปเดต
+  `/home/ddservice/sneakercare-backup.env` บน VPS พร้อมกันทันที ไม่งั้น backup รายวันจะพังคืนนั้นเลย)
+- **พบด้วย: บัญชีทดสอบ `rlsverify35.tmp.1787803110265@local.test`** ค้างอยู่ใน Supabase Auth
+  (สร้างเมื่อ 2026-08-27 น่าจะมาจาก pgTAP RLS test ที่ไม่ได้ลบผู้ใช้ทิ้งหลังทดสอบ) ไม่ใช่ความเสี่ยง
+  เร่งด่วน (ไม่รู้รหัสผ่าน ไม่ใช่ตัวไหนที่หลุดในโค้ด) แต่ควรลบทิ้งเพื่อความสะอาด — ยังไม่ได้ลบ
 
 ## สถานะงานล่าสุด (2026-09-01, รอบเย็น — ตรวจ pgTAP + browser)
 
