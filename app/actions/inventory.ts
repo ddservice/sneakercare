@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireProfile } from "@/lib/auth";
 import { getSelectedBranchId } from "@/lib/branch";
+import { logAudit } from "@/lib/audit";
 
 export type InventoryItemInput = {
   id?: string;
@@ -16,6 +17,45 @@ export type InventoryItemInput = {
   avg_unit_cost: number;
   min_stock_level: number;
 };
+
+/**
+ * เปิด/ปิดการแจ้งเตือนสต๊อกต่ำเฉพาะรายการนี้ (item_stock.alert_muted)
+ *
+ * ทำไมต้องมี: บาง item (เช่น กาวยาง, อะซิโตน) จงใจสั่งซื้อทีละน้อยจนติดขั้นต่ำอยู่บ่อยๆ
+ * โดยตั้งใจ (ไม่ใช่ของหมดจริง) หรือเป็นของใช้ภายในร้านที่ไม่ต้องเติมสต๊อกตามรอบ — ถ้าไม่มีทาง
+ * ปิดแจ้งเตือนต่อรายการ พนักงานจะโดนเตือนซ้ำทุกวันจนเมินการแจ้งเตือนจริงๆ ไปด้วย
+ *
+ * Edge Function inv-low-stock-alert (ที่รันจริงบน production) เช็คคอลัมน์นี้อยู่แล้ว
+ * ฟังก์ชันนี้แค่เปิดทางให้ผู้ใช้ตั้งค่าจาก UI เท่านั้น ไม่ต้องแก้อะไรฝั่ง cron/Edge Function
+ */
+export async function toggleItemAlertMute(itemId: string, muted: boolean) {
+  const profile = await requireProfile();
+  const branchId = await getSelectedBranchId(profile);
+  const supabase = createAdminClient();
+
+  let q = (supabase.from("item_stock" as any) as any)
+    .update({ alert_muted: muted })
+    .eq("item_id", itemId);
+  if (branchId) q = q.eq("branch_id", branchId);
+
+  const { error } = await q;
+  if (error) {
+    return { success: false, error: "ไม่สามารถเปลี่ยนสถานะการแจ้งเตือนได้: " + error.message };
+  }
+
+  await logAudit({
+    action: "UPDATE",
+    entity: "inventory_item",
+    entity_id: itemId,
+    actor_id: profile.id,
+    actor_name: profile.display_name,
+    detail: { alert_muted: muted },
+  });
+
+  revalidatePath("/inventory");
+  revalidatePath("/dashboard");
+  return { success: true };
+}
 
 /**
  * Update existing inventory item and its stock level

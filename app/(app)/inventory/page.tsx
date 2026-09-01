@@ -38,6 +38,7 @@ export default async function InventoryHubPage() {
       total_value: currentQty * unitCost,
       is_low_stock: currentQty <= minStock,
       is_active: item.is_active ?? true,
+      alert_muted: stockRow?.alert_muted ?? false,
     };
   });
 

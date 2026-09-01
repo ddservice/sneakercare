@@ -27,11 +27,15 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   let lowStockCount = 0;
   try {
     const adminDb = createAdminClient();
-    let q = (adminDb.from("item_stock" as any) as any).select("id, current_qty, min_stock_level");
+    let q = (adminDb.from("item_stock" as any) as any).select(
+      "id, current_qty, min_stock_level, alert_muted"
+    );
     if (selectedBranchId) q = q.eq("branch_id", selectedBranchId);
     const { data: stockRows } = await q;
-    lowStockCount = (stockRows || []).filter((s: any) =>
-      Number(s.current_qty ?? 0) <= Number(s.min_stock_level ?? 0)
+    // ไม่นับรายการที่ปิดแจ้งเตือนไว้ — ไม่งั้น badge จะขึ้นตัวเลขค้างที่พนักงานไม่มีทางเคลียร์ได้
+    // (เพราะ Telegram ก็ไม่ส่งแจ้งรายการนั้นอยู่แล้วเช่นกัน ดู supabase/functions ที่ deploy จริง)
+    lowStockCount = (stockRows || []).filter(
+      (s: any) => !s.alert_muted && Number(s.current_qty ?? 0) <= Number(s.min_stock_level ?? 0)
     ).length;
   } catch {
     // non-fatal — badge just won't show

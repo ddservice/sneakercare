@@ -5,6 +5,7 @@ import {
   updateInventoryItem,
   createInventoryItem,
   deleteInventoryItem,
+  toggleItemAlertMute,
   type InventoryItemInput,
 } from "@/app/actions/inventory";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -34,6 +35,8 @@ import {
   Upload,
   Layers,
   Filter,
+  Bell,
+  BellOff,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -51,6 +54,9 @@ export type InventoryRow = {
   total_value: number;
   is_low_stock: boolean;
   is_active: boolean;
+  /** ปิดแจ้งเตือนสต๊อกต่ำเฉพาะรายการนี้ — เช่น ของใช้ภายในร้านที่ไม่ต้องเติมตามรอบ
+   * หรือของที่ตั้งใจสั่งทีละน้อยจนติดขั้นต่ำเป็นปกติ ไม่ใช่ของหมดจริง */
+  alert_muted: boolean;
 };
 
 export function InventoryClient({
@@ -78,6 +84,7 @@ export function InventoryClient({
   const [editQty, setEditQty] = useState<number>(0);
   const [editCost, setEditCost] = useState<number>(0);
   const [editMin, setEditMin] = useState<number>(1);
+  const [editMuted, setEditMuted] = useState<boolean>(false);
 
   // Create Modal State
   const [isCreateOpen, setIsCreateOpen] = useState(false);
@@ -122,6 +129,31 @@ export function InventoryClient({
     setEditQty(item.current_qty);
     setEditCost(item.avg_unit_cost);
     setEditMin(item.min_stock_level);
+    setEditMuted(item.alert_muted);
+  }
+
+  // สลับสถานะ "ปิดแจ้งเตือน" แบบเร็ว — ไม่ต้องเปิด modal แก้ไขทั้งหมดถ้าแค่จะปิด/เปิดแจ้งเตือน
+  function handleToggleMute(item: InventoryRow) {
+    const nextMuted = !item.alert_muted;
+    setItems((prev) =>
+      prev.map((i) => (i.id === item.id ? { ...i, alert_muted: nextMuted } : i))
+    );
+    startTransition(async () => {
+      const res = await toggleItemAlertMute(item.item_id, nextMuted);
+      if (res.success) {
+        toast.success(
+          nextMuted
+            ? `ปิดแจ้งเตือนสต๊อกต่ำของ "${item.name}" แล้ว`
+            : `เปิดแจ้งเตือนสต๊อกต่ำของ "${item.name}" อีกครั้ง`
+        );
+      } else {
+        // ย้อนกลับถ้าบันทึกไม่สำเร็จ ไม่ให้ UI ค้างสถานะที่ยังไม่ได้บันทึกจริง
+        setItems((prev) =>
+          prev.map((i) => (i.id === item.id ? { ...i, alert_muted: item.alert_muted } : i))
+        );
+        toast.error(res.error || "เปลี่ยนสถานะการแจ้งเตือนไม่สำเร็จ");
+      }
+    });
   }
 
   function handleCloseEdit() {
@@ -148,7 +180,19 @@ export function InventoryClient({
         min_stock_level: editMin,
       });
 
-      if (res.success) {
+      if (!res.success) {
+        toast.error(res.error || "เกิดข้อผิดพลาดในการแก้ไข");
+        return;
+      }
+
+      // สถานะแจ้งเตือนบันทึกแยกจากฟิลด์อื่น (คนละตาราง/action) — ยิงต่อเมื่อค่าเปลี่ยนจริงเท่านั้น
+      let muteError: string | undefined;
+      if (editMuted !== editingItem.alert_muted) {
+        const muteRes = await toggleItemAlertMute(editingItem.item_id, editMuted);
+        if (!muteRes.success) muteError = muteRes.error;
+      }
+
+      if (!muteError) {
         toast.success(`แก้ไขข้อมูล "${editName}" สำเร็จเรียบร้อย`);
         setItems((prev) =>
           prev.map((i) =>
@@ -163,13 +207,15 @@ export function InventoryClient({
                   min_stock_level: editMin,
                   total_value: editQty * editCost,
                   is_low_stock: editQty <= editMin,
+                  alert_muted: editMuted,
                 }
               : i
           )
         );
         handleCloseEdit();
       } else {
-        toast.error(res.error || "เกิดข้อผิดพลาดในการแก้ไข");
+        // ข้อมูลสินค้าหลักบันทึกไปแล้ว แค่สถานะแจ้งเตือนล้มเหลว — บอกให้ชัดว่าอันไหนติด
+        toast.error(muteError || "บันทึกข้อมูลสินค้าสำเร็จ แต่ตั้งค่าแจ้งเตือนไม่สำเร็จ");
       }
     });
   }
@@ -209,6 +255,7 @@ export function InventoryClient({
             total_value: newQty * newCost,
             is_low_stock: newQty <= newMin,
             is_active: true,
+            alert_muted: false,
           },
           ...prev,
         ]);
@@ -538,18 +585,54 @@ export function InventoryClient({
                     </td>
                   )}
                   <td className="px-3 py-3 text-center">
-                    {item.is_low_stock ? (
-                      <Badge className="bg-rose-100 text-rose-700 border-rose-200 text-[10px] font-bold">
-                        ⚠️ ใกล้หมด
-                      </Badge>
-                    ) : (
-                      <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200 text-[10px] font-bold">
-                        ✓ ปกติ
-                      </Badge>
-                    )}
+                    <div className="flex flex-col items-center gap-1">
+                      {item.is_low_stock ? (
+                        <Badge
+                          className={
+                            item.alert_muted
+                              ? "bg-slate-100 text-slate-500 border-slate-200 text-[10px] font-bold"
+                              : "bg-rose-100 text-rose-700 border-rose-200 text-[10px] font-bold"
+                          }
+                        >
+                          ⚠️ ใกล้หมด
+                        </Badge>
+                      ) : (
+                        <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200 text-[10px] font-bold">
+                          ✓ ปกติ
+                        </Badge>
+                      )}
+                      {item.alert_muted && (
+                        <span
+                          className="inline-flex items-center gap-0.5 text-[10px] font-medium text-slate-400"
+                          title="ปิดแจ้งเตือนสต๊อกต่ำสำหรับรายการนี้ — จะไม่มีข้อความ Telegram ส่งแม้ต่ำกว่าขั้นต่ำ"
+                        >
+                          <BellOff className="h-2.5 w-2.5" /> ปิดแจ้งเตือน
+                        </span>
+                      )}
+                    </div>
                   </td>
                   <td className="px-4 py-3 text-center whitespace-nowrap">
                     <div className="flex items-center justify-center gap-1.5">
+                      {canEdit && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleToggleMute(item)}
+                          className={`h-7 w-7 p-0 ${
+                            item.alert_muted
+                              ? "text-amber-500 hover:text-amber-600 hover:bg-amber-50"
+                              : "text-slate-400 hover:text-slate-600"
+                          }`}
+                          title={
+                            item.alert_muted
+                              ? "เปิดแจ้งเตือนสต๊อกต่ำอีกครั้ง"
+                              : "ปิดแจ้งเตือนสต๊อกต่ำ (เช่น ของใช้ในร้าน หรือของที่ตั้งใจสั่งทีละน้อย)"
+                          }
+                        >
+                          {item.alert_muted ? <BellOff className="h-3.5 w-3.5" /> : <Bell className="h-3.5 w-3.5" />}
+                        </Button>
+                      )}
                       <Button
                         type="button"
                         variant="outline"
@@ -683,6 +766,31 @@ export function InventoryClient({
                   />
                 </div>
               </div>
+
+              <label
+                className={`flex items-start gap-2.5 rounded-xl border p-3 text-xs cursor-pointer transition-colors ${
+                  editMuted
+                    ? "border-amber-300 bg-amber-50/70 text-amber-900"
+                    : "border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100"
+                }`}
+              >
+                <input
+                  type="checkbox"
+                  checked={editMuted}
+                  onChange={(e) => setEditMuted(e.target.checked)}
+                  className="mt-0.5 h-3.5 w-3.5 rounded border-slate-300 accent-amber-500"
+                />
+                <span>
+                  <span className="font-bold flex items-center gap-1">
+                    {editMuted ? <BellOff className="h-3.5 w-3.5" /> : <Bell className="h-3.5 w-3.5" />}
+                    ปิดแจ้งเตือนสต๊อกต่ำสำหรับรายการนี้
+                  </span>
+                  <span className="block mt-0.5 text-[11px] opacity-80">
+                    ใช้เมื่อสินค้านี้ใช้ภายในร้านเอง ไม่ใช่ของขาย หรือตั้งใจสั่งซื้อทีละน้อยจนติดขั้นต่ำเป็นปกติอยู่แล้ว —
+                    ระบบจะไม่ส่งข้อความ Telegram แจ้งเตือนสต๊อกต่ำของรายการนี้ แต่ยังนับสต๊อกและแสดงสถานะ &ldquo;ใกล้หมด&rdquo; ในตารางตามปกติ
+                  </span>
+                </span>
+              </label>
 
               <div className="rounded-xl bg-slate-50 p-3 text-xs text-slate-600 border border-slate-200">
                 💡 การแก้ไขยอดคงเหลือจะถูกบันทึกลงในสมุดบัญชีสต๊อก (Stock Ledger Adjustment) โดยอัตโนมัติ เพื่อให้ยอดตัวเลขสอดคล้องกับการตรวจนับจริง
