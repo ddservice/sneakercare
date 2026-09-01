@@ -136,7 +136,7 @@ export function StatisticsClient({ initialData }: { initialData: AnalyticsDashbo
                     เฉลี่ยวันละ ฿{dailyAvg.toLocaleString("th-TH", { maximumFractionDigits: 0 })}
                   </div>
                 </div>
-                <div className="rounded-xl sc-icon-badge-primary">
+                <div className="rounded-xl bg-emerald-50 dark:bg-emerald-900/20 p-3 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-700">
                   <Receipt className="h-6 w-6" />
                 </div>
               </CardContent>
@@ -153,7 +153,7 @@ export function StatisticsClient({ initialData }: { initialData: AnalyticsDashbo
                     เฉลี่ยคู่ละ ฿{avgPerShoe.toLocaleString("th-TH", { maximumFractionDigits: 0 })}
                   </div>
                 </div>
-                <div className="rounded-xl sc-icon-badge-primary">
+                <div className="rounded-xl bg-emerald-50 dark:bg-emerald-900/20 p-3 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-700">
                   <Footprints className="h-6 w-6" />
                 </div>
               </CardContent>
@@ -170,7 +170,7 @@ export function StatisticsClient({ initialData }: { initialData: AnalyticsDashbo
                     เงินสด: <span className="font-mono">฿{totalCash.toLocaleString()}</span>
                   </div>
                 </div>
-                <div className="sc-icon-badge sc-icon-badge-slate rounded-xl border border-slate-200">
+                <div className="rounded-xl bg-slate-100 dark:bg-slate-800 p-3 text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700 border border-slate-200">
                   <Wallet className="h-6 w-6" />
                 </div>
               </CardContent>
@@ -185,7 +185,7 @@ export function StatisticsClient({ initialData }: { initialData: AnalyticsDashbo
                     ส่วนลดรวม ฿{totalDiscount.toLocaleString()}
                   </div>
                 </div>
-                <div className="sc-icon-badge sc-icon-badge-primary rounded-xl border border-emerald-100">
+                <div className="rounded-xl bg-emerald-50 dark:bg-emerald-900/20 p-3 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-700 border border-emerald-100">
                   <CheckCircle2 className="h-6 w-6" />
                 </div>
               </CardContent>
@@ -390,7 +390,7 @@ export function StatisticsClient({ initialData }: { initialData: AnalyticsDashbo
                   </div>
                   <div className="text-[11px] text-slate-400">ครอบคลุมน้ำยาและอุปกรณ์</div>
                 </div>
-                <div className="rounded-xl sc-icon-badge-primary">
+                <div className="rounded-xl bg-emerald-50 dark:bg-emerald-900/20 p-3 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-700">
                   <Boxes className="h-6 w-6" />
                 </div>
               </CardContent>
@@ -422,7 +422,7 @@ export function StatisticsClient({ initialData }: { initialData: AnalyticsDashbo
                     {statInventoryFilter === "low_stock" ? "คลิกเพื่อดูทั้งหมด" : "คลิกเพื่อกรองเฉพาะใกล้หมด"}
                   </div>
                 </div>
-                <div className="sc-icon-badge sc-icon-badge-rose rounded-xl border border-rose-100">
+                <div className="rounded-xl bg-rose-50 dark:bg-rose-900/20 p-3 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-700 border border-rose-100">
                   <AlertTriangle className="h-6 w-6" />
                 </div>
               </CardContent>

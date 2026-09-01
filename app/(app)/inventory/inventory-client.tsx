@@ -387,7 +387,7 @@ export function InventoryClient({
                 </div>
                 <div className="text-[11px] text-slate-400">คำนวณตามต้นทุนถัวเฉลี่ยจริง</div>
               </div>
-              <div className="sc-icon-badge sc-icon-badge-primary rounded-xl">
+              <div className="rounded-xl bg-emerald-50 dark:bg-emerald-900/20 p-3 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-700">
                 <TrendingDown className="h-6 w-6" />
               </div>
             </CardContent>

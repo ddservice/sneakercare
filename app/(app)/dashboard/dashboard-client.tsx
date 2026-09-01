@@ -424,7 +424,7 @@ export function DashboardClient({
                 <span className="text-emerald-700 font-bold">สด ฿{totalCash.toLocaleString()}</span>
               </div>
             </div>
-            <div className="sc-icon-badge sc-icon-badge-primary rounded-xl">
+            <div className="rounded-xl bg-emerald-50 dark:bg-emerald-900/20 p-3 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-700">
               <Receipt className="h-6 w-6" />
             </div>
           </CardContent>
@@ -442,7 +442,7 @@ export function DashboardClient({
                 ค่าดำเนินการ + เงินเดือนพนักงาน + ภาษี + ค่าเช่า
               </div>
             </div>
-            <div className="sc-icon-badge sc-icon-badge-amber rounded-xl">
+            <div className="rounded-xl bg-amber-50 dark:bg-amber-900/20 p-3 text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-700">
               <Wallet className="h-6 w-6" />
             </div>
           </CardContent>
@@ -490,7 +490,7 @@ export function DashboardClient({
                 S: {sizeSCount} | M: {sizeMCount} | L: {sizeLCount} | XL: {sizeXLCount}
               </div>
             </div>
-            <div className="sc-icon-badge sc-icon-badge-primary rounded-xl">
+            <div className="rounded-xl bg-emerald-50 dark:bg-emerald-900/20 p-3 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-700">
               <Footprints className="h-6 w-6" />
             </div>
           </CardContent>
@@ -534,7 +534,7 @@ export function DashboardClient({
                 {totalOutstanding > 0 ? "ยอดคงเหลือหลังหักรับชำระเพิ่มแล้ว" : "ไม่มียอดค้างชำระในช่วงนี้"}
               </div>
             </div>
-            <div className="sc-icon-badge sc-icon-badge-rose rounded-xl">
+            <div className="rounded-xl bg-rose-50 dark:bg-rose-900/20 p-3 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-700">
               <Clock className="h-6 w-6" />
             </div>
           </CardContent>
