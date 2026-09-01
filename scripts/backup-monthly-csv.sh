@@ -51,11 +51,17 @@ WORKDIR="$(mktemp -d)"
 cleanup() { rm -rf "$WORKDIR"; }
 trap cleanup EXIT
 
+# $2 = "silent" (ไม่บังคับ) — เหมือน notify() ใน backup-db-to-r2.sh: ข้อความ heartbeat
+# "สำเร็จ" ไม่ต้องปลุกมือถือตอนตีสี่ แต่ข้อความ "ล้มเหลว" ยังคงดังตามปกติ
 notify() {
   local message="$1"
+  local mode="${2:-}"
   if [[ -n "${TELEGRAM_BOT_TOKEN:-}" && -n "${TELEGRAM_OPS_CHAT_ID:-}" ]]; then
+    local silent_flag="false"
+    [[ "$mode" == "silent" ]] && silent_flag="true"
     curl -fsS -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
       -d "chat_id=${TELEGRAM_OPS_CHAT_ID}" \
+      -d "disable_notification=${silent_flag}" \
       --data-urlencode "text=${message}" \
       >/dev/null || true
   fi
@@ -97,6 +103,6 @@ find "${LOCAL_BACKUP_DIR}/csv" -name 'rrs-csv-*.tar.gz' -mtime "+${CSV_RETENTION
 notify "📑 RRS CSV รายเดือนสำเร็จ
 🗓️ เดือน ${MONTH}
 📦 rrs-csv-${MONTH}.tar.gz (${ARCHIVE_SIZE}, ${FILE_COUNT} ไฟล์)
-☁️ Cloudflare R2 (${R2_BUCKET}/monthly-csv) & 💾 VPS ${LOCAL_BACKUP_DIR}/csv"
+☁️ Cloudflare R2 (${R2_BUCKET}/monthly-csv) & 💾 VPS ${LOCAL_BACKUP_DIR}/csv" silent
 
 echo "[$(date -u +%FT%TZ)] เสร็จสมบูรณ์"

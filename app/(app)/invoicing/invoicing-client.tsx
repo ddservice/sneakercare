@@ -12,6 +12,7 @@ import {
 import { DOC_TYPE_CONFIG, type DocumentType } from "@/lib/smartacc/types";
 import { thaiBahtText } from "@/lib/smartacc/baht-text";
 import { Button } from "@/components/ui/button";
+import { PrintModalPortal } from "@/components/print-modal-portal";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -146,12 +147,14 @@ export function InvoicingClient({
         if (res.phone) setPhone(res.phone);
         if (res.email) setEmail(res.email);
         setDbdSearchInput(res.taxId || res.companyName);
-        toast.success(`ดึงข้อมูล DBD สำเร็จ: ${res.companyName}`);
+        toast.success(`เจอข้อมูลที่เคยบันทึกไว้: ${res.companyName}`);
       } else {
-        toast.error("ไม่พบข้อมูลนิติบุคคลจากคำค้นหานี้ในระบบ DBD");
+        toast.error(
+          "ยังไม่เคยบันทึกลูกค้ารายนี้ไว้ — กรอกข้อมูลด้านล่างเองครั้งนี้ ระบบจะจำไว้ให้ค้นหาเจอในครั้งถัดไป"
+        );
       }
     } catch {
-      toast.error("เกิดข้อผิดพลาดในการดึงข้อมูล DBD");
+      toast.error("เกิดข้อผิดพลาดในการค้นหา");
     } finally {
       setIsSearchingDbd(false);
     }
@@ -372,8 +375,13 @@ export function InvoicingClient({
                   <div className="rounded-xl border border-teal-200 bg-teal-50/50 p-3 space-y-2">
                     <Label className="text-xs font-bold text-teal-900 flex items-center gap-1.5">
                       <Search className="h-3.5 w-3.5 text-teal-700" />
-                      ค้นหา & ดึงข้อมูลอัตโนมัติจาก DBD / ทะเบียนพาณิชย์ (13 หลัก หรือ ชื่อบริษัท)
+                      ค้นหาลูกค้าที่เคยบันทึกไว้ (13 หลัก หรือ ชื่อบริษัท)
                     </Label>
+                    <p className="text-[11px] text-teal-800/70 -mt-1">
+                      ค้นจากลูกค้าที่เคยออกเอกสารด้วยกันมาก่อนในระบบนี้เท่านั้น — <strong>ไม่ได้เชื่อมต่อกับ
+                      ฐานข้อมูลกรมพัฒนาธุรกิจการค้า (DBD) จริง</strong> ลูกค้าใหม่ต้องกรอกข้อมูลเองครั้งแรก
+                      แล้วระบบจะจำไว้ให้ค้นหาเจอในครั้งถัดไปอัตโนมัติ
+                    </p>
                     <div className="flex gap-2">
                       <Input
                         value={dbdSearchInput}
@@ -384,7 +392,7 @@ export function InvoicingClient({
                             handleDbdSearch();
                           }
                         }}
-                        placeholder="พิมพ์เลขผู้เสียภาษี 13 หลัก เช่น 0105558000000 หรือชื่อบริษัท..."
+                        placeholder="พิมพ์เลขผู้เสียภาษี 13 หลัก หรือชื่อลูกค้าที่เคยบันทึกไว้..."
                         className="text-xs h-9 bg-white font-mono"
                       />
                       <Button
@@ -394,7 +402,7 @@ export function InvoicingClient({
                         onClick={() => handleDbdSearch()}
                         className="bg-teal-700 hover:bg-emerald-600 text-white text-xs h-9 px-4 shrink-0 font-semibold gap-1"
                       >
-                        {isSearchingDbd ? "กำลังค้นหา..." : "ดึงข้อมูล DBD"}
+                        {isSearchingDbd ? "กำลังค้นหา..." : "ค้นหา"}
                       </Button>
                     </div>
                   </div>
@@ -423,7 +431,7 @@ export function InvoicingClient({
                             onClick={() => handleDbdSearch(taxId)}
                             className="text-[11px] text-teal-700 hover:underline font-semibold"
                           >
-                            ดึงข้อมูล DBD จากเลขนี้
+                            ค้นจากเลขนี้
                           </button>
                         )}
                       </div>
@@ -910,6 +918,7 @@ export function InvoicingClient({
 
       {/* ── OFFICIAL A4 DOCUMENT PRINT MODAL (INVOICE / TAX INVOICE / DO / RECEIPT) ── */}
       {printingDoc && (
+        <PrintModalPortal>
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs overflow-y-auto">
           <div className="w-full max-w-4xl rounded-2xl bg-white p-6 shadow-2xl border border-slate-300 space-y-4">
             <div className="flex items-center justify-between border-b border-slate-200 pb-3 print:hidden">
@@ -1048,6 +1057,7 @@ export function InvoicingClient({
             </div>
           </div>
         </div>
+        </PrintModalPortal>
       )}
     </div>
   );

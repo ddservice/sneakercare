@@ -9,6 +9,7 @@ import {
 } from "@/lib/smartacc/tax-reports";
 import { generateETaxXML } from "@/lib/smartacc/etax-generator";
 import { Button } from "@/components/ui/button";
+import { PrintModalPortal } from "@/components/print-modal-portal";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
@@ -416,6 +417,7 @@ export function TaxFilingClient({
 
       {/* ── OFFICIAL 50 TAWI PRINT MODAL (A4 ISOLATION) ── */}
       {selectedWhtCert && (
+        <PrintModalPortal>
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs overflow-y-auto">
           <div className="w-full max-w-3xl rounded-2xl bg-white p-6 shadow-2xl border border-slate-300 space-y-4">
             <div className="flex items-center justify-between border-b border-slate-200 pb-3 print:hidden">
@@ -529,6 +531,7 @@ export function TaxFilingClient({
             </div>
           </div>
         </div>
+        </PrintModalPortal>
       )}
     </div>
   );

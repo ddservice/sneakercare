@@ -72,12 +72,20 @@ cleanup() {
 }
 trap cleanup EXIT
 
+# $2 = "silent" (ไม่บังคับ) — ส่งข้อความแบบไม่ปลุกมือถือ (disable_notification) ยังคงขึ้น
+# ในแชทให้เห็นย้อนหลังตามปกติ เผื่อวันไหนไม่มีข้อความมาเลยจะรู้ว่า cron หยุดทำงาน (ดูเหตุผลเต็ม
+# ใต้ heartbeat ด้านล่าง) แต่ไม่ต้องปลุกใครตอนตีสาม — ใช้กับ heartbeat "สำเร็จ" เท่านั้น
+# ข้อความ "ล้มเหลว" (notify_failure) ยังคงดัง/ปลุกตามปกติ เพราะเป็นเรื่องด่วนจริง
 notify() {
   local message="$1"
+  local mode="${2:-}"
   if [[ -n "${TELEGRAM_BOT_TOKEN:-}" && -n "${TELEGRAM_OPS_CHAT_ID:-}" ]]; then
+    local silent_flag="false"
+    [[ "$mode" == "silent" ]] && silent_flag="true"
     # --data-urlencode กัน message ที่มีขึ้นบรรทัดใหม่/อักขระพิเศษทำ request เพี้ยน
     curl -fsS -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
       -d "chat_id=${TELEGRAM_OPS_CHAT_ID}" \
+      -d "disable_notification=${silent_flag}" \
       --data-urlencode "text=${message}" \
       >/dev/null || true
   fi
@@ -138,6 +146,6 @@ find "$LOCAL_BACKUP_DIR" -name '*.dump' -mtime "+${RETENTION_DAYS}" -delete
 notify "💾 RRS DB backup สำเร็จ
 📅 ${STAMP} UTC
 📦 rrs-backup-${STAMP}.dump (${DUMP_SIZE})
-☁️ Cloudflare R2 (${R2_BUCKET}) & 💾 VPS ${LOCAL_BACKUP_DIR}"
+☁️ Cloudflare R2 (${R2_BUCKET}) & 💾 VPS ${LOCAL_BACKUP_DIR}" silent
 
 echo "[$(date -u +%FT%TZ)] เสร็จสมบูรณ์"

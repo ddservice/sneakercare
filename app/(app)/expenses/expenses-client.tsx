@@ -21,6 +21,7 @@ import {
 import { thaiBahtText } from "@/lib/bahttext";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { PrintModalPortal } from "@/components/print-modal-portal";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
@@ -55,19 +56,53 @@ import {
   RefreshCw,
 } from "lucide-react";
 
-export const AVAILABLE_MONTHS = [
-  { value: "08/2026", iso: "2026-08", label: "สิงหาคม 2569 (08/2026) — งวดล่าสุด", monthName: "สิงหาคม 2569" },
-  { value: "07/2026", iso: "2026-07", label: "กรกฎาคม 2569 (07/2026)", monthName: "กรกฎาคม 2569" },
-  { value: "06/2026", iso: "2026-06", label: "มิถุนายน 2569 (06/2026)", monthName: "มิถุนายน 2569" },
-  { value: "05/2026", iso: "2026-05", label: "พฤษภาคม 2569 (05/2026)", monthName: "พฤษภาคม 2569" },
-  { value: "04/2026", iso: "2026-04", label: "เมษายน 2569 (04/2026)", monthName: "เมษายน 2569" },
-  { value: "03/2026", iso: "2026-03", label: "มีนาคม 2569 (03/2026)", monthName: "มีนาคม 2569" },
-  { value: "02/2026", iso: "2026-02", label: "กุมภาพันธ์ 2569 (02/2026)", monthName: "กุมภาพันธ์ 2569" },
-  { value: "01/2026", iso: "2026-01", label: "มกราคม 2569 (01/2026)", monthName: "มกราคม 2569" },
-  { value: "12/2025", iso: "2025-12", label: "ธันวาคม 2568 (12/2025)", monthName: "ธันวาคม 2568" },
-  { value: "11/2025", iso: "2025-11", label: "พฤศจิกายน 2568 (11/2025)", monthName: "พฤศจิกายน 2568" },
-  { value: "all", iso: "all", label: "📊 ภาพรวมสะสมทุกงวด (All Time: 10 เดือน)", monthName: "ภาพรวมสะสมทั้งหมด (10 เดือน)" },
+const THAI_MONTH_NAMES = [
+  "มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน",
+  "กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม",
 ];
+const THAI_MONTH_SHORT = [
+  "ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.",
+  "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค.",
+];
+
+/**
+ * ⚠️ (แก้ 2026-09-02) เดิมรายการนี้เป็น array ตายตัว 10 เดือน (พ.ย. 2568 – ส.ค. 2569) เขียนไว้
+ * ตอนสร้างฟีเจอร์ครั้งแรก แล้วไม่มีใครมาต่อให้ทุกเดือน — พอเข้าเดือนกันยายน ตัวเลือก "งวดล่าสุด"
+ * ยังค้างเป็นสิงหาคมตลอดไป และไม่มีทางเลือกเดือนกันยายนได้เลยจาก dropdown นี้ สร้างจากวันที่จริง
+ * แทน ย้อนหลัง 24 เดือนจากเดือนปัจจุบันเสมอ ไม่ต้องแก้โค้ดทุกเดือนอีกต่อไป
+ */
+function buildAvailableMonths(monthsBack = 24) {
+  const now = new Date();
+  const months = [];
+  for (let i = 0; i < monthsBack; i++) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const mm = String(d.getMonth() + 1).padStart(2, "0");
+    const yyyy = d.getFullYear();
+    const monthName = `${THAI_MONTH_NAMES[d.getMonth()]} ${yyyy + 543}`;
+    months.push({
+      value: `${mm}/${yyyy}`,
+      iso: `${yyyy}-${mm}`,
+      label: i === 0 ? `${monthName} (${mm}/${yyyy}) — งวดล่าสุด` : `${monthName} (${mm}/${yyyy})`,
+      monthName,
+    });
+  }
+  months.push({
+    value: "all",
+    iso: "all",
+    label: `📊 ภาพรวมสะสมทุกงวด (All Time: ${monthsBack} เดือน)`,
+    monthName: `ภาพรวมสะสมทั้งหมด (${monthsBack} เดือน)`,
+  });
+  return months;
+}
+
+export const AVAILABLE_MONTHS = buildAvailableMonths();
+/** ค่า "MM/YYYY" ของเดือนปัจจุบัน — ใช้แทนเลข "08/2026" ที่เคย hardcode ไว้ */
+export const LATEST_MONTH_VALUE = AVAILABLE_MONTHS[0].value;
+/** ป้ายย่อของเดือนปัจจุบัน เช่น "ก.ย. 69" — ใช้แทนข้อความ "(ส.ค. 69)" ที่เคย hardcode ไว้ */
+export const LATEST_MONTH_SHORT_LABEL = (() => {
+  const now = new Date();
+  return `${THAI_MONTH_SHORT[now.getMonth()]} ${String((now.getFullYear() + 543) % 100).padStart(2, "0")}`;
+})();
 
 export function ExpensesClient({
   initialData,
@@ -81,7 +116,7 @@ export function ExpensesClient({
   const [selectedMonth, setSelectedMonth] = useState<string>(() => {
     if (initialData.timeRange && initialData.timeRange.includes("/")) return initialData.timeRange;
     if (initialData.timeRange === "all") return "all";
-    return "08/2026";
+    return LATEST_MONTH_VALUE;
   });
   const [activeTab, setActiveTab] = useState<"overview" | "payroll" | "opex">("overview");
   const [selectedCategoryFilter, setSelectedCategoryFilter] = useState<ExpenseCategoryKey | "all">("all");
@@ -552,11 +587,11 @@ export function ExpensesClient({
               <Button
                 type="button"
                 size="sm"
-                onClick={() => handleSelectMonth("08/2026")}
-                disabled={isPending || selectedMonth === "08/2026"}
+                onClick={() => handleSelectMonth(LATEST_MONTH_VALUE)}
+                disabled={isPending || selectedMonth === LATEST_MONTH_VALUE}
                 className="h-8 text-xs font-bold bg-teal-800 hover:bg-emerald-500 text-white shadow-2xs"
               >
-                🎯 งวดล่าสุด (ส.ค. 69)
+                🎯 งวดล่าสุด ({LATEST_MONTH_SHORT_LABEL})
               </Button>
 
               <Button
@@ -1603,6 +1638,7 @@ export function ExpensesClient({
 
       {/* ── OFFICIAL STANDARD PAYSLIP VOUCHER MODAL ── */}
       {selectedPayslip && (
+        <PrintModalPortal>
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-xs print:p-0 print:bg-white print:static">
           <div className="w-full max-w-2xl rounded-2xl bg-white p-8 shadow-2xl border border-slate-300 print:shadow-none print:border-none print:p-0 print:max-w-none print:w-full space-y-6">
             {/* Top Toolbar (Hidden on Print) */}
@@ -1839,6 +1875,7 @@ export function ExpensesClient({
             </div>
           </div>
         </div>
+        </PrintModalPortal>
       )}
     </div>
   );

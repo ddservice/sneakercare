@@ -5,6 +5,12 @@ import { requireProfile } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
 import { logAudit } from "@/lib/audit";
 
+/** เดือนปัจจุบันในรูปแบบ "MM/YYYY" ที่ตาราง sc_opex ใช้ทั้งไฟล์ */
+function currentMonthMY(): string {
+  const now = new Date();
+  return `${String(now.getMonth() + 1).padStart(2, "0")}/${now.getFullYear()}`;
+}
+
 export type StaffPayslip = {
   employeeName: string;
   nickname?: string;
@@ -107,19 +113,40 @@ export async function fetchAllExpensesData(timeRange: string = "this_month"): Pr
   const allRows = rows || [];
 
   // Determine target month or all-time
+  //
+  // ⚠️ (แก้ 2026-09-02) เดิมค่า "เดือนนี้"/"วันนี้"/"เมื่อวาน"/"สัปดาห์นี้" ทุกตัวถูก hardcode เป็น
+  // "08/2026" ตรงๆ — เดือนสิงหาคมคือเดือนที่เขียนโค้ดนี้ครั้งแรก แต่พอเดือนเปลี่ยนไปเรื่อยๆ หน้า
+  // /expenses จะค้างแสดงข้อมูลสิงหาคมตลอดกาล ไม่ขยับตามวันที่จริงเลย ทำให้ยอดเงินที่เห็นไม่ตรงกับ
+  // ที่บันทึกไว้จริงในเดือนปัจจุบัน (ผู้ใช้รายงานปัญหานี้เมื่อเข้าเดือนกันยายน) แก้ให้คำนวณจากวันที่
+  // จริงบนเซิร์ฟเวอร์แทน
+  const now = new Date();
+  const thisMonthMY = currentMonthMY();
+  const thisMonthISO = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+
+  /** เลื่อนคีย์เดือนแบบ "MM/YYYY" ไปข้างหน้า/ถอยหลัง คืนทั้งรูปแบบ MM/YYYY และ YYYY-MM */
+  function shiftMonthMY(monthYear: string, delta: number): { my: string; iso: string } {
+    const [m, y] = monthYear.split("/").map(Number);
+    const d = new Date(y, m - 1 + delta, 1);
+    return {
+      my: `${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`,
+      iso: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`,
+    };
+  }
+
   const isAllTime = timeRange === "all";
-  let targetMonthFilter: string = "08/2026";
-  let targetSalesMonth: string = "2026-08";
+  let targetMonthFilter: string = thisMonthMY;
+  let targetSalesMonth: string = thisMonthISO;
 
   if (isAllTime) {
     targetMonthFilter = "all";
     targetSalesMonth = "all";
   } else if (timeRange === "this_month" || timeRange === "today" || timeRange === "yesterday" || timeRange === "this_week") {
-    targetMonthFilter = "08/2026";
-    targetSalesMonth = "2026-08";
+    targetMonthFilter = thisMonthMY;
+    targetSalesMonth = thisMonthISO;
   } else if (timeRange === "last_month") {
-    targetMonthFilter = "07/2026";
-    targetSalesMonth = "2026-07";
+    const prev = shiftMonthMY(thisMonthMY, -1);
+    targetMonthFilter = prev.my;
+    targetSalesMonth = prev.iso;
   } else if (timeRange.includes("/")) {
     targetMonthFilter = timeRange;
     const [m, y] = timeRange.split("/");
@@ -144,6 +171,22 @@ export async function fetchAllExpensesData(timeRange: string = "this_month"): Pr
 
   // Filter rows by month
   const filteredRows = isAllTime ? allRows : allRows.filter((r: any) => r.month === targetMonthFilter);
+
+  // ข้อมูลโปรไฟล์พนักงาน (เลขบัตร/บัญชีธนาคาร/ชื่อเล่น/ประเภทการจ้าง) เป็นข้อมูลถาวรของคน
+  // ไม่ใช่ตัวเลขรายเดือน แต่ถูกบันทึกปนอยู่ใน sc_opex แถวเดียวกับตัวเลขเงินเดือนที่ผูกกับเดือน —
+  // ถ้ากรองด้วย targetMonthFilter เดียวกัน พอเปลี่ยนไปดูเดือนอื่น (เช่น เดือนที่ยังไม่เคยบันทึก
+  // เงินเดือนเลย) ข้อมูลโปรไฟล์นี้จะหายไปทั้งหมดทันที ทั้งที่ควรอยู่ติดกับพนักงานเสมอไม่ว่าจะดู
+  // เดือนไหน — ดึงแยกจากทุกเดือน เอาแถวล่าสุดต่อ key (saveStaffProfileInfo ลบแถวเก่าแล้ว insert
+  // ใหม่ทุกครั้งที่แก้ไข ปกติมีแถวเดียวต่อคนอยู่แล้ว แต่กันเหนียวด้วย id สูงสุดเผื่อมีซ้ำ)
+  const profileRowsLatest = new Map<string, any>();
+  for (const r of allRows) {
+    if (!r.key?.startsWith("empd_profile_") || !r.name) continue;
+    const existing = profileRowsLatest.get(r.key);
+    if (!existing || Number(r.id ?? 0) > Number(existing.id ?? 0)) {
+      profileRowsLatest.set(r.key, r);
+    }
+  }
+  const profileRows = [...profileRowsLatest.values()];
 
   // 1. Process Operating Expenses (Excluding internal detail & rental meter rows)
   const opexList: RealExpenseRecord[] = [];
@@ -286,7 +329,9 @@ export async function fetchAllExpensesData(timeRange: string = "this_month"): Pr
   });
 
   // Merge any saved custom records from sc_opex
-  filteredRows.forEach((r: any) => {
+  // (ต่อท้ายด้วย profileRows เสมอ ไม่ว่าจะซ้ำกับ filteredRows หรือไม่ — ประมวลผลซ้ำได้อย่างปลอดภัย
+  // เพราะ branch นี้แค่ set field ทับด้วยค่าเดิม ไม่มีผลข้างเคียงสะสม)
+  [...filteredRows, ...profileRows].forEach((r: any) => {
     const rawEmp = extractCleanEmployeeName(r.key || "", r.name || "");
     if (!rawEmp) return;
 
@@ -487,7 +532,7 @@ export async function saveStaffProfileInfo(payload: {
 
   // Insert updated profile entry
   await (supabase.from("sc_opex" as any) as any).insert({
-    month: "08/2026",
+    month: currentMonthMY(),
     category: "payslip_detail",
     key,
     name: JSON.stringify(profileData),
@@ -596,7 +641,7 @@ export async function createStaffMember(payload: {
   };
 
   await (supabase.from("sc_opex" as any) as any).insert({
-    month: "08/2026",
+    month: currentMonthMY(),
     category: "payslip_detail",
     key: `empd_profile_${payload.fullName.trim()}`,
     name: JSON.stringify(profileData),
