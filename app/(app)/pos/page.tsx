@@ -1,24 +1,32 @@
 import { requireProfile } from "@/lib/auth";
 import { getSelectedBranchId } from "@/lib/branch";
 import { createClient } from "@/lib/supabase/server";
+import { DEFAULT_PAGE_SIZE, pageInfo, parsePage, rangeFor } from "@/lib/pagination";
 import { PosClient, type OrderItem } from "./pos-client";
 
-export default async function PosPage() {
+export default async function PosPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string }>;
+}) {
   const profile = await requireProfile();
   const selectedBranchId = await getSelectedBranchId(profile);
   const supabase = await createClient();
 
+  const page = parsePage((await searchParams).page);
+  const { from, to } = rangeFor(page, DEFAULT_PAGE_SIZE);
+
   let query = supabase
     .from("service_orders")
-    .select("*")
+    .select("*", { count: "exact" })
     .order("received_at", { ascending: false })
-    .limit(50);
+    .range(from, to);
 
   if (selectedBranchId) {
     query = query.eq("branch_id", selectedBranchId);
   }
 
-  const { data: orders } = await query;
+  const { data: orders, count } = await query;
 
   const formattedOrders: OrderItem[] =
     orders && orders.length > 0
@@ -41,5 +49,7 @@ export default async function PosPage() {
         }))
       : [];
 
-  return <PosClient initialOrders={formattedOrders} />;
+  const info = pageInfo(page, DEFAULT_PAGE_SIZE, count ?? null, formattedOrders.length);
+
+  return <PosClient initialOrders={formattedOrders} pageInfo={info} />;
 }

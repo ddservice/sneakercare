@@ -11,7 +11,9 @@
     "test:legacy": "node scripts/test-legacy-estimate-banner.mjs",
     "test:reports": "node --no-warnings=MODULE_TYPELESS_PACKAGE_JSON scripts/test-reports-range.mjs",
     "migrate:legacy": "node --env-file=.env.local scripts/migrate-from-legacy.mjs",
-    "deploy": "node scripts/deploy-vps.mjs"
+    "deploy": "node scripts/deploy-vps.mjs",
+    "export:csv": "node --env-file=.env.local scripts/export-monthly-csv.mjs",
+    "test:migration": "node --no-warnings=MODULE_TYPELESS_PACKAGE_JSON scripts/test-migration-0011.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",
@@ -31,6 +33,7 @@
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.5.8",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",

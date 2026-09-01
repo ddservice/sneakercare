@@ -44,6 +44,15 @@ opex ไม่ครบ (ค่าเช่าห้อง + ประกัน�
 1. **`audit_logs` / `inv_audit_logs` ห้ามมี UPDATE/DELETE จากโค้ดแอปเด็ดขาด แม้แต่ endpoint ที่ role เป็น admin**
    การเขียน log เกิดจาก DB trigger เท่านั้น (`fn_write_audit_log`) — อย่าสร้าง API route หรือ Supabase RPC
    ที่ไปแก้ไขตาราง `audit_logs` ตรงๆ ไม่ว่ากรณีใด
+
+   **⚠️ สำคัญ (2026-09-01): ในฐานข้อมูลจริง `audit_logs` ไม่ใช่ตาราง แต่เป็น VIEW ที่ชี้ไป
+   `inv_audit_logs`** (สร้างโดย `scripts/apply-aliases-and-unified-schema.sql`) ระบบจึงมี audit **สองสาย**
+   ที่แยกกันโดยเจตนา ห้ามรวมเข้าด้วยกัน:
+   - `audit_logs` → `inv_audit_logs` : ledger ของ**คลังสินค้า** เขียนโดย DB trigger เท่านั้น
+   - `sc_audit_logs` : audit ระดับ**แอปฝั่งการเงิน/ยอดขาย/เงินเดือน** เขียนผ่าน `lib/audit.ts`
+     (service_role) เพราะเหตุการณ์อย่าง "แอดมินลบยอดขายรายวัน" ไม่มี trigger รองรับ
+     ตารางนี้ append-only เหมือนกัน มี trigger กัน UPDATE/DELETE/TRUNCATE ไว้ที่ระดับ DB
+     (migration `0011`) และมี `npm run test:migration` พิสูจน์ว่ากันได้จริง
 2. **`stock_transactions` / `inv_stock_transactions` เป็น append-only ledger** ห้าม UPDATE/DELETE แถวเดิมเพื่อ "แก้ตัวเลขที่พิมพ์ผิด"
    ให้สร้างแถวใหม่ที่อ้าง `corrects_txn_id` แทนเสมอ ยอดคงเหลือ (`item_stock.current_qty` — แยกต่อสาขา ไม่ใช่
    คอลัมน์ใน `items`) เป็นแค่ cache ที่มาจากผลรวมของ ledger — ห้ามให้ UI ไปแก้ `item_stock` ตรงๆ
@@ -82,7 +91,9 @@ opex ไม่ครบ (ค่าเช่าห้อง + ประกัน�
 /lib/reports-range.ts     ตรรกะช่วงเดือน + CSV (pure ไม่มี server-only — มีเทสต์)
 /lib/reports.ts           query ของหน้ารายงาน (server-only)
 /lib/supabase             browser client / server client / admin (service_role) client
-/scripts                  เครื่องมือ: deploy-vps.mjs, backup-db-to-r2.sh, verify-backup.sh, inspect-inv-schema.sql, test-*.mjs
+/lib/audit.ts             logAudit() → เขียนลง sc_audit_logs เท่านั้น (ห้ามเขียนลง audit_logs ดูกฎข้อ 1)
+/scripts                  เครื่องมือ: deploy-vps.mjs, backup-db-to-r2.sh, verify-backup.sh,
+                          export-monthly-csv.mjs, backup-monthly-csv.sh, inspect-inv-schema.sql, test-*.mjs
 /supabase/migrations      SQL migrations (เริ่มจาก 0001_init.sql — ห้ามแก้ไฟล์ที่ apply แล้ว)
 /supabase/functions       Edge Functions เช่น low-stock-alert (รันตาม cron)
 /supabase/tests/database  pgTAP tests (รันด้วย supabase test db)
@@ -134,6 +145,10 @@ CLAUDE.md                 คู่มือนี้ — อัปเดตท�
 - `node scripts/backup-db.mjs` — สคริปต์สำรองฐานข้อมูลอัตโนมัติบน VPS
 - `bash scripts/backup-db-to-r2.sh` — สำรอง DB แบบ `pg_dump` แล้วอัปโหลดไป Cloudflare R2 พร้อมลบไฟล์เก่าเกิน 90 วัน
 - `bash scripts/verify-backup.sh [--deep]` — ตรวจว่าไฟล์สำรองล่าสุดกู้คืนได้จริง
+- `npm run test:migration` — รัน migration 0011 ใส่ Postgres จริง (PGlite/WASM ไม่ต้องมี Docker)
+  พิสูจน์ว่า SQL รันได้ รันซ้ำได้ และ `sc_audit_logs` แก้/ลบ/TRUNCATE ไม่ได้จริง
+- `npm run export:csv [-- --month=2026-08]` — ส่งออกข้อมูลรายเดือนเป็น CSV (มี BOM เปิด Excel ภาษาไทยได้)
+- `bash scripts/backup-monthly-csv.sh` — ตัวห่อสำหรับ cron: ส่งออก CSV เดือนที่แล้ว → tar.gz → Cloudflare R2
 
 **⚠️ ห้ามลบ flag `--webpack` ออกจาก script `dev`/`build`**: จำเป็นสำหรับการ build บน network drive / UNC path
 
@@ -149,7 +164,48 @@ CLAUDE.md                 คู่มือนี้ — อัปเดตท�
   ใช้ `pg_dump` รันผ่าน cron บน VPS ตี 3 ทุกคืน (`scripts/backup-db-to-r2.sh`) อัปโหลดไป Cloudflare R2 (`ddservicedb`)
   พร้อมลบไฟล์เก่าเกิน 90 วันทั้งบน VPS และ R2 อัตโนมัติ ตามด้วย `verify-backup.sh` ตรวจสอบความสมบูรณ์และส่ง Heartbeat เข้า Telegram
 
-## สถานะงานล่าสุด (2026-08-31)
+## 🔴 ต้องทำก่อนใช้งานจริง (ค้างอยู่ ณ 2026-09-01)
+
+**รัน `supabase/migrations/0011_sc_audit_logs_and_indexes.sql` ที่ SQL Editor ของ project
+`SneakerCareDB` (ref `mdlxogfkpwejnqpzhmoy`) หนึ่งครั้ง** — repo นี้ไม่มีสิทธิ์ DDL ไปที่ฐานข้อมูลนั้น
+(PostgREST รัน DDL ไม่ได้ และ repo ห้าม `supabase link` ไป `SneakerCareDB`) จึงต้องวางรันด้วยมือ
+
+ระหว่างที่ยังไม่รัน:
+- การกระทำฝั่งการเงินทั้งหมด **ไม่ถูกบันทึกลง audit** (`logAudit()` จะ log error ลง console แล้วปล่อยผ่าน
+  โดยเจตนา เพื่อไม่ให้การลบข้อมูลของผู้ใช้พังตาม)
+- หน้า `/admin/audit` แท็บ "การเงิน / ยอดขาย" จะขึ้นแถบเตือนสีเหลืองบอกวิธีแก้
+- แท็บ "คลังสินค้า (DB trigger)" ยังใช้งานได้ปกติ (688 แถวเดิมอยู่ครบ)
+- index ของ `sc_sales."date"`, `sc_payments.sale_date`, `sc_opex.month` ยังไม่มี
+
+SQL ไฟล์นี้ผ่านการรันจริงบน Postgres แล้วผ่าน `npm run test:migration` (รวมทดสอบรันซ้ำ) — ไม่ใช่ SQL ที่เขียนลอยๆ
+
+## สถานะงานล่าสุด (2026-09-01)
+
+11. **[แก้บั๊กร้ายแรง] ระบบ Audit Log ไม่เคยบันทึกอะไรเลยตั้งแต่ commit `e3f025d`** — `lib/audit.ts`
+    insert ลง `audit_logs` ด้วยคอลัมน์ `entity`/`actor_name`/`detail`/`created_at` ที่ **ไม่มีอยู่จริง**
+    (ตารางจริงใช้ `table_name`/`record_id`/`performed_at`/`before_data`/`after_data`) ทุก insert จึงได้
+    HTTP 400 แล้วถูก `catch` ทิ้งเงียบ — และหน้า `/admin/audit` ก็ query คอลัมน์ชุดเดียวกันจึงขึ้น
+    "ยังไม่มีบันทึก" เสมอ **แก้โดยแยกตาราง `sc_audit_logs` ออกมาต่างหาก** (migration 0011) ไม่ไปเขียนทับ
+    ledger ของคลังสินค้าตามกฎข้อ 1 พร้อมทำให้ `logAudit()` ร้องเสียงดังใน server log เมื่อเขียนไม่สำเร็จ
+12. **[เสร็จสมบูรณ์] Audit coverage ครบทุกจุดที่แตะเงิน** — เพิ่มจากเดิมที่มีแค่ `deleteDailySale`:
+    `saveDailySale` (CREATE/UPDATE), `recordArPayment`, `deleteArPayment`, `addExpense`, `deleteExpense`,
+    `saveStaffPayrollAdjustment`, `saveStaffProfileInfo`, `createStaffMember`
+    — ทุกการ **ลบ** จะอ่านแถวเดิมเก็บไว้ใน `detail` ก่อนลบเสมอ (ของเดิมบันทึกแค่ `{sale_id: 305}`
+    ซึ่งบอกไม่ได้เลยว่ายอดที่หายไปคือเท่าไหร่) และเลขบัตรประชาชน/เลขบัญชีถูก mask ก่อนลง log
+13. **[เสร็จสมบูรณ์] หน้า `/admin/audit` แสดง audit ทั้งสองสาย** — สลับแท็บระหว่าง "การเงิน/ยอดขาย (แอป)"
+    กับ "คลังสินค้า (DB trigger)" มีตัวกรอง action/entity, แบ่งหน้า และ **ตัวกรองไม่หลุดตอนกดเปลี่ยนหน้า**
+14. **[เสร็จสมบูรณ์] Pagination + index** — `/pos` เปลี่ยนจาก `.limit(50)` ตายตัวเป็นแบ่งหน้าจริงพร้อม
+    count; `/history` เดิมกด "ถัดไป" แล้วช่วงเวลา/ประเภทที่เลือกไว้หลุดกลับเป็นค่า default — แก้แล้ว
+    และการ์ดสรุป (รับเข้า/เบิกใช้/มูลค่าต้นทุน) เดิมบวกจาก**แถวในหน้าเดียว** แต่พาดหัวว่าเป็นยอดของทั้งช่วง
+    = ตัวเลขผิด ตอนนี้คิดจากทั้งช่วงจริง (มีเพดาน 5,000 แถวและขึ้นเตือนเมื่อชน);
+    `/pos/daily-entry` ยังกรองฝั่ง client แต่เลิกตัดข้อมูลเงียบๆ — ขึ้นแถบบอกเมื่อโหลดมาไม่ครบ
+    และ `fetchRecentDailySales` เลิก `select *` ทั้งตาราง `sc_payments` (ดึงเฉพาะวันที่โหลดมาจริง)
+15. **[เสร็จสมบูรณ์] CSV สำรองรายเดือน** — `scripts/export-monthly-csv.mjs` + `scripts/backup-monthly-csv.sh`
+    เสริม `backup-db-to-r2.sh` (pg_dump รายวัน กู้ได้แต่เปิดอ่านเองไม่ได้) ด้วย CSV ที่เปิดด้วย Excel
+    ได้ทันทีและส่งให้ผู้ทำบัญชีได้ เก็บ 5 ปีตามอายุเอกสารบัญชี — **ทดสอบกับฐานข้อมูลจริงแล้ว**
+    (ส.ค. 2569: ยอดขาย 27 แถว, รับชำระ 6, ค่าใช้จ่าย 45, audit คลัง 518, สต๊อก 34)
+
+## สถานะงานก่อนหน้า (2026-08-31)
 
 1. **[เสร็จสมบูรณ์] คืนค่ารายการสินค้าในคลังครบ 100% (46 รายการ)** — เชื่อมต่อ `items` และ `item_stock` ตรงกัน แสดงยอดคงเหลือจริง, จุดสั่งซื้อขั้นต่ำ และต้นทุน COGS ถูกต้อง
 2. **[เสร็จสมบูรณ์] เพิ่มสินค้าใหม่ขณะรับของเข้า (`/stock-in`)** — มีปุ่มสลับโหมด `[เลือกสินค้าเดิม]` / `[+ เพิ่มสินค้าใหม่]` สร้างแคตตาล็อกและรับเข้าสต๊อกจบในขั้นตอนเดียว

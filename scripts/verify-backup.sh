@@ -57,7 +57,15 @@ EXPECTED_TABLES=(
   profiles
   sc_sales
   sc_payments
+  sc_opex
   sc_users
+)
+
+# ตารางที่ "ควรมี แต่ยังอาจไม่มี" — ขาดแล้วขึ้นเป็นคำเตือน ไม่ใช่ทำให้ทั้งการตรวจล้มเหลว
+# sc_audit_logs สร้างโดย migration 0011 ซึ่งต้อง apply ด้วยมือที่ SQL Editor
+# ➜ เมื่อรัน 0011 บน SneakerCareDB แล้ว ให้ย้ายชื่อนี้ขึ้นไปอยู่ใน EXPECTED_TABLES
+OPTIONAL_TABLES=(
+  sc_audit_logs
 )
 
 # ขนาดต่ำสุดที่ยังพอสมเหตุสมผล — ไฟล์ที่เล็กกว่านี้แปลว่า dump ขาดกลางคันแทบแน่นอน
@@ -154,6 +162,12 @@ fi
 for table in "${EXPECTED_TABLES[@]}"; do
   if ! grep -qE "TABLE DATA public ${table}([[:space:]]|$)" "$TOC"; then
     PROBLEMS+=("ไม่มีข้อมูลของตาราง public.${table} ในไฟล์")
+  fi
+done
+
+for table in "${OPTIONAL_TABLES[@]}"; do
+  if ! grep -qE "TABLE DATA public ${table}([[:space:]]|$)" "$TOC"; then
+    WARNINGS+=("ยังไม่มีตาราง public.${table} ในไฟล์ — ถ้ารัน migration 0011 ไปแล้ว แปลว่า backup ขาดตารางนี้จริง")
   fi
 done
 

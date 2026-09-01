@@ -116,20 +116,52 @@ export async function saveDailySale(data: DailySaleInput) {
     last_updated: new Date().toISOString(),
   };
 
+  // เก็บค่าเดิมไว้ก่อนแก้ เพื่อให้ audit log บอกได้ว่าอะไรเปลี่ยนจากอะไรเป็นอะไร
+  let before: Record<string, any> | null = null;
+  if (data.id) {
+    const { data: prev } = await (supabase.from("sc_sales" as any) as any)
+      .select("date, total_revenue, grand_total, discount, amount_paid, payment_status")
+      .eq("id", data.id)
+      .maybeSingle();
+    before = prev ?? null;
+  }
+
   let error;
+  let savedId: number | undefined = data.id;
   if (data.id) {
     const res = await (supabase.from("sc_sales" as any) as any)
       .update(payload)
       .eq("id", data.id);
     error = res.error;
   } else {
-    const res = await (supabase.from("sc_sales" as any) as any).insert(payload);
+    const res = await (supabase.from("sc_sales" as any) as any)
+      .insert(payload)
+      .select("id")
+      .maybeSingle();
     error = res.error;
+    savedId = res.data?.id;
   }
 
   if (error) {
     return { success: false, error: error.message };
   }
+
+  await logAudit({
+    action: data.id ? "UPDATE" : "CREATE",
+    entity: "daily_sale",
+    entity_id: savedId,
+    actor_id: profile.id,
+    actor_name: profile.display_name,
+    detail: {
+      date: data.date,
+      total_revenue: netTotal,
+      grand_total: grossTotal,
+      discount,
+      amount_paid: actualPaid,
+      payment_status: paymentStatus,
+      ...(before ? { before } : {}),
+    },
+  });
 
   revalidatePath("/", "layout");
 
@@ -139,6 +171,12 @@ export async function saveDailySale(data: DailySaleInput) {
 export async function deleteDailySale(id: number) {
   const profile = await requireProfile();
   const supabase = createAdminClient();
+
+  // อ่านแถวเก็บไว้ก่อน เพราะพอลบแล้วไม่มีทางรู้ย้อนหลังว่ายอดที่หายไปคือเท่าไหร่
+  const { data: doomed } = await (supabase.from("sc_sales" as any) as any)
+    .select("date, total_revenue, grand_total, discount, amount_paid, payment_status, recorded_by")
+    .eq("id", id)
+    .maybeSingle();
 
   const { error } = await (supabase.from("sc_sales" as any) as any)
     .delete()
@@ -154,7 +192,9 @@ export async function deleteDailySale(id: number) {
     entity_id: id,
     actor_id: profile.id,
     actor_name: profile.display_name,
-    detail: { sale_id: id },
+    detail: doomed
+      ? { sale_id: id, ...doomed }
+      : { sale_id: id, note: "อ่านข้อมูลเดิมไม่ได้ก่อนลบ" },
   });
 
   revalidatePath("/", "layout");
@@ -162,21 +202,37 @@ export async function deleteDailySale(id: number) {
   return { success: true };
 }
 
+/** นับยอดขายรายวันทั้งหมด — ใช้บอกผู้ใช้ว่าหน้าจอกำลังแสดงไม่ครบ */
+export async function countDailySales(): Promise<number> {
+  await requireProfile();
+  const supabase = createAdminClient();
+  const { count } = await (supabase.from("sc_sales" as any) as any).select("id", {
+    count: "exact",
+    head: true,
+  });
+  return count ?? 0;
+}
+
 export async function fetchRecentDailySales(limit: number = 300): Promise<DailySaleWithPayments[]> {
   await requireProfile();
   const supabase = createAdminClient();
 
-  const [{ data: salesData, error: salesError }, { data: paymentsData }] = await Promise.all([
-    (supabase.from("sc_sales" as any) as any)
-      .select("*")
-      .order("date", { ascending: false })
-      .limit(limit),
-    (supabase.from("sc_payments" as any) as any)
-      .select("*")
-      .order("created_at", { ascending: false }),
-  ]);
+  const { data: salesData, error: salesError } = await (supabase.from("sc_sales" as any) as any)
+    .select("*")
+    .order("date", { ascending: false })
+    .limit(limit);
 
   if (salesError || !salesData) return [];
+
+  // ดึงเฉพาะใบรับชำระของวันที่โหลดมาจริง — ของเดิม select ทั้งตาราง sc_payments
+  // โดยไม่มี limit ซึ่งจะโตไม่มีเพดานไปเรื่อยๆ ตามจำนวนงวดที่เก็บเงินย้อนหลัง
+  const loadedDates = [...new Set(salesData.map((s: any) => s.date))];
+  const { data: paymentsData } = loadedDates.length
+    ? await (supabase.from("sc_payments" as any) as any)
+        .select("*")
+        .in("sale_date", loadedDates)
+        .order("created_at", { ascending: false })
+    : { data: [] as any[] };
 
   const paymentsByDate = new Map<string, ArPaymentRecord[]>();
   (paymentsData || []).forEach((p: any) => {
@@ -255,10 +311,22 @@ export async function recordArPayment(data: {
     recorded_by: profile.display_name || profile.username || "Staff",
   };
 
-  const { error: paymentError } = await (supabase.from("sc_payments" as any) as any).insert(paymentPayload);
+  const { data: inserted, error: paymentError } = await (supabase.from("sc_payments" as any) as any)
+    .insert(paymentPayload)
+    .select("id")
+    .maybeSingle();
   if (paymentError) {
     return { success: false, error: paymentError.message };
   }
+
+  await logAudit({
+    action: "CREATE",
+    entity: "ar_payment",
+    entity_id: inserted?.id,
+    actor_id: profile.id,
+    actor_name: profile.display_name,
+    detail: paymentPayload,
+  });
 
   // Update sale status in sc_sales
   const { data: sale } = await (supabase.from("sc_sales" as any) as any)
@@ -302,8 +370,14 @@ export async function recordArPayment(data: {
  * Delete an AR Payment receipt
  */
 export async function deleteArPayment(paymentId: number, saleDate: string) {
-  await requireProfile();
+  const profile = await requireProfile();
   const supabase = createAdminClient();
+
+  // อ่านใบรับชำระเก็บไว้ก่อนลบ — ยอดเงินที่หายต้องตรวจย้อนหลังได้
+  const { data: doomed } = await (supabase.from("sc_payments" as any) as any)
+    .select("sale_date, received_date, amount, pay_method, notes, recorded_by")
+    .eq("id", paymentId)
+    .maybeSingle();
 
   const { error } = await (supabase.from("sc_payments" as any) as any)
     .delete()
@@ -312,6 +386,15 @@ export async function deleteArPayment(paymentId: number, saleDate: string) {
   if (error) {
     return { success: false, error: error.message };
   }
+
+  await logAudit({
+    action: "DELETE",
+    entity: "ar_payment",
+    entity_id: paymentId,
+    actor_id: profile.id,
+    actor_name: profile.display_name,
+    detail: { payment_id: paymentId, sale_date: saleDate, ...(doomed ?? {}) },
+  });
 
   // Recalculate status in sc_sales
   const { data: sale } = await (supabase.from("sc_sales" as any) as any)

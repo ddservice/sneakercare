@@ -47,3 +47,6 @@ token github.txt
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# ผลลัพธ์ของ scripts/export-monthly-csv.mjs — ข้อมูลจริงของร้าน ห้ามหลุดเข้า git
+/exports/

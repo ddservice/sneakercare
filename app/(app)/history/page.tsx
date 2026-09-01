@@ -23,6 +23,21 @@ import {
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 
+type HistoryRow = {
+  id: string;
+  created_at: string;
+  txn_type: string;
+  status: string;
+  quantity_delta: number;
+  total_cost: number;
+  reference_note: string | null;
+  reason: string | null;
+  item_name: string;
+  base_unit: string;
+  branch_name: string;
+  performed_by_name: string;
+};
+
 function statusLabel(status: string) {
   if (status === "pending_approval") return "รออนุมัติ";
   if (status === "rejected") return "ปฏิเสธ";
@@ -77,6 +92,10 @@ export default async function HistoryPage({
     endDate = endDate + "T23:59:59.999Z";
   }
 
+  const txnTypeFilter =
+    resolvedParams.txnType && resolvedParams.txnType !== "all" ? resolvedParams.txnType : null;
+
+  // query ของหน้าที่กำลังดู
   let q = supabase
     .from("stock_transactions")
     .select(
@@ -86,15 +105,27 @@ export default async function HistoryPage({
     .order("created_at", { ascending: false });
 
   if (branchId) q = q.eq("branch_id", branchId);
-  if (resolvedParams.txnType && resolvedParams.txnType !== "all") {
-    q = q.eq("txn_type", resolvedParams.txnType as any);
-  }
+  if (txnTypeFilter) q = q.eq("txn_type", txnTypeFilter as any);
   if (startDate) q = q.gte("created_at", startDate);
   if (endDate) q = q.lte("created_at", endDate);
 
-  const { data: rawRows, count } = await q.range(from, to);
+  // ยอดรวมของ "ทั้งช่วงเวลา" ไม่ใช่แค่หน้าที่กำลังดู — ดึงเฉพาะสองคอลัมน์ที่ต้องบวก
+  // ก่อนหน้านี้การ์ดสรุปบวกจากแถวในหน้าเดียว แต่พาดหัวว่าเป็นยอดของทั้งช่วง = ตัวเลขผิด
+  // ตัวกรองด้านล่างต้องเหมือน query ข้างบนเป๊ะ ไม่งั้นยอดรวมกับตารางจะไม่ตรงกัน
+  const SUMMARY_CAP = 5000;
+  let summaryQuery = supabase.from("stock_transactions").select("quantity_delta, total_cost");
 
-  const rows = (rawRows || []).map((r: any) => ({
+  if (branchId) summaryQuery = summaryQuery.eq("branch_id", branchId);
+  if (txnTypeFilter) summaryQuery = summaryQuery.eq("txn_type", txnTypeFilter as any);
+  if (startDate) summaryQuery = summaryQuery.gte("created_at", startDate);
+  if (endDate) summaryQuery = summaryQuery.lte("created_at", endDate);
+
+  const [{ data: rawRows, count }, { data: summaryRows }] = await Promise.all([
+    q.range(from, to),
+    summaryQuery.limit(SUMMARY_CAP),
+  ]);
+
+  const rows: HistoryRow[] = (rawRows || []).map((r: any) => ({
     id: r.id,
     created_at: r.created_at,
     txn_type: r.txn_type,
@@ -111,14 +142,16 @@ export default async function HistoryPage({
 
   const info = pageInfo(page, DEFAULT_PAGE_SIZE, count ?? null, rows?.length ?? 0);
 
-  // Period KPIs
-  const totalStockIn = rows
-    .filter((r) => r.quantity_delta > 0)
-    .reduce((acc, r) => acc + r.quantity_delta, 0);
-  const totalStockOut = rows
-    .filter((r) => r.quantity_delta < 0)
-    .reduce((acc, r) => acc + Math.abs(r.quantity_delta), 0);
-  const totalCostPeriod = rows.reduce((acc, r) => acc + (r.total_cost || 0), 0);
+  // Period KPIs — คิดจากทุกแถวในช่วงเวลาที่เลือก ไม่ใช่แค่แถวในหน้านี้
+  const summary = (summaryRows ?? []).map((r) => ({
+    qty: Number(r.quantity_delta || 0),
+    cost: Number(r.total_cost || 0),
+  }));
+  const totalStockIn = summary.filter((r) => r.qty > 0).reduce((acc, r) => acc + r.qty, 0);
+  const totalStockOut = summary.filter((r) => r.qty < 0).reduce((acc, r) => acc + Math.abs(r.qty), 0);
+  const totalCostPeriod = summary.reduce((acc, r) => acc + r.cost, 0);
+  // ถ้าชนเพดานแปลว่ายอดรวมยังไม่ครบ ต้องบอกผู้ใช้ ไม่ใช่แสดงตัวเลขที่ขาดไปเฉยๆ
+  const summaryTruncated = summary.length >= SUMMARY_CAP;
 
   return (
     <div className="space-y-6">
@@ -222,6 +255,12 @@ export default async function HistoryPage({
                   <span className="font-bold font-mono">
                     {totalCostPeriod.toLocaleString("th-TH", { minimumFractionDigits: 2 })} ฿
                   </span>
+                </div>
+              )}
+              {summaryTruncated && (
+                <div className="rounded-md bg-amber-50 border border-amber-300 text-amber-800 px-2.5 py-1">
+                  ⚠️ ยอดรวมนับจาก {SUMMARY_CAP.toLocaleString("th-TH")} รายการล่าสุดเท่านั้น — ช่วงเวลานี้ใหญ่เกินไป
+                  ให้แคบช่วงลงเพื่อดูยอดที่ครบถ้วน
                 </div>
               )}
             </div>
@@ -333,7 +372,17 @@ export default async function HistoryPage({
         </CardContent>
       </Card>
 
-      <Pagination info={info} basePath="/history" />
+      {/* ส่ง params ไปด้วย ไม่งั้นกด "ถัดไป" แล้วช่วงเวลา/ประเภทที่เลือกไว้หลุดกลับเป็นค่า default */}
+      <Pagination
+        info={info}
+        basePath="/history"
+        params={{
+          period: resolvedParams.period,
+          txnType: resolvedParams.txnType,
+          startDate: resolvedParams.startDate,
+          endDate: resolvedParams.endDate,
+        }}
+      />
     </div>
   );
 }

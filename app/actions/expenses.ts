@@ -3,6 +3,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireProfile } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
+import { logAudit } from "@/lib/audit";
 
 export type StaffPayslip = {
   employeeName: string;
@@ -432,6 +433,17 @@ export async function fetchAllExpensesData(timeRange: string = "this_month"): Pr
 /**
  * Save / update staff profile details and employment type
  */
+/**
+ * ปิดบังเลขบัตรประชาชน/เลขบัญชีก่อนเขียนลง audit log
+ * audit ต้องบอกได้ว่า "มีการแก้ไขข้อมูลนี้" โดยไม่กลายเป็นแหล่งรวม PII เสียเอง
+ */
+function maskId(value: string | undefined | null): string {
+  const raw = String(value ?? "").replace(/s|-/g, "");
+  if (!raw) return "—";
+  if (raw.length <= 4) return "*".repeat(raw.length);
+  return "*".repeat(raw.length - 4) + raw.slice(-4);
+}
+
 export async function saveStaffProfileInfo(payload: {
   employeeKeyName: string;
   fullName: string;
@@ -506,6 +518,27 @@ export async function saveStaffProfileInfo(payload: {
       .eq("id", existingEmp.id);
   }
 
+  await logAudit({
+    action: "UPDATE",
+    entity: "roster_employee",
+    entity_id: cleanKeyName,
+    actor_id: profile.id,
+    actor_name: profile.display_name,
+    detail: {
+      employee: cleanKeyName,
+      full_name: payload.fullName,
+      nickname: payload.nickname,
+      role: payload.employeeRole,
+      employment_type: payload.employmentType,
+      base_salary: profileData.baseSalary,
+      daily_wage: profileData.dailyWage,
+      days_worked: profileData.daysWorked,
+      bank: payload.bankName,
+      account_no: maskId(payload.accountNo),
+      id_card_no: maskId(payload.idCardNo),
+    },
+  });
+
   revalidatePath("/", "layout");
   return { success: true };
 }
@@ -573,6 +606,24 @@ export async function createStaffMember(payload: {
     last_updated: new Date().toISOString(),
   });
 
+  await logAudit({
+    action: "CREATE",
+    entity: "roster_employee",
+    entity_id: payload.fullName.trim(),
+    actor_id: profile.id,
+    actor_name: profile.display_name,
+    detail: {
+      full_name: payload.fullName.trim(),
+      nickname: payload.nickname.trim(),
+      position: payload.position.trim(),
+      employment_type: payload.employmentType,
+      salary: payload.salary,
+      bank: payload.bankName.trim(),
+      account_no: maskId(payload.accountNo),
+      id_card_no: maskId(payload.idCardNo),
+    },
+  });
+
   revalidatePath("/", "layout");
   return { success: true };
 }
@@ -629,6 +680,31 @@ export async function saveStaffPayrollAdjustment(payload: {
     });
   }
 
+  // เขียนตัวเลขเงินเดือนทั้งชุดลง audit — ฟังก์ชันนี้ลบแถวเดิมแล้ว insert ทับ
+  // ถ้าไม่บันทึกไว้ตรงนี้ ยอดเดิมจะหายไปโดยไม่มีร่องรอยเลย
+  await logAudit({
+    action: "UPDATE",
+    entity: "payroll",
+    entity_id: `${m}:${cleanKeyName}`,
+    actor_id: profile.id,
+    actor_name: profile.display_name,
+    detail: {
+      month: m,
+      employee: cleanKeyName,
+      employment_type: payload.employmentType,
+      base_salary: payload.baseSalary,
+      diligence: payload.diligence,
+      ot: payload.ot,
+      commission_pct: payload.commPct,
+      commission: payload.commission,
+      wht: payload.wht,
+      sso_deduction: payload.ssoDeduction,
+      other_deductions: payload.otherDeductions,
+      net_pay: payload.netPay,
+      pay_method: payload.payMethod || "บัญชีร้าน",
+    },
+  });
+
   revalidatePath("/", "layout");
   return { success: true };
 }
@@ -652,28 +728,47 @@ export async function addExpense(
   const [y, m] = expenseDate.split("-");
   const monthKey = `${m}/${y}`;
 
-  const { error } = await (supabase.from("sc_opex" as any) as any).insert({
-    month: monthKey,
-    category,
-    name: title,
-    amount,
-    pay_method: payMethod,
-    recorded_by: profile.display_name,
-    key: `custom_${Date.now()}`,
-    last_updated: new Date().toISOString(),
-  });
+  const expenseKey = `custom_${Date.now()}`;
+  const { data: inserted, error } = await (supabase.from("sc_opex" as any) as any)
+    .insert({
+      month: monthKey,
+      category,
+      name: title,
+      amount,
+      pay_method: payMethod,
+      recorded_by: profile.display_name,
+      key: expenseKey,
+      last_updated: new Date().toISOString(),
+    })
+    .select("id")
+    .maybeSingle();
 
   if (error) {
     return { error: `ไม่สามารถบันทึกได้: ${error.message}` };
   }
+
+  await logAudit({
+    action: "CREATE",
+    entity: "expense",
+    entity_id: inserted?.id ?? expenseKey,
+    actor_id: profile.id,
+    actor_name: profile.display_name,
+    detail: { month: monthKey, category, name: title, amount, pay_method: payMethod, expense_date: expenseDate },
+  });
 
   revalidatePath("/", "layout");
   return { success: true };
 }
 
 export async function deleteExpense(id: string | number) {
-  await requireProfile();
+  const profile = await requireProfile();
   const supabase = createAdminClient();
+
+  // อ่านรายการเก็บไว้ก่อนลบ — ยอดค่าใช้จ่ายที่หายไปต้องตรวจย้อนหลังได้
+  const { data: doomed } = await (supabase.from("sc_opex" as any) as any)
+    .select("month, category, key, name, amount, pay_method, recorded_by")
+    .eq("id", id)
+    .maybeSingle();
 
   const { error } = await (supabase.from("sc_opex" as any) as any)
     .delete()
@@ -682,6 +777,17 @@ export async function deleteExpense(id: string | number) {
   if (error) {
     throw new Error(`ไม่สามารถลบรายการได้: ${error.message}`);
   }
+
+  await logAudit({
+    action: "DELETE",
+    entity: "expense",
+    entity_id: String(id),
+    actor_id: profile.id,
+    actor_name: profile.display_name,
+    detail: doomed
+      ? { expense_id: id, ...doomed }
+      : { expense_id: id, note: "อ่านข้อมูลเดิมไม่ได้ก่อนลบ" },
+  });
 
   revalidatePath("/", "layout");
   return { success: true };

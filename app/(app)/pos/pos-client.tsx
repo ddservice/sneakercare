@@ -8,6 +8,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Pagination } from "@/components/pagination";
+import { rangeLabel, type PageInfo } from "@/lib/pagination";
 import { toast } from "sonner";
 import {
   Sparkles,
@@ -73,7 +75,14 @@ const STATUS_CONFIG = {
   cancelled: { label: "ยกเลิก", color: "bg-rose-100 text-rose-800 border-rose-300 dark:bg-rose-900/50 dark:text-rose-300" },
 };
 
-export function PosClient({ initialOrders }: { initialOrders: OrderItem[] }) {
+export function PosClient({
+  initialOrders,
+  pageInfo,
+}: {
+  initialOrders: OrderItem[];
+  /** ข้อมูลหน้าที่กำลังดู — ตัวกรอง/ค้นหาด้านล่างทำงานกับ "หน้านี้" เท่านั้น */
+  pageInfo: PageInfo;
+}) {
   const [orders, setOrders] = useState<OrderItem[]>(initialOrders);
   const [selectedServices, setSelectedServices] = useState<{ id: string; name: string; price: number }[]>([
     DEFAULT_SERVICES[0],
@@ -480,7 +489,7 @@ export function PosClient({ initialOrders }: { initialOrders: OrderItem[] }) {
                   <Clock className="h-4 w-4 text-teal-600" />
                   รายการงานในระบบ ({filteredOrders.length})
                 </CardTitle>
-                <div className="text-xs text-muted-foreground">อัปเดตล่าสุดเรียลไทม์</div>
+                <div className="text-xs text-muted-foreground">{rangeLabel(pageInfo)}</div>
               </div>
 
               {/* Filters & Search */}
@@ -601,6 +610,17 @@ export function PosClient({ initialOrders }: { initialOrders: OrderItem[] }) {
                 })
               )}
             </CardContent>
+
+            {/* แบ่งหน้าฝั่งเซิร์ฟเวอร์ — ของเดิมใช้ .limit(50) ตายตัว พองานเกิน 50 ใบ
+                รายการเก่าจะหายไปเงียบๆ โดยผู้ใช้ไม่มีทางรู้ */}
+            <div className="border-t border-slate-100 dark:border-slate-800 px-4 py-3">
+              <Pagination info={pageInfo} basePath="/pos" />
+              {(pageInfo.total ?? 0) > pageInfo.pageSize && (
+                <p className="mt-1 text-[11px] text-amber-700 dark:text-amber-400">
+                  ⚠️ ช่องค้นหาและปุ่มกรองสถานะด้านบนกรองเฉพาะรายการในหน้านี้
+                </p>
+              )}
+            </div>
           </Card>
         </div>
       </div>
