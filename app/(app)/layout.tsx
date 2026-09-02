@@ -44,7 +44,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const alerts = { inventory: lowStockCount };
 
   return (
-    <div className="flex min-h-svh flex-col bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 antialiased">
+    <div id="app-shell" className="flex min-h-svh flex-col bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 antialiased">
 
       {/* ══════════════════════════════════════════════
           Top Header (sticky, glassmorphism)

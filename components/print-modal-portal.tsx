@@ -13,6 +13,12 @@ import { createPortal } from "react-dom";
  * กระดาษ ทำให้พิมพ์ออกมาผิดตำแหน่ง/ผิดขนาด หรือปนกับเนื้อหาอื่นบนหน้า — เจอบั๊กคลาสเดียวกันนี้แล้ว
  * ครั้งหนึ่งกับ MobileNav drawer (ดู CLAUDE.md 2026-09-01) modal พิมพ์เอกสารเองก็มี
  * backdrop-blur-xs อยู่ที่ตัว backdrop ด้วย จึงเข้าข่ายเดียวกัน
+ *
+ * ⚠️ id="print-portal-root" ที่ห่อไว้ตรงนี้ห้ามลบ — เป็น hook ที่ app/globals.css ใช้เช็คว่า
+ * ตอนนี้กำลังพิมพ์เอกสารที่ portal ออกมานอก #app-shell อยู่หรือเปล่า (ดูคอมเมนต์ที่ globals.css
+ * @media print) ถ้าลบ id นี้ พิมพ์เอกสารจะกลับไปเป็นบั๊กเดิม: พิมพ์ซ้ำหลายหน้า เพราะ #app-shell
+ * ที่ถูกซ่อนด้วย visibility:hidden ยังกินพื้นที่ layout เต็มความสูงของทั้งหน้าเว็บอยู่ ทำให้
+ * browser คิดว่าต้องพิมพ์หลายหน้า แล้ว .printable-area (position:fixed) จะถูกพิมพ์ซ้ำทุกหน้า
  */
 export function PrintModalPortal({ children }: { children: React.ReactNode }) {
   const [mounted, setMounted] = useState(false);
@@ -23,5 +29,5 @@ export function PrintModalPortal({ children }: { children: React.ReactNode }) {
   }, []);
 
   if (!mounted) return null;
-  return createPortal(children, document.body);
+  return createPortal(<div id="print-portal-root">{children}</div>, document.body);
 }

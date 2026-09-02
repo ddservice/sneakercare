@@ -459,6 +459,24 @@
     border: none !important;
   }
 
+  /* กรณี .printable-area ถูก portal ออกมานอก #app-shell แล้ว (สลิปเงินเดือน/ใบแจ้งหนี้/
+     ใบกำกับภาษี — ดู components/print-modal-portal.tsx) กฎ position:fixed ด้านบนคือสาเหตุที่
+     พิมพ์ซ้ำหลายหน้า: visibility:hidden ไม่ได้ลบพื้นที่ layout ของ #app-shell ที่ถูกซ่อนไว้
+     (เนื้อหาทั้งหน้าเว็บที่มองไม่เห็นแต่ยังกิน "ความสูง" อยู่เต็ม) พอความสูงเอกสารรวมยาวกว่า
+     1 หน้ากระดาษ เบราว์เซอร์จึงสั่งพิมพ์หลายหน้า และ element ที่เป็น position:fixed จะถูกวาดซ้ำ
+     ในทุกๆ หน้าตามสเปก CSS — ผลคือสลิปคนเดิมถูกพิมพ์ซ้ำกันหลายแผ่น
+     ทางแก้: เมื่อรู้ว่ากำลังพิมพ์เอกสารที่ portal ออกมา (มี #print-portal-root อยู่) ให้ยุบ
+     #app-shell ทิ้งทั้งก้อนด้วย display:none (ทำได้เพราะเนื้อหาที่จะพิมพ์อยู่นอกมันแล้ว) แล้ว
+     เปลี่ยน .printable-area ให้ไหลตาม flow ปกติแทน fixed เอกสารจะได้ยาวเท่าที่จำเป็นจริงๆ
+     (ปกติสลิป 1 คนพอดี 1 หน้า) ไม่ซ้ำเวลามีมากกว่า 1 หน้าจริง (เช่นตารางยาว) */
+  body:has(#print-portal-root) #app-shell {
+    display: none !important;
+  }
+  #print-portal-root .printable-area {
+    position: static !important;
+    inset: auto !important;
+  }
+
   .printable-area table {
     width: 100% !important;
     border-collapse: collapse !important;
