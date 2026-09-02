@@ -96,6 +96,14 @@ function buildAvailableMonths(monthsBack = 24) {
   return months;
 }
 
+/** วันที่สุดท้ายของเดือน (พ.ศ.) จากค่า "MM/YYYY" — ใช้แทนวันที่จ่ายเงินที่เคย hardcode เป็น "31 สิงหาคม 2569" ตรงๆ */
+function lastDayOfMonthThai(monthValue: string): string {
+  const [mm, yyyy] = monthValue.split("/").map(Number);
+  if (!mm || !yyyy) return "-";
+  const lastDay = new Date(yyyy, mm, 0).getDate(); // วันที่ 0 ของเดือนถัดไป = วันสุดท้ายของเดือนนี้
+  return `${lastDay} ${THAI_MONTH_NAMES[mm - 1]} ${yyyy + 543}`;
+}
+
 export const AVAILABLE_MONTHS = buildAvailableMonths();
 /** ค่า "MM/YYYY" ของเดือนปัจจุบัน — ใช้แทนเลข "08/2026" ที่เคย hardcode ไว้ */
 export const LATEST_MONTH_VALUE = AVAILABLE_MONTHS[0].value;
@@ -1854,15 +1862,18 @@ export function ExpensesClient({
                     {shopProfile?.phone ? ` · โทร. ${shopProfile.phone}` : ""}
                   </div>
                 </div>
-                <div className="text-right">
-                  <div className="inline-block rounded-md bg-slate-900 px-3 py-1 text-xs font-black text-white tracking-wide">
-                    PAYSLIP VOUCHER
+                <div className="text-right space-y-1">
+                  <div className="text-lg font-black text-slate-900 tracking-tight">
+                    ใบจ่ายเงินเดือน
+                  </div>
+                  <div className="text-[10px] font-semibold text-slate-500 tracking-widest uppercase">
+                    Payslip Voucher
                   </div>
                   <div className="text-[11px] font-mono text-slate-500 pt-1">
                     เลขที่: PS-{selectedPayslip.month.replace("/", "")}-{selectedPayslip.idCardNo?.slice(-4) || "0001"}
                   </div>
                   <div className="text-[11px] text-slate-700 font-semibold">
-                    วันที่จ่ายเงิน: 31 สิงหาคม 2569
+                    วันที่จ่ายเงิน: {lastDayOfMonthThai(selectedPayslip.month)}
                   </div>
                 </div>
               </div>
