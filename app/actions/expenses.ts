@@ -28,6 +28,9 @@ export type StaffPayslip = {
   commission: number;
   wht: number; // 3% of commission
   ssoDeduction: number; // 5% of base salary for monthly staff
+  /** ยกเว้นประกันสังคม เช่น หุ้นส่วนผู้จัดการที่ไม่นับเป็น "ลูกจ้าง" ตาม พ.ร.บ.ประกันสังคม —
+   * ไม่หัก ปกส. แม้จะเป็นพนักงานประจำ (employmentType === "monthly") ก็ตาม */
+  ssoExempt?: boolean;
   otherDeductions: number;
   netPay: number;
   payMethod: string;
@@ -301,7 +304,8 @@ export async function fetchAllExpensesData(timeRange: string = "this_month"): Pr
       const dailyWage = isDaily ? salary : 350;
       const days = 8;
       const baseSalary = isDaily ? dailyWage * days : salary;
-      const sso = isDaily ? 0 : Math.round(baseSalary * 0.05);
+      const ssoExempt = !!emp.sso_exempt;
+      const sso = isDaily || ssoExempt ? 0 : Math.round(baseSalary * 0.05);
 
       staffMap[emp.name] = {
         employeeName: emp.name,
@@ -320,6 +324,7 @@ export async function fetchAllExpensesData(timeRange: string = "this_month"): Pr
         commission: 0,
         wht: 0,
         ssoDeduction: sso,
+        ssoExempt,
         otherDeductions: 0,
         netPay: baseSalary - sso,
         payMethod: "บัญชีร้าน (โอน)",
@@ -388,6 +393,7 @@ export async function fetchAllExpensesData(timeRange: string = "this_month"): Pr
         if (parsed.accountNo) p.accountNo = parsed.accountNo;
         if (parsed.nickname) p.nickname = parsed.nickname;
         if (parsed.employeeRole) p.employeeRole = parsed.employeeRole;
+        p.ssoExempt = !!parsed.ssoExempt;
         if (parsed.employmentType) {
           p.employmentType = parsed.employmentType;
           if (parsed.employmentType === "monthly") {
@@ -417,7 +423,9 @@ export async function fetchAllExpensesData(timeRange: string = "this_month"): Pr
       p.wht = Math.round(p.commission * 0.03);
     }
 
-    if (p.employmentType === "monthly") {
+    // ยกเว้น ปกส. ได้แม้เป็นพนักงานประจำ — สำหรับหุ้นส่วนผู้จัดการที่ไม่นับเป็น "ลูกจ้าง"
+    // ตาม พ.ร.บ.ประกันสังคม (ดู CLAUDE.md 2026-09-02)
+    if (p.employmentType === "monthly" && !p.ssoExempt) {
       p.ssoDeduction = 600;
     } else {
       p.ssoDeduction = 0;
@@ -505,6 +513,8 @@ export async function saveStaffProfileInfo(payload: {
   baseSalary?: number;
   dailyWage?: number;
   daysWorked?: number;
+  /** ยกเว้นประกันสังคม เช่น หุ้นส่วนผู้จัดการที่ไม่นับเป็นลูกจ้างตาม พ.ร.บ.ประกันสังคม */
+  ssoExempt?: boolean;
 }): Promise<ExpenseActionState> {
   const profile = await requireProfile();
   const supabase = createAdminClient();
@@ -525,6 +535,7 @@ export async function saveStaffProfileInfo(payload: {
     baseSalary: payload.baseSalary || 12000,
     dailyWage: payload.dailyWage || 350,
     daysWorked: payload.daysWorked || 8,
+    ssoExempt: !!payload.ssoExempt,
   };
 
   const key = `empd_profile_${cleanKeyName}`;
@@ -561,7 +572,7 @@ export async function saveStaffProfileInfo(payload: {
         bank: payload.bankName,
         account: payload.accountNo,
         salary: payload.employmentType === "monthly" ? payload.baseSalary || 12000 : (payload.dailyWage || 350) * 26,
-        sso_exempt: payload.employmentType === "probation_daily",
+        sso_exempt: payload.employmentType === "probation_daily" || !!payload.ssoExempt,
         last_updated: new Date().toISOString(),
       })
       .eq("id", existingEmp.id);
@@ -579,6 +590,7 @@ export async function saveStaffProfileInfo(payload: {
       nickname: payload.nickname,
       role: payload.employeeRole,
       employment_type: payload.employmentType,
+      sso_exempt: !!payload.ssoExempt,
       base_salary: profileData.baseSalary,
       daily_wage: profileData.dailyWage,
       days_worked: profileData.daysWorked,
@@ -604,6 +616,8 @@ export async function createStaffMember(payload: {
   position: string;
   employmentType: "monthly" | "probation_daily";
   salary: number;
+  /** ยกเว้นประกันสังคม เช่น หุ้นส่วนผู้จัดการที่ไม่นับเป็นลูกจ้างตาม พ.ร.บ.ประกันสังคม */
+  ssoExempt?: boolean;
 }): Promise<ExpenseActionState> {
   const profile = await requireProfile();
   const supabase = createAdminClient();
@@ -622,7 +636,7 @@ export async function createStaffMember(payload: {
     salary: payload.salary,
     status: "Active",
     comm_rate: 0,
-    sso_exempt: payload.employmentType === "probation_daily",
+    sso_exempt: payload.employmentType === "probation_daily" || !!payload.ssoExempt,
     last_updated: new Date().toISOString(),
   });
 
@@ -642,6 +656,7 @@ export async function createStaffMember(payload: {
     baseSalary: payload.employmentType === "monthly" ? payload.salary : payload.salary * 8,
     dailyWage: payload.employmentType === "probation_daily" ? payload.salary : 350,
     daysWorked: 8,
+    ssoExempt: !!payload.ssoExempt,
   };
 
   await (supabase.from("sc_opex" as any) as any).insert({
@@ -666,6 +681,7 @@ export async function createStaffMember(payload: {
       nickname: payload.nickname.trim(),
       position: payload.position.trim(),
       employment_type: payload.employmentType,
+      sso_exempt: !!payload.ssoExempt,
       salary: payload.salary,
       bank: payload.bankName.trim(),
       account_no: maskId(payload.accountNo),

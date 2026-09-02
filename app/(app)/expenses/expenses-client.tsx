@@ -136,6 +136,8 @@ export function ExpensesClient({
   const [editEmpType, setEditEmpType] = useState<"monthly" | "probation_daily">("monthly");
   const [editSalary, setEditSalary] = useState<number>(12000);
   const [editDailyRate, setEditDailyRate] = useState<number>(350);
+  /** ยกเว้นประกันสังคม — สำหรับหุ้นส่วนผู้จัดการที่ไม่นับเป็นลูกจ้างตาม พ.ร.บ.ประกันสังคม */
+  const [editSsoExempt, setEditSsoExempt] = useState(false);
 
   // New Staff Modal State
   const [showAddStaffModal, setShowAddStaffModal] = useState(false);
@@ -147,6 +149,8 @@ export function ExpensesClient({
   const [newStaffPosition, setNewStaffPosition] = useState("ช่างสปารองเท้า");
   const [newStaffType, setNewStaffType] = useState<"monthly" | "probation_daily">("probation_daily");
   const [newStaffSalary, setNewStaffSalary] = useState<number>(350);
+  /** ยกเว้นประกันสังคม — สำหรับหุ้นส่วนผู้จัดการที่ไม่นับเป็นลูกจ้างตาม พ.ร.บ.ประกันสังคม */
+  const [newStaffSsoExempt, setNewStaffSsoExempt] = useState(false);
 
   // Add Expense Modal State
   const [showAddExpenseModal, setShowAddExpenseModal] = useState(false);
@@ -357,12 +361,15 @@ export function ExpensesClient({
     setEditEmpType(p.employmentType);
     setEditSalary(p.baseSalary || 12000);
     setEditDailyRate(p.dailyWage || 350);
+    setEditSsoExempt(!!p.ssoExempt);
   }
 
   // Save Edit Profile Modal
   function handleSaveStaffProfile(e: React.FormEvent) {
     e.preventDefault();
     if (!editingProfileStaff) return;
+
+    const nextSso = editEmpType === "monthly" && !editSsoExempt ? 600 : 0;
 
     startTransition(async () => {
       const res = await saveStaffProfileInfo({
@@ -377,6 +384,7 @@ export function ExpensesClient({
         baseSalary: editEmpType === "monthly" ? editSalary : editDailyRate * (editingProfileStaff.daysWorked || 8),
         dailyWage: editEmpType === "probation_daily" ? editDailyRate : undefined,
         daysWorked: editingProfileStaff.daysWorked || 8,
+        ssoExempt: editSsoExempt,
       });
 
       if (res.success) {
@@ -396,13 +404,14 @@ export function ExpensesClient({
                   employmentType: editEmpType,
                   baseSalary: editEmpType === "monthly" ? editSalary : editDailyRate * (p.daysWorked || 8),
                   dailyWage: editEmpType === "probation_daily" ? editDailyRate : undefined,
-                  ssoDeduction: editEmpType === "monthly" ? 600 : 0,
+                  ssoExempt: editSsoExempt,
+                  ssoDeduction: nextSso,
                   netPay:
                     (editEmpType === "monthly" ? editSalary : editDailyRate * (p.daysWorked || 8)) +
                     p.diligence +
                     p.ot +
                     p.commission -
-                    (editEmpType === "monthly" ? 600 : 0) -
+                    nextSso -
                     p.wht -
                     p.otherDeductions,
                 }
@@ -434,11 +443,13 @@ export function ExpensesClient({
         position: newStaffPosition.trim(),
         employmentType: newStaffType,
         salary: newStaffType === "monthly" ? newStaffSalary : newStaffSalary,
+        ssoExempt: newStaffSsoExempt,
       });
 
       if (res.success) {
         toast.success(`เพิ่มพนักงานใหม่ "${newStaffName}" สำเร็จเรียบร้อย`);
         setShowAddStaffModal(false);
+        setNewStaffSsoExempt(false);
         const updated = await fetchAllExpensesData(selectedMonth);
         setData(updated);
       } else {
@@ -1364,6 +1375,30 @@ export function ExpensesClient({
                 </div>
               </div>
 
+              {editEmpType === "monthly" && (
+                <label
+                  className={`flex items-start gap-2.5 rounded-xl border p-3 text-xs cursor-pointer transition-colors ${
+                    editSsoExempt
+                      ? "border-amber-300 bg-amber-50/70 text-amber-900"
+                      : "border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100"
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={editSsoExempt}
+                    onChange={(e) => setEditSsoExempt(e.target.checked)}
+                    className="mt-0.5 h-3.5 w-3.5 rounded border-slate-300 accent-amber-500"
+                  />
+                  <span>
+                    <span className="font-bold">ยกเว้นประกันสังคม (ปกส.)</span>
+                    <span className="block mt-0.5 text-[11px] opacity-80">
+                      ใช้สำหรับหุ้นส่วนผู้จัดการ/ผู้บริหารที่ไม่นับเป็น &ldquo;ลูกจ้าง&rdquo; ตาม พ.ร.บ.ประกันสังคม
+                      — ไม่หัก 600 บาท/เดือน แม้ตั้งเป็นพนักงานประจำ ควรยืนยันกับนักบัญชีก่อนติ๊กเลือก
+                    </span>
+                  </span>
+                </label>
+              )}
+
               <div className="grid grid-cols-3 gap-2">
                 <div className="col-span-2 space-y-1">
                   <Label className="font-bold text-slate-700">ชื่อ-นามสกุล จริง *</Label>
@@ -1533,6 +1568,29 @@ export function ExpensesClient({
                   </button>
                 </div>
               </div>
+
+              {newStaffType === "monthly" && (
+                <label
+                  className={`flex items-start gap-2.5 rounded-xl border p-3 text-xs cursor-pointer transition-colors ${
+                    newStaffSsoExempt
+                      ? "border-amber-300 bg-amber-50/70 text-amber-900"
+                      : "border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100"
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={newStaffSsoExempt}
+                    onChange={(e) => setNewStaffSsoExempt(e.target.checked)}
+                    className="mt-0.5 h-3.5 w-3.5 rounded border-slate-300 accent-amber-500"
+                  />
+                  <span>
+                    <span className="font-bold">ยกเว้นประกันสังคม (ปกส.)</span>
+                    <span className="block mt-0.5 text-[11px] opacity-80">
+                      สำหรับหุ้นส่วนผู้จัดการ/ผู้บริหารที่ไม่นับเป็น &ldquo;ลูกจ้าง&rdquo; ตาม พ.ร.บ.ประกันสังคม
+                    </span>
+                  </span>
+                </label>
+              )}
 
               <div className="grid grid-cols-3 gap-2">
                 <div className="col-span-2 space-y-1">
