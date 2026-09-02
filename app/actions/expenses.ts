@@ -964,3 +964,72 @@ export async function deleteExpense(id: string | number) {
   return { success: true };
 }
 
+/**
+ * ลบรายการหนึ่งรายการออกจากรายจ่ายเบ็ดเตล็ด (misc_items_json)
+ *
+ * ทำไมต้องมี action แยก: หน้า /expenses แสดงรายการย่อยของ misc_items_json เป็นแถวๆ ในตาราง
+ * ค่าใช้จ่าย (ดู fetchAllExpensesData) โดยใช้ id สังเคราะห์แบบ "${rowId}-misc-${itemIndex}"
+ * เพราะรายการเหล่านี้ไม่มีแถว sc_opex ของตัวเอง — เป็นแค่ item หนึ่งตัวใน array JSON ที่เก็บรวมกัน
+ * ในแถวเดียว ถ้าใช้ deleteExpense(id) ตรงๆ กับ id สังเคราะห์นี้จะพังทันที (id column เป็น bigint
+ * ใส่ string แบบนี้เข้าไปไม่ได้) ต้อง "แก้ไข JSON แล้วเขียนทับ" แทนการลบทั้งแถว
+ *
+ * มีแถวคู่กันเสมอ: key="misc" (ยอดรวมก้อนเดียว) กับ key="misc_items_json" (รายละเอียด) สอง
+ * แถวนี้ต้องมียอดตรงกันเสมอ (ดูคอมเมนต์ที่ fetchAllExpensesData) ฟังก์ชันนี้จึงต้องอัปเดตทั้งคู่
+ */
+export async function deleteMiscExpenseItem(rowId: number, itemIndex: number) {
+  const profile = await requireProfile();
+  const supabase = createAdminClient();
+
+  const { data: row, error: fetchError } = await (supabase.from("sc_opex" as any) as any)
+    .select("id, month, name")
+    .eq("id", rowId)
+    .eq("key", "misc_items_json")
+    .maybeSingle();
+
+  if (fetchError || !row) {
+    throw new Error(`ไม่พบรายการรายจ่ายเบ็ดเตล็ดแถวนี้: ${fetchError?.message || "row not found"}`);
+  }
+
+  let items: Array<{ name: string; amount: number; method?: string }>;
+  try {
+    items = JSON.parse(row.name);
+    if (!Array.isArray(items)) throw new Error("ข้อมูลไม่ใช่ array");
+  } catch (err) {
+    throw new Error(`อ่านข้อมูลรายจ่ายเบ็ดเตล็ดไม่สำเร็จ: ${err instanceof Error ? err.message : String(err)}`);
+  }
+
+  if (itemIndex < 0 || itemIndex >= items.length) {
+    throw new Error("ไม่พบรายการย่อยที่ตำแหน่งนี้ — ข้อมูลอาจถูกแก้ไปแล้วจากที่อื่น ลองรีเฟรชหน้าอีกครั้ง");
+  }
+
+  const removed = items[itemIndex];
+  const nextItems = items.filter((_, i) => i !== itemIndex);
+  const nextTotal = nextItems.reduce((sum, i) => sum + Number(i.amount || 0), 0);
+
+  const { error: updateItemsError } = await (supabase.from("sc_opex" as any) as any)
+    .update({ name: JSON.stringify(nextItems), last_updated: new Date().toISOString() })
+    .eq("id", rowId);
+
+  if (updateItemsError) {
+    throw new Error(`ลบรายการไม่สำเร็จ: ${updateItemsError.message}`);
+  }
+
+  // ซิงค์แถวสรุป key="misc" ให้ยอดตรงกับ items ที่เหลือเสมอ
+  await (supabase.from("sc_opex" as any) as any)
+    .update({ amount: nextTotal, last_updated: new Date().toISOString() })
+    .eq("month", row.month)
+    .eq("key", "misc");
+
+  await logAudit({
+    action: "DELETE",
+    entity: "expense",
+    entity_id: `${rowId}-misc-${itemIndex}`,
+    actor_id: profile.id,
+    actor_name: profile.display_name,
+    detail: { month: row.month, removed_item: removed, remaining_total: nextTotal },
+  });
+
+  revalidatePath("/", "layout");
+  return { success: true };
+}
+

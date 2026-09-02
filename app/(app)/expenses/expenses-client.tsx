@@ -5,6 +5,7 @@ import {
   fetchAllExpensesData,
   addExpense,
   deleteExpense,
+  deleteMiscExpenseItem,
   saveStaffPayrollAdjustment,
   saveStaffProfileInfo,
   createStaffMember,
@@ -535,7 +536,14 @@ export function ExpensesClient({
 
     startTransition(async () => {
       try {
-        await deleteExpense(id);
+        // รายการย่อยของ "ค่าใช้จ่ายเบ็ดเตล็ด" ใช้ id สังเคราะห์ "${rowId}-misc-${itemIndex}"
+        // เพราะไม่มีแถว sc_opex ของตัวเอง — ต้องแยกไปแก้ JSON แทนการลบทั้งแถว (ดู deleteMiscExpenseItem)
+        const miscMatch = String(id).match(/^(\d+)-misc-(\d+)$/);
+        if (miscMatch) {
+          await deleteMiscExpenseItem(Number(miscMatch[1]), Number(miscMatch[2]));
+        } else {
+          await deleteExpense(id);
+        }
         toast.success(`ลบรายการ "${name}" เรียบร้อยแล้ว`);
         const updated = await fetchAllExpensesData(selectedMonth);
         setData(updated);
