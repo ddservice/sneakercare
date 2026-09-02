@@ -1306,7 +1306,7 @@ export function ExpensesClient({
 
       {/* ── ADD EXPENSE MODAL (WITH 6 STANDARD CATEGORIES & PRESETS) ── */}
       {showAddExpenseModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs overflow-y-auto">
           <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-150">
             <div className="flex items-center justify-between border-b border-slate-200 pb-3">
               <div className="flex items-center gap-2">
@@ -1437,7 +1437,7 @@ export function ExpensesClient({
 
       {/* ── EDIT STAFF PROFILE & STATUS MODAL ── */}
       {editingProfileStaff && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs overflow-y-auto">
           <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-150">
             <div className="flex items-center justify-between border-b border-slate-200 pb-3">
               <div className="flex items-center gap-2">
@@ -1635,7 +1635,7 @@ export function ExpensesClient({
 
       {/* ── CREATE NEW STAFF MEMBER MODAL ── */}
       {showAddStaffModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs overflow-y-auto">
           <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-150">
             <div className="flex items-center justify-between border-b border-slate-200 pb-3">
               <div className="flex items-center gap-2">
@@ -1819,7 +1819,7 @@ export function ExpensesClient({
       {/* ── OFFICIAL STANDARD PAYSLIP VOUCHER MODAL ── */}
       {selectedPayslip && (
         <PrintModalPortal>
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-xs print:p-0 print:bg-white print:static">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-xs overflow-y-auto print:p-0 print:bg-white print:static print:overflow-visible">
           <div className="w-full max-w-2xl rounded-2xl bg-white p-8 shadow-2xl border border-slate-300 print:shadow-none print:border-none print:p-0 print:max-w-none print:w-full space-y-6">
             {/* Top Toolbar (Hidden on Print) */}
             <div className="flex items-center justify-between border-b border-slate-200 pb-3 print:hidden">
