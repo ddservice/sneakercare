@@ -191,7 +191,28 @@ export async function fetchAllExpensesData(timeRange: string = "this_month"): Pr
   }
   const profileRows = [...profileRowsLatest.values()];
 
-  // 1. Process Operating Expenses (Excluding internal detail & rental meter rows)
+  // ⚠️ (แก้ 2026-09-02) เดิม filter เช็ค r.category !== "rental_meter" แต่ข้อมูลรายรับห้องเช่าจริง
+  // ในตารางใช้ category = "rental_income" (คนละคำกับที่ filter เช็ค) — ไม่เคยถูกกรองออกเลยสักแถว
+  // ผลคือ "รายรับ" ห้องเช่าถูกนับรวมเป็น "รายจ่าย" ในยอดค่าดำเนินการ (OPEX) มาตลอด ทำให้ยอดค่าใช้จ่าย
+  // รวมพองขึ้นผิดๆ ด้วยรายรับ ไม่ใช่รายจ่ายจริง ผู้ใช้สังเกตเห็นจากรายการ "รายรับห้องเช่า" โผล่อยู่ใน
+  // หมวดค่าดำเนินการ แก้ให้กรองออกด้วยชื่อ category ที่ถูกต้อง และแยกไปคำนวณเป็น totalRentalIncome
+  // /rentals ต่างหาก ไม่ปนกับค่าใช้จ่าย
+
+  // 1. Process Operating Expenses (Excluding internal detail, rental income/meter, and
+  //    per-employee net-pay rows already counted in totalPayroll)
+  //
+  // ⚠️ (แก้ 2026-09-02) พบว่า OPEX เดิมรวมยอด "รวมค่าใช้จ่ายทั้งหมด" นับซ้ำอย่างน้อย 2 เรื่องใหญ่:
+  //  1. rental_meter (แถวมิเตอร์ไฟ/ค่าเช่าที่ตั้งค่าไว้ — ข้อมูลภายในสำหรับคำนวณ ไม่ใช่รายจ่ายจริง)
+  //     กับ rental_income (แถวรายรับค่าเช่าจริง) เป็นคนละ category กัน ต้องกันทั้งคู่ออก —
+  //     พลาดแก้ตอนแรกโดยเอา rental_meter ออกแล้วใส่แค่ rental_income เข้าไปแทน (แก้แล้ว)
+  //  2. category "ค่าแรงพนักงาน" (แถว key เช่น "emp_ชื่อพนักงาน" ที่ saveStaffPayrollAdjustment
+  //     บันทึกยอด netPay ไว้) ถูกนับเข้า OPEX ด้วย ทั้งที่ยอดเดียวกันนี้ถูกนับใน totalPayroll
+  //     (จาก payslips.reduce(netPay)) อยู่แล้ว — เดือน ส.ค. 69 เพียงเดือนเดียวเงินเดือนถูกนับซ้ำ
+  //     ไปถึง ฿27,275 ทำให้ "รวมค่าใช้จ่ายทั้งหมด" สูงเกินจริงมาตลอด (ไม่ใช่แค่เดือนนี้ — ทุกเดือนที่
+  //     เคยบันทึกเงินเดือนผ่านหน้านี้) — กันออกด้วย category ตรงๆ (คนละ string กับหมวด "ค่าแรง &
+  //     เงินเดือน" ที่ใช้ตอนกดเพิ่มรายจ่ายทั่วไปแบบ manual ผ่าน /expenses ซึ่งยังนับปกติ)
+  //  ยอด ภาษี/ประกันสังคม (sso_employee, sso_employer) ยังคงนับต่อไปตามเดิม — เป็นเงินสดจริงที่ร้าน
+  //  ต้องจ่ายให้ประกันสังคมนอกเหนือจาก netPay ที่จ่ายให้พนักงาน ไม่ใช่การนับซ้ำ
   const opexList: RealExpenseRecord[] = [];
   let totalOpex = 0;
 
@@ -199,7 +220,12 @@ export async function fetchAllExpensesData(timeRange: string = "this_month"): Pr
     .filter(
       (r: any) =>
         r.category !== "payslip_detail" &&
+        r.category !== "rental_income" &&
         r.category !== "rental_meter" &&
+        r.category !== "ค่าแรงพนักงาน" &&
+        // key="misc" คือยอดรวมของ misc_items_json (ตรวจสอบแล้วว่าเท่ากันทุกเดือนย้อนหลังทั้งหมด
+        // ไม่ใช่คนละยอด) — แสดงเป็นรายการย่อยจาก misc_items_json แทน ไม่นับแถวสรุปนี้ซ้ำ
+        r.key !== "misc" &&
         !r.name?.startsWith("empd_") &&
         !r.category?.startsWith("empd_")
     )
@@ -384,7 +410,39 @@ export async function fetchAllExpensesData(timeRange: string = "this_month"): Pr
     } else if (r.key?.startsWith("empd_wht_")) {
       p.wht = amt;
     } else if (r.key?.startsWith("empd_deduct_total_")) {
+      // fallback สำหรับข้อมูลเก่าที่บันทึกเป็นยอดหักก้อนเดียว ไม่มีรายละเอียด (ไม่มี
+      // empd_deduct_items_ คู่กัน) — ถ้ามี empd_deduct_items_ จะถูกเขียนทับด้วยค่าที่ถูกต้องด้านล่าง
       p.otherDeductions = amt;
+    } else if (r.key?.startsWith("empd_deduct_items_") && r.name) {
+      try {
+        const items = JSON.parse(r.name);
+        if (Array.isArray(items)) {
+          p.deductDetails = items;
+          p.otherDeductions = items.reduce((sum: number, i: any) => sum + Number(i.amount || 0), 0);
+        }
+      } catch (err) {
+        console.error(`[expenses] parse empd_deduct_items JSON ล้มเหลว (key=${r.key}):`, err);
+      }
+    } else if (r.key?.startsWith("empd_deduct_json_") && r.name) {
+      // ข้อมูลเก่าจากฟีเจอร์รายการหักย่อยรุ่นก่อน (schema {type, detail, minutes, rate, amount} —
+      // ละเอียดกว่าที่ใช้ตอนนี้ แต่ไม่เคยถูกอ่านย้อนกลับมาแสดงที่ไหนเลย เจอตอนไล่หา key
+      // "empd_deduct_total_" 2026-09-02) แปลงเป็นรูปแบบเดียวกับ deductDetails ปัจจุบันเพื่อไม่ให้
+      // ข้อมูลเดือนเก่า (มี.ค.–มิ.ย. 69) หายไปจากหน้าจอ — ใช้เป็น fallback เท่านั้น
+      // empd_deduct_items_ (คีย์ใหม่) จะทับค่านี้อีกทีถ้ามีอยู่คู่กัน
+      if (!p.deductDetails || p.deductDetails.length === 0) {
+        try {
+          const legacyItems = JSON.parse(r.name);
+          if (Array.isArray(legacyItems) && legacyItems.length > 0) {
+            p.deductDetails = legacyItems.map((i: any) => ({
+              name: [i.type, i.detail].filter(Boolean).join(" ") || "อื่นๆ",
+              amount: Number(i.amount || 0),
+            }));
+            p.otherDeductions = p.deductDetails.reduce((sum, i) => sum + i.amount, 0);
+          }
+        } catch (err) {
+          console.error(`[expenses] parse empd_deduct_json (รูปแบบเก่า) ล้มเหลว (key=${r.key}):`, err);
+        }
+      }
     } else if (r.key?.startsWith("empd_profile_") && r.name) {
       try {
         const parsed = JSON.parse(r.name);
@@ -446,20 +504,43 @@ export async function fetchAllExpensesData(timeRange: string = "this_month"): Pr
   const totalPayroll = payslips.reduce((sum, p) => sum + p.netPay, 0);
 
   // Miscellaneous expenses
+  //
+  // ⚠️ (แก้ 2026-09-02 — แก้ 2 รอบ รอบแรกเข้าใจผิด) รอบแรกคิดว่ายอด misc หายไปจากยอดรวมเพราะ
+  // filter เดิมเช็ค r.category === "misc_items_json" ผิด (ของจริง category="payslip_detail",
+  // key="misc_items_json") เลย "แก้" ด้วยการดันรายการย่อยเข้า opexList/totalOpex — ที่จริงแล้ว
+  // มีแถวสรุป key="misc" (category="ค่าดำเนินการ") เก็บยอดรวมเดียวกันนี้ไว้อยู่แล้ว และแถวนั้น
+  // "ผ่าน" filter หลักตั้งแต่แรกอยู่แล้ว (ตรวจสอบยอดตรงกันทุกเดือนย้อนหลังทั้งหมดแล้ว ไม่ใช่คนละยอด)
+  // การดันรายการย่อยเข้าไปอีกจึงกลายเป็นนับซ้ำสอง — แก้จริงคือ: กันแถวสรุป key="misc" ออกจาก
+  // filter หลัก (ดูด้านบน) แล้วใช้รายการย่อยจาก misc_items_json เป็นแหล่งเดียวทั้งยอดรวมและ
+  // รายละเอียดที่แสดงในตาราง (เดิม data.miscExpenses ไม่มีใครอ่านฝั่ง client เลยด้วย)
   const miscExpenses: Array<{ name: string; amount: number; method: string; month: string }> = [];
   filteredRows
-    .filter((r: any) => r.category === "misc_items_json" && r.name)
+    .filter((r: any) => r.key === "misc_items_json" && r.name)
     .forEach((r: any) => {
       try {
         const arr = JSON.parse(r.name);
         if (Array.isArray(arr)) {
-          arr.forEach((item: any) => {
+          arr.forEach((item: any, idx: number) => {
+            const amt = Number(item.amount || 0);
             miscExpenses.push({
               name: item.name,
-              amount: Number(item.amount || 0),
+              amount: amt,
               method: item.method || "บัญชีร้าน",
               month: r.month,
             });
+            if (amt > 0 && amt < 10000000) {
+              totalOpex += amt;
+              opexList.push({
+                id: `${r.id}-misc-${idx}`,
+                month: r.month,
+                category: "ค่าใช้จ่ายเบ็ดเตล็ด",
+                name: item.name,
+                amount: amt,
+                payMethod: item.method || "บัญชีร้าน",
+                recordedBy: r.recorded_by || "Milo",
+                key: `${r.key}-${idx}`,
+              });
+            }
           });
         }
       } catch (err) {
@@ -469,9 +550,23 @@ export async function fetchAllExpensesData(timeRange: string = "this_month"): Pr
       }
     });
 
-  // Rental Income (Dormitory/Rooms)
-  const rentals: RentalRecord[] = [];
-  let totalRentalIncome = 0;
+  // Rental Income (Dormitory/Rooms) — category "rental_income" ถูกกรองออกจาก opexList ไปแล้วข้างบน
+  // ตรงนี้ดึงมาแสดงแยกต่างหาก ไม่ปนกับค่าใช้จ่าย (ยังไม่มีข้อมูลเลขมิเตอร์ไฟ/ชื่อผู้เช่าจริงในตาราง
+  // sc_opex ปัจจุบัน — ใส่ค่าว่าง/0 ไว้ก่อน ถ้าจะทำระบบมิเตอร์ไฟเต็มรูปแบบต้องเพิ่ม schema แยก)
+  const rentals: RentalRecord[] = filteredRows
+    .filter((r: any) => r.category === "rental_income")
+    .map((r: any, idx: number) => ({
+      roomId: idx,
+      roomName: r.name || `ห้องเช่า ${idx + 1}`,
+      tenantName: "",
+      rentAmount: Number(r.amount || 0),
+      prevMeter: 0,
+      currMeter: 0,
+      electricCost: 0,
+      totalIncome: Number(r.amount || 0),
+      month: r.month,
+    }));
+  const totalRentalIncome = rentals.reduce((sum, r) => sum + r.totalIncome, 0);
 
   return {
     timeRange,
@@ -705,6 +800,9 @@ export async function saveStaffPayrollAdjustment(payload: {
   wht: number;
   ssoDeduction: number;
   otherDeductions: number;
+  /** รายการหักย่อย เช่น "มาสาย", "ลากิจไม่แจ้งล่วงหน้า" — ถ้าใส่มา otherDeductions จะถูกคำนวณ
+   * เป็นผลรวมของรายการเหล่านี้แทนที่จะใช้ค่า otherDeductions ตรงๆ */
+  deductDetails?: Array<{ name: string; amount: number }>;
   netPay: number;
   payMethod: string;
 }): Promise<ExpenseActionState> {
@@ -717,6 +815,13 @@ export async function saveStaffPayrollAdjustment(payload: {
   else if (cleanKeyName.includes("สุทธินันท์")) cleanKeyName = "น.ส.สุทธินันท์ นนทจันทร์";
   else if (cleanKeyName.includes("เจ")) cleanKeyName = "เจ";
 
+  // ถ้ามีรายการหักย่อยส่งมา ยอดรวมต้องมาจากผลรวมของรายการเหล่านั้นเสมอ ไม่ใช่ payload.otherDeductions
+  // ตรงๆ — กันกรณี client คำนวณผลรวมพลาดแล้วสองค่าไม่ตรงกัน (ตัวเลขในสองคีย์ sc_opex ต้องซิงค์กันเสมอ)
+  const deductItems = (payload.deductDetails || []).filter((d) => d.name.trim() && d.amount > 0);
+  const deductTotal = deductItems.length > 0
+    ? deductItems.reduce((sum, d) => sum + Number(d.amount || 0), 0)
+    : payload.otherDeductions;
+
   const keysToSave = [
     { key: `emp_${cleanKeyName}`, name: `เงินจ่ายพนักงาน: ${cleanKeyName}`, amount: payload.netPay, category: "ค่าแรงพนักงาน" },
     { key: `empd_base_sal_${cleanKeyName}`, name: `empd_base_sal_${cleanKeyName}: ${cleanKeyName}`, amount: payload.baseSalary, category: "payslip_detail" },
@@ -724,7 +829,8 @@ export async function saveStaffPayrollAdjustment(payload: {
     { key: `empd_ot_${cleanKeyName}`, name: `empd_ot_${cleanKeyName}: ${cleanKeyName}`, amount: payload.ot, category: "payslip_detail" },
     { key: `empd_comm_pct_${cleanKeyName}`, name: `empd_comm_pct_${cleanKeyName}: ${cleanKeyName}`, amount: payload.commPct, category: "payslip_detail" },
     { key: `empd_wht_${cleanKeyName}`, name: `empd_wht_${cleanKeyName}: ${cleanKeyName}`, amount: payload.wht, category: "payslip_detail" },
-    { key: `empd_deduct_total_${cleanKeyName}`, name: `empd_deduct_total_${cleanKeyName}: ${cleanKeyName}`, amount: payload.otherDeductions, category: "payslip_detail" },
+    { key: `empd_deduct_total_${cleanKeyName}`, name: `empd_deduct_total_${cleanKeyName}: ${cleanKeyName}`, amount: deductTotal, category: "payslip_detail" },
+    { key: `empd_deduct_items_${cleanKeyName}`, name: JSON.stringify(deductItems), amount: 0, category: "payslip_detail" },
   ];
 
   for (const item of keysToSave) {

@@ -161,6 +161,12 @@ export function ExpensesClient({
   const [expDate, setExpDate] = useState(new Date().toISOString().slice(0, 10));
 
   // Interactive Live Values State for Staff (Keyed by employeeName)
+  //
+  // deductItems คือรายการหักย่อย (เช่น "มาสาย 3 ครั้ง", "ลากิจไม่แจ้งล่วงหน้า") — ผู้ใช้ขอให้แยก
+  // ช่องหักอื่นๆ ออกเป็นหลายรายการได้ (เดิมมีแค่ช่องตัวเลขก้อนเดียว กรอกรายละเอียดไม่ได้เลย)
+  // otherDeductions ยังคงอยู่เป็นผลรวมที่คำนวณจาก deductItems เสมอ ให้โค้ดส่วนอื่นที่อ่าน
+  // draft.otherDeductions ทำงานต่อได้โดยไม่ต้องแก้ทุกจุด
+  type DeductItem = { name: string; amount: number };
   const [staffDrafts, setStaffDrafts] = useState<
     Record<
       string,
@@ -170,17 +176,25 @@ export function ExpensesClient({
         commPct: number;
         daysWorked: number;
         otherDeductions: number;
+        deductItems: DeductItem[];
       }
     >
   >(() => {
     const initial: Record<string, any> = {};
     initialData.payslips.forEach((p) => {
+      const items: DeductItem[] =
+        p.deductDetails && p.deductDetails.length > 0
+          ? p.deductDetails
+          : p.otherDeductions > 0
+          ? [{ name: "อื่นๆ", amount: p.otherDeductions }]
+          : [];
       initial[p.employeeName] = {
         diligence: p.diligence,
         ot: p.ot,
         commPct: p.commPct || 0,
         daysWorked: p.daysWorked || 8,
         otherDeductions: p.otherDeductions || 0,
+        deductItems: items,
       };
     });
     return initial;
@@ -244,12 +258,19 @@ export function ExpensesClient({
       setData(updated);
       const newDrafts: Record<string, any> = {};
       updated.payslips.forEach((p) => {
+        const items: DeductItem[] =
+          p.deductDetails && p.deductDetails.length > 0
+            ? p.deductDetails
+            : p.otherDeductions > 0
+            ? [{ name: "อื่นๆ", amount: p.otherDeductions }]
+            : [];
         newDrafts[p.employeeName] = {
           diligence: p.diligence,
           ot: p.ot,
           commPct: p.commPct || 0,
           daysWorked: p.daysWorked || 8,
           otherDeductions: p.otherDeductions || 0,
+          deductItems: items,
         };
       });
       setStaffDrafts(newDrafts);
@@ -264,61 +285,73 @@ export function ExpensesClient({
     }
   }
 
-  function updateStaffDraft(
-    empName: string,
-    field: "diligence" | "ot" | "commPct" | "daysWorked" | "otherDeductions",
-    value: number
-  ) {
-    setStaffDrafts((prev) => {
-      const current = prev[empName] || {
-        diligence: 0,
-        ot: 0,
-        commPct: 0,
-        daysWorked: 8,
-        otherDeductions: 0,
-      };
-      const next = { ...current, [field]: value };
+  const emptyDraft = { diligence: 0, ot: 0, commPct: 0, daysWorked: 8, otherDeductions: 0, deductItems: [] as DeductItem[] };
 
-      setData((prevData) => {
-        const updatedPayslips = prevData.payslips.map((p) => {
-          if (p.employeeName !== empName) return p;
+  /** คำนวณ payslips/totalPayroll/netExpenses ใหม่จาก draft ล่าสุดของพนักงานคนหนึ่ง — ใช้ร่วมกัน
+   * ทั้งตอนแก้ diligence/ot/commPct/daysWorked และตอนแก้รายการหักย่อย ไม่ให้สูตร netPay ไปซ้ำกันสองที่ */
+  function applyDraftToData(empName: string, next: typeof emptyDraft) {
+    setData((prevData) => {
+      const updatedPayslips = prevData.payslips.map((p) => {
+        if (p.employeeName !== empName) return p;
 
-          let base = p.baseSalary;
-          if (p.employmentType === "probation_daily") {
-            const daily = p.dailyWage || 350;
-            base = daily * next.daysWorked;
-          }
+        let base = p.baseSalary;
+        if (p.employmentType === "probation_daily") {
+          const daily = p.dailyWage || 350;
+          base = daily * next.daysWorked;
+        }
 
-          const comm = Math.round((prevData.totalMonthlySales * next.commPct) / 100);
-          const wht = Math.round(comm * 0.03);
-          const sso = p.employmentType === "monthly" ? 600 : 0;
-          const net = base + next.diligence + next.ot + comm - sso - wht - next.otherDeductions;
-
-          return {
-            ...p,
-            baseSalary: base,
-            daysWorked: next.daysWorked,
-            diligence: next.diligence,
-            ot: next.ot,
-            commPct: next.commPct,
-            commission: comm,
-            wht,
-            ssoDeduction: sso,
-            otherDeductions: next.otherDeductions,
-            netPay: net,
-          };
-        });
-
-        const newPayrollTotal = updatedPayslips.reduce((sum, item) => sum + item.netPay, 0);
+        const comm = Math.round((prevData.totalMonthlySales * next.commPct) / 100);
+        const wht = Math.round(comm * 0.03);
+        const sso = p.employmentType === "monthly" && !p.ssoExempt ? 600 : 0;
+        const net = base + next.diligence + next.ot + comm - sso - wht - next.otherDeductions;
 
         return {
-          ...prevData,
-          payslips: updatedPayslips,
-          totalPayroll: newPayrollTotal,
-          netExpenses: prevData.totalOpex + newPayrollTotal,
+          ...p,
+          baseSalary: base,
+          daysWorked: next.daysWorked,
+          diligence: next.diligence,
+          ot: next.ot,
+          commPct: next.commPct,
+          commission: comm,
+          wht,
+          ssoDeduction: sso,
+          otherDeductions: next.otherDeductions,
+          deductDetails: next.deductItems,
+          netPay: net,
         };
       });
 
+      const newPayrollTotal = updatedPayslips.reduce((sum, item) => sum + item.netPay, 0);
+
+      return {
+        ...prevData,
+        payslips: updatedPayslips,
+        totalPayroll: newPayrollTotal,
+        netExpenses: prevData.totalOpex + newPayrollTotal,
+      };
+    });
+  }
+
+  function updateStaffDraft(
+    empName: string,
+    field: "diligence" | "ot" | "commPct" | "daysWorked",
+    value: number
+  ) {
+    setStaffDrafts((prev) => {
+      const current = prev[empName] || emptyDraft;
+      const next = { ...current, [field]: value };
+      applyDraftToData(empName, next);
+      return { ...prev, [empName]: next };
+    });
+  }
+
+  /** เพิ่ม/แก้/ลบรายการหักย่อยหนึ่งแถว — otherDeductions คำนวณใหม่จากผลรวมของรายการเสมอ */
+  function updateStaffDeductItems(empName: string, items: DeductItem[]) {
+    setStaffDrafts((prev) => {
+      const current = prev[empName] || emptyDraft;
+      const otherDeductions = items.reduce((sum, i) => sum + (Number(i.amount) || 0), 0);
+      const next = { ...current, deductItems: items, otherDeductions };
+      applyDraftToData(empName, next);
       return { ...prev, [empName]: next };
     });
   }
@@ -337,6 +370,7 @@ export function ExpensesClient({
         wht: p.wht,
         ssoDeduction: p.ssoDeduction,
         otherDeductions: p.otherDeductions,
+        deductDetails: p.deductDetails,
         netPay: p.netPay,
         payMethod: p.payMethod,
       });
@@ -703,6 +737,29 @@ export function ExpensesClient({
         </Card>
       </div>
 
+      {/* ── Rental Income — แยกออกจากค่าใช้จ่ายโดยเจตนา (แก้บั๊ก 2026-09-02: เดิมถูกนับปนเป็น
+          "ค่าดำเนินการ" เพราะ filter เช็คชื่อ category ผิด ทำให้รายรับกลายเป็นรายจ่ายในตัวเลขรวม) ── */}
+      {data.totalRentalIncome > 0 && (
+        <div className="flex items-center justify-between gap-4 rounded-xl border border-emerald-200 bg-emerald-50/70 dark:bg-emerald-900/20 dark:border-emerald-800/60 px-4 py-3 print:hidden">
+          <div className="flex items-center gap-3">
+            <div className="rounded-lg bg-emerald-100 dark:bg-emerald-900/40 p-2 text-emerald-700 dark:text-emerald-300">
+              <Building2 className="h-4 w-4" />
+            </div>
+            <div>
+              <div className="text-xs font-bold text-emerald-900 dark:text-emerald-200">
+                รายรับค่าเช่าห้อง (แยกจากค่าใช้จ่าย — ไม่รวมในยอด &ldquo;รวมค่าใช้จ่ายทั้งหมด&rdquo; ด้านบน)
+              </div>
+              <div className="text-[10px] text-emerald-700/80 dark:text-emerald-400/80">
+                {data.rentals.map((r) => r.roomName).join(" · ")}
+              </div>
+            </div>
+          </div>
+          <div className="text-lg font-black text-emerald-700 dark:text-emerald-300 font-mono shrink-0">
+            +฿{data.totalRentalIncome.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+          </div>
+        </div>
+      )}
+
       {/* ── 6-CATEGORY VISUAL BREAKDOWN SECTION ── */}
       <Card className="border-slate-200 shadow-sm print:hidden">
         <CardHeader className="p-4 bg-slate-50 border-b border-slate-200 flex flex-wrap items-center justify-between gap-2">
@@ -1042,16 +1099,65 @@ export function ExpensesClient({
                           <span className="font-mono font-semibold text-rose-600">-฿{p.wht.toLocaleString()}</span>
                         </div>
                       )}
-                      <div className="flex items-center justify-between pt-1">
-                        <span className="text-slate-600">หักอื่นๆ (ขาด/สาย):</span>
-                        <Input
-                          type="number"
-                          value={draft.otherDeductions}
-                          onChange={(e) =>
-                            updateStaffDraft(p.employeeName, "otherDeductions", parseFloat(e.target.value) || 0)
+                      <div className="space-y-1.5 pt-1">
+                        <div className="flex items-center justify-between">
+                          <span className="text-slate-600 font-semibold">หักอื่นๆ (ขาด/สาย ฯลฯ):</span>
+                          {draft.otherDeductions > 0 && (
+                            <span className="font-mono font-semibold text-rose-600">
+                              -฿{draft.otherDeductions.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+                            </span>
+                          )}
+                        </div>
+
+                        {draft.deductItems.map((item, idx) => (
+                          <div key={idx} className="flex items-center gap-1.5">
+                            <Input
+                              type="text"
+                              value={item.name}
+                              placeholder="เช่น มาสาย 2 ครั้ง"
+                              onChange={(e) => {
+                                const next = draft.deductItems.map((d, i) =>
+                                  i === idx ? { ...d, name: e.target.value } : d
+                                );
+                                updateStaffDeductItems(p.employeeName, next);
+                              }}
+                              className="h-6 flex-1 text-[11px]"
+                            />
+                            <Input
+                              type="number"
+                              value={item.amount || ""}
+                              placeholder="0"
+                              onChange={(e) => {
+                                const next = draft.deductItems.map((d, i) =>
+                                  i === idx ? { ...d, amount: parseFloat(e.target.value) || 0 } : d
+                                );
+                                updateStaffDeductItems(p.employeeName, next);
+                              }}
+                              className="h-6 w-16 font-mono text-[11px] text-right"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const next = draft.deductItems.filter((_, i) => i !== idx);
+                                updateStaffDeductItems(p.employeeName, next);
+                              }}
+                              className="shrink-0 text-slate-400 hover:text-rose-600"
+                              title="ลบรายการนี้"
+                            >
+                              <X className="h-3 w-3" />
+                            </button>
+                          </div>
+                        ))}
+
+                        <button
+                          type="button"
+                          onClick={() =>
+                            updateStaffDeductItems(p.employeeName, [...draft.deductItems, { name: "", amount: 0 }])
                           }
-                          className="h-6 w-24 font-mono text-xs text-right"
-                        />
+                          className="text-[11px] font-semibold text-teal-700 hover:underline"
+                        >
+                          + เพิ่มรายการหัก
+                        </button>
                       </div>
                     </div>
 
@@ -1725,9 +1831,9 @@ export function ExpensesClient({
             </div>
 
             {/* ── OFFICIAL PAYSLIP VOUCHER CONTAINER ── */}
-            <div className="printable-area space-y-4 text-slate-900 dark:text-slate-950 font-sans border-2 border-slate-800 p-6 rounded-xl print:border-2 print:border-slate-900 print:p-6 bg-white dark:bg-white shadow-lg">
+            <div className="printable-area space-y-4 text-slate-900 dark:text-slate-950 font-sans border-2 border-slate-800 p-6 rounded-xl print:border-2 print:border-slate-900 print:p-4 print:space-y-2 print:text-[11px] print:break-inside-avoid bg-white dark:bg-white shadow-lg">
               {/* Header: Company Name & Tax Registration */}
-              <div className="flex items-start justify-between border-b-2 border-slate-800 pb-4">
+              <div className="flex items-start justify-between border-b-2 border-slate-800 pb-4 print:pb-2">
                 <div className="space-y-1">
                   <h1 className="text-lg font-black tracking-tight text-slate-950 uppercase">
                     {shopProfile?.name || "ยังไม่ได้ตั้งค่าชื่อกิจการ — ไปที่ /settings"}
@@ -1855,13 +1961,29 @@ export function ExpensesClient({
                         </div>
                       )}
 
-                      {selectedPayslip.otherDeductions > 0 && (
+                      {selectedPayslip.deductDetails && selectedPayslip.deductDetails.length > 0 ? (
+                        // แสดงแยกรายการถ้ามีรายละเอียด แต่รวมไว้บรรทัดเดียวกันแบบกระชับ ไม่ขึ้นบรรทัด
+                        // ใหม่ทีละรายการ — กันสลิปยาวเกิน 1 หน้าเวลาพิมพ์เมื่อมีรายการหักหลายรายการ
                         <div className="flex justify-between text-slate-800">
-                          <span>หักขาด/ลา/มาสาย/อื่นๆ</span>
-                          <span className="font-mono font-semibold text-rose-700">
+                          <span>
+                            หักอื่นๆ:{" "}
+                            <span className="font-normal text-[10px] text-slate-500">
+                              {selectedPayslip.deductDetails.map((d) => `${d.name} ฿${d.amount.toLocaleString("th-TH")}`).join(", ")}
+                            </span>
+                          </span>
+                          <span className="font-mono font-semibold text-rose-700 shrink-0 pl-2">
                             -฿{selectedPayslip.otherDeductions.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
                           </span>
                         </div>
+                      ) : (
+                        selectedPayslip.otherDeductions > 0 && (
+                          <div className="flex justify-between text-slate-800">
+                            <span>หักขาด/ลา/มาสาย/อื่นๆ</span>
+                            <span className="font-mono font-semibold text-rose-700">
+                              -฿{selectedPayslip.otherDeductions.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+                            </span>
+                          </div>
+                        )
                       )}
                     </td>
                   </tr>
@@ -1906,9 +2028,9 @@ export function ExpensesClient({
               </table>
 
               {/* Signatures & Certification */}
-              <div className="grid grid-cols-2 gap-8 pt-6 text-center text-xs">
-                <div className="space-y-6">
-                  <div className="border-b border-slate-400 w-4/5 mx-auto pb-8"></div>
+              <div className="grid grid-cols-2 gap-8 print:gap-4 pt-6 print:pt-3 text-center text-xs">
+                <div className="space-y-6 print:space-y-3">
+                  <div className="border-b border-slate-400 w-4/5 mx-auto pb-8 print:pb-4"></div>
                   <div>
                     <div className="font-bold">ลงชื่อ ................................................................</div>
                     <div className="text-[11px] text-slate-600 pt-1">(ผู้มีอำนาจลงนาม / ฝ่ายการเงินและบัญชี)</div>
@@ -1916,8 +2038,8 @@ export function ExpensesClient({
                   </div>
                 </div>
 
-                <div className="space-y-6">
-                  <div className="border-b border-slate-400 w-4/5 mx-auto pb-8"></div>
+                <div className="space-y-6 print:space-y-3">
+                  <div className="border-b border-slate-400 w-4/5 mx-auto pb-8 print:pb-4"></div>
                   <div>
                     <div className="font-bold">ลงชื่อ ................................................................</div>
                     <div className="text-[11px] text-slate-600 pt-1">({selectedPayslip.employeeName})</div>
