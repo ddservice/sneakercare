@@ -288,6 +288,47 @@ received_date อยู่ใน ส.ค. (6,600.00) = 100,592.30` ตรงก�
 **timestamp (1,787,827,245,489) ไว้ในคอลัมน์ `amount`** ตอนนี้รอดเพราะมี guard `amt < 10000000`
 และ category ถูก blacklist ไว้ ถ้าใครเผลอถอด guard ตัวใดตัวหนึ่งออก ยอดเงินทั้งระบบจะระเบิดทันที
 
+## 🔒 ผลตรวจช่องโหว่ + สิ่งที่ปิดไปแล้ว (2026-09-06, กลางคืน)
+
+ตรวจด้วยการ **ยิง REST API จริงด้วย publishable key** ที่ฝังอยู่ในหน้าเว็บ (ใครเปิด DevTools ก็ก๊อปได้)
+ไม่ใช่การอ่านโค้ดเดา — พบว่าข้อมูลจริงอ่านได้โดยไม่ต้องล็อกอินหลายตาราง **ปิดครบแล้วด้วย
+migration `0014` + `0015`** (ยิงซ้ำหลังปิดแล้วไม่เห็นข้อมูลสักตาราง)
+
+| ตาราง | สิ่งที่เคยหลุด | ปิดด้วย |
+|---|---|---|
+| `sc_payments` | ประวัติรับชำระเงิน **+ เพิ่ม/แก้ยอดได้จากภายนอก** | 0015 |
+| `profiles` | username/ชื่อจริง/role ของผู้ใช้ทุกคน | 0015 |
+| `customers` | ชื่อ+เบอร์โทรลูกค้า (ไม่มี RLS เลย) | 0014 |
+| `inv_branches` | `telegram_chat_id` ของกลุ่มพนักงาน | 0014 |
+| `inv_items`, `ui_permissions` | แคตตาล็อก/ตารางสิทธิ์ | 0014 |
+
+**สาเหตุ 2 ชั้นที่ต้องจำไว้:**
+1. `create policy ... using (true)` **ที่ไม่ใส่ `TO authenticated`** → Postgres ตีเป็น role `public`
+   ซึ่ง**รวม `anon`** อ่านโค้ดผ่านๆ นึกว่าปิดแล้ว แต่จริงๆ เปิดให้ทุกคนบนอินเทอร์เน็ต
+2. **อย่าเชื่อชื่อ policy** — `profiles_select_authenticated` ชื่อบอกว่า authenticated แต่ `roles`
+   จริงคือ `{anon,authenticated}` ใส่ anon ไว้ตรงๆ (0014 จึงกรองไม่เจอเพราะไล่หาแต่ `{public}`)
+   **ตรวจจาก `select policyname, roles from pg_policies` เสมอ ไม่ใช่จากชื่อหรือจากไฟล์ migration**
+
+**ทำไมปิดได้โดยแอปไม่พัง:** ไม่มีไฟล์ไหนใน `app/`, `components/`, `lib/` import
+`lib/supabase/client.ts` เลย ทุก query วิ่งผ่านฝั่งเซิร์ฟเวอร์ (session ของผู้ใช้ = `authenticated`
+หรือ service_role ที่ข้าม RLS อยู่แล้ว) — role `anon` ไม่เคยถูกใช้อ่าน/เขียนข้อมูลจริงเลย
+
+**ทำไมกล้าปิด `sc_payments` ทั้งที่ระบบเดิมยังใช้อยู่:** legacy ส่ง `formType: 'save_payment'`
+และ `'save_opex'` ไปที่ Google Apps Script — แต่ policy ของ `sc_opex` เป็น `{authenticated}` ล้วน
+มาก่อนแล้ว และใน `sc_opex` มีแถวที่ legacy เขียนลงวันที่ 27 ส.ค. 2569 ⇒ ถ้า GAS ใช้ anon จริง
+`save_opex` ต้องพังไปแล้ว แต่มันไม่พัง ⇒ GAS ใช้ service_role หรือ session ที่ล็อกอินแล้ว
+**ถ้าหน้าการเงินระบบเดิมบันทึกไม่ได้ขึ้นมา = สมมติฐานนี้ผิด ย้อนได้ทันทีที่
+`supabase/migrations/rollback/0015_rollback.sql`**
+
+### 🔴 ช่องโหว่ที่ยังเหลือ (ยังไม่ได้แก้ — งานถัดไป)
+
+1. **`anon` ยังมี GRANT ระดับตารางครบทุกอย่าง** (SELECT/INSERT/UPDATE/DELETE) บนแทบทุกตาราง
+   เหลือ RLS เป็นด่านเดียว — พลาด policy เดียวคือหลุดซ้ำรอยเดิมทันที ควร
+   `revoke all on <table> from anon` เป็นด่านที่สอง (ส่วนที่ 4 ใน `0014` คอมเมนต์รออยู่แล้ว)
+2. **Staff เห็นและแก้ข้อมูลเงินได้ทุกอย่าง** — `sc_opex`/`sc_sales`/`sc_settings`/`sc_users`
+   เป็น `using (true)` สำหรับ `authenticated` ทั้งหมด ผิดกฎข้อ 4 และ 5 ใน CLAUDE.md
+   ตอนนี้ยังไม่ระเบิดเพราะมีแต่ admin 2 คน **แต่จะระเบิดวันแรกที่เชิญพนักงานเข้าระบบ**
+
 ## Deploy ล่าสุด (2026-09-06 12:30)
 
 - **production รัน commit `c47db0a`** — `npm run deploy` (clean rebuild + PM2 restart) สำเร็จ
