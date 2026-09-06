@@ -27,6 +27,7 @@ import {
   Check,
 } from "lucide-react";
 import Link from "next/link";
+import { calculateExpenseBreakdown } from "@/lib/expense-totals";
 
 type DashboardPeriod = "all" | "day" | "week" | "month" | "custom";
 
@@ -117,64 +118,33 @@ export function DashboardClient({
       return true; // all
     });
 
-    // 2. Filter & Aggregate OPEX
+    // 2. รวมยอดค่าใช้จ่ายด้วย "สูตรกลาง" ที่ใช้ร่วมกับหน้า /expenses
     //
-    // ⚠️ (แก้บั๊ก 2026-09-06) เดิมใช้ "whitelist" ของชื่อ category ที่ hardcode ไว้ 8 ชื่อ —
-    // แต่ `sc_opex.category` เป็น free-text ที่ฟอร์มฝั่ง /expenses เขียนชื่อใหม่ลงไปได้เรื่อยๆ
-    // ผลคือหมวดที่เกิดขึ้นทีหลังและไม่มีในรายชื่อนี้ **หายไปจากยอดค่าใช้จ่ายเงียบๆ** โดยไม่มี error
-    // ตรวจกับข้อมูลจริงเดือน 08/2569 แล้วพบว่าตกไป 2 หมวด รวม 6,600.51 บาท:
-    //   "สาธารณูปโภค & ค่าเช่า" (ค่าไฟ/น้ำ/เน็ต) 4,996.51 · "ดำเนินงาน & เบ็ดเตล็ด" 1,604.00
-    // ทำให้กำไรสุทธิในหน้านี้สูงเกินจริง และไม่ตรงกับหน้า /expenses ที่ใช้ตรรกะคนละแบบ
-    //
-    // เปลี่ยนเป็น "blacklist" ให้ตรงกับ fetchAllExpensesData() ใน app/actions/expenses.ts:
-    // นับทุกหมวดยกเว้นหมวดที่ไม่ใช่ค่าใช้จ่ายจริง — หมวดใหม่ที่เพิ่มในอนาคตจะถูกนับเองอัตโนมัติ
-    // ซึ่งปลอดภัยกว่าการหายไปเงียบๆ (ตัวเลขเกินยังเห็นและทักได้ ตัวเลขขาดไม่มีใครรู้)
-    //
-    //   payslip_detail : ข้อมูลดิบของสลิปเงินเดือน (ฐานเงินเดือน/เบี้ยขยัน/OT รายคน) — ยอดสุทธิ
-    //                    ถูกนับผ่านแถว category="ค่าแรงพนักงาน" อยู่แล้ว ถ้านับหมวดนี้ด้วยจะซ้ำสองรอบ
-    //                    (หมวดนี้ยังมีแถว key="audit_log" ที่เก็บ timestamp ระดับพันล้านไว้ใน amount ด้วย)
-    //   rental_income  : รายรับค่าเช่าห้องชั้น 3 — เป็น "รายรับ" ไม่ใช่รายจ่าย
-    //   rental_meter   : เลขมิเตอร์/ค่าเช่าที่บันทึกไว้ใช้คำนวณ ไม่ใช่เงินที่จ่ายออก
-    const nonExpenseCategories = new Set(["payslip_detail", "rental_income", "rental_meter"]);
-
-    let expSum = 0;
-    (opexRows || []).forEach((o) => {
-      const amt = Number(o.amount || 0);
-      if (amt <= 0 || amt > 10000000) return; // filter anomalies
-
-      const cat = o.category || "";
-      if (nonExpenseCategories.has(cat)) return;
-      // แถวข้อมูลรายคนของสลิป (empd_*) กันไว้อีกชั้นเผื่อถูกบันทึกด้วย category อื่น
-      if (String(o.key || "").startsWith("empd_") || String(o.name || "").startsWith("empd_")) return;
-
+    // ⚠️ (แก้ 2026-09-06) เดิมหน้านี้กรอง sc_opex ด้วย whitelist ของชื่อหมวดที่ hardcode ไว้ 8 ชื่อ
+    // แต่ `category` เป็นข้อความอิสระที่ฟอร์มสร้างชื่อใหม่ได้เรื่อยๆ หมวดที่ไม่อยู่ในรายชื่อจึงหาย
+    // จากยอดเงียบๆ ไม่มี error (ส.ค. 2569 ตกไป ฿6,600.51) และทำให้หน้านี้กับ /expenses
+    // แสดงยอดของเดือนเดียวกันไม่ตรงกัน — ตอนนี้ทั้งสองหน้าเรียก calculateExpenseBreakdown()
+    // ตัวเดียวกัน มี npm run test:expenses ล็อกไว้ **ห้ามเขียนกฎกรองเองที่นี่อีก**
+    const monthRows = (opexRows || []).filter((o) => {
       const oMonth = String(o.month || "").trim();
-
-      if (period === "month") {
-        if (oMonth === monthPrefixLegacy || oMonth === monthPrefixISO) {
-          expSum += amt;
-        }
-      } else if (period === "day" || period === "week") {
-        // Apportion monthly opex for day/week view
-        if (oMonth === monthPrefixLegacy || oMonth === monthPrefixISO) {
-          const daysInMonth = 31;
-          const factor = period === "day" ? 1 / daysInMonth : 7 / daysInMonth;
-          expSum += amt * factor;
-        }
-      } else if (period === "custom") {
-        const startM = customStartDate.slice(0, 7);
-        const endM = customEndDate.slice(0, 7);
-        const [sy, sm] = startM.split("-");
-        const [ey, em] = endM.split("-");
-        const sLegacy = `${sm}/${sy}`;
-        const eLegacy = `${em}/${ey}`;
-        if (oMonth >= sLegacy && oMonth <= eLegacy) {
-          expSum += amt;
-        }
-      } else {
-        // all time
-        expSum += amt;
+      if (period === "month" || period === "day" || period === "week") {
+        return oMonth === monthPrefixLegacy || oMonth === monthPrefixISO;
       }
+      if (period === "custom") {
+        const [sy, sm] = customStartDate.slice(0, 7).split("-");
+        const [ey, em] = customEndDate.slice(0, 7).split("-");
+        return oMonth >= `${sm}/${sy}` && oMonth <= `${em}/${ey}`;
+      }
+      return true; // all time
     });
+
+    let expSum = calculateExpenseBreakdown(monthRows).totalExpenses;
+
+    // มุมมองรายวัน/รายสัปดาห์: ค่าใช้จ่ายบันทึกเป็นรายเดือน จึงเฉลี่ยลงตามสัดส่วนวัน
+    if (period === "day" || period === "week") {
+      const daysInMonth = 31;
+      expSum *= period === "day" ? 1 / daysInMonth : 7 / daysInMonth;
+    }
 
     return { filteredSales: fSales, totalExpensesForPeriod: Math.round(expSum * 100) / 100 };
   }, [salesRows, opexRows, period, filterDate, customStartDate, customEndDate]);

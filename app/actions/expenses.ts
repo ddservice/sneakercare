@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { requireProfile } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
 import { logAudit } from "@/lib/audit";
+import { calculateExpenseBreakdown } from "@/lib/expense-totals";
 
 /** เดือนปัจจุบันในรูปแบบ "MM/YYYY" ที่ตาราง sc_opex ใช้ทั้งไฟล์ */
 function currentMonthMY(): string {
@@ -213,38 +214,17 @@ export async function fetchAllExpensesData(timeRange: string = "this_month"): Pr
   //     เงินเดือน" ที่ใช้ตอนกดเพิ่มรายจ่ายทั่วไปแบบ manual ผ่าน /expenses ซึ่งยังนับปกติ)
   //  ยอด ภาษี/ประกันสังคม (sso_employee, sso_employer) ยังคงนับต่อไปตามเดิม — เป็นเงินสดจริงที่ร้าน
   //  ต้องจ่ายให้ประกันสังคมนอกเหนือจาก netPay ที่จ่ายให้พนักงาน ไม่ใช่การนับซ้ำ
-  const opexList: RealExpenseRecord[] = [];
-  let totalOpex = 0;
+  // ⚠️ (แก้ 2026-09-06) ตรรกะ "อะไรนับเป็นค่าใช้จ่าย" ทั้งหมดย้ายไปอยู่ที่ lib/expense-totals.ts
+  // แล้ว — เดิมหน้านี้กับหน้าภาพรวม (/dashboard) เขียนกฎกันคนละชุด ทำให้ยอดของเดือนเดียวกัน
+  // ไม่ตรงกันมาตลอด (ส.ค. 2569 ต่างกัน ฿6,600.51) ตอนนี้ทั้งสองหน้าเรียกฟังก์ชันเดียวกัน
+  // และมี npm run test:expenses ล็อกพฤติกรรมไว้ — **ห้ามเขียนกฎกรองซ้ำที่นี่อีก**
+  const breakdown = calculateExpenseBreakdown(filteredRows, (rowId, err) => {
+    // ข้ามแถวที่ JSON เสียแถวเดียว ไม่ให้ทั้งหน้าพัง แต่ต้องไม่เงียบ — id ช่วยตามไปดูใน sc_opex ได้
+    console.error(`[expenses] parse misc_items_json ล้มเหลว (row id=${rowId}):`, err);
+  });
 
-  filteredRows
-    .filter(
-      (r: any) =>
-        r.category !== "payslip_detail" &&
-        r.category !== "rental_income" &&
-        r.category !== "rental_meter" &&
-        r.category !== "ค่าแรงพนักงาน" &&
-        // key="misc" คือยอดรวมของ misc_items_json (ตรวจสอบแล้วว่าเท่ากันทุกเดือนย้อนหลังทั้งหมด
-        // ไม่ใช่คนละยอด) — แสดงเป็นรายการย่อยจาก misc_items_json แทน ไม่นับแถวสรุปนี้ซ้ำ
-        r.key !== "misc" &&
-        !r.name?.startsWith("empd_") &&
-        !r.category?.startsWith("empd_")
-    )
-    .forEach((r: any) => {
-      const amt = Number(r.amount || 0);
-      if (amt > 0 && amt < 10000000) {
-        totalOpex += amt;
-        opexList.push({
-          id: r.id,
-          month: r.month,
-          category: r.category || "ค่าดำเนินการ",
-          name: r.name,
-          amount: amt,
-          payMethod: r.pay_method || "บัญชีร้าน",
-          recordedBy: r.recorded_by || "Milo",
-          key: r.key,
-        });
-      }
-    });
+  const opexList: RealExpenseRecord[] = breakdown.opexLines;
+  const totalOpex = breakdown.totalOpex;
 
   // 2. Process Staff Payslips
   const staffMap: Record<string, StaffPayslip> = {};
@@ -513,42 +493,8 @@ export async function fetchAllExpensesData(timeRange: string = "this_month"): Pr
   // การดันรายการย่อยเข้าไปอีกจึงกลายเป็นนับซ้ำสอง — แก้จริงคือ: กันแถวสรุป key="misc" ออกจาก
   // filter หลัก (ดูด้านบน) แล้วใช้รายการย่อยจาก misc_items_json เป็นแหล่งเดียวทั้งยอดรวมและ
   // รายละเอียดที่แสดงในตาราง (เดิม data.miscExpenses ไม่มีใครอ่านฝั่ง client เลยด้วย)
-  const miscExpenses: Array<{ name: string; amount: number; method: string; month: string }> = [];
-  filteredRows
-    .filter((r: any) => r.key === "misc_items_json" && r.name)
-    .forEach((r: any) => {
-      try {
-        const arr = JSON.parse(r.name);
-        if (Array.isArray(arr)) {
-          arr.forEach((item: any, idx: number) => {
-            const amt = Number(item.amount || 0);
-            miscExpenses.push({
-              name: item.name,
-              amount: amt,
-              method: item.method || "บัญชีร้าน",
-              month: r.month,
-            });
-            if (amt > 0 && amt < 10000000) {
-              totalOpex += amt;
-              opexList.push({
-                id: `${r.id}-misc-${idx}`,
-                month: r.month,
-                category: "ค่าใช้จ่ายเบ็ดเตล็ด",
-                name: item.name,
-                amount: amt,
-                payMethod: item.method || "บัญชีร้าน",
-                recordedBy: r.recorded_by || "Milo",
-                key: `${r.key}-${idx}`,
-              });
-            }
-          });
-        }
-      } catch (err) {
-        // ข้ามแถวนี้แถวเดียว ไม่ให้ทั้งหน้าพัง แต่ log ไว้เพราะแปลว่ารายจ่ายบางรายการหายไปจาก
-        // ยอดรวมเงียบๆ (id ของแถวช่วยตามไปดูใน sc_opex ได้)
-        console.error(`[expenses] parse misc_items_json ล้มเหลว (row id=${r.id}):`, err);
-      }
-    });
+  // รายการย่อยของรายจ่ายเบ็ดเตล็ด — มาจากสูตรกลางชุดเดียวกับ opexList จึงไม่มีทางนับไม่ตรงกันอีก
+  const miscExpenses = breakdown.miscItems;
 
   // Rental Income (Dormitory/Rooms) — category "rental_income" ถูกกรองออกจาก opexList ไปแล้วข้างบน
   // ตรงนี้ดึงมาแสดงแยกต่างหาก ไม่ปนกับค่าใช้จ่าย (ยังไม่มีข้อมูลเลขมิเตอร์ไฟ/ชื่อผู้เช่าจริงในตาราง

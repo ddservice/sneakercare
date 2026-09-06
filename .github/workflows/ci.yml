@@ -44,6 +44,11 @@ jobs:
       - name: Reports & pagination logic
         run: npm run test:reports
 
+      # สูตรกลาง "อะไรนับเป็นค่าใช้จ่าย" — หน้า /dashboard กับ /expenses เคยแสดงยอด
+      # ของเดือนเดียวกันไม่ตรงกัน เพราะเขียนกฎกรองกันคนละชุด และเป็นตัวเลข "ขาด" ที่ไม่มี error ให้เห็น
+      - name: Expense totals (สูตรกลางของค่าใช้จ่าย)
+        run: npm run test:expenses
+
       # migration กลุ่มนี้ต้อง apply ด้วยมือผ่าน Supabase SQL Editor (repo ไม่มีสิทธิ์ DDL
       # ไปที่ SneakerCareDB) เทสต์นี้จึงรันมันใส่ Postgres จริงผ่าน PGlite (WASM ไม่ต้องมี Docker)
       # เพื่อจับ SQL ที่พิมพ์ผิดก่อนจะไปพังในหน้าเว็บ production
