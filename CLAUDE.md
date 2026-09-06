@@ -48,6 +48,21 @@ opex ไม่ครบ (ค่าเช่าห้อง + ประกัน�
   เรียก Edge Function **`inv-low-stock-alert`** (คนละตัวกับ `low-stock-alert` ในโฟลเดอร์
   `supabase/functions/` ของ repo นี้) — ฟังก์ชันนี้ deploy อยู่บน `mdlxogfkpwejnqpzhmoy` ถูกต้อง
   ตั้งแต่ 2026-07-10 แล้ว และ `cron.job_run_details` ยืนยันว่า**รันสำเร็จทุกวันไม่เคยขาด** รวมถึงวันนี้
+
+  **⚠️ [แก้ข้อสรุปที่ยังไม่ครบ 2026-09-06] มี cron **สองตัว** ที่ active ไม่ใช่ตัวเดียว**
+  ตรวจ `cron.job` จริงอีกครั้งพบว่านอกจาก `inv-low-stock-alert-daily-9am-th` (jobid 3) ยังมี
+  `low-stock-alert-30min` (jobid 4, `*/30 * * * *`, `active = true`) ที่ยิงไปที่ Edge Function
+  `low-stock-alert` — ตัวที่ถูกลบออกจากโปรเจกต์ไปเมื่อ 2026-09-01 **จึงได้ HTTP 404 ทุกครั้ง วันละ 48 ครั้ง**
+  (`{"code":"NOT_FOUND","message":"Requested function was not found"}` ใน `net._http_response`)
+  ที่เอกสารเก่าสรุปว่า "cron ทุก 30 นาทีไม่มีอยู่จริง" **ผิด** — มันมีอยู่จริงและยังทำงานอยู่
+  หมายเหตุ: `cron.job_run_details` ขึ้น `succeeded` ก็จริง แต่มันแปลว่า "สั่งยิงสำเร็จ" เท่านั้น
+  (pg_net เป็น async) **ต้องดู `net._http_response` เสมอ** จึงจะรู้ว่า HTTP สำเร็จจริงหรือไม่
+  **ลบไปแล้ว 2026-09-06** (เจ้าของอนุมัติ) ด้วย `select cron.unschedule('low-stock-alert-30min');`
+  เหลือ job เดียวคือ `inv-low-stock-alert-daily-9am-th` และมี `0013_unschedule_dead_low_stock_cron.sql`
+  กำกับไว้ให้ repo ตรงกับของจริง
+  **กระทบตอน rotate key:** Authorization header ของ cron อ่าน service_role key จาก **Supabase Vault**
+  (`vault.decrypted_secrets` ชื่อ `inv_service_role_key`) — ถ้า rotate key แล้วไม่อัปเดต Vault
+  ด้วย แจ้งเตือนสต๊อกต่ำจะหยุดทำงานเงียบๆ โดยไม่มีใครรู้
   — **ไม่เคยมี outage จริง** สิ่งที่เข้าใจผิดคือ `inv_notification_log` ไม่มีแถวใหม่ตั้งแต่ 2026-08-27
   เพราะ 4 รายการที่ต่ำกว่าขั้นต่ำอยู่ตอนนี้ถูกตั้ง `alert_muted = true` ไว้ (ของปกติ ไม่ใช่บั๊ก) ฟังก์ชัน
   `inv-low-stock-alert` เช็คแฟล็กนี้ถูกต้องจึงไม่ส่ง ส่วน `low-stock-alert` (ซอร์สใน repo นี้) **ไม่เช็ค
@@ -192,23 +207,62 @@ CLAUDE.md                 คู่มือนี้ — อัปเดตท�
   ใช้ `pg_dump` รันผ่าน cron บน VPS ตี 3 ทุกคืน (`scripts/backup-db-to-r2.sh`) อัปโหลดไป Cloudflare R2 (`ddservicedb`)
   พร้อมลบไฟล์เก่าเกิน 90 วันทั้งบน VPS และ R2 อัตโนมัติ ตามด้วย `verify-backup.sh` ตรวจสอบความสมบูรณ์และส่ง Heartbeat เข้า Telegram
 
-## 🔴 ต้องทำก่อนใช้งานจริง (ค้างอยู่ ณ 2026-09-01)
+## 🔴 ต้องทำก่อนใช้งานจริง (ค้างอยู่ ณ 2026-09-06)
 
-**รัน `supabase/migrations/0011_sc_audit_logs_and_indexes.sql` ที่ SQL Editor ของ project
-`SneakerCareDB` (ref `mdlxogfkpwejnqpzhmoy`) หนึ่งครั้ง** — repo นี้ไม่มีสิทธิ์ DDL ไปที่ฐานข้อมูลนั้น
-(PostgREST รัน DDL ไม่ได้ และ repo ห้าม `supabase link` ไป `SneakerCareDB`) จึงต้องวางรันด้วยมือ
+**rotate Supabase `service_role` key ตัวเก่า — ต้องกดที่ Supabase Dashboard เท่านั้น**
+key ที่เคย hardcode อยู่ใน `scripts/test-login.mjs` / `scripts/set-admin-pw.mjs` (แก้ไฟล์ไปแล้ว
+2026-09-02) **ยังใช้งานได้อยู่** และ bypass RLS ได้ทั้งฐานข้อมูล ถือเป็นช่องโหว่ที่ใหญ่กว่ารหัสผ่าน
+บัญชีผู้ใช้มาก เพราะอยู่ใน git history ที่ย้อนดูได้ตลอด — ขั้นตอนละเอียดอยู่ใน `HANDOFF.md`
+หัวข้อ "งานที่ 6"
 
-ระหว่างที่ยังไม่รัน:
-- การกระทำฝั่งการเงินทั้งหมด **ไม่ถูกบันทึกลง audit** (`logAudit()` จะ log error ลง console แล้วปล่อยผ่าน
-  โดยเจตนา เพื่อไม่ให้การลบข้อมูลของผู้ใช้พังตาม)
-- หน้า `/admin/audit` แท็บ "การเงิน / ยอดขาย" จะขึ้นแถบเตือนสีเหลืองบอกวิธีแก้
-- แท็บ "คลังสินค้า (DB trigger)" ยังใช้งานได้ปกติ (688 แถวเดิมอยู่ครบ)
-- index ของ `sc_sales."date"`, `sc_payments.sale_date`, `sc_opex.month` ยังไม่มี
+ยืนยันแล้ว 2026-09-06: `.env.local` ยังใช้ key แบบ legacy JWT ทั้ง anon และ service_role
+(ขึ้นต้น `eyJhbGciOiJI…`) ยังไม่ได้ย้ายไป key แบบใหม่ (`sb_publishable_…` / `sb_secret_…`)
 
-SQL ไฟล์นี้ผ่านการรันจริงบน Postgres แล้วผ่าน `npm run test:migration` (รวมทดสอบรันซ้ำ) — ไม่ใช่ SQL ที่เขียนลอยๆ
+**เครื่องมือที่ agent ตัวถัดไปไม่มี:** ไม่มี `supabase` CLI ทั้งบนเครื่อง dev และ VPS และไม่มี
+Personal Access Token — Management API จึงเรียกไม่ได้ อย่าเสียเวลาลองใหม่ ให้เจ้าของกดที่หน้าเว็บ
 
-**⚠️ โค้ดที่ deploy อยู่บน production ตอนนี้ (commit `3d6449a`) รอ migration นี้อยู่แล้ว**
-เว็บใช้งานได้ปกติทุกหน้า ไม่พัง แต่ audit ฝั่งการเงินจะยังว่างจนกว่าจะรัน SQL
+### [เสร็จแล้ว — ตัดออกจากรายการค้าง]
+- ~~รัน migration `0011`~~ apply บน `SneakerCareDB` เรียบร้อยตั้งแต่ 2026-09-01 ยืนยันซ้ำ
+  2026-09-06 ด้วยการ query ฐานข้อมูลจริง (ตาราง/index/policy/trigger ครบ และมีแถวจริงใน
+  `sc_audit_logs`) — แถบเตือนเหลืองที่ `/admin/audit` หายไปแล้ว
+- ~~ตาราง `sc_*` ไม่ถูก track ใน migrations~~ ปิดช่องว่างด้วย `0012_sc_tables_baseline.sql`
+  (2026-09-06) ดูหัวข้อสถานะงานล่าสุดด้านล่าง
+
+## สถานะงานล่าสุด (2026-09-06 — reset รหัสผ่าน admin, ปิดช่องว่าง disaster recovery ของตาราง sc_*)
+
+1. **[ทำแล้ว] รีเซ็ตรหัสผ่านบัญชี admin ทั้งสองบัญชี** (`admin@ddserviceth.com`,
+   `milo@ddserviceth.com`) เป็นรหัสสุ่ม 20 ตัวอักษร ผ่าน `scripts/set-admin-pw.mjs` แล้ว
+   **ยืนยันด้วยการล็อกอินจริง** ผ่าน `scripts/test-login.mjs` ทั้งคู่ (ไม่ใช่แค่ API ตอบ 200)
+   — รหัสผ่านส่งให้เจ้าของในแชท ไม่ได้เขียนลงไฟล์ใดในโปรเจกต์และไม่ได้ commit
+2. **[ปิดช่องว่างใหญ่] `0012_sc_tables_baseline.sql` — ตาราง `sc_*` ถูก track ใน migrations แล้ว**
+   เดิมตาราง `sc_employees`, `sc_expenses`, `sc_opex`, `sc_opex_history`, `sc_payments`,
+   `sc_sales`, `sc_settings`, `sc_users` ถูกสร้างบน production โดยตรงนอกระบบ migration
+   ผลคือกู้ระบบขึ้นโปรเจกต์ใหม่จาก `supabase/migrations/` อย่างเดียวจะไม่มีโมดูลการเงินเลย
+   - ที่มาของนิยาม: `pg_dump --schema-only -t 'public.sc_*'` จาก production ผ่าน VPS (อ่านอย่างเดียว)
+   - ทุก statement มี guard — **ตรวจกับ production จริงแล้วว่าเป็น no-op สนิท** (ทุกตาราง/index/
+     policy/trigger/constraint มีอยู่แล้วครบ และนิยาม `sc_get_my_role()` ตรงกันเป๊ะ)
+   - `sc_users.branch_id` FK เลือกเป้าหมายอัตโนมัติระหว่าง `inv_branches` (prod) กับ `branches`
+     (local/CI) เพราะสองสภาพแวดล้อมนี้ชื่อตารางไม่ตรงกัน (ดูเรื่อง alias ใน CLAUDE.md)
+   - **⚠️ `sc_get_my_role()` ต้องประกาศ *หลัง* `create table sc_users` เสมอ** — เป็น `language sql`
+     ซึ่ง Postgres ตรวจ body ตอนสร้างฟังก์ชัน ถ้าวางไว้บนสุดจะ error `relation "sc_users" does not
+     exist` ทันทีบนฐานข้อมูลใหม่ (เจอจากการรันจริง ไม่ใช่จากการอ่านโค้ด)
+3. **[เทสต์ใหม่] `scripts/test-migration-0012.mjs`** — รัน 0011 → 0012 ต่อกันบน Postgres จริง
+   (PGlite/WASM ไม่ต้องมี Docker) ตรวจ 30 ข้อ: ตาราง/index/policy/RLS/FK/unique ครบ, รันซ้ำได้,
+   เขียน-อ่านข้อมูลจริงได้, และ `sc_expenses` ต้องไม่มี policy เลยตามที่ production เป็นอยู่
+   `npm run test:migration` รันทั้ง 0011 และ 0012 แล้ว
+4. **[แก้บั๊กของเครื่องมือเทสต์เอง] `npm run test:migration` คืน exit code 127 ทุกครั้งแม้เทสต์ผ่านหมด**
+   — `process.exit()` ถูกเรียกทั้งที่ worker ของ PGlite ยังเปิดอยู่ libuv จึง abort
+   (`Assertion failed: !(handle->flags & UV_HANDLE_CLOSING)`) แปลว่า CI ที่รันคำสั่งนี้จะแดงเสมอ
+   โดยไม่เกี่ยวกับ SQL เลย แก้เป็น `await db.close()` แล้วตั้ง `process.exitCode` แทนทั้งสองไฟล์
+5. **[แก้ช่องโหว่ของการตรวจ backup] `scripts/verify-backup.sh` ตรวจไม่ครบ 5 ตาราง** — `EXPECTED_TABLES`
+   มีแค่ `sc_sales`/`sc_payments`/`sc_opex`/`sc_users` ขาด `sc_employees`, `sc_expenses`,
+   `sc_opex_history`, `sc_settings`, `sc_audit_logs` แปลว่าถ้า dump ขาดข้อมูลเงินเดือนทั้งก้อน
+   สคริปต์จะยังรายงานว่า "ผ่าน" — เติมครบแล้ว และย้าย `sc_audit_logs` จาก `OPTIONAL_TABLES`
+   ขึ้นมาเป็นตารางบังคับ (migration 0011 apply แล้ว)
+
+**ยังทำไม่ได้ในรอบนี้ (ต้องให้เจ้าของกดเอง):** rotate `service_role` key และรหัสผ่าน Postgres —
+ไม่มี `supabase` CLI และไม่มี Personal Access Token ทั้งบนเครื่อง dev และ VPS ขั้นตอนละเอียดอยู่ที่
+`HANDOFF.md` งานที่ 6
 
 ## สถานะงานล่าสุด (2026-09-02, ดึกกว่านั้นอีก — พิมพ์หน้าเดียวสำเร็จแล้ว, แก้ป้ายดำ+วันที่ hardcode, modal เลื่อนขึ้นไปกดปุ่มพิมพ์/ปิดไม่ได้)
 

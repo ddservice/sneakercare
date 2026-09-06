@@ -44,10 +44,10 @@ jobs:
       - name: Reports & pagination logic
         run: npm run test:reports
 
-      # migration 0011 ต้อง apply ด้วยมือผ่าน Supabase SQL Editor (repo ไม่มีสิทธิ์ DDL
+      # migration กลุ่มนี้ต้อง apply ด้วยมือผ่าน Supabase SQL Editor (repo ไม่มีสิทธิ์ DDL
       # ไปที่ SneakerCareDB) เทสต์นี้จึงรันมันใส่ Postgres จริงผ่าน PGlite (WASM ไม่ต้องมี Docker)
       # เพื่อจับ SQL ที่พิมพ์ผิดก่อนจะไปพังในหน้าเว็บ production
-      - name: Migration 0011 (append-only audit log)
+      - name: Migrations 0011 + 0012 (append-only audit log, sc_* baseline)
         run: npm run test:migration
 
       # ค่า env ด้านล่างเป็นค่าปลอมโดยตั้งใจ — ตอน build ไม่มีการต่อ Supabase จริงสักจุด

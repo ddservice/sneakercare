@@ -133,4 +133,8 @@ if (cnt[0].n === 1) ok("แถวยังอยู่ครบ 1 แถวห�
 else bad(`เหลือ ${cnt[0].n} แถว (ต้องเป็น 1)`);
 
 console.log(failures === 0 ? "\n✅ ผ่านทั้งหมด" : `\n❌ ไม่ผ่าน ${failures} ข้อ`);
-process.exit(failures === 0 ? 0 : 1);
+// ต้องปิด PGlite ก่อนจบโปรเซส: ถ้าเรียก process.exit() ทั้งที่ worker ของมันยังเปิดอยู่ libuv
+// จะ abort ด้วย "Assertion failed: !(handle->flags & UV_HANDLE_CLOSING)" แล้วคืน exit code 127
+// ออกมา — เทสต์ผ่านหมดทุกข้อแต่ npm/CI อ่านว่า "ล้มเหลว" (เจอจริง 2026-09-06 บน Node 24 / Windows)
+await db.close();
+process.exitCode = failures === 0 ? 0 : 1;

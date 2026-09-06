@@ -1,6 +1,6 @@
 # HANDOFF — งานค้างและวิธีทำต่อ
 
-อัปเดต 2026-09-01 · เขียนไว้ให้ agent ตัวถัดไป (Antigravity / Claude Code / คนก็ได้) อ่านแล้วทำต่อได้เลย
+อัปเดต 2026-09-06 · เขียนไว้ให้ agent ตัวถัดไป (Antigravity / Claude Code / คนก็ได้) อ่านแล้วทำต่อได้เลย
 
 > **อ่าน `CLAUDE.md` ให้จบก่อนเริ่ม** โดยเฉพาะหัวข้อ "กฎทางธุรกิจที่ต้องไม่ละเมิด" 13 ข้อ
 > กฎพวกนั้นสำคัญกว่าความสะดวกทุกอย่างในเอกสารนี้ ถ้าขัดกันให้ยึด `CLAUDE.md`
@@ -80,7 +80,7 @@
 - สร้างและอัปเดตไฟล์คอนฟิก Nginx [deploy/nginx-sneakercare.conf](file:///Z:/independentz/Web/RRS/deploy/nginx-sneakercare.conf) ไปยัง `/etc/nginx/sites-available/sneakercare` และ Reload Nginx เรียบร้อย (เข้าเว็บผ่าน HTTPS ได้ปกติ)
 - สร้างสคริปต์ [scripts/deploy-vps.mjs](file:///Z:/independentz/Web/RRS/scripts/deploy-vps.mjs) (`npm run deploy`) สำหรับ deploy อัตโนมัติในอนาคต
 - อัปเดต `crontab` ให้ต่อท้ายด้วย `&& /var/www/sneakercare/scripts/verify-backup.sh` เรียบร้อยแล้ว
-- ⚠️ *สิ่งที่ต้องทำเพิ่มบน VPS:* เปลี่ยน `SUPABASE_DB_URL` ใน `/home/ddservice/sneakercare-backup.env` ให้ชี้ไปที่ `tecrcoienazmtbynuqpg` (`shoe-care-inventory`) แทน `mdlxogfkpwejnqpzhmoy`
+- ~~⚠️ *สิ่งที่ต้องทำเพิ่มบน VPS:* เปลี่ยน `SUPABASE_DB_URL` ให้ชี้ไป `tecrcoienazmtbynuqpg`~~ **คำแนะนำนี้ผิด ห้ามทำตาม** — โปรเจกต์นั้นไม่มีอยู่จริงแล้ว ค่าปัจจุบันที่ชี้ไป `mdlxogfkpwejnqpzhmoy` ถูกต้องอยู่แล้ว (ยืนยันซ้ำ 2026-09-06 ด้วยการ pg_dump จาก VPS สำเร็จ)
 
 ---
 
@@ -136,6 +136,64 @@ flag `--exclude` ตัดบริการที่ไม่จำเป็น
 
 ครอบคลุม: ต้นทุนถัวเฉลี่ยเคลื่อนที่, `fn_approve_adjustment`, staff-safe cost views
 ถ้าชุด staff-safe fail ในอนาคต = **ข้อมูลต้นทุนรั่วถึง Staff จริง** ไม่ใช่แค่ test แดง ให้หยุดแล้วแจ้งทันที
+
+---
+
+## งานที่ 6 — rotate `service_role` key + รหัสผ่าน Postgres [ค้าง — ต้องให้เจ้าของกดที่ Dashboard]
+
+**ทำไมยังค้าง:** ขั้นตอนที่ 1 และขั้นตอนสุดท้ายทำได้เฉพาะบนหน้าเว็บ Supabase Dashboard
+เครื่อง dev และ VPS **ไม่มี `supabase` CLI และไม่มี Personal Access Token** (ตรวจแล้ว 2026-09-06)
+Management API จึงเรียกไม่ได้ — อย่าเสียเวลาหาทางอ้อม ให้เจ้าของกดเอง
+
+**สถานะ key ปัจจุบัน (2026-09-06):** `.env.local` ยังใช้ legacy JWT ทั้ง anon และ service_role
+(ขึ้นต้น `eyJhbGciOiJI…` ยาว 219 ตัว) — ยังไม่เคยย้ายไป key แบบใหม่
+
+### ลำดับที่ปลอดภัย (ห้ามสลับขั้นตอน)
+
+1. **[เจ้าของ]** Dashboard → Project Settings → API Keys → สร้าง key แบบใหม่
+   (`sb_publishable_…` แทน anon, `sb_secret_…` แทน service_role) **ยังไม่ต้อง disable ของเก่า**
+2. **[agent ทำได้]** แก้ `.env.local` บนเครื่อง dev + `/var/www/sneakercare/.env.local` บน VPS
+   (ยืนยันแล้วว่าเป็นไฟล์เดียวที่มี key อยู่บน VPS) แล้ว `pm2 restart sneakercare`
+3. **[agent ทำได้]** ทดสอบว่าใช้งานได้จริงก่อนไปต่อ — อย่างน้อย: ล็อกอิน (`scripts/test-login.mjs`),
+   เปิด `/dashboard`, และหน้าที่ใช้ `service_role` จริงคือ `/admin/users` (เชิญผู้ใช้)
+4. **⚠️ [เจ้าของ] อัปเดต Supabase Vault ด้วย** — cron `inv-low-stock-alert-daily-9am-th` อ่าน
+   service_role key จาก `vault.decrypted_secrets` ชื่อ **`inv_service_role_key`** ไม่ได้อ่านจาก
+   env var ของแอป **ถ้าลืมข้อนี้ แจ้งเตือนสต๊อกต่ำจะหยุดทำงานเงียบๆ โดยไม่มีใครรู้**
+   (ตรวจว่ายังทำงานได้: ดู `net._http_response` ต้องเป็น 200 ไม่ใช่ 401)
+5. **[เจ้าของ]** ค่อย disable legacy key ที่ Dashboard เป็นขั้นตอนสุดท้าย
+6. เฝ้าดู 1 วันเต็ม: `pm2 logs sneakercare`, cron 9 โมงเช้าต้องได้ 200, backup ตี 3 ต้องส่ง
+   heartbeat เข้า Telegram ตามปกติ
+
+### รหัสผ่าน Postgres (`SUPABASE_DB_URL`)
+
+เคยหลุดใน `scripts/backup-db.mjs` (ลบไฟล์ทิ้งไปแล้ว) ถ้า rotate ต้องแก้
+`/home/ddservice/sneakercare-backup.env` บน VPS **ในคืนเดียวกันทันที** ไม่งั้น backup ตี 3
+กับ `verify-backup.sh` จะพังคืนนั้นเลย — และ Telegram จะเงียบ ซึ่งตามกฎข้อ 3 แปลว่า "ผิดปกติ"
+
+---
+
+## งานที่ 7 — cron `low-stock-alert-30min` ยิง 404 ทุก 30 นาที [เสร็จแล้ว 2026-09-06]
+
+พบ 2026-09-06 จากการตรวจ `cron.job` จริง: มี cron **สองตัว** ที่ `active = true` ไม่ใช่ตัวเดียว
+อย่างที่เอกสารรุ่นก่อนสรุปไว้
+
+| jobid | ชื่อ | schedule | เป้าหมาย | ผลจริง |
+|---|---|---|---|---|
+| 3 | `inv-low-stock-alert-daily-9am-th` | `0 2 * * *` (9 โมงเช้าไทย) | `inv-low-stock-alert` | **200 OK** ปกติ |
+| 4 | `low-stock-alert-30min` | `*/30 * * * *` | `low-stock-alert` (ถูกลบไปแล้ว) | **404 ทุกครั้ง** |
+
+Edge Function `low-stock-alert` ถูกลบออกจากโปรเจกต์เมื่อ 2026-09-01 แต่ **ไม่มีใครลบ cron ที่เรียกมัน**
+ตั้งแต่นั้นมาระบบยิง HTTP 404 วันละ 48 ครั้งเปล่าๆ (`{"code":"NOT_FOUND"}` ใน `net._http_response`)
+ไม่กระทบข้อมูลหรือการแจ้งเตือนจริง แต่เป็นขยะที่ทำให้คนอ่าน log ในอนาคตเข้าใจผิดได้
+
+**แก้แล้ว (เจ้าของอนุมัติ 2026-09-06):** รัน `select cron.unschedule('low-stock-alert-30min')`
+บน production เรียบร้อย ตรวจซ้ำแล้วเหลือ job เดียวคือ `inv-low-stock-alert-daily-9am-th` (active)
+และเพิ่ม `supabase/migrations/0013_unschedule_dead_low_stock_cron.sql` ให้ repo ตรงกับของจริง
+(0002 ยังคงสร้าง job นี้บนฐานข้อมูลใหม่ แล้ว 0013 ลบทิ้งทีหลัง — ไม่แก้ 0002 ตามกฎข้อ 2)
+
+**บทเรียนสำคัญ:** `cron.job_run_details.status = 'succeeded'` **ไม่ได้แปลว่า HTTP สำเร็จ** —
+pg_net ทำงานแบบ async สถานะนั้นบอกแค่ว่า "ยิงคำสั่งออกไปแล้ว" การตรวจว่าปลายทางตอบอะไรจริงต้องดู
+ตาราง `net._http_response` เสมอ (เอกสารรุ่นก่อนสรุปว่า cron ทำงานปกติจากคอลัมน์นี้ ซึ่งไม่พอ)
 
 ---
 

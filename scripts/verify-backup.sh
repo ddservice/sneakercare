@@ -59,14 +59,21 @@ EXPECTED_TABLES=(
   sc_payments
   sc_opex
   sc_users
+  # [2026-09-06] เติมให้ครบทุกตาราง sc_* ที่มีอยู่จริงบน production พร้อมกับตอนเขียน
+  # migration 0012 (baseline ของกลุ่มนี้) — ก่อนหน้านี้ 5 ตารางด้านล่างหายไปจากการตรวจ
+  # แปลว่าถ้า dump ขาดตารางใดตารางหนึ่ง (เช่นข้อมูลเงินเดือนทั้งหมดใน sc_employees)
+  # verify-backup.sh จะบอกว่า "ผ่าน" ทั้งที่ backup ใช้กู้ระบบจริงไม่ได้
+  sc_audit_logs
+  sc_employees
+  sc_expenses
+  sc_opex_history
+  sc_settings
 )
 
 # ตารางที่ "ควรมี แต่ยังอาจไม่มี" — ขาดแล้วขึ้นเป็นคำเตือน ไม่ใช่ทำให้ทั้งการตรวจล้มเหลว
-# sc_audit_logs สร้างโดย migration 0011 ซึ่งต้อง apply ด้วยมือที่ SQL Editor
-# ➜ เมื่อรัน 0011 บน SneakerCareDB แล้ว ให้ย้ายชื่อนี้ขึ้นไปอยู่ใน EXPECTED_TABLES
-OPTIONAL_TABLES=(
-  sc_audit_logs
-)
+# (ว่างอยู่: sc_audit_logs ย้ายขึ้นไป EXPECTED_TABLES แล้วเมื่อ 2026-09-06 หลังยืนยันว่า
+#  migration 0011 apply บน SneakerCareDB เรียบร้อยและมีแถวจริงในตารางแล้ว)
+OPTIONAL_TABLES=()
 
 # ขนาดต่ำสุดที่ยังพอสมเหตุสมผล — ไฟล์ที่เล็กกว่านี้แปลว่า dump ขาดกลางคันแทบแน่นอน
 MIN_SIZE_BYTES="${MIN_BACKUP_SIZE_BYTES:-10240}"
@@ -165,9 +172,11 @@ for table in "${EXPECTED_TABLES[@]}"; do
   fi
 done
 
-for table in "${OPTIONAL_TABLES[@]}"; do
+# ใช้รูปแบบ ${arr[@]+"${arr[@]}"} เพราะตอนนี้ OPTIONAL_TABLES ว่าง — บน bash รุ่นเก่า (< 4.4)
+# ที่รันด้วย set -u การอ้าง "${arr[@]}" ของ array ว่างจะกลายเป็น unbound variable แล้วสคริปต์ตายกลางคัน
+for table in ${OPTIONAL_TABLES[@]+"${OPTIONAL_TABLES[@]}"}; do
   if ! grep -qE "TABLE DATA public ${table}([[:space:]]|$)" "$TOC"; then
-    WARNINGS+=("ยังไม่มีตาราง public.${table} ในไฟล์ — ถ้ารัน migration 0011 ไปแล้ว แปลว่า backup ขาดตารางนี้จริง")
+    WARNINGS+=("ยังไม่มีตาราง public.${table} ในไฟล์ — ถ้ารัน migration ที่สร้างตารางนี้ไปแล้ว แปลว่า backup ขาดตารางนี้จริง")
   fi
 done
 

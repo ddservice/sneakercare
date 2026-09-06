@@ -13,7 +13,7 @@
     "migrate:legacy": "node --env-file=.env.local scripts/migrate-from-legacy.mjs",
     "deploy": "node scripts/deploy-vps.mjs",
     "export:csv": "node --env-file=.env.local scripts/export-monthly-csv.mjs",
-    "test:migration": "node --no-warnings=MODULE_TYPELESS_PACKAGE_JSON scripts/test-migration-0011.mjs"
+    "test:migration": "node --no-warnings=MODULE_TYPELESS_PACKAGE_JSON scripts/test-migration-0011.mjs && node --no-warnings=MODULE_TYPELESS_PACKAGE_JSON scripts/test-migration-0012.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",
