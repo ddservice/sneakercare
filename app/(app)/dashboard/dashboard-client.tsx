@@ -118,17 +118,24 @@ export function DashboardClient({
     });
 
     // 2. Filter & Aggregate OPEX
-    // Valid categories for real expenses (excluding internal helpers & rental meter readings)
-    const validExpenseCategories = new Set([
-      "ค่าดำเนินการ",
-      "ค่าแรงพนักงาน",
-      "ภาษี",
-      "ค่าเช่าร้าน",
-      "ค่าการตลาด",
-      "ทั่วไป",
-      "misc",
-      "รายจ่าย",
-    ]);
+    //
+    // ⚠️ (แก้บั๊ก 2026-09-06) เดิมใช้ "whitelist" ของชื่อ category ที่ hardcode ไว้ 8 ชื่อ —
+    // แต่ `sc_opex.category` เป็น free-text ที่ฟอร์มฝั่ง /expenses เขียนชื่อใหม่ลงไปได้เรื่อยๆ
+    // ผลคือหมวดที่เกิดขึ้นทีหลังและไม่มีในรายชื่อนี้ **หายไปจากยอดค่าใช้จ่ายเงียบๆ** โดยไม่มี error
+    // ตรวจกับข้อมูลจริงเดือน 08/2569 แล้วพบว่าตกไป 2 หมวด รวม 6,600.51 บาท:
+    //   "สาธารณูปโภค & ค่าเช่า" (ค่าไฟ/น้ำ/เน็ต) 4,996.51 · "ดำเนินงาน & เบ็ดเตล็ด" 1,604.00
+    // ทำให้กำไรสุทธิในหน้านี้สูงเกินจริง และไม่ตรงกับหน้า /expenses ที่ใช้ตรรกะคนละแบบ
+    //
+    // เปลี่ยนเป็น "blacklist" ให้ตรงกับ fetchAllExpensesData() ใน app/actions/expenses.ts:
+    // นับทุกหมวดยกเว้นหมวดที่ไม่ใช่ค่าใช้จ่ายจริง — หมวดใหม่ที่เพิ่มในอนาคตจะถูกนับเองอัตโนมัติ
+    // ซึ่งปลอดภัยกว่าการหายไปเงียบๆ (ตัวเลขเกินยังเห็นและทักได้ ตัวเลขขาดไม่มีใครรู้)
+    //
+    //   payslip_detail : ข้อมูลดิบของสลิปเงินเดือน (ฐานเงินเดือน/เบี้ยขยัน/OT รายคน) — ยอดสุทธิ
+    //                    ถูกนับผ่านแถว category="ค่าแรงพนักงาน" อยู่แล้ว ถ้านับหมวดนี้ด้วยจะซ้ำสองรอบ
+    //                    (หมวดนี้ยังมีแถว key="audit_log" ที่เก็บ timestamp ระดับพันล้านไว้ใน amount ด้วย)
+    //   rental_income  : รายรับค่าเช่าห้องชั้น 3 — เป็น "รายรับ" ไม่ใช่รายจ่าย
+    //   rental_meter   : เลขมิเตอร์/ค่าเช่าที่บันทึกไว้ใช้คำนวณ ไม่ใช่เงินที่จ่ายออก
+    const nonExpenseCategories = new Set(["payslip_detail", "rental_income", "rental_meter"]);
 
     let expSum = 0;
     (opexRows || []).forEach((o) => {
@@ -136,7 +143,9 @@ export function DashboardClient({
       if (amt <= 0 || amt > 10000000) return; // filter anomalies
 
       const cat = o.category || "";
-      if (!validExpenseCategories.has(cat)) return;
+      if (nonExpenseCategories.has(cat)) return;
+      // แถวข้อมูลรายคนของสลิป (empd_*) กันไว้อีกชั้นเผื่อถูกบันทึกด้วย category อื่น
+      if (String(o.key || "").startsWith("empd_") || String(o.name || "").startsWith("empd_")) return;
 
       const oMonth = String(o.month || "").trim();
 
