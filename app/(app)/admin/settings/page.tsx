@@ -1,4 +1,5 @@
 import { requireProfile, requireAdmin } from "@/lib/auth";
+import { text } from "@/lib/db-rows";
 import { createClient } from "@/lib/supabase/server";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { TelegramTokenForm } from "./telegram-token-form";
@@ -39,8 +40,8 @@ export default async function AdminSettingsPage() {
             {(branches ?? []).map((branch) => (
               <BranchChatIdForm
                 key={branch.id}
-                branchId={branch.id}
-                branchName={branch.name}
+                branchId={text(branch.id)}
+                branchName={text(branch.name)}
                 currentChatId={branch.telegram_chat_id}
               />
             ))}

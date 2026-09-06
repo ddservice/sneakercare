@@ -61,9 +61,11 @@ export async function createServiceOrder(
     const { data: newCustomer } = await supabase
       .from("customers")
       .insert({
+        // ⚠️ (แก้บั๊ก 2026-09-06) ตาราง customers ไม่มีคอลัมน์ branch_id (มีแค่ id/name/phone/
+        // created_at/updated_at) การใส่มาด้วยทำให้ insert error ทุกครั้ง = สร้างลูกค้าใหม่ไม่ได้เลย
+        // ทะเบียนลูกค้าเป็นของร้านทั้งร้าน ไม่ได้แยกตามสาขา — ถ้าวันหลังต้องแยกจริงค่อยเพิ่มคอลัมน์
         name: customerName,
         phone: customerPhone,
-        branch_id: selectedBranchId,
       })
       .select("id")
       .single();
@@ -91,14 +93,19 @@ export async function createServiceOrder(
       shoe_size: shoeSize || "M",
       status: "received",
       payment_method: paymentMethod,
-      gross_amount: grossAmount,
+      // ⚠️ (แก้บั๊ก 2026-09-06) ชื่อคอลัมน์ 4 ตัวนี้เคยเขียนผิดจากของจริงในตาราง ทำให้ insert
+      // error ทุกครั้ง = ฟีเจอร์รับงานบริการไม่เคยบันทึกได้เลย (ตารางมี 0 แถวมาตลอด)
+      // gross_amount→total_amount · notes→note · received_by→created_by · is_paid→payment_status
+      // ส่วน cash_amount/transfer_amount เป็นข้อมูลที่ฟอร์มเก็บจริงแต่ตารางไม่มีที่เก็บ
+      // จึงเพิ่มคอลัมน์ให้ใน migration 0018 แทนการตัดทิ้ง
+      total_amount: grossAmount,
       discount_amount: discountAmount,
       net_amount: netAmount,
       cash_amount: cashAmount,
       transfer_amount: transferAmount,
-      is_paid: paymentMethod !== "unpaid",
-      notes: notes || null,
-      received_by: profile.id,
+      payment_status: paymentMethod !== "unpaid" ? "paid" : "unpaid",
+      note: notes || null,
+      created_by: profile.id,
       received_at: now.toISOString(),
     })
     .select("id")

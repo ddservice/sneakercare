@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireProfile } from "@/lib/auth";
 import { logAudit } from "@/lib/audit";
+import type { Database } from "@/lib/supabase/database.types";
 
 export type DailySaleInput = {
   id?: number;
@@ -81,7 +82,7 @@ export async function saveDailySale(data: DailySaleInput) {
     : Math.max(0, grossTotal - discount);
 
   // Check if there are existing AR payments in sc_payments for this sale date
-  const { data: existingAr } = await (supabase.from("sc_payments" as any) as any)
+  const { data: existingAr } = await supabase.from("sc_payments")
     .select("amount")
     .eq("sale_date", data.date);
 
@@ -98,7 +99,9 @@ export async function saveDailySale(data: DailySaleInput) {
     }
   }
 
-  const payload: Record<string, any> = {
+  // ⚠️ (แก้ 2026-09-06) เดิมเป็น `Record<string, any>` ซึ่งทำให้ TypeScript ตรวจชื่อคอลัมน์ไม่ได้เลย
+  // ผูกกับชนิดจริงของตาราง sc_sales แทน — พิมพ์ชื่อคอลัมน์ผิดจะขึ้น error ทันทีตั้งแต่ตอน build
+  const payload: Database["public"]["Tables"]["sc_sales"]["Insert"] = {
     date: data.date,
     size_s: sizeS,
     size_m: sizeM,
@@ -119,7 +122,7 @@ export async function saveDailySale(data: DailySaleInput) {
   // เก็บค่าเดิมไว้ก่อนแก้ เพื่อให้ audit log บอกได้ว่าอะไรเปลี่ยนจากอะไรเป็นอะไร
   let before: Record<string, any> | null = null;
   if (data.id) {
-    const { data: prev } = await (supabase.from("sc_sales" as any) as any)
+    const { data: prev } = await supabase.from("sc_sales")
       .select("date, total_revenue, grand_total, discount, amount_paid, payment_status")
       .eq("id", data.id)
       .maybeSingle();
@@ -129,12 +132,12 @@ export async function saveDailySale(data: DailySaleInput) {
   let error;
   let savedId: number | undefined = data.id;
   if (data.id) {
-    const res = await (supabase.from("sc_sales" as any) as any)
+    const res = await supabase.from("sc_sales")
       .update(payload)
       .eq("id", data.id);
     error = res.error;
   } else {
-    const res = await (supabase.from("sc_sales" as any) as any)
+    const res = await supabase.from("sc_sales")
       .insert(payload)
       .select("id")
       .maybeSingle();
@@ -173,12 +176,12 @@ export async function deleteDailySale(id: number) {
   const supabase = createAdminClient();
 
   // อ่านแถวเก็บไว้ก่อน เพราะพอลบแล้วไม่มีทางรู้ย้อนหลังว่ายอดที่หายไปคือเท่าไหร่
-  const { data: doomed } = await (supabase.from("sc_sales" as any) as any)
+  const { data: doomed } = await supabase.from("sc_sales")
     .select("date, total_revenue, grand_total, discount, amount_paid, payment_status, recorded_by")
     .eq("id", id)
     .maybeSingle();
 
-  const { error } = await (supabase.from("sc_sales" as any) as any)
+  const { error } = await supabase.from("sc_sales")
     .delete()
     .eq("id", id);
 
@@ -206,7 +209,7 @@ export async function deleteDailySale(id: number) {
 export async function countDailySales(): Promise<number> {
   await requireProfile();
   const supabase = createAdminClient();
-  const { count } = await (supabase.from("sc_sales" as any) as any).select("id", {
+  const { count } = await supabase.from("sc_sales").select("id", {
     count: "exact",
     head: true,
   });
@@ -217,7 +220,7 @@ export async function fetchRecentDailySales(limit: number = 300): Promise<DailyS
   await requireProfile();
   const supabase = createAdminClient();
 
-  const { data: salesData, error: salesError } = await (supabase.from("sc_sales" as any) as any)
+  const { data: salesData, error: salesError } = await supabase.from("sc_sales")
     .select("*")
     .order("date", { ascending: false })
     .limit(limit);
@@ -228,7 +231,7 @@ export async function fetchRecentDailySales(limit: number = 300): Promise<DailyS
   // โดยไม่มี limit ซึ่งจะโตไม่มีเพดานไปเรื่อยๆ ตามจำนวนงวดที่เก็บเงินย้อนหลัง
   const loadedDates = [...new Set(salesData.map((s: any) => s.date))];
   const { data: paymentsData } = loadedDates.length
-    ? await (supabase.from("sc_payments" as any) as any)
+    ? await supabase.from("sc_payments")
         .select("*")
         .in("sale_date", loadedDates)
         .order("created_at", { ascending: false })
@@ -311,7 +314,7 @@ export async function recordArPayment(data: {
     recorded_by: profile.display_name || profile.username || "Staff",
   };
 
-  const { data: inserted, error: paymentError } = await (supabase.from("sc_payments" as any) as any)
+  const { data: inserted, error: paymentError } = await supabase.from("sc_payments")
     .insert(paymentPayload)
     .select("id")
     .maybeSingle();
@@ -329,13 +332,13 @@ export async function recordArPayment(data: {
   });
 
   // Update sale status in sc_sales
-  const { data: sale } = await (supabase.from("sc_sales" as any) as any)
+  const { data: sale } = await supabase.from("sc_sales")
     .select("*")
     .eq("date", data.sale_date)
     .maybeSingle();
 
   if (sale) {
-    const { data: allAr } = await (supabase.from("sc_payments" as any) as any)
+    const { data: allAr } = await supabase.from("sc_payments")
       .select("amount")
       .eq("sale_date", data.sale_date);
 
@@ -349,7 +352,7 @@ export async function recordArPayment(data: {
     const totalPaidAll = initialPaid + totalAr;
 
     const newStatus = totalPaidAll >= netRevenue ? "ชำระครบ" : "ค้างชำระ";
-    await (supabase.from("sc_sales" as any) as any)
+    await supabase.from("sc_sales")
       .update({
         payment_status: newStatus,
         last_updated: new Date().toISOString(),
@@ -374,12 +377,12 @@ export async function deleteArPayment(paymentId: number, saleDate: string) {
   const supabase = createAdminClient();
 
   // อ่านใบรับชำระเก็บไว้ก่อนลบ — ยอดเงินที่หายต้องตรวจย้อนหลังได้
-  const { data: doomed } = await (supabase.from("sc_payments" as any) as any)
+  const { data: doomed } = await supabase.from("sc_payments")
     .select("sale_date, received_date, amount, pay_method, notes, recorded_by")
     .eq("id", paymentId)
     .maybeSingle();
 
-  const { error } = await (supabase.from("sc_payments" as any) as any)
+  const { error } = await supabase.from("sc_payments")
     .delete()
     .eq("id", paymentId);
 
@@ -397,13 +400,13 @@ export async function deleteArPayment(paymentId: number, saleDate: string) {
   });
 
   // Recalculate status in sc_sales
-  const { data: sale } = await (supabase.from("sc_sales" as any) as any)
+  const { data: sale } = await supabase.from("sc_sales")
     .select("*")
     .eq("date", saleDate)
     .maybeSingle();
 
   if (sale) {
-    const { data: allAr } = await (supabase.from("sc_payments" as any) as any)
+    const { data: allAr } = await supabase.from("sc_payments")
       .select("amount")
       .eq("sale_date", saleDate);
 
@@ -417,7 +420,7 @@ export async function deleteArPayment(paymentId: number, saleDate: string) {
     const totalPaidAll = initialPaid + totalAr;
 
     const newStatus = totalPaidAll >= netRevenue ? "ชำระครบ" : "ค้างชำระ";
-    await (supabase.from("sc_sales" as any) as any)
+    await supabase.from("sc_sales")
       .update({
         payment_status: newStatus,
         last_updated: new Date().toISOString(),

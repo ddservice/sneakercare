@@ -17,7 +17,7 @@ export type ShopProfile = {
 export async function fetchShopProfile(): Promise<ShopProfile> {
   const supabase = createAdminClient();
 
-  const { data } = await supabase.from("sc_settings" as any).select("key, value");
+  const { data } = await supabase.from("sc_settings").select("key, value");
 
   const settingsMap: Record<string, string> = {};
   (data || []).forEach((row: any) => {
@@ -50,7 +50,7 @@ export async function updateShopProfile(profile: Partial<ShopProfile>) {
   if (profile.promptPayId !== undefined) updates.push({ key: "promptpay_id", value: profile.promptPayId });
 
   for (const item of updates) {
-    await supabase.from("sc_settings" as any).upsert(
+    await supabase.from("sc_settings").upsert(
       { key: item.key, value: item.value, updated_at: new Date().toISOString() },
       { onConflict: "key" }
     );
@@ -100,7 +100,7 @@ export async function setBackupHeartbeatEnabled(enabled: boolean) {
   requireAdmin(user);
 
   const supabase = createAdminClient();
-  const { error } = await supabase.from("sc_settings" as any).upsert(
+  const { error } = await supabase.from("sc_settings").upsert(
     { key: BACKUP_HEARTBEAT_KEY, value: enabled ? "true" : "false", updated_at: new Date().toISOString() },
     { onConflict: "key" }
   );

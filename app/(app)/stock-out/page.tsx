@@ -1,4 +1,5 @@
 import { requireProfile, requireModuleView } from "@/lib/auth";
+import { withId, text, num } from "@/lib/db-rows";
 import { createClient } from "@/lib/supabase/server";
 import { getSelectedBranchId } from "@/lib/branch";
 import { canRecordWaste, canWrite } from "@/lib/permissions";
@@ -34,11 +35,12 @@ export default async function StockOutPage() {
   ]);
 
   const stockByItem = new Map((stockRows ?? []).map((row) => [row.item_id, row.current_qty]));
-  const options = (items ?? []).map((item) => ({
+    // view alias คืนทุกคอลัมน์เป็น nullable — เติมค่าสำรองแทนการ cast ทับ (ดู lib/db-rows.ts)
+  const options = withId(items).map((item) => ({
     id: item.id,
-    name: item.name,
-    base_unit: item.base_unit,
-    current_qty: stockByItem.get(item.id) ?? 0,
+    name: text(item.name),
+    base_unit: text(item.base_unit),
+    current_qty: num(stockByItem.get(item.id)),
   }));
 
   return (

@@ -105,7 +105,7 @@ export async function fetchAnalyticsData(targetMonth: string = "all"): Promise<A
   // Specific month: filter exact month range only
   const NEEDED_COLS = "id, date, size_s, size_m, size_l, size_xl, cash_amount, transfer_amount, discount, grand_total, total_revenue, recorded_by, extra_items";
 
-  let salesQuery = (supabase.from("sc_sales" as any) as any)
+  let salesQuery = supabase.from("sc_sales")
     .select(NEEDED_COLS)
     .order("date", { ascending: false });
 

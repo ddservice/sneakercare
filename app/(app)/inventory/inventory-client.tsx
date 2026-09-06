@@ -238,12 +238,15 @@ export function InventoryClient({
         min_stock_level: newMin,
       });
 
-      if (res.success && res.item) {
+      // id มาจาก view จึงเป็น nullable — ถ้าไม่มี id จะใช้เป็น key ของแถวไม่ได้
+      if (res.success && res.item?.id) {
+        // เก็บ id ใส่ตัวแปรก่อน: TypeScript narrow ค่าข้าม closure ของ setItems ให้ไม่ได้
+        const newItemId = res.item.id;
         toast.success(`เพิ่มสินค้า "${newName}" เรียบร้อย`);
         setItems((prev) => [
           {
-            id: res.item.id,
-            item_id: res.item.id,
+            id: newItemId,
+            item_id: newItemId,
             name: newName.trim(),
             category: newCategory.trim(),
             item_type: "inventory",

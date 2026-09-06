@@ -1,4 +1,5 @@
 import { requireProfile } from "@/lib/auth";
+import { withId, text } from "@/lib/db-rows";
 import { getSelectedBranchId, getActiveBranches } from "@/lib/branch";
 import { mainNavItemsFor, ROLE_LABEL } from "@/lib/permissions";
 import { Button } from "@/components/ui/button";
@@ -27,7 +28,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   let lowStockCount = 0;
   try {
     const adminDb = createAdminClient();
-    let q = (adminDb.from("item_stock" as any) as any).select(
+    let q = adminDb.from("item_stock").select(
       "id, current_qty, min_stock_level, alert_muted"
     );
     if (selectedBranchId) q = q.eq("branch_id", selectedBranchId);
@@ -89,7 +90,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           {/* Right: actions */}
           <div className="ml-auto flex items-center gap-2 shrink-0">
             {profile.role === "admin" && (
-              <BranchPicker branches={branches ?? []} selectedBranchId={selectedBranchId} />
+              <BranchPicker branches={withId(branches).map((b) => ({ id: b.id, name: text(b.name) }))} selectedBranchId={selectedBranchId} />
             )}
 
             {/* User badge — hidden on mobile (shown in drawer instead) */}

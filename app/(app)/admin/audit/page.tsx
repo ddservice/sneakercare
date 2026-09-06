@@ -1,4 +1,5 @@
 import { requireProfile, requireModuleView } from "@/lib/auth";
+import { text } from "@/lib/db-rows";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { SC_AUDIT_TABLE } from "@/lib/audit";
 import { Card, CardContent } from "@/components/ui/card";
@@ -147,7 +148,7 @@ export default async function AuditLogPage({
       rows = (data ?? []).map((r) => ({
         key: `app-${r.id}`,
         at: r.created_at,
-        action: r.action,
+        action: text(r.action),
         entityLabel: ENTITY_LABEL[r.entity] ?? r.entity,
         entityId: r.entity_id,
         actor: r.actor_name || "ระบบ",
@@ -181,9 +182,9 @@ export default async function AuditLogPage({
 
       rows = (data ?? []).map((r) => ({
         key: `inv-${r.id}`,
-        at: r.performed_at,
-        action: r.action,
-        entityLabel: r.table_name,
+        at: text(r.performed_at),
+        action: text(r.action),
+        entityLabel: text(r.table_name),
         entityId: r.record_id,
         actor: r.performed_by ? actorName.get(r.performed_by) ?? "—" : "ระบบ (trigger)",
         detail:

@@ -178,7 +178,7 @@ export async function lookupDbdCompany(taxIdOrKeyword: string): Promise<DbdCompa
 
   // 3. Search in persistent sc_settings registry
   try {
-    const { data: regSetting } = await (supabase.from("sc_settings" as any) as any)
+    const { data: regSetting } = await supabase.from("sc_settings")
       .select("value")
       .eq("key", "dbd_company_registry")
       .maybeSingle();
@@ -365,7 +365,7 @@ export async function createSmartAccDocument(payload: CreateDocumentPayload) {
   let contactId: string | null = null;
   if (payload.companyName) {
     try {
-      const { data: regSetting } = await (supabase.from("sc_settings" as any) as any)
+      const { data: regSetting } = await supabase.from("sc_settings")
         .select("value")
         .eq("key", "dbd_company_registry")
         .maybeSingle();
@@ -394,7 +394,7 @@ export async function createSmartAccDocument(payload: CreateDocumentPayload) {
         currentRegistry.unshift(newEntry);
       }
 
-      await (supabase.from("sc_settings" as any) as any).upsert({
+      await supabase.from("sc_settings").upsert({
         key: "dbd_company_registry",
         value: JSON.stringify(currentRegistry.slice(0, 100)),
         updated_at: new Date().toISOString(),

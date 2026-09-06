@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { text } from "@/lib/db-rows";
 import { requireProfile, requireAdmin } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -127,8 +128,8 @@ export default async function SettingsPage() {
                 {(branches ?? []).map((branch) => (
                   <BranchChatIdForm
                     key={branch.id}
-                    branchId={branch.id}
-                    branchName={branch.name}
+                    branchId={text(branch.id)}
+                    branchName={text(branch.name)}
                     currentChatId={branch.telegram_chat_id}
                   />
                 ))}

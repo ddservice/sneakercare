@@ -40,6 +40,8 @@ export async function fetchMonthlyCogs(range: MonthRange, branchId: string | nul
   const defaultBranchId = branchId || "cb8dcf5d-7e5e-4671-be42-aca79469a19b";
 
   for (const t of txns || []) {
+    // created_at มาจาก view จึงเป็น nullable — ข้ามแถวที่ไม่มีวันที่ ดีกว่าพังทั้งรายงาน
+    if (!t.created_at) continue;
     const monthKey = t.created_at.slice(0, 7) + "-01";
     const cost = Math.abs(Number(t.total_cost || 0));
     monthlyMap[monthKey] = (monthlyMap[monthKey] || 0) + cost;

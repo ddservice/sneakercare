@@ -26,9 +26,9 @@ export default async function ReportsPage({
     { data: expensesRows },
   ] = await Promise.all([
     fetchMonthlyCogs(range, branchId),
-    (supabase.from("sc_sales" as any) as any).select("*").order("date", { ascending: false }),
+    supabase.from("sc_sales").select("*").order("date", { ascending: false }),
     supabase.from("items").select("*, item_stock(*)").order("name"),
-    (supabase.from("sc_expenses" as any) as any).select("*").order("date", { ascending: false }),
+    supabase.from("sc_expenses").select("*").order("date", { ascending: false }),
   ]);
 
   const totalCogs = cogsRows.reduce((sum, row) => sum + Number(row.cogs ?? 0), 0);

@@ -1,4 +1,5 @@
 import { requireProfile, requireModuleView } from "@/lib/auth";
+import { withId, text } from "@/lib/db-rows";
 import { createClient } from "@/lib/supabase/server";
 import { getSelectedBranchId } from "@/lib/branch";
 import { canWrite } from "@/lib/permissions";
@@ -56,7 +57,7 @@ export default async function StockInPage() {
         </CardHeader>
         <CardContent className="p-6">
           {canEdit ? (
-            <StockInForm items={items ?? []} branchId={branchId!} />
+            <StockInForm items={withId(items).map((i) => ({ id: i.id, name: text(i.name), purchase_unit: text(i.purchase_unit) }))} branchId={branchId!} />
           ) : (
             <p className="text-sm text-slate-500">บัญชีนี้ดูหน้านี้ได้ แต่ไม่มีสิทธิ์บันทึกรับของเข้า</p>
           )}

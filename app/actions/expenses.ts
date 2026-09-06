@@ -110,7 +110,7 @@ export async function fetchAllExpensesData(timeRange: string = "this_month"): Pr
   const supabase = createAdminClient();
 
   // Fetch all records from sc_opex
-  const { data: rows } = await (supabase.from("sc_opex" as any) as any)
+  const { data: rows } = await supabase.from("sc_opex")
     .select("*")
     .order("id", { ascending: false });
 
@@ -162,7 +162,7 @@ export async function fetchAllExpensesData(timeRange: string = "this_month"): Pr
   }
 
   // Fetch sales to calculate commission %
-  let salesQuery = (supabase.from("sc_sales" as any) as any).select("date, total_revenue, grand_total, discount");
+  let salesQuery = supabase.from("sc_sales").select("date, total_revenue, grand_total, discount");
   if (!isAllTime) {
     salesQuery = salesQuery.gte("date", `${targetSalesMonth}-01`).lte("date", `${targetSalesMonth}-31`);
   }
@@ -298,7 +298,7 @@ export async function fetchAllExpensesData(timeRange: string = "this_month"): Pr
   };
 
   // Fetch registered staff from sc_employees to include 4th, 5th, etc.
-  const { data: dbEmployees } = await (supabase.from("sc_employees" as any) as any).select("*");
+  const { data: dbEmployees } = await supabase.from("sc_employees").select("*");
   (dbEmployees || []).forEach((emp: any) => {
     const matchedKey = Object.keys(staffMap).find(
       (k) => k.includes(emp.name) || (emp.nickname && k.includes(emp.nickname))
@@ -582,12 +582,12 @@ export async function saveStaffProfileInfo(payload: {
   const key = `empd_profile_${cleanKeyName}`;
 
   // Delete existing profile entry
-  await (supabase.from("sc_opex" as any) as any)
+  await supabase.from("sc_opex")
     .delete()
     .eq("key", key);
 
   // Insert updated profile entry
-  await (supabase.from("sc_opex" as any) as any).insert({
+  await supabase.from("sc_opex").insert({
     month: currentMonthMY(),
     category: "payslip_detail",
     key,
@@ -599,13 +599,13 @@ export async function saveStaffProfileInfo(payload: {
   });
 
   // Also update or insert in sc_employees table
-  const { data: existingEmp } = await (supabase.from("sc_employees" as any) as any)
+  const { data: existingEmp } = await supabase.from("sc_employees")
     .select("id")
     .ilike("name", `%${payload.nickname || cleanKeyName}%`)
     .maybeSingle();
 
   if (existingEmp) {
-    await (supabase.from("sc_employees" as any) as any)
+    await supabase.from("sc_employees")
       .update({
         name: payload.fullName,
         nickname: payload.nickname,
@@ -668,7 +668,7 @@ export async function createStaffMember(payload: {
   }
 
   // 1. Insert into sc_employees
-  const { error: empError } = await (supabase.from("sc_employees" as any) as any).insert({
+  const { error: empError } = await supabase.from("sc_employees").insert({
     name: payload.fullName.trim(),
     nickname: payload.nickname.trim() || payload.fullName.trim(),
     position: payload.position.trim() || (payload.employmentType === "monthly" ? "พนักงานประจำ" : "พนักงานทดลองงาน"),
@@ -700,7 +700,7 @@ export async function createStaffMember(payload: {
     ssoExempt: !!payload.ssoExempt,
   };
 
-  await (supabase.from("sc_opex" as any) as any).insert({
+  await supabase.from("sc_opex").insert({
     month: currentMonthMY(),
     category: "payslip_detail",
     key: `empd_profile_${payload.fullName.trim()}`,
@@ -780,12 +780,12 @@ export async function saveStaffPayrollAdjustment(payload: {
   ];
 
   for (const item of keysToSave) {
-    await (supabase.from("sc_opex" as any) as any)
+    await supabase.from("sc_opex")
       .delete()
       .eq("month", m)
       .eq("key", item.key);
 
-    await (supabase.from("sc_opex" as any) as any).insert({
+    await supabase.from("sc_opex").insert({
       month: m,
       category: item.category,
       key: item.key,
@@ -846,7 +846,7 @@ export async function addExpense(
   const monthKey = `${m}/${y}`;
 
   const expenseKey = `custom_${Date.now()}`;
-  const { data: inserted, error } = await (supabase.from("sc_opex" as any) as any)
+  const { data: inserted, error } = await supabase.from("sc_opex")
     .insert({
       month: monthKey,
       category,
@@ -882,14 +882,21 @@ export async function deleteExpense(id: string | number) {
   const supabase = createAdminClient();
 
   // อ่านรายการเก็บไว้ก่อนลบ — ยอดค่าใช้จ่ายที่หายไปต้องตรวจย้อนหลังได้
-  const { data: doomed } = await (supabase.from("sc_opex" as any) as any)
+  // sc_opex.id เป็น bigint — แปลงเป็นตัวเลขก่อนเสมอ (ฝั่งเรียกส่งมาเป็น string ได้)
+  const numericId = Number(id);
+  // กันกรณีถูกเรียกด้วย id สังเคราะห์ของรายการย่อย ("123-misc-0") ซึ่งต้องไปที่
+  // deleteMiscExpenseItem() แทน — เดิม Number() จะได้ NaN แล้วลบไม่โดนอะไรเลยแบบเงียบๆ
+  if (!Number.isFinite(numericId)) {
+    throw new Error(`รหัสรายการไม่ถูกต้อง: ${id} (รายการย่อยของรายจ่ายเบ็ดเตล็ดต้องลบผ่าน deleteMiscExpenseItem)`);
+  }
+  const { data: doomed } = await supabase.from("sc_opex")
     .select("month, category, key, name, amount, pay_method, recorded_by")
-    .eq("id", id)
+    .eq("id", numericId)
     .maybeSingle();
 
-  const { error } = await (supabase.from("sc_opex" as any) as any)
+  const { error } = await supabase.from("sc_opex")
     .delete()
-    .eq("id", id);
+    .eq("id", numericId);
 
   if (error) {
     throw new Error(`ไม่สามารถลบรายการได้: ${error.message}`);
@@ -926,7 +933,7 @@ export async function deleteMiscExpenseItem(rowId: number, itemIndex: number) {
   const profile = await requireProfile();
   const supabase = createAdminClient();
 
-  const { data: row, error: fetchError } = await (supabase.from("sc_opex" as any) as any)
+  const { data: row, error: fetchError } = await supabase.from("sc_opex")
     .select("id, month, name")
     .eq("id", rowId)
     .eq("key", "misc_items_json")
@@ -938,7 +945,8 @@ export async function deleteMiscExpenseItem(rowId: number, itemIndex: number) {
 
   let items: Array<{ name: string; amount: number; method?: string }>;
   try {
-    items = JSON.parse(row.name);
+    // name เก็บ JSON array ไว้ — view/ตารางคืนเป็น nullable ต้องกันก่อน parse
+    items = JSON.parse(row.name ?? "[]");
     if (!Array.isArray(items)) throw new Error("ข้อมูลไม่ใช่ array");
   } catch (err) {
     throw new Error(`อ่านข้อมูลรายจ่ายเบ็ดเตล็ดไม่สำเร็จ: ${err instanceof Error ? err.message : String(err)}`);
@@ -952,7 +960,7 @@ export async function deleteMiscExpenseItem(rowId: number, itemIndex: number) {
   const nextItems = items.filter((_, i) => i !== itemIndex);
   const nextTotal = nextItems.reduce((sum, i) => sum + Number(i.amount || 0), 0);
 
-  const { error: updateItemsError } = await (supabase.from("sc_opex" as any) as any)
+  const { error: updateItemsError } = await supabase.from("sc_opex")
     .update({ name: JSON.stringify(nextItems), last_updated: new Date().toISOString() })
     .eq("id", rowId);
 
@@ -961,7 +969,7 @@ export async function deleteMiscExpenseItem(rowId: number, itemIndex: number) {
   }
 
   // ซิงค์แถวสรุป key="misc" ให้ยอดตรงกับ items ที่เหลือเสมอ
-  await (supabase.from("sc_opex" as any) as any)
+  await supabase.from("sc_opex")
     .update({ amount: nextTotal, last_updated: new Date().toISOString() })
     .eq("month", row.month)
     .eq("key", "misc");

@@ -102,8 +102,11 @@ export async function createStockIn(_prev: StockActionState, formData: FormData)
       .select("id, purchase_unit_qty")
       .single();
 
-    if (createErr || !createdItem) {
-      return { error: `สร้างสินค้าใหม่ไม่สำเร็จ: ${createErr?.message}` };
+    // `items` เป็น VIEW (alias ของ inv_items) types จึงมองว่าทุกคอลัมน์อาจเป็น null ได้
+    // เช็ค id ตรงๆ แทนการ cast — ถ้า insert สำเร็จแต่ไม่ได้ id กลับมาจริงๆ (เช่น view เปลี่ยนรูป)
+    // ต้องหยุดแล้วบอกผู้ใช้ ดีกว่าปล่อยให้ itemId เป็น null แล้วไปพังตอนตัดสต๊อกทีหลัง
+    if (createErr || !createdItem?.id) {
+      return { error: `สร้างสินค้าใหม่ไม่สำเร็จ: ${createErr?.message ?? "ไม่ได้รับรหัสสินค้ากลับมา"}` };
     }
 
     itemId = createdItem.id;
@@ -238,7 +241,7 @@ export async function setMinStockLevel(_prev: StockActionState, formData: FormDa
   const { branchId } = branch;
 
   const supabase = await createClient();
-  const { error } = await supabase.rpc("fn_set_min_stock_level", {
+  const { error } = await callDbFunction(supabase, "inv_fn_set_min_stock_level", "fn_set_min_stock_level", {
     p_item_id: itemId,
     p_branch_id: branchId,
     p_new_min: min,
@@ -252,9 +255,44 @@ export async function setMinStockLevel(_prev: StockActionState, formData: FormDa
   return { success: true };
 }
 
+/**
+ * เรียก RPC ที่บนฐานข้อมูล production มีชื่อขึ้นต้นด้วย `inv_` แต่บนฐานข้อมูลที่สร้างจาก
+ * supabase/migrations/ ล้วนๆ (local dev / CI / pgTAP) ใช้ชื่อไร้ prefix
+ *
+ * ⚠️ (แก้บั๊ก 2026-09-06) โค้ดเดิมเรียกชื่อไร้ prefix อย่างเดียว ซึ่ง **ไม่มีอยู่จริงบน production**
+ * ทำให้ 2 ฟีเจอร์นี้พังเงียบมาตลอดโดยไม่มีใครรู้ (error ถูกคืนเป็นข้อความให้ผู้ใช้เห็นว่า
+ * "บันทึกไม่สำเร็จ" เฉยๆ ไม่ได้บอกว่าเพราะฟังก์ชันไม่มี):
+ *   • ตั้งจุดสั่งซื้อขั้นต่ำ (fn_set_min_stock_level → inv_fn_set_min_stock_level)
+ *   • อนุมัติรายการปรับปรุงสต๊อกของ Co-Admin (fn_approve_adjustment → inv_fn_approve_adjustment)
+ *     ซึ่งเป็นกฎธุรกิจข้อ 3 ใน CLAUDE.md โดยตรง
+ * เพิ่งเจอตอน generate types จากฐานข้อมูลจริง — ก่อนหน้านี้โค้ดใช้ `as any` ทับไว้ทั้งโปรเจกต์
+ * TypeScript จึงไม่มีทางเตือนได้เลย
+ */
+async function callDbFunction(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  invName: string,
+  legacyName: string,
+  params: Record<string, unknown>
+): Promise<{ error: { message: string } | null }> {
+  const rpc = supabase.rpc.bind(supabase) as unknown as (
+    fn: string,
+    p: Record<string, unknown>
+  ) => Promise<{ error: { message: string } | null }>;
+
+  const first = await rpc(invName, params);
+  if (!first.error) return first;
+  if (/schema cache|does not exist|Could not find the function/i.test(first.error.message)) {
+    return rpc(legacyName, params);
+  }
+  return first;
+}
+
 export async function approveAdjustment(txnId: string, approve: boolean) {
   const supabase = await createClient();
-  const { error } = await supabase.rpc("fn_approve_adjustment", { p_txn_id: txnId, p_approve: approve });
+  const { error } = await callDbFunction(supabase, "inv_fn_approve_adjustment", "fn_approve_adjustment", {
+    p_txn_id: txnId,
+    p_approve: approve,
+  });
   if (error) throw new Error(error.message);
   revalidatePath("/adjustments");
   revalidatePath("/dashboard");

@@ -33,7 +33,7 @@ export async function toggleItemAlertMute(itemId: string, muted: boolean) {
   const branchId = await getSelectedBranchId(profile);
   const supabase = createAdminClient();
 
-  let q = (supabase.from("item_stock" as any) as any)
+  let q = supabase.from("item_stock")
     .update({ alert_muted: muted })
     .eq("item_id", itemId);
   if (branchId) q = q.eq("branch_id", branchId);
@@ -70,7 +70,7 @@ export async function updateInventoryItem(data: InventoryItemInput) {
   }
 
   // 1. Update items table
-  const { error: itemError } = await (supabase.from("items" as any) as any)
+  const { error: itemError } = await supabase.from("items")
     .update({
       name: data.name.trim(),
       category: data.category?.trim() || "ทั่วไป",
@@ -85,7 +85,7 @@ export async function updateInventoryItem(data: InventoryItemInput) {
   }
 
   // 2. Fetch old stock to calculate delta for audit
-  let qStock = (supabase.from("item_stock" as any) as any)
+  let qStock = supabase.from("item_stock")
     .select("*")
     .eq("item_id", data.id);
   if (branchId) qStock = qStock.eq("branch_id", branchId);
@@ -96,37 +96,42 @@ export async function updateInventoryItem(data: InventoryItemInput) {
   const newCost = Number(data.avg_unit_cost ?? 0);
   const newMin = Number(data.min_stock_level ?? 1);
 
-  if (existingStock) {
+  // id ของ item_stock มาจาก view alias จึงเป็น nullable — เช็คก่อนใช้เป็นเงื่อนไข .eq()
+  if (existingStock?.id) {
     // Update existing stock row
-    await (supabase.from("item_stock" as any) as any)
+    await supabase.from("item_stock")
       .update({
         current_qty: newQty,
         avg_unit_cost: newCost,
         min_stock_level: newMin,
-        last_counted_at: new Date().toISOString(),
+        // ⚠️ (แก้บั๊ก 2026-09-06) ตาราง item_stock ไม่มีคอลัมน์ last_counted_at
+        // การใส่มาทำให้ update ล้มทั้ง statement = แก้จำนวนสต๊อกจากหน้าคลังไม่สำเร็จมาตลอด
+        updated_at: new Date().toISOString(),
       })
       .eq("id", existingStock.id);
   } else {
     // Insert new stock row
-    await (supabase.from("item_stock" as any) as any).insert({
+    await supabase.from("item_stock").insert({
       item_id: data.id,
       branch_id: branchId || null,
       current_qty: newQty,
       avg_unit_cost: newCost,
       min_stock_level: newMin,
-      last_counted_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
     });
   }
 
   // 3. Record Audit Transaction if quantity changed
   if (oldQty !== newQty) {
     const delta = newQty - oldQty;
-    await (supabase.from("stock_transactions" as any) as any).insert({
+    await supabase.from("stock_transactions").insert({
       item_id: data.id,
       branch_id: branchId || null,
-      txn_type: "count_adjustment",
+      // ⚠️ (แก้บั๊ก 2026-09-06) "count_adjustment" ไม่ใช่ค่าที่มีใน enum inv_txn_type
+      // (มีแค่ stock_in/stock_out/adjustment_increase/adjustment_decrease/waste)
+      txn_type: delta > 0 ? "adjustment_increase" : "adjustment_decrease",
       quantity_delta: delta,
-      unit_cost: newCost,
+      unit_cost_snapshot: newCost,
       total_cost: Math.abs(delta) * newCost,
       reason: `แก้ไขสต๊อกโดยตรงผ่านหน้าคลังสินค้า (${oldQty} -> ${newQty} ${data.base_unit})`,
       reference_note: `แก้ไขโดย: ${profile.display_name || profile.username}`,
@@ -152,11 +157,11 @@ export async function createInventoryItem(data: InventoryItemInput) {
   const supabase = createAdminClient();
 
   // 1. Insert item
-  const { data: newItem, error: itemError } = await (supabase.from("items" as any) as any)
+  const { data: newItem, error: itemError } = await supabase.from("items")
     .insert({
       name: data.name.trim(),
       category: data.category?.trim() || "ทั่วไป",
-      item_type: data.item_type || "inventory",
+      item_type: (data.item_type === "consumable" ? "consumable" : "inventory"),
       base_unit: data.base_unit.trim() || "ชิ้น",
       purchase_unit: data.purchase_unit?.trim() || data.base_unit.trim() || "ชิ้น",
       default_min_stock_level: Number(data.min_stock_level || 1),
@@ -173,7 +178,7 @@ export async function createInventoryItem(data: InventoryItemInput) {
   const initialQty = Number(data.current_qty || 0);
   const unitCost = Number(data.avg_unit_cost || 0);
 
-  await (supabase.from("item_stock" as any) as any).insert({
+  await supabase.from("item_stock").insert({
     item_id: newItem.id,
     branch_id: branchId || null,
     current_qty: initialQty,
@@ -183,12 +188,13 @@ export async function createInventoryItem(data: InventoryItemInput) {
 
   // 3. Record Initial Stock In transaction if initial qty > 0
   if (initialQty > 0) {
-    await (supabase.from("stock_transactions" as any) as any).insert({
+    await supabase.from("stock_transactions").insert({
       item_id: newItem.id,
       branch_id: branchId || null,
-      txn_type: "opening_balance",
+      // ⚠️ (แก้บั๊ก 2026-09-06) "opening_balance" ไม่มีใน enum — ยอดยกมาคือการรับของเข้าครั้งแรก
+      txn_type: "stock_in",
       quantity_delta: initialQty,
-      unit_cost: unitCost,
+      unit_cost_snapshot: unitCost,
       total_cost: initialQty * unitCost,
       reason: "ยอดยกมาเริ่มต้นตอนสร้างรายการสินค้า",
       reference_note: `สร้างโดย: ${profile.display_name || profile.username}`,
@@ -213,13 +219,13 @@ export async function deleteInventoryItem(itemId: string) {
   const supabase = createAdminClient();
 
   // Try delete if no foreign key constraints, else deactivate
-  const { error } = await (supabase.from("items" as any) as any)
+  const { error } = await supabase.from("items")
     .delete()
     .eq("id", itemId);
 
   if (error) {
     // If foreign key constraint exists, deactivate it
-    await (supabase.from("items" as any) as any)
+    await supabase.from("items")
       .update({ is_active: false })
       .eq("id", itemId);
   }

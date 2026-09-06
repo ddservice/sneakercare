@@ -18,9 +18,9 @@ export default async function DashboardPage() {
     { data: stockItems },
     { data: lowStock },
   ] = await Promise.all([
-    (supabase.from("sc_sales" as any) as any).select("*").order("date", { ascending: false }),
-    (supabase.from("sc_opex" as any) as any).select("*").order("month", { ascending: false }),
-    (supabase.from("sc_payments" as any) as any).select("*").order("sale_date", { ascending: false }),
+    supabase.from("sc_sales").select("*").order("date", { ascending: false }),
+    supabase.from("sc_opex").select("*").order("month", { ascending: false }),
+    supabase.from("sc_payments").select("*").order("sale_date", { ascending: false }),
     supabase.from("service_orders").select("*").order("received_at", { ascending: false }),
     supabase.from("items").select("id, name, item_stock(*)").order("name"),
     supabase.from("v_low_stock").select("*"),

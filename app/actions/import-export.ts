@@ -71,17 +71,17 @@ export async function bulkImportSales(rows: Record<string, unknown>[]): Promise<
       };
 
       // Check if row exists on same date
-      const { data: existing } = await (supabase.from("sc_sales" as any) as any)
+      const { data: existing } = await supabase.from("sc_sales")
         .select("id")
         .eq("date", validated.date)
         .maybeSingle();
 
       if (existing) {
-        await (supabase.from("sc_sales" as any) as any)
+        await supabase.from("sc_sales")
           .update(payload)
           .eq("id", existing.id);
       } else {
-        await (supabase.from("sc_sales" as any) as any).insert(payload);
+        await supabase.from("sc_sales").insert(payload);
       }
       imported++;
     } catch (err: any) {
@@ -135,7 +135,7 @@ export async function bulkImportStock(rows: Record<string, unknown>[]): Promise<
 
     try {
       // Check if item exists
-      const { data: existingItem } = await (supabase.from("items" as any) as any)
+      const { data: existingItem } = await supabase.from("items")
         .select("id")
         .eq("name", validated.name)
         .maybeSingle();
@@ -143,7 +143,7 @@ export async function bulkImportStock(rows: Record<string, unknown>[]): Promise<
       let itemId = existingItem?.id;
 
       if (!itemId) {
-        const { data: newItem, error: createError } = await (supabase.from("items" as any) as any)
+        const { data: newItem, error: createError } = await supabase.from("items")
           .insert({
             name: validated.name,
             category: validated.category,
@@ -165,23 +165,24 @@ export async function bulkImportStock(rows: Record<string, unknown>[]): Promise<
       }
 
       // Upsert item_stock
-      let qStock = (supabase.from("item_stock" as any) as any)
+      let qStock = supabase.from("item_stock")
         .select("id")
-        .eq("item_id", itemId);
+        .eq("item_id", itemId!);
       if (branchId) qStock = qStock.eq("branch_id", branchId);
       const { data: existingStock } = await qStock.maybeSingle();
 
-      if (existingStock) {
-        await (supabase.from("item_stock" as any) as any)
+      if (existingStock?.id) {
+        await supabase.from("item_stock")
           .update({
             current_qty: validated.qty,
             avg_unit_cost: validated.unit_cost,
             min_stock_level: validated.min_stock,
-            last_counted_at: new Date().toISOString(),
+            // ⚠️ (แก้บั๊ก 2026-09-06) item_stock ไม่มีคอลัมน์ last_counted_at — ใส่แล้ว update ล้มทั้ง statement
+            updated_at: new Date().toISOString(),
           })
-          .eq("id", existingStock.id);
+          .eq("id", existingStock.id!);
       } else {
-        await (supabase.from("item_stock" as any) as any).insert({
+        await supabase.from("item_stock").insert({
           item_id: itemId,
           branch_id: branchId || null,
           current_qty: validated.qty,
@@ -240,11 +241,12 @@ export async function bulkImportExpenses(rows: Record<string, unknown>[]): Promi
     }
 
     try {
-      await (supabase.from("sc_expenses" as any) as any).insert({
+      await supabase.from("sc_expenses").insert({
         date: validated.date,
         category: validated.category,
-        item_name: validated.name,
-        total_amount: validated.amount,
+        // ⚠️ (แก้บั๊ก 2026-09-06) sc_expenses ใช้ชื่อ name/amount ไม่ใช่ item_name/total_amount
+        name: validated.name,
+        amount: validated.amount,
         pay_method: validated.pay_method,
         recorded_by: profile.display_name || "Import Tool",
         created_at: new Date().toISOString(),

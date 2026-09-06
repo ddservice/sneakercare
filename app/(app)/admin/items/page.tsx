@@ -1,4 +1,5 @@
 import { requireProfile, requireModuleView } from "@/lib/auth";
+import { text, bool } from "@/lib/db-rows";
 import { createClient } from "@/lib/supabase/server";
 import { canWrite } from "@/lib/permissions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -68,7 +69,7 @@ export default async function AdminItemsPage() {
                 {canEdit && (
                   <TableCell className="flex justify-end gap-2">
                     <ItemForm item={item as ItemRow} trigger={<Button size="sm" variant="outline">แก้ไข</Button>} />
-                    <ToggleActiveButton id={item.id} isActive={item.is_active} />
+                    <ToggleActiveButton id={text(item.id)} isActive={bool(item.is_active)} />
                   </TableCell>
                 )}
               </TableRow>
