@@ -288,6 +288,62 @@ received_date อยู่ใน ส.ค. (6,600.00) = 100,592.30` ตรงก�
 **timestamp (1,787,827,245,489) ไว้ในคอลัมน์ `amount`** ตอนนี้รอดเพราะมี guard `amt < 10000000`
 และ category ถูก blacklist ไว้ ถ้าใครเผลอถอด guard ตัวใดตัวหนึ่งออก ยอดเงินทั้งระบบจะระเบิดทันที
 
+## 🚨 ต้องทำด่วนที่สุด — rotate Telegram Bot Token (2026-09-06)
+
+**Bot Token ถูกเปิดให้อ่านสาธารณะอยู่ ไม่รู้ว่านานแค่ไหน — ต้องถือว่าหลุดแล้ว 100%**
+
+```
+GET /rest/v1/integration_secrets   (ใช้แค่ publishable key ที่ฝังในหน้าเว็บ ไม่ต้องล็อกอิน)
+→ [{"key":"telegram_bot_token","value":"8875441249:AAG…"}]
+```
+`branches.telegram_chat_id` (`-5034072774`) ก็หลุดคู่กัน ⇒ ใครถือทั้งคู่ **ส่งข้อความปลอมเข้ากลุ่ม
+พนักงานได้ทันที** เช่นแกล้งเป็นระบบสั่งให้พนักงานทำอะไรบางอย่าง
+
+**ช่องทางถูกปิดไปแล้ว** (migration `0016`) แต่ token ตัวเดิมยังใช้งานได้อยู่จนกว่าจะ revoke:
+Telegram → **@BotFather** → `/revoke` → เลือกบอท → เอา token ใหม่มาใส่ที่หน้า `/settings`
+(ห้ามใส่ในไฟล์ env หรือโค้ด — ตามกฎข้อ 9 เขียนผ่าน RPC `fn_set_integration_secret()` เท่านั้น)
+
+## 🔴 SECURITY DEFINER View — ช่องโหว่ที่ทำให้ 0014/0015 ไร้ผล (แก้แล้วด้วย 0016)
+
+Supabase Security Advisor ชี้จุดที่การไล่ตรวจ RLS ของตารางมองไม่เห็น: **VIEW ใน Postgres ทำงานด้วย
+สิทธิ์ของเจ้าของ view เป็นค่าเริ่มต้น** (เจ้าของคือ postgres ซึ่งมี BYPASSRLS) ⇒ **RLS ของตาราง
+ข้างใต้ไม่ถูกบังคับเลย** ต่อให้ปิดตารางแน่นแค่ไหนก็ไม่มีผล ตราบใดที่ยังเข้าทาง view ได้
+
+view alias ที่ `scripts/apply-aliases-and-unified-schema.sql` สร้างไว้ (`items` → `inv_items`,
+`item_stock` → `inv_item_stock`, `audit_logs` → `inv_audit_logs`, `integration_secrets` → …)
+**12 ตัวเป็น SECURITY DEFINER ทั้งหมด** ทำให้ข้อมูลต่อไปนี้อ่านได้โดยไม่ต้องล็อกอิน:
+Bot Token · `item_stock.avg_unit_cost` และ `stock_transactions.unit_cost` (**ข้อมูลต้นทุน —
+ผิดกฎข้อ 5 โดยตรง**) · audit ledger ทั้งหมด · `telegram_chat_id` · แคตตาล็อก · ซัพพลายเออร์
+
+**แก้ด้วย `alter view ... set (security_invoker = on)`** (Postgres 15+) ให้ view ใช้สิทธิ์ของคนเรียก
+ซึ่งเป็นพฤติกรรมที่ควรเป็นตั้งแต่แรก — view กลุ่ม `inv_v_*` บางตัวตั้งถูกไว้แล้ว แต่ alias ที่สร้าง
+ทีหลังไม่ได้ตั้ง
+
+**⚠️ กฎใหม่: ทุกครั้งที่สร้าง VIEW ใน public ต้องใส่ `with (security_invoker = on)` เสมอ**
+ไม่งั้นมันจะกลายเป็นประตูหลังข้าม RLS ทันที และ `npm run lint`/typecheck จับไม่ได้เลย
+
+## 🛡️ ด่านที่สอง: ถอนสิทธิ์ anon ออกทั้งหมด (0016)
+
+`revoke all on <ทุกตาราง/view ใน public> from anon` — เหตุผลคือรอบนี้พิสูจน์แล้วว่า RLS ด่านเดียว
+ไม่พอ (view ตัวเดียวเปิดทะลุทุกอย่าง) ตอนนี้ต่อให้ policy ผิดอีก ข้อมูลก็ไม่หลุดเพราะ anon แตะ
+ไม่ได้ตั้งแต่ระดับ GRANT
+
+ปลอดภัยเพราะไม่มีไฟล์ใดในแอป import `lib/supabase/client.ts` เลย (ทุก query ผ่านเซิร์ฟเวอร์ด้วย
+session ผู้ใช้หรือ service_role) และ `/login` ใช้ Supabase Auth (`/auth/v1/*`) ซึ่งไม่เกี่ยวกับ
+GRANT ของตาราง — **ยืนยันด้วยการล็อกอินเป็น admin จริงแล้วอ่านครบ 17 ตาราง/view ผ่านหมด**
+(`integration_secrets` คืน 0 แถวแม้เป็น admin ซึ่งถูกต้องตามกฎข้อ 9)
+
+## 🔴 ช่องโหว่ที่ยังเหลือ — หน้าเว็บไม่มีการ์ดกันสิทธิ์ฝั่งเซิร์ฟเวอร์
+
+`lib/permissions.ts` กำหนด `viewRoles` ไว้ครบทุกโมดูล และ `lib/auth.ts` มี `requireModuleView()`
+ให้ใช้อยู่แล้ว **แต่มีแค่ 3 หน้าที่เรียกใช้จริง** (`/settings`, `/admin/settings`, `/admin/users`
+ซึ่งใช้ `requireAdmin`) — หน้าที่เหลือมีแค่ `requireProfile()` (เช็คว่าล็อกอินเท่านั้น)
+
+ผลคือ **พนักงานที่ล็อกอินแล้วพิมพ์ URL ตรงๆ เข้า `/expenses` (เงินเดือนทุกคน), `/admin/audit`,
+`/invoicing`, `/roster`, `/tax-filing`, `/statistics` ได้ทั้งหมด** เมนูแค่ซ่อนลิงก์เฉยๆ
+ตอนนี้ยังไม่ระเบิดเพราะมีแต่บัญชี admin 2 คน แต่จะระเบิดวันแรกที่เชิญพนักงานเข้าระบบ
+**งานถัดไปคือเติม `requireModuleView(profile, "<key>")` ให้ครบทุกหน้า**
+
 ## 🔒 ผลตรวจช่องโหว่ + สิ่งที่ปิดไปแล้ว (2026-09-06, กลางคืน)
 
 ตรวจด้วยการ **ยิง REST API จริงด้วย publishable key** ที่ฝังอยู่ในหน้าเว็บ (ใครเปิด DevTools ก็ก๊อปได้)
