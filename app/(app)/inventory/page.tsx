@@ -1,4 +1,4 @@
-import { requireProfile } from "@/lib/auth";
+import { requireProfile, requireModuleView } from "@/lib/auth";
 import { getSelectedBranchId } from "@/lib/branch";
 import { createClient } from "@/lib/supabase/server";
 import { canSeeCost, canWrite } from "@/lib/permissions";
@@ -8,6 +8,7 @@ export const dynamic = "force-dynamic";
 
 export default async function InventoryHubPage() {
   const profile = await requireProfile();
+  requireModuleView(profile, "inventory");
   const selectedBranchId = await getSelectedBranchId(profile);
   const supabase = await createClient();
   const isCostVisible = canSeeCost(profile.role);

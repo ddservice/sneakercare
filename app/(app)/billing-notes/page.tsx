@@ -1,4 +1,4 @@
-import { requireProfile } from "@/lib/auth";
+import { requireProfile, requireModuleView } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { thaiBahtText } from "@/lib/smartacc/baht-text";
 import { fetchShopProfile } from "@/app/actions/shop-settings";
@@ -8,7 +8,9 @@ import { ArrowLeft, Layers, Plus } from "lucide-react";
 import Link from "next/link";
 
 export default async function BillingNotesPage() {
-  await requireProfile();
+  const profile = await requireProfile();
+  // ใบวางบิลอยู่โดเมนเดียวกับการออกเอกสาร จึงใช้สิทธิ์ชุด invoicing
+  requireModuleView(profile, "invoicing");
   const supabase = createAdminClient();
 
   let documents: any[] = [];

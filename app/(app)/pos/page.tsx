@@ -1,4 +1,4 @@
-import { requireProfile } from "@/lib/auth";
+import { requireProfile, requireModuleView } from "@/lib/auth";
 import { getSelectedBranchId } from "@/lib/branch";
 import { createClient } from "@/lib/supabase/server";
 import { DEFAULT_PAGE_SIZE, pageInfo, parsePage, rangeFor } from "@/lib/pagination";
@@ -10,6 +10,7 @@ export default async function PosPage({
   searchParams: Promise<{ page?: string }>;
 }) {
   const profile = await requireProfile();
+  requireModuleView(profile, "pos");
   const selectedBranchId = await getSelectedBranchId(profile);
   const supabase = await createClient();
 

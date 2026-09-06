@@ -1,4 +1,4 @@
-import { requireProfile } from "@/lib/auth";
+import { requireProfile, requireModuleView } from "@/lib/auth";
 import { countDailySales, fetchRecentDailySales } from "@/app/actions/daily-sales";
 import { DailyEntryClient } from "./daily-entry-client";
 
@@ -12,7 +12,8 @@ export const dynamic = "force-dynamic";
 const LOAD_LIMIT = 500;
 
 export default async function DailyEntryPage() {
-  await requireProfile();
+  const profile = await requireProfile();
+  requireModuleView(profile, "pos");
 
   const [recentRecords, totalRecords] = await Promise.all([
     fetchRecentDailySales(LOAD_LIMIT),

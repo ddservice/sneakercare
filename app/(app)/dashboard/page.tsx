@@ -1,11 +1,12 @@
-import { requireProfile } from "@/lib/auth";
+import { requireProfile, requireModuleView } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { DashboardClient } from "./dashboard-client";
 
 export const dynamic = "force-dynamic";
 
 export default async function DashboardPage() {
-  await requireProfile();
+  const profile = await requireProfile();
+  requireModuleView(profile, "dashboard");
   const supabase = await createClient();
 
   // Fetch real sales, opex, payments, orders, items, and low-stock items

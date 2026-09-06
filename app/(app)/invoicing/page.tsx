@@ -1,4 +1,4 @@
-import { requireProfile } from "@/lib/auth";
+import { requireProfile, requireModuleView } from "@/lib/auth";
 import {
   fetchPendingDeliveryOrders,
   fetchCatalogItems,
@@ -8,7 +8,9 @@ import { fetchShopProfile } from "@/app/actions/shop-settings";
 import { InvoicingClient } from "./invoicing-client";
 
 export default async function InvoicingPage() {
-  await requireProfile();
+  const profile = await requireProfile();
+  // ออกใบกำกับภาษี/ใบเสร็จในนามนิติบุคคล
+  requireModuleView(profile, "invoicing");
   const [pendingDOs, catalog, existingDocs, shopProfile] = await Promise.all([
     fetchPendingDeliveryOrders(),
     fetchCatalogItems(),

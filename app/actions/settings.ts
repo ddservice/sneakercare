@@ -22,10 +22,30 @@ export async function setTelegramToken(
   }
 
   const supabase = await createClient();
-  const { error } = await supabase.rpc("fn_set_integration_secret", {
-    p_key: "telegram_bot_token",
-    p_value: token,
-  });
+
+  // ⚠️ (แก้บั๊ก 2026-09-06) ชื่อฟังก์ชันจริงบนฐานข้อมูลคือ `inv_fn_set_integration_secret`
+  // ไม่ใช่ `fn_set_integration_secret` — ฝั่ง "อ่านสถานะ" มี alias ไร้ prefix ให้ (
+  // `fn_integration_secret_status`) แต่ฝั่ง "เขียน" ไม่เคยมี alias เลย ปุ่มบันทึก Bot Token
+  // จึงพังมาตลอดด้วย error "Could not find the function public.fn_set_integration_secret
+  // (p_key, p_value) in the schema cache" — เพิ่งเจอตอนต้องเปลี่ยน token ด่วนเพราะของเดิมหลุด
+  //
+  // เรียกชื่อจริงก่อน แล้ว fallback ไปชื่อไร้ prefix เผื่อฐานข้อมูลอื่น (local/CI ที่สร้างจาก
+  // migrations ล้วนๆ จะมีเฉพาะชื่อไร้ prefix เพราะ alias inv_* เกิดจาก
+  // scripts/apply-aliases-and-unified-schema.sql ที่รันบน production เท่านั้น)
+  const args = { p_key: "telegram_bot_token", p_value: token };
+  // cast เพราะ lib/supabase/database.types.ts ถูก generate ไว้ตั้งแต่ก่อนมี alias inv_*
+  // จึงยังไม่รู้จักชื่อฟังก์ชันที่มี prefix (ดูงานค้าง "generate types ของ sc_*/inv_*")
+  const rpc = supabase.rpc.bind(supabase) as unknown as (
+    fn: string,
+    params: Record<string, string>
+  ) => Promise<{ error: { message: string } | null }>;
+
+  let { error } = await rpc("inv_fn_set_integration_secret", args);
+
+  if (error && /schema cache|does not exist|Could not find the function/i.test(error.message)) {
+    console.warn("[settings] ไม่พบ inv_fn_set_integration_secret ลองชื่อไร้ prefix ต่อ:", error.message);
+    ({ error } = await rpc("fn_set_integration_secret", args));
+  }
 
   if (error) {
     return { error: `บันทึกไม่สำเร็จ: ${error.message}` };

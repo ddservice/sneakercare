@@ -1,4 +1,4 @@
-import { requireProfile } from "@/lib/auth";
+import { requireProfile, requireModuleView } from "@/lib/auth";
 import { RosterClient } from "./roster-client";
 
 export const metadata = {
@@ -7,6 +7,7 @@ export const metadata = {
 };
 
 export default async function RosterPage() {
-  await requireProfile();
+  const profile = await requireProfile();
+  requireModuleView(profile, "roster");
   return <RosterClient />;
 }
