@@ -139,7 +139,7 @@ flag `--exclude` ตัดบริการที่ไม่จำเป็น
 
 ---
 
-## งานที่ 6 — rotate `service_role` key + รหัสผ่าน Postgres [ค้าง — ต้องให้เจ้าของกดที่ Dashboard]
+## งานที่ 6 — rotate `service_role` key + รหัสผ่าน Postgres [ทำไป 4/5 ขั้นแล้ว 2026-09-06]
 
 **ทำไมยังค้าง:** ขั้นตอนที่ 1 และขั้นตอนสุดท้ายทำได้เฉพาะบนหน้าเว็บ Supabase Dashboard
 เครื่อง dev และ VPS **ไม่มี `supabase` CLI และไม่มี Personal Access Token** (ตรวจแล้ว 2026-09-06)
@@ -147,6 +147,20 @@ Management API จึงเรียกไม่ได้ — อย่าเส
 
 **สถานะ key ปัจจุบัน (2026-09-06):** `.env.local` ยังใช้ legacy JWT ทั้ง anon และ service_role
 (ขึ้นต้น `eyJhbGciOiJI…` ยาว 219 ตัว) — ยังไม่เคยย้ายไป key แบบใหม่
+
+### สถานะ (อัปเดต 2026-09-06 12:20)
+
+| ขั้น | สถานะ |
+|---|---|
+| 1. สร้าง key แบบใหม่ที่ Dashboard | ✅ เจ้าของสร้างให้แล้ว (publishable + secret) |
+| 2. สลับ `.env.local` ทั้ง dev และ VPS + rebuild | ✅ (rebuild ไม่ใช่แค่ restart — `NEXT_PUBLIC_*` ฝังตอน build) |
+| 3. ทดสอบล็อกอิน / service_role / production | ✅ ผ่านหมด |
+| 4. อัปเดต Vault `inv_service_role_key` + ทดสอบ cron จริง | ✅ ได้ 200 |
+| 5. **disable legacy key ที่ Dashboard** | ⬜ **ยังไม่ได้ทำ — เหลือขั้นนี้ขั้นเดียว** |
+
+⚠️ ก่อน/หลังกดขั้นที่ 5 อ่านหัวข้อ 🔴 ใน `CLAUDE.md` ให้จบก่อน — มีความเสี่ยงเรื่อง Edge Function
+`inv-low-stock-alert` ที่ซอร์สไม่ได้อยู่ใน repo นี้ พร้อมคำสั่ง SQL สำหรับตรวจทันทีหลังกด และเงื่อนไข
+ที่ต้องรีบกลับไป enable ใหม่
 
 ### ลำดับที่ปลอดภัย (ห้ามสลับขั้นตอน)
 

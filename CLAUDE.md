@@ -207,26 +207,74 @@ CLAUDE.md                 คู่มือนี้ — อัปเดตท�
   ใช้ `pg_dump` รันผ่าน cron บน VPS ตี 3 ทุกคืน (`scripts/backup-db-to-r2.sh`) อัปโหลดไป Cloudflare R2 (`ddservicedb`)
   พร้อมลบไฟล์เก่าเกิน 90 วันทั้งบน VPS และ R2 อัตโนมัติ ตามด้วย `verify-backup.sh` ตรวจสอบความสมบูรณ์และส่ง Heartbeat เข้า Telegram
 
-## 🔴 ต้องทำก่อนใช้งานจริง (ค้างอยู่ ณ 2026-09-06)
+## 🔴 ต้องทำก่อนใช้งานจริง (ค้างอยู่ ณ 2026-09-06 — เหลือขั้นตอนเดียว)
 
-**rotate Supabase `service_role` key ตัวเก่า — ต้องกดที่ Supabase Dashboard เท่านั้น**
-key ที่เคย hardcode อยู่ใน `scripts/test-login.mjs` / `scripts/set-admin-pw.mjs` (แก้ไฟล์ไปแล้ว
-2026-09-02) **ยังใช้งานได้อยู่** และ bypass RLS ได้ทั้งฐานข้อมูล ถือเป็นช่องโหว่ที่ใหญ่กว่ารหัสผ่าน
-บัญชีผู้ใช้มาก เพราะอยู่ใน git history ที่ย้อนดูได้ตลอด — ขั้นตอนละเอียดอยู่ใน `HANDOFF.md`
-หัวข้อ "งานที่ 6"
+**กด disable legacy anon / service_role key ที่ Supabase Dashboard** (Settings → API Keys →
+แท็บ `Legacy anon, service_role API keys`) — ทุกอย่างฝั่งเราย้ายไป key แบบใหม่เรียบร้อยและทดสอบผ่านหมดแล้ว
+(ดูหัวข้อสถานะงานล่าสุด) เหลือแค่ปิดของเก่าที่ยังใช้งานได้อยู่และหลุดอยู่ใน git history
 
-ยืนยันแล้ว 2026-09-06: `.env.local` ยังใช้ key แบบ legacy JWT ทั้ง anon และ service_role
-(ขึ้นต้น `eyJhbGciOiJI…`) ยังไม่ได้ย้ายไป key แบบใหม่ (`sb_publishable_…` / `sb_secret_…`)
+**⚠️ ความเสี่ยงที่ต้องเฝ้าทันทีหลังกด disable — Edge Function `inv-low-stock-alert`**
+ซอร์สของฟังก์ชันนี้ไม่ได้อยู่ใน repo นี้ (deploy มาจากที่อื่น) จึงยังไม่รู้ว่าข้างในสร้าง Supabase client
+ด้วย env var ตัวไหน ถ้ามันอ่าน `SUPABASE_SERVICE_ROLE_KEY` (legacy ที่ Supabase inject ให้อัตโนมัติ)
+การ disable legacy key จะทำให้ query ข้างในฟังก์ชันพัง = **แจ้งเตือนสต๊อกต่ำตายเงียบ**
+ด่านหน้า (gateway auth) ไม่พังแน่นอนเพราะ cron ใช้ key ใหม่จาก Vault แล้ว
+
+**วิธีตรวจทันทีหลัง disable** (ทำได้จาก VPS ผ่าน psql — รันแล้วรอ 8 วินาที):
+```sql
+select net.http_post(
+  url := 'https://mdlxogfkpwejnqpzhmoy.supabase.co/functions/v1/inv-low-stock-alert',
+  headers := jsonb_build_object('Content-Type','application/json',
+    'Authorization','Bearer ' || (select decrypted_secret from vault.decrypted_secrets
+                                  where name = 'inv_service_role_key')),
+  body := '{}'::jsonb);
+-- แล้วดูผลจริง (อย่าดูแค่ cron.job_run_details — มันขึ้น succeeded เสมอ)
+select status_code, content from net._http_response order by created desc limit 1;
+```
+ต้องได้ `200` พร้อม body `{"status":"ok",...}` ถ้าไม่ใช่ **ให้กลับไป enable legacy key ที่ Dashboard
+ทันที** แล้วค่อยไล่แก้ซอร์สของ Edge Function ให้ใช้ key ใหม่ก่อน (ดาวน์โหลดซอร์สด้วย
+`supabase functions download inv-low-stock-alert --project-ref mdlxogfkpwejnqpzhmoy`)
 
 **เครื่องมือที่ agent ตัวถัดไปไม่มี:** ไม่มี `supabase` CLI ทั้งบนเครื่อง dev และ VPS และไม่มี
-Personal Access Token — Management API จึงเรียกไม่ได้ อย่าเสียเวลาลองใหม่ ให้เจ้าของกดที่หน้าเว็บ
+Personal Access Token — Management API จึงเรียกไม่ได้ งานที่ต้องกดบนหน้าเว็บต้องให้เจ้าของทำ
+(browser extension สั่งงานได้ แต่แท็บที่ไม่ได้อยู่หน้าจอจะถูก Chrome throttle จนหน้า Dashboard
+โหลดไม่ทันแล้วเด้งไป sign-in — เจอมาแล้ว 3 รอบ อย่าเสียเวลาวน)
 
 ### [เสร็จแล้ว — ตัดออกจากรายการค้าง]
-- ~~รัน migration `0011`~~ apply บน `SneakerCareDB` เรียบร้อยตั้งแต่ 2026-09-01 ยืนยันซ้ำ
-  2026-09-06 ด้วยการ query ฐานข้อมูลจริง (ตาราง/index/policy/trigger ครบ และมีแถวจริงใน
-  `sc_audit_logs`) — แถบเตือนเหลืองที่ `/admin/audit` หายไปแล้ว
-- ~~ตาราง `sc_*` ไม่ถูก track ใน migrations~~ ปิดช่องว่างด้วย `0012_sc_tables_baseline.sql`
-  (2026-09-06) ดูหัวข้อสถานะงานล่าสุดด้านล่าง
+- ~~รัน migration `0011`~~ apply ตั้งแต่ 2026-09-01 ยืนยันซ้ำ 2026-09-06 กับฐานข้อมูลจริง
+- ~~ตาราง `sc_*` ไม่ถูก track ใน migrations~~ ปิดด้วย `0012_sc_tables_baseline.sql`
+- ~~cron `low-stock-alert-30min` ยิง 404~~ unschedule แล้ว + `0013`
+- ~~สลับแอปไปใช้ key แบบใหม่~~ เสร็จทั้ง dev, VPS และ Vault (2026-09-06)
+
+## สถานะงานล่าสุด (2026-09-06, บ่าย — rotate API key ไป key แบบใหม่สำเร็จ)
+
+`service_role` key เก่าที่เคยหลุดใน git history ถูกแทนที่แล้วทุกจุดที่เราควบคุมได้ **เหลือแค่กด
+disable ของเก่าที่ Dashboard** (ดูหัวข้อ 🔴 ด้านบน)
+
+**สิ่งที่เปลี่ยน:** `anon` (legacy JWT) → `sb_publishable_…` · `service_role` (legacy JWT) → `sb_secret_…`
+
+**ทำที่ไหนบ้าง (3 จุด — ห้ามลืมจุดที่ 3):**
+1. `.env.local` บนเครื่อง dev (สำรองไฟล์เดิมไว้นอก repo แล้ว)
+2. `/var/www/sneakercare/.env.local` บน VPS (สำรองเป็น `.env.local.bak-20260906-121603`)
+   แล้ว **rebuild ใหม่ทั้งหมด** ไม่ใช่แค่ restart — `NEXT_PUBLIC_*` ถูกฝังตอน build
+   ยืนยันแล้วว่า bundle ที่ deploy อยู่ไม่มี legacy JWT หลงเหลือแม้แต่ที่เดียว
+3. **Supabase Vault `inv_service_role_key`** — cron แจ้งเตือนสต๊อกอ่าน key จากที่นี่ ไม่ใช่จาก
+   env ของแอป **ถ้าลืมจุดนี้ แจ้งเตือนจะตายเงียบโดยไม่มีใครรู้**
+
+**ทดสอบจริงที่ผ่านแล้ว (ไม่ใช่แค่ดูโค้ด):**
+- ล็อกอิน `admin@ddserviceth.com` ผ่าน key ใหม่ → สำเร็จ
+- service_role: อ่าน `sc_sales` ข้าม RLS ได้ + `auth/v1/admin/users` → 200
+- publishable: `auth/v1/settings` → 200 · อ่าน `sc_sales` โดยไม่ล็อกอินได้ `[]` (RLS ยังกันอยู่)
+- production: `/login` 200 · `/dashboard` 307 · PM2 online · unstable restarts 0
+- **เส้นทาง cron ทั้งเส้น**: ยิง `inv-low-stock-alert` ด้วย pg_net + key จาก Vault → **200**
+  `{"status":"ok","results":[{"branch":"SneakerCare","sent":0}]}` (`sent:0` เพราะ 4 รายการที่ต่ำกว่า
+  ขั้นต่ำถูก mute ไว้ทั้งหมด จึงไม่มีข้อความหลุดเข้ากลุ่มพนักงานจากการทดสอบ)
+
+**เทคนิคที่ใช้ทดสอบ auth ของ Edge Function โดยไม่ต้องเรียกฟังก์ชันจริง** (กันส่ง Telegram เกินจำเป็น):
+ยิงไปที่ชื่อฟังก์ชันที่ไม่มีอยู่ — ได้ `404` = auth ผ่านแล้วแต่ไม่เจอฟังก์ชัน, ได้ `401` = key ใช้ไม่ได้
+
+**หมายเหตุ:** error `Invalid Refresh Token` ใน PM2 log เป็นของเก่าตั้งแต่ 11:31 (ก่อน rotate 12:16)
+ไม่ได้เกิดจากการเปลี่ยน key — การ rotate API key ไม่ทำให้ session ผู้ใช้ที่ล็อกอินค้างไว้หลุด
+(คนละเรื่องกับการ rotate JWT secret)
 
 ## สถานะงานล่าสุด (2026-09-06 — reset รหัสผ่าน admin, ปิดช่องว่าง disaster recovery ของตาราง sc_*)
 
