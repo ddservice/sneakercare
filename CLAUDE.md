@@ -245,6 +245,16 @@ Personal Access Token — Management API จึงเรียกไม่ได
 - ~~cron `low-stock-alert-30min` ยิง 404~~ unschedule แล้ว + `0013`
 - ~~สลับแอปไปใช้ key แบบใหม่~~ เสร็จทั้ง dev, VPS และ Vault (2026-09-06)
 
+## Deploy ล่าสุด (2026-09-06 12:30)
+
+- **production รัน commit `c47db0a`** — `npm run deploy` (clean rebuild + PM2 restart) สำเร็จ
+- ตรวจหลัง deploy: `/login` 200 · `/dashboard` 307 · PM2 `sneakercare` online · unstable restarts 0
+  · ไม่มี legacy JWT หลงเหลือใน `.next` · `.env.local` บน VPS ใช้ key แบบใหม่ครบทั้ง 2 ค่า
+- migration `0012` / `0013` อยู่บนเครื่องแล้ว (ทั้งคู่ apply บน production ไปแล้วเช่นกัน — `0012`
+  เป็น no-op และ `0013` รันด้วยมือผ่าน `cron.unschedule()` ไปก่อนหน้านี้)
+- **หมายเหตุ:** คอมมิตที่แก้แต่เอกสาร (`CLAUDE.md`/`HANDOFF.md`) ไม่จำเป็นต้อง deploy ตาม
+  เพราะไม่มีผลกับแอปที่รันอยู่ — VPS ตามหลัง repo อยู่ 1 คอมมิตเอกสารถือว่าปกติ ไม่ใช่ของเสีย
+
 ## สถานะงานล่าสุด (2026-09-06, บ่าย — rotate API key ไป key แบบใหม่สำเร็จ)
 
 `service_role` key เก่าที่เคยหลุดใน git history ถูกแทนที่แล้วทุกจุดที่เราควบคุมได้ **เหลือแค่กด
