@@ -4811,11 +4811,20 @@
       const now = new Date();
       const nowStr = now.toLocaleDateString('th-TH', { year: 'numeric', month: 'long', day: 'numeric' }) + ' เวลา ' +
         now.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
+      // ⚠️ (แก้ 2026-09-06) amount ต้องเป็น 0 เท่านั้น ห้ามใส่ now.getTime() กลับมาเด็ดขาด
+      //
+      // เดิมบรรทัด amount เก็บ epoch milliseconds (ค่าระดับ 1.78 ล้านล้าน) ลงคอลัมน์ "จำนวนเงิน"
+      // ของ sc_opex ทั้งที่แถวนี้เป็นแค่บันทึกว่า "ใครกดบันทึกเดือนนี้เมื่อไหร่" ไม่ใช่เงินสักบาท
+      // ตัวเวลาที่เอาไปแสดงจริงอยู่ใน name อยู่แล้ว (ฝั่งอ่านที่ opex_audit_banner ใช้แค่ .name
+      // ไม่เคยอ่าน .amount เลย) การใส่ตัวเลขนี้จึงไม่มีประโยชน์ แต่เป็นระเบิดเวลา: ระบบใหม่รอด
+      // มาได้เพราะบังเอิญมี guard `amount < 10000000` กันไว้ ถ้าใครถอด guard นั้นออกวันไหน
+      // ยอดค่าใช้จ่าย/กำไรสุทธิทุกหน้าจะระเบิดเป็นล้านล้านทันทีในเดือนที่มีแถวนี้ (มีทุกเดือนที่เคย
+      // กดบันทึกเงินเดือน = แทบทุกเดือน) — แถวเก่า 10 แถวถูกตั้ง amount = 0 ย้อนหลังไปแล้ว
       opexItemsList.push({
         category: 'payslip_detail',
         key: 'audit_log',
         name: `บันทึกโดย: ${_auth.display_name} (${_auth.username}) เมื่อ ${nowStr}`,
-        amount: now.getTime(),
+        amount: 0,
         method: _auth.role
       });
 

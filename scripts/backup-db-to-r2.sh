@@ -92,7 +92,24 @@ notify() {
 }
 
 notify_failure() {
+  # ข้อความ "ล้มเหลว" — ส่งเสมอ ไม่เช็คสวิตช์ใดๆ ทั้งสิ้น และดังปกติ (ไม่ silent)
   notify "⚠️ RRS DB backup ล้มเหลว (${STAMP} UTC): $1"
+}
+
+# อ่านสวิตช์ "ส่งข้อความตอนสำเร็จหรือไม่" จากตาราง sc_settings (ตั้งจากหน้า /settings ของเว็บ)
+#
+# ทำไมต้องอ่านจาก DB ไม่ใช่ env: เจ้าของร้านต้องกดเปิด/ปิดเองได้จากมือถือ
+# โดยไม่ต้อง ssh เข้า VPS มาแก้ไฟล์ env ทุกครั้ง
+#
+# ⚠️ สวิตช์นี้คุมเฉพาะข้อความ "สำเร็จ" เท่านั้น ข้อความ "ล้มเหลว" ไม่เคยถูกกรอง
+# ตาม HANDOFF.md กฎข้อ 3 — นี่คือ "ทำให้ปิดได้จากหน้าเว็บ" ไม่ใช่ "ถอดออกจากสคริปต์"
+# ถ้าอ่านค่าไม่ได้ด้วยเหตุใดก็ตาม (DB ล่ม/psql หาย/ตารางไม่มี) ให้ถือว่า "เปิด" ไว้ก่อนเสมอ
+# (fail-open) — เงียบเกินไปอันตรายกว่าดังเกินไปหนึ่งข้อความ
+success_notify_enabled() {
+  local value
+  value="$(psql "$SUPABASE_DB_URL" -X -A -t -q -c     "select value from sc_settings where key = 'backup_success_notify' limit 1" 2>/dev/null || true)"
+  value="$(printf '%s' "$value" | tr -d '[:space:]')"
+  [[ "$value" != "false" ]]
 }
 trap 'notify_failure "ดูรายละเอียดที่ /var/log/rrs-backup.log บน VPS"' ERR
 
@@ -143,9 +160,15 @@ find "$LOCAL_BACKUP_DIR" -name '*.dump' -mtime "+${RETENTION_DAYS}" -delete
 # คือ (ก) สำรองสำเร็จทุกวัน กับ (ข) cron ตายไปแล้ว/ไฟล์ env พัง จึงไม่มีอะไรรันและไม่มีอะไรให้ fail
 # ด้วยซ้ำ — กรณี (ข) จะไม่มีใครรู้จนถึงวันที่ต้องใช้ backup จริง ซึ่งสายไปแล้ว
 # พอมีข้อความทุกวัน ความเงียบจึงกลายเป็นสัญญาณผิดปกติที่คนสังเกตได้เอง
-notify "💾 RRS DB backup สำเร็จ
+#
+# [2026-09-06] ข้อความนี้ปิดได้จากหน้า /settings แล้ว (เข้ากลุ่มพนักงานตอนตีสาม) — ดูหมายเหตุที่ success_notify_enabled()
+if success_notify_enabled; then
+  notify "💾 RRS DB backup สำเร็จ
 📅 ${STAMP} UTC
 📦 rrs-backup-${STAMP}.dump (${DUMP_SIZE})
 ☁️ Cloudflare R2 (${R2_BUCKET}) & 💾 VPS ${LOCAL_BACKUP_DIR}" silent
+else
+  echo "[$(date -u +%FT%TZ)] ข้ามส่ง Telegram ตอนสำเร็จ (backup_success_notify = false ใน sc_settings)"
+fi
 
 echo "[$(date -u +%FT%TZ)] เสร็จสมบูรณ์"

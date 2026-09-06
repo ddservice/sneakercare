@@ -100,9 +100,23 @@ cp "$ARCHIVE" "${LOCAL_BACKUP_DIR}/csv/rrs-csv-${MONTH}.tar.gz"
 find "${LOCAL_BACKUP_DIR}/csv" -name 'rrs-csv-*.tar.gz' -mtime "+${CSV_RETENTION_DAYS}" -delete
 
 # heartbeat เหมือน backup รายวัน — "เงียบ" ต้องแปลว่าผิดปกติ ไม่ใช่แปลว่าเรียบร้อย
-notify "📑 RRS CSV รายเดือนสำเร็จ
+# [2026-09-06] ข้อความตอน "สำเร็จ" ปิดได้จากหน้า /settings — สวิตช์เดียวกันกับ backup-db-to-r2.sh
+# ข้อความ "ล้มเหลว" ที่ trap ERR ส่ง ไม่เคยถูกกรอง และถ้าอ่านค่าไม่ได้ = ถือว่าเปิด (fail-open)
+success_notify_enabled() {
+  local value
+  value="$(psql "$SUPABASE_DB_URL" -X -A -t -q -c \
+    "select value from sc_settings where key = 'backup_success_notify' limit 1" 2>/dev/null || true)"
+  value="$(printf '%s' "$value" | tr -d '[:space:]')"
+  [[ "$value" != "false" ]]
+}
+
+if success_notify_enabled; then
+  notify "📑 RRS CSV รายเดือนสำเร็จ
 🗓️ เดือน ${MONTH}
 📦 rrs-csv-${MONTH}.tar.gz (${ARCHIVE_SIZE}, ${FILE_COUNT} ไฟล์)
 ☁️ Cloudflare R2 (${R2_BUCKET}/monthly-csv) & 💾 VPS ${LOCAL_BACKUP_DIR}/csv" silent
+else
+  echo "[$(date -u +%FT%TZ)] ข้ามส่ง Telegram ตอนสำเร็จ (backup_success_notify = false ใน sc_settings)"
+fi
 
 echo "[$(date -u +%FT%TZ)] เสร็จสมบูรณ์"

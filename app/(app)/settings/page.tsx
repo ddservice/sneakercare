@@ -11,22 +11,25 @@ import {
   Building2,
   PackagePlus,
   Key,
+  DatabaseBackup,
 } from "lucide-react";
 import { TelegramTokenForm } from "../admin/settings/telegram-token-form";
 import { BranchChatIdForm } from "../admin/settings/branch-chat-id-form";
 import { PermissionMatrix } from "../admin/settings/permission-matrix";
-import { fetchShopProfile } from "@/app/actions/shop-settings";
+import { fetchShopProfile, fetchBackupHeartbeatEnabled } from "@/app/actions/shop-settings";
 import { ShopProfileForm } from "./shop-profile-form";
+import { BackupNotifyForm } from "./backup-notify-form";
 
 export default async function SettingsPage() {
   const profile = await requireProfile();
   requireAdmin(profile);
 
   const supabase = await createClient();
-  const [{ data: statusRows }, { data: branches }, shopProfile] = await Promise.all([
+  const [{ data: statusRows }, { data: branches }, shopProfile, backupNotifyEnabled] = await Promise.all([
     supabase.rpc("fn_integration_secret_status", { p_key: "telegram_bot_token" }),
     supabase.from("branches").select("id, name, telegram_chat_id").eq("is_active", true).order("name"),
     fetchShopProfile(),
+    fetchBackupHeartbeatEnabled(),
   ]);
 
   const status = statusRows?.[0] ?? { is_set: false, value_suffix: null, updated_at: null };
@@ -133,6 +136,23 @@ export default async function SettingsPage() {
                   <p className="text-sm text-slate-400">ยังไม่มีสาขาในระบบ</p>
                 )}
               </div>
+            </CardContent>
+          </Card>
+
+          {/* แจ้งเตือนสำรองข้อมูลกลางดึก — คนละเรื่องกับแจ้งเตือนสต๊อกต่ำด้านบน */}
+          <Card className="border-slate-200 shadow-xs dark:border-slate-800">
+            <CardHeader className="border-b border-slate-100 dark:border-slate-800 pb-4">
+              <CardTitle className="text-base font-bold flex items-center gap-2">
+                <DatabaseBackup className="h-4 w-4 text-teal-600" />
+                การแจ้งเตือนสำรองข้อมูลกลางดึก
+              </CardTitle>
+              <CardDescription>
+                ระบบสำรองฐานข้อมูลอัตโนมัติทุกคืนตี 3 และส่งออก CSV รายเดือนตี 4 —
+                ตั้งได้ว่าจะให้ส่งข้อความตอน “สำเร็จ” เข้ากลุ่มพนักงานหรือไม่
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="p-6">
+              <BackupNotifyForm initialEnabled={backupNotifyEnabled} />
             </CardContent>
           </Card>
         </div>
