@@ -344,6 +344,64 @@ GRANT ของตาราง — **ยืนยันด้วยการล�
 ตอนนี้ยังไม่ระเบิดเพราะมีแต่บัญชี admin 2 คน แต่จะระเบิดวันแรกที่เชิญพนักงานเข้าระบบ
 **งานถัดไปคือเติม `requireModuleView(profile, "<key>")` ให้ครบทุกหน้า**
 
+## 🧬 database.types.ts generate จากฐานข้อมูลจริงแล้ว — เลิกใช้ `as any` (2026-09-06)
+
+**ห้ามแก้ส่วน `Database` ในไฟล์นั้นด้วยมือ** สร้างใหม่ด้วย (รันบน VPS ที่มี `SUPABASE_DB_URL`):
+```bash
+npx --yes supabase@latest gen types typescript --db-url "$SUPABASE_DB_URL" --schema public
+```
+แล้วเอาเนื้อหาตั้งแต่บรรทัด `export type Json =` ลงไปมาแทนที่ (เก็บ header + type ที่เขียนมือไว้)
+**เครื่อง dev ไม่มี Supabase CLI — ต้อง generate ผ่าน VPS เท่านั้น** (npx ใช้ได้ที่นั่น)
+
+### ทำไมเรื่องนี้สำคัญกว่าที่คิด
+ไฟล์ types เดิมเขียนมือและมีแค่ตารางฝั่งคลังสินค้า ทั้งโปรเจกต์จึงต้องเขียน
+`(supabase.from("sc_x" as any) as any)` = **ปิดตา TypeScript ทั้งหมด** พอ generate ของจริง
+แล้วถอด `as any` ออก 133 จุด TypeScript ชี้บั๊กที่พังเงียบมานานทันที **7 จุด**:
+
+| จุด | อาการจริง |
+|---|---|
+| `stock.ts` เรียก RPC ผิดชื่อ (`fn_set_min_stock_level`, `fn_approve_adjustment` — ของจริงมี prefix `inv_`) | ตั้งจุดสั่งซื้อขั้นต่ำ + **อนุมัติ adjustment (กฎข้อ 3)** ไม่เคยทำงานบน production |
+| `/adjustments` query view `v_stock_transactions` ที่ไม่มีจริง | หน้าอนุมัติว่างเปล่าตลอด |
+| `inventory.ts` เขียน `last_counted_at`/`unit_cost` ที่ไม่มี + `txn_type` นอก enum | แก้จำนวนสต๊อกจากหน้าคลัง **ล้มทั้ง statement** และไม่บันทึก ledger |
+| `import-export.ts` `item_name`/`total_amount` (ของจริง `name`/`amount`) | นำเข้าค่าใช้จ่ายพัง |
+| `pos.ts` insert ผิดชื่อ 6 คอลัมน์ + `customers.branch_id` ที่ไม่มี | รับงานบริการบันทึกไม่ได้เลย (0 แถวมาตลอด) |
+| `pos/page.tsx` อ่าน `gross_amount`/`notes` | ยอดเงินโชว์ 0 |
+| `deleteExpense` เทียบ bigint กับ string | ลบไม่โดนแบบเงียบเมื่อได้ id สังเคราะห์ |
+
+**ทั้ง 7 จุดไม่มี error ให้เห็นเลยตอนใช้งาน** เพราะโค้ดส่วนใหญ่ไม่เช็ค `error` ที่ Supabase คืนมา
+
+### กฎใหม่
+- **ห้ามเพิ่ม `as any` ใหม่** ถ้า type ไม่ตรง แปลว่าโค้ดผิด ไม่ใช่ type ผิด
+- **view alias ทำให้ทุกคอลัมน์เป็น nullable** (`items`, `item_stock`, `branches`, `audit_logs`, …)
+  ใช้ตัวช่วยใน `lib/db-rows.ts` (`withId` / `text` / `num` / `bool`) จัดการ null แทนการ cast ทับ
+- **เพิ่มคอลัมน์/ตาราง/ฟังก์ชันใหม่บน production แล้วต้อง regenerate types เสมอ** ไม่งั้นโค้ดใหม่
+  จะเขียน `as any` เพื่อให้ผ่าน แล้ววนกลับไปปัญหาเดิม
+
+## ⚡ RLS ผ่าน Supabase Advisor หมดทุกข้อแล้ว (2026-09-06)
+
+| Advisor | สถานะ |
+|---|---|
+| Security Definer View (12 ตัว) · RLS Disabled (4 ตาราง) | ✅ `0016` |
+| Function Search Path Mutable (2 ตัว) | ✅ `0019` |
+| Auth RLS Initialization Plan (6 policy) | ✅ `0020` — ครอบ `auth.uid()` เป็น `(select auth.uid())` |
+| Multiple Permissive Policies | ⬜ **จงใจไม่แก้** — `inv_stock_transactions` มี INSERT policy 3 ตัวแยกตาม role ซึ่งอ่านแล้วเข้าใจทันทีว่าใครทำอะไรได้ การยุบเป็นเงื่อนไข OR ก้อนเดียวทำให้ตรวจทานยากขึ้นมาก แลกกับความเร็วที่ตาราง ~110 แถวไม่รู้สึก |
+| Leaked Password Protection | ⬜ **ต้องกดที่ Dashboard** → Authentication → เปิด "Leaked password protection" |
+| Extension in Public (`vector`) | ⬜ ย้ายเสี่ยงกว่าผลที่ได้ ปล่อยไว้ |
+
+**`profiles_update` เปลี่ยนจาก EXISTS ที่ query `profiles` ซ้อนตัวเอง มาใช้ `sc_get_my_role()`**
+(SECURITY DEFINER) — เร็วกว่าและกัน error "infinite recursion detected in policy" ที่เป็นกับดัก
+คลาสสิกของ RLS ที่อ้างตารางตัวเอง
+
+## 🔴 ช่องว่างที่รู้แล้วแต่ยังไม่ได้แก้ (สำคัญก่อนรับพนักงานเข้าระบบ)
+
+**staff-safe view ตาม migration 0003 ไม่เคยถูกสร้างบน production** — `v_item_stock`,
+`v_low_stock`, `v_inventory_value` บน production เป็นแค่ `select * from inv_*` เปล่าๆ
+ไม่มี `WHERE fn_current_role()` กรองอย่างที่ 0003 ออกแบบไว้ และหลัง `0016` ตั้ง
+`security_invoker = on` แล้ว RLS ของตารางต้นทางจะบังคับแทน ⇒ **staff จะมองไม่เห็นสต๊อกเลย**
+(ก่อนหน้านี้เห็น แต่เห็น `avg_unit_cost` ติดมาด้วย = ผิดกฎข้อ 5 อยู่ดี)
+ตอนนี้ยังไม่กระทบเพราะมีแต่บัญชี admin 2 คน **แต่ต้องสร้าง view ที่ตัดคอลัมน์ต้นทุนจริงๆ
+ก่อนเชิญพนักงานเข้าระบบ** ไม่งั้นพนักงานจะใช้หน้าคลังสินค้าไม่ได้
+
 ## 🔒 ผลตรวจช่องโหว่ + สิ่งที่ปิดไปแล้ว (2026-09-06, กลางคืน)
 
 ตรวจด้วยการ **ยิง REST API จริงด้วย publishable key** ที่ฝังอยู่ในหน้าเว็บ (ใครเปิด DevTools ก็ก๊อปได้)
