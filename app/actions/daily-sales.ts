@@ -235,12 +235,24 @@ export async function fetchRecentDailySales(limit: number = 300): Promise<DailyS
         .select("*")
         .in("sale_date", loadedDates)
         .order("created_at", { ascending: false })
-    : { data: [] as any[] };
+    // ให้ชนิดตรงกับผลลัพธ์ของ query ด้านบน แทน any[] เพื่อให้ TypeScript ตรวจการใช้งานต่อได้จริง
+    : { data: [] as Database["public"]["Tables"]["sc_payments"]["Row"][] };
 
   const paymentsByDate = new Map<string, ArPaymentRecord[]>();
   (paymentsData || []).forEach((p) => {
     const list = paymentsByDate.get(p.sale_date) || [];
-    list.push(p);
+    // คอลัมน์ในฐานข้อมูลเป็น nullable แต่ ArPaymentRecord ที่ฝั่ง UI ใช้ต้องการค่าแน่นอน —
+    // เติมค่าสำรองตรงนี้จุดเดียว แทนที่จะปล่อย null ไปให้ทุกที่ที่ใช้ต้องมาเช็คเอง
+    list.push({
+      id: p.id,
+      sale_date: p.sale_date,
+      received_date: p.received_date,
+      amount: Number(p.amount ?? 0),
+      pay_method: p.pay_method ?? "",
+      notes: p.notes ?? undefined,
+      recorded_by: p.recorded_by ?? undefined,
+      created_at: p.created_at ?? undefined,
+    });
     paymentsByDate.set(p.sale_date, list);
   });
 

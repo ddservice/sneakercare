@@ -85,7 +85,7 @@ const BACKUP_HEARTBEAT_KEY = "backup_success_notify";
 export async function fetchBackupHeartbeatEnabled(): Promise<boolean> {
   const supabase = createAdminClient();
   const { data } = await supabase
-    .from("sc_settings" as any)
+    .from("sc_settings")
     .select("value")
     .eq("key", BACKUP_HEARTBEAT_KEY)
     .maybeSingle();

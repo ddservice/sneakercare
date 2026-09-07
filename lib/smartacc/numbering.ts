@@ -15,7 +15,8 @@ export async function generateDocumentNumber(
   const dateStr = `${year}${month}${day}`; // YYYYMMDD
 
   const supabase = createAdminClient();
-  const { data, error } = await supabase.rpc("fn_generate_document_number" as any, {
+  // RPC ตัวนี้อยู่ใน schema extension_layer — types ครอบทั้งสอง schema แล้วตั้งแต่ 2026-09-07
+  const { data, error } = await supabase.schema("extension_layer").rpc("fn_generate_document_number", {
     p_doc_type: docType,
     p_prefix: config.prefix,
     p_date_str: dateStr,

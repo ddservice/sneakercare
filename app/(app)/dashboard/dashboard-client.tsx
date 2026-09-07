@@ -94,7 +94,7 @@ export function DashboardClient({
   }
 
   // Filter Sales & Expenses based on selected period
-  const { filteredSales, totalExpensesForPeriod } = useMemo(() => {
+  const { filteredSales, totalExpensesForPeriod, cashRevenueForPeriod, rentalIncomeForPeriod } = useMemo(() => {
     const baseDate = new Date(filterDate);
     const dayOfWeek = baseDate.getDay();
     const diffToMonday = (dayOfWeek + 6) % 7;
@@ -146,8 +146,41 @@ export function DashboardClient({
       expSum *= period === "day" ? 1 / daysInMonth : 7 / daysInMonth;
     }
 
-    return { filteredSales: fSales, totalExpensesForPeriod: Math.round(expSum * 100) / 100 };
-  }, [salesRows, opexRows, period, filterDate, customStartDate, customEndDate]);
+    // ── รายรับ "เงินเข้าจริงในช่วงเวลา" (cash basis) ──────────────────────────
+    //
+    // ⚠️ (แก้ 2026-09-07) เดิมหน้านี้ใช้ยอด "ตามบิล" (total_revenue) ซึ่งรวมบิลที่ลูกค้ายังไม่จ่าย
+    // จึงไม่ตรงกับที่เจ้าของกระทบยอดจริง — ส.ค. 69 ต่างกัน 2,100 บาท (บิลวันที่ 21 ส.ค.
+    // ที่ลูกค้าโอนวันที่ 1 ก.ย. ต้องไปนับเป็นรายรับของเดือนกันยายน ไม่ใช่สิงหาคม)
+    //
+    // เงินเข้าจริง = ยอดที่จ่ายตอนออกบิล (amount_paid ของบิลในช่วงนั้น)
+    //              + ยอดที่มาจ่ายย้อนหลัง (sc_payments ที่ received_date อยู่ในช่วงนั้น)
+    // ตัวหลังต้องกรองด้วย received_date ไม่ใช่ sale_date — เพราะเราสนใจว่า "เงินเข้าวันไหน"
+    const paidOnBills = fSales.reduce((acc, s) => acc + Number(s.amount_paid ?? 0), 0);
+    const arReceived = (paymentsRows || []).reduce((acc, p) => {
+      const d = String(p.received_date || "");
+      if (!d) return acc;
+      if (period === "day") return d === filterDate ? acc + Number(p.amount || 0) : acc;
+      if (period === "week") return d >= monStr && d <= sunStr ? acc + Number(p.amount || 0) : acc;
+      if (period === "month") return d.startsWith(monthPrefixISO) ? acc + Number(p.amount || 0) : acc;
+      if (period === "custom") return d >= customStartDate && d <= customEndDate ? acc + Number(p.amount || 0) : acc;
+      return acc + Number(p.amount || 0); // all time
+    }, 0);
+
+    // รายรับค่าเช่าห้องชั้น 3 — เป็นรายรับของร้านเหมือนกัน ต้องรวมในกำไรสุทธิ
+    // (เดิมหน้านี้ไม่นับเลย ทำให้กำไรต่ำกว่าที่ควรเป็น 6,000 บาท/เดือน)
+    let rentalIncome = calculateExpenseBreakdown(monthRows).totalRentalIncome;
+    if (period === "day" || period === "week") {
+      const daysInMonth = 31;
+      rentalIncome *= period === "day" ? 1 / daysInMonth : 7 / daysInMonth;
+    }
+
+    return {
+      filteredSales: fSales,
+      totalExpensesForPeriod: Math.round(expSum * 100) / 100,
+      cashRevenueForPeriod: Math.round((paidOnBills + arReceived) * 100) / 100,
+      rentalIncomeForPeriod: Math.round(rentalIncome * 100) / 100,
+    };
+  }, [salesRows, opexRows, paymentsRows, period, filterDate, customStartDate, customEndDate]);
 
   // Financial KPI Calculations
   const totalNetRevenue = filteredSales.reduce(
@@ -172,9 +205,14 @@ export function DashboardClient({
   const sizeXLCount = filteredSales.reduce((acc, s) => acc + Number(s.size_xl || 0), 0);
   const totalShoes = sizeSCount + sizeMCount + sizeLCount + sizeXLCount;
 
-  // NET PROFIT & MARGIN
-  const netProfit = totalNetRevenue - totalExpensesForPeriod;
-  const profitMarginPct = totalNetRevenue > 0 ? (netProfit / totalNetRevenue) * 100 : 0;
+  // ── กำไรสุทธิ ────────────────────────────────────────────────────────────
+  //
+  // ⚠️ ใช้เกณฑ์ "เงินเข้าจริง" ให้ตรงกับที่เจ้าของกระทบยอดเอง (ยืนยันกับ Excel เดือน ส.ค. 69
+  // แล้วตรงเป๊ะที่ ฿24,524.79) — ห้ามเปลี่ยนกลับไปใช้ total_revenue ตามบิลโดยไม่คุยกันก่อน
+  //   กำไรสุทธิ = เงินเข้าจากบริการ + รายรับห้องเช่า − ค่าใช้จ่ายทั้งหมด
+  const totalIncomeForPeriod = cashRevenueForPeriod + rentalIncomeForPeriod;
+  const netProfit = totalIncomeForPeriod - totalExpensesForPeriod;
+  const profitMarginPct = totalIncomeForPeriod > 0 ? (netProfit / totalIncomeForPeriod) * 100 : 0;
   const isProfitable = netProfit >= 0;
 
   // Period label
@@ -408,10 +446,28 @@ export function DashboardClient({
         <Card className="border-slate-200 dark:border-slate-700 shadow-sm">
           <CardContent className="p-5 flex items-center justify-between">
             <div className="space-y-1">
-              <span className="text-xs font-semibold text-slate-500">รายรับสุทธิจากการบริการ (Net Sales)</span>
+              <span className="text-xs font-semibold text-slate-500">
+                รายรับจากการบริการ <span className="text-slate-400">(เงินเข้าจริงในช่วงนี้)</span>
+              </span>
               <div className="text-2xl font-black text-slate-900 dark:text-slate-100 font-mono">
-                ฿{totalNetRevenue.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+                ฿{cashRevenueForPeriod.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
               </div>
+              {/* แสดงยอดตามบิลกำกับไว้ด้วยเมื่อไม่เท่ากัน เพื่อให้เห็นว่าส่วนต่างคือหนี้ที่ยังไม่เข้า */}
+              {/* แสดงเฉพาะตอนที่ยอดตามบิล > เงินเข้าจริง (= ยังมีหนี้ค้าง) — ถ้าติดลบแปลว่า
+                  เดือนนี้ได้รับเงินของบิลเดือนก่อน ซึ่งเห็นได้จากตัวเลขเงินเข้าอยู่แล้ว ไม่ต้องบอกซ้ำ */}
+              {totalNetRevenue - cashRevenueForPeriod > 0.005 && (
+                <div className="text-[11px] text-slate-500">
+                  ยอดตามบิล ฿{totalNetRevenue.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+                  <span className="text-amber-700 font-semibold">
+                    {" "}(ยังไม่เข้า ฿{(totalNetRevenue - cashRevenueForPeriod).toLocaleString("th-TH", { minimumFractionDigits: 2 })})
+                  </span>
+                </div>
+              )}
+              {rentalIncomeForPeriod > 0 && (
+                <div className="text-[11px] text-emerald-700 font-semibold">
+                  + ค่าเช่าห้อง ฿{rentalIncomeForPeriod.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+                </div>
+              )}
               <div className="flex items-center gap-2 text-[11px] text-slate-500 font-medium">
                 <span className="text-blue-700 font-bold">โอน ฿{totalTransfer.toLocaleString()}</span>
                 <span>•</span>

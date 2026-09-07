@@ -25,7 +25,7 @@ export default async function BillingNotesPage() {
 
   try {
     const [{ data: docs }, profile] = await Promise.all([
-      (supabase as any)
+      supabase
         .schema("extension_layer")
         .from("ext_documents")
         .select("*, ext_contacts(*), ext_document_items(*)")

@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getSelectedBranchId } from "@/lib/branch";
 import { canSeeCost } from "@/lib/permissions";
 import { TXN_TYPE_LABEL } from "@/lib/txn-labels";
+import type { StockTxnType } from "@/lib/supabase/database.types";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -92,8 +93,13 @@ export default async function HistoryPage({
     endDate = endDate + "T23:59:59.999Z";
   }
 
-  const txnTypeFilter =
-    resolvedParams.txnType && resolvedParams.txnType !== "all" ? resolvedParams.txnType : null;
+  // ค่าจาก query string เป็นข้อความอิสระที่ใครก็พิมพ์อะไรมาก็ได้ — ตรวจกับรายการชนิดที่มีจริง
+  // ก่อนเอาไปใส่ .eq() แทนการ cast ทับ (ค่ามั่วจะกลายเป็น "ไม่กรอง" แทนที่จะทำให้ query error)
+  const rawTxnType = resolvedParams.txnType;
+  const txnTypeFilter: StockTxnType | null =
+    rawTxnType && rawTxnType !== "all" && rawTxnType in TXN_TYPE_LABEL
+      ? (rawTxnType as StockTxnType)
+      : null;
 
   // query ของหน้าที่กำลังดู
   let q = supabase
@@ -105,7 +111,7 @@ export default async function HistoryPage({
     .order("created_at", { ascending: false });
 
   if (branchId) q = q.eq("branch_id", branchId);
-  if (txnTypeFilter) q = q.eq("txn_type", txnTypeFilter as any);
+  if (txnTypeFilter) q = q.eq("txn_type", txnTypeFilter);
   if (startDate) q = q.gte("created_at", startDate);
   if (endDate) q = q.lte("created_at", endDate);
 
@@ -116,7 +122,7 @@ export default async function HistoryPage({
   let summaryQuery = supabase.from("stock_transactions").select("quantity_delta, total_cost");
 
   if (branchId) summaryQuery = summaryQuery.eq("branch_id", branchId);
-  if (txnTypeFilter) summaryQuery = summaryQuery.eq("txn_type", txnTypeFilter as any);
+  if (txnTypeFilter) summaryQuery = summaryQuery.eq("txn_type", txnTypeFilter);
   if (startDate) summaryQuery = summaryQuery.gte("created_at", startDate);
   if (endDate) summaryQuery = summaryQuery.lte("created_at", endDate);
 
