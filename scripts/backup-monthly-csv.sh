@@ -66,7 +66,17 @@ notify() {
       >/dev/null || true
   fi
 }
-trap 'notify "⚠️ RRS CSV รายเดือนล้มเหลว — ดู /var/log/rrs-backup.log บน VPS"' ERR
+# ── Dead-man switch — ใช้ตัวแยกจาก backup รายวัน ────────────────────────────
+# ตั้ง HEALTHCHECK_CSV_URL เป็น check คนละตัวกับ HEALTHCHECK_URL (Period = 1 month, Grace = 2 days)
+# เพราะรอบการทำงานคนละความถี่ ถ้าใช้ check เดียวกันจะแยกไม่ออกว่าอันไหนขาด
+# รายละเอียดเหตุผลเต็มดูที่ scripts/backup-db-to-r2.sh
+heartbeat() {
+  local suffix="${1:-}"
+  [[ -z "${HEALTHCHECK_CSV_URL:-}" ]] && return 0
+  curl -fsS --max-time 10 --retry 3 "${HEALTHCHECK_CSV_URL}${suffix}" >/dev/null 2>&1 || true
+}
+
+trap 'heartbeat /fail; notify "⚠️ RRS CSV รายเดือนล้มเหลว — ดู /var/log/rrs-backup.log บน VPS"' ERR
 
 CSV_DIR="${WORKDIR}/csv"
 mkdir -p "$CSV_DIR"
@@ -119,4 +129,5 @@ else
   echo "[$(date -u +%FT%TZ)] ข้ามส่ง Telegram ตอนสำเร็จ (backup_success_notify = false ใน sc_settings)"
 fi
 
+heartbeat
 echo "[$(date -u +%FT%TZ)] เสร็จสมบูรณ์"

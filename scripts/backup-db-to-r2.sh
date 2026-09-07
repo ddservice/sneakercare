@@ -91,6 +91,30 @@ notify() {
   fi
 }
 
+# ── Dead-man switch (heartbeat ภายนอก) ──────────────────────────────────────────
+#
+# ทำไมต้องมีทั้งที่มี Telegram อยู่แล้ว: Telegram บอกได้แค่ "สิ่งที่เกิดขึ้น" — ถ้า cron ตายทั้งตัว
+# (crontab หาย / เซิร์ฟเวอร์ไม่บูต / ไฟล์ env พัง) จะ **ไม่มีอะไรเกิดขึ้นเลย** จึงไม่มีข้อความอะไรส่ง
+# และไม่มีใครรู้จนถึงวันที่ต้องใช้ backup จริง ซึ่งสายไปแล้ว
+#
+# ยิ่งตอนนี้ปิดข้อความ "สำเร็จ" เข้ากลุ่มพนักงานได้จากหน้า /settings (2026-09-06) ความเงียบ
+# ยิ่งกลายเป็นสภาพปกติ — dead-man switch จึงกลับด้านปัญหา: ให้ "ระบบภายนอกเตือนเราเมื่อไม่ได้ยิน
+# เสียงจากเรา" แทนที่จะรอให้คนสังเกตเองว่าข้อความหายไป
+#
+# ตั้งค่า (ไม่บังคับ — ถ้าไม่ตั้ง สคริปต์ทำงานเหมือนเดิมทุกประการ):
+#   1. สมัคร https://healthchecks.io (แผนฟรีพอ) → สร้าง check ใหม่ ตั้ง Period = 1 day, Grace = 2 hours
+#   2. คัดลอก Ping URL (รูปแบบ https://hc-ping.com/<uuid>)
+#   3. ใส่ในไฟล์ env ของ cron: HEALTHCHECK_URL=https://hc-ping.com/<uuid>
+#   4. ถ้าคืนไหน backup ไม่ทำงาน healthchecks.io จะส่งอีเมล/แจ้งเตือนเองเมื่อเลย Grace
+#
+# ใช้ระบบอื่นก็ได้ ขอแค่รับ HTTP GET: /<uuid> = สำเร็จ · /<uuid>/fail = ล้มเหลว · /<uuid>/start = เริ่มทำงาน
+heartbeat() {
+  local suffix="${1:-}"
+  [[ -z "${HEALTHCHECK_URL:-}" ]] && return 0
+  # --max-time กัน backup ค้างเพราะ ping ไม่ตอบ · || true เพราะ heartbeat ล้มไม่ควรทำให้ backup ล้มตาม
+  curl -fsS --max-time 10 --retry 3 "${HEALTHCHECK_URL}${suffix}" >/dev/null 2>&1 || true
+}
+
 notify_failure() {
   # ข้อความ "ล้มเหลว" — ส่งเสมอ ไม่เช็คสวิตช์ใดๆ ทั้งสิ้น และดังปกติ (ไม่ silent)
   notify "⚠️ RRS DB backup ล้มเหลว (${STAMP} UTC): $1"
@@ -111,7 +135,10 @@ success_notify_enabled() {
   value="$(printf '%s' "$value" | tr -d '[:space:]')"
   [[ "$value" != "false" ]]
 }
-trap 'notify_failure "ดูรายละเอียดที่ /var/log/rrs-backup.log บน VPS"' ERR
+trap 'heartbeat /fail; notify_failure "ดูรายละเอียดที่ /var/log/rrs-backup.log บน VPS"' ERR
+
+# บอกระบบภายนอกว่า "เริ่มทำงานแล้ว" — ใช้วัดเวลาที่ใช้จริงและแยกกรณี "ไม่เริ่มเลย" ออกจาก "เริ่มแล้วพัง"
+heartbeat /start
 
 echo "[$(date -u +%FT%TZ)] เริ่ม pg_dump -> ${DUMP_FILE}"
 pg_dump --format=custom --no-owner --no-privileges --file="$DUMP_FILE" "$SUPABASE_DB_URL"
@@ -171,4 +198,5 @@ else
   echo "[$(date -u +%FT%TZ)] ข้ามส่ง Telegram ตอนสำเร็จ (backup_success_notify = false ใน sc_settings)"
 fi
 
+heartbeat
 echo "[$(date -u +%FT%TZ)] เสร็จสมบูรณ์"
