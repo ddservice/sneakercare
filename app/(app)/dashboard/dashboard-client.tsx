@@ -67,16 +67,7 @@ export function DashboardClient({
   const [customStartDate, setCustomStartDate] = useState(toFirstOfMonthLocal);
   const [customEndDate, setCustomEndDate] = useState(toTodayLocal);
 
-  // Map AR Payments by sale_date
-  const paymentsByDate = useMemo(() => {
-    const map: Record<string, number> = {};
-    (paymentsRows || []).forEach((p) => {
-      if (p.sale_date) {
-        map[p.sale_date] = (map[p.sale_date] || 0) + Number(p.amount || 0);
-      }
-    });
-    return map;
-  }, [paymentsRows]);
+
 
   // Shift period navigator
   function shiftPeriod(delta: number) {
@@ -94,7 +85,14 @@ export function DashboardClient({
   }
 
   // Filter Sales & Expenses based on selected period
-  const { filteredSales, totalExpensesForPeriod, cashRevenueForPeriod, rentalIncomeForPeriod } = useMemo(() => {
+  const {
+    filteredSales,
+    totalExpensesForPeriod,
+    cashRevenueForPeriod,
+    rentalIncomeForPeriod,
+    outstandingForPeriod,
+    paidBySaleDate,
+  } = useMemo(() => {
     const baseDate = new Date(filterDate);
     const dayOfWeek = baseDate.getDay();
     const diffToMonday = (dayOfWeek + 6) % 7;
@@ -174,11 +172,45 @@ export function DashboardClient({
       rentalIncome *= period === "day" ? 1 / daysInMonth : 7 / daysInMonth;
     }
 
+    // ── ยอดค้างชำระ ณ สิ้นช่วงเวลาที่เลือก ────────────────────────────────────
+    //
+    // ⚠️ (แก้ 2026-09-07) เดิมหักด้วย sc_payments **ทุกแถว** ไม่สนใจว่าเงินเข้าวันไหน
+    // ผลคือยอด 2,100 ของบิล 21 ส.ค. ที่ลูกค้าโอนวันที่ 1 ก.ย. ถูกนับว่า "จ่ายแล้ว" ตั้งแต่เดือน
+    // สิงหาคม ⇒ เมื่อรายรับเปลี่ยนไปใช้เกณฑ์เงินเข้าจริง (ไม่นับ 2,100 ในเดือน ส.ค.) ยอดนี้จึง
+    // **หายไปจากทั้งสองฝั่ง** — ไม่เป็นรายรับ และไม่เป็นลูกหนี้ด้วย งบไม่บาลานซ์
+    //
+    // ที่ถูกคือดูจากมุม "ณ สิ้นเดือนสิงหาคม เงินก้อนนี้เข้ามาหรือยัง" ⇒ ยังไม่เข้า ⇒ เป็นลูกหนี้
+    // พอเปลี่ยนไปดูเดือนกันยายนก็จะเห็นมันเป็นรายรับของเดือนนั้นแทน — ยอดไม่หายไปไหน
+    const periodEnd =
+      period === "day" ? filterDate
+      : period === "week" ? sunStr
+      : period === "month" ? `${monthPrefixISO}-31`
+      : period === "custom" ? customEndDate
+      : "9999-12-31"; // all time
+
+    const paidBySaleDate: Record<string, number> = {};
+    (paymentsRows || []).forEach((p) => {
+      if (!p.sale_date) return;
+      const received = String(p.received_date || "");
+      if (received && received > periodEnd) return; // เงินยังไม่เข้าภายในช่วงนี้
+      paidBySaleDate[p.sale_date] = (paidBySaleDate[p.sale_date] || 0) + Number(p.amount || 0);
+    });
+
+    const outstanding = fSales.reduce((acc, s) => {
+      const net = Number(s.total_revenue || (Number(s.grand_total || 0) - Number(s.discount || 0)));
+      const paid = Number(s.cash_amount || 0) + Number(s.transfer_amount || 0) + (paidBySaleDate[s.date] || 0);
+      return acc + Math.max(0, net - paid);
+    }, 0);
+
     return {
       filteredSales: fSales,
       totalExpensesForPeriod: Math.round(expSum * 100) / 100,
       cashRevenueForPeriod: Math.round((paidOnBills + arReceived) * 100) / 100,
       rentalIncomeForPeriod: Math.round(rentalIncome * 100) / 100,
+      outstandingForPeriod: Math.round(outstanding * 100) / 100,
+      // ส่งออกไปให้ตารางรายวันใช้ตัดสิน "ชำระครบแล้วหรือยัง" ด้วยกรอบเวลาเดียวกัน
+      // ไม่งั้นการ์ดสรุปกับตารางจะบอกคนละเรื่องในบิลใบเดียวกัน
+      paidBySaleDate,
     };
   }, [salesRows, opexRows, paymentsRows, period, filterDate, customStartDate, customEndDate]);
 
@@ -191,12 +223,7 @@ export function DashboardClient({
   const totalCash = filteredSales.reduce((acc, s) => acc + Number(s.cash_amount || 0), 0);
 
   // Exact Outstanding AR factoring in sc_payments
-  const totalOutstanding = filteredSales.reduce((acc, s) => {
-    const net = Number(s.total_revenue || (Number(s.grand_total || 0) - Number(s.discount || 0)));
-    const extraPaid = paymentsByDate[s.date] || 0;
-    const totalPaidForBill = Number(s.transfer_amount || 0) + Number(s.cash_amount || 0) + extraPaid;
-    return acc + Math.max(0, net - totalPaidForBill);
-  }, 0);
+  const totalOutstanding = outstandingForPeriod;
 
   // Total Shoes Count
   const sizeSCount = filteredSales.reduce((acc, s) => acc + Number(s.size_s || 0), 0);
@@ -633,7 +660,7 @@ export function DashboardClient({
                   const net = Number(
                     sale.total_revenue || (Number(sale.grand_total || 0) - Number(sale.discount || 0))
                   );
-                  const extraPaid = paymentsByDate[sale.date] || 0;
+                  const extraPaid = paidBySaleDate[sale.date] || 0;
                   const totalPaid = Number(sale.transfer_amount || 0) + Number(sale.cash_amount || 0) + extraPaid;
                   const isPaid = totalPaid >= net;
 
