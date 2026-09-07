@@ -51,7 +51,7 @@ export async function parseAndStageReceiptOcr(imageBase64OrUrl: string) {
     accountCode = "510600";
   }
 
-  const { data, error } = await (supabase as any)
+  const { data, error } = await supabase
     .schema("extension_layer")
     .from("ext_staged_expenses")
     .insert({
@@ -82,7 +82,7 @@ export async function approveStagedExpense(expenseId: string, accountCode?: stri
   await requireProfile();
   const supabase = createAdminClient();
 
-  const { error } = await (supabase as any)
+  const { error } = await supabase
     .schema("extension_layer")
     .from("ext_staged_expenses")
     .update({
@@ -101,7 +101,7 @@ export async function fetchStagedExpenses() {
   await requireProfile();
   const supabase = createAdminClient();
 
-  const { data } = await (supabase as any)
+  const { data } = await supabase
     .schema("extension_layer")
     .from("ext_staged_expenses")
     .select("*, ext_chart_of_accounts(account_name_th)")

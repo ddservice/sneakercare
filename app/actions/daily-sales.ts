@@ -86,7 +86,7 @@ export async function saveDailySale(data: DailySaleInput) {
     .select("amount")
     .eq("sale_date", data.date);
 
-  const arPaidSum = (existingAr || []).reduce((sum: number, p: any) => sum + Number(p.amount || 0), 0);
+  const arPaidSum = (existingAr || []).reduce((sum: number, p) => sum + Number(p.amount || 0), 0);
   const totalPaidAll = actualPaid + arPaidSum;
 
   // Derive payment status strictly to 'ชำระครบ' vs 'ค้างชำระ' (matching legacy 100%)
@@ -229,7 +229,7 @@ export async function fetchRecentDailySales(limit: number = 300): Promise<DailyS
 
   // ดึงเฉพาะใบรับชำระของวันที่โหลดมาจริง — ของเดิม select ทั้งตาราง sc_payments
   // โดยไม่มี limit ซึ่งจะโตไม่มีเพดานไปเรื่อยๆ ตามจำนวนงวดที่เก็บเงินย้อนหลัง
-  const loadedDates = [...new Set(salesData.map((s: any) => s.date))];
+  const loadedDates = [...new Set(salesData.map((s) => s.date))];
   const { data: paymentsData } = loadedDates.length
     ? await supabase.from("sc_payments")
         .select("*")
@@ -238,13 +238,13 @@ export async function fetchRecentDailySales(limit: number = 300): Promise<DailyS
     : { data: [] as any[] };
 
   const paymentsByDate = new Map<string, ArPaymentRecord[]>();
-  (paymentsData || []).forEach((p: any) => {
+  (paymentsData || []).forEach((p) => {
     const list = paymentsByDate.get(p.sale_date) || [];
     list.push(p);
     paymentsByDate.set(p.sale_date, list);
   });
 
-  return salesData.map((s: any) => {
+  return salesData.map((s) => {
     const payments = paymentsByDate.get(s.date) || [];
     const arPaid = payments.reduce((sum, p) => sum + Number(p.amount || 0), 0);
     const initialPaid = Number(
@@ -279,7 +279,8 @@ export async function fetchRecentDailySales(limit: number = 300): Promise<DailyS
       payment_status: status,
       extra_items: s.extra_items || "",
       recorded_by: s.recorded_by || "Staff",
-      created_at: s.created_at,
+      // คอลัมน์ในฐานข้อมูลเป็น nullable ส่วน type ฝั่งแอปใช้ optional — แปลง null เป็น undefined
+      created_at: s.created_at ?? undefined,
       payments,
       total_ar_paid: arPaid,
       total_paid: totalPaid,
@@ -342,7 +343,7 @@ export async function recordArPayment(data: {
       .select("amount")
       .eq("sale_date", data.sale_date);
 
-    const totalAr = (allAr || []).reduce((sum: number, p: any) => sum + Number(p.amount || 0), 0);
+    const totalAr = (allAr || []).reduce((sum: number, p) => sum + Number(p.amount || 0), 0);
     const initialPaid = Number(
       sale.amount_paid !== undefined
         ? sale.amount_paid
@@ -410,7 +411,7 @@ export async function deleteArPayment(paymentId: number, saleDate: string) {
       .select("amount")
       .eq("sale_date", saleDate);
 
-    const totalAr = (allAr || []).reduce((sum: number, p: any) => sum + Number(p.amount || 0), 0);
+    const totalAr = (allAr || []).reduce((sum: number, p) => sum + Number(p.amount || 0), 0);
     const initialPaid = Number(
       sale.amount_paid !== undefined
         ? sale.amount_paid

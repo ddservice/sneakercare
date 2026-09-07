@@ -169,12 +169,12 @@ export async function fetchAllExpensesData(timeRange: string = "this_month"): Pr
   const { data: salesRows } = await salesQuery;
 
   const totalMonthlySales = (salesRows || []).reduce(
-    (sum: number, r: any) => sum + Number(r.total_revenue || (Number(r.grand_total || 0) - Number(r.discount || 0))),
+    (sum: number, r) => sum + Number(r.total_revenue || (Number(r.grand_total || 0) - Number(r.discount || 0))),
     0
   );
 
   // Filter rows by month
-  const filteredRows = isAllTime ? allRows : allRows.filter((r: any) => r.month === targetMonthFilter);
+  const filteredRows = isAllTime ? allRows : allRows.filter((r) => r.month === targetMonthFilter);
 
   // ข้อมูลโปรไฟล์พนักงาน (เลขบัตร/บัญชีธนาคาร/ชื่อเล่น/ประเภทการจ้าง) เป็นข้อมูลถาวรของคน
   // ไม่ใช่ตัวเลขรายเดือน แต่ถูกบันทึกปนอยู่ใน sc_opex แถวเดียวกับตัวเลขเงินเดือนที่ผูกกับเดือน —
@@ -299,14 +299,15 @@ export async function fetchAllExpensesData(timeRange: string = "this_month"): Pr
 
   // Fetch registered staff from sc_employees to include 4th, 5th, etc.
   const { data: dbEmployees } = await supabase.from("sc_employees").select("*");
-  (dbEmployees || []).forEach((emp: any) => {
+  (dbEmployees || []).forEach((emp) => {
     const matchedKey = Object.keys(staffMap).find(
       (k) => k.includes(emp.name) || (emp.nickname && k.includes(emp.nickname))
     );
     if (!matchedKey) {
-      const isProbation = emp.position?.includes("ทดลองงาน") || (emp.salary && emp.salary < 1000);
-      const isDaily = isProbation || emp.salary <= 500;
-      const salary = Number(emp.salary || (isDaily ? 350 : 12000));
+      const empSalary = Number(emp.salary ?? 0);
+      const isProbation = emp.position?.includes("ทดลองงาน") || (empSalary > 0 && empSalary < 1000);
+      const isDaily = isProbation || empSalary <= 500;
+      const salary = empSalary || (isDaily ? 350 : 12000);
       const dailyWage = isDaily ? salary : 350;
       const days = 8;
       const baseSalary = isDaily ? dailyWage * days : salary;
@@ -316,7 +317,10 @@ export async function fetchAllExpensesData(timeRange: string = "this_month"): Pr
       staffMap[emp.name] = {
         employeeName: emp.name,
         nickname: emp.nickname || "",
-        idCardNo: emp.id_card_no || "ยังไม่ได้ระบุ",
+        // ⚠️ (แก้ 2026-09-07) sc_employees ไม่มีคอลัมน์ id_card_no — เลขบัตรเก็บอยู่ใน
+        // sc_opex ด้วยคีย์ empd_profile_* (ดูส่วนอ่านโปรไฟล์ด้านบน) ตรงนี้จึงใส่ค่าเริ่มต้นไว้
+        // แล้วให้ข้อมูลโปรไฟล์ที่โหลดมาทับทีหลัง
+        idCardNo: "ยังไม่ได้ระบุ",
         bankName: emp.bank || "กสิกรไทย",
         accountNo: emp.account || "-",
         month: targetMonthFilter,
@@ -342,7 +346,7 @@ export async function fetchAllExpensesData(timeRange: string = "this_month"): Pr
   // Merge any saved custom records from sc_opex
   // (ต่อท้ายด้วย profileRows เสมอ ไม่ว่าจะซ้ำกับ filteredRows หรือไม่ — ประมวลผลซ้ำได้อย่างปลอดภัย
   // เพราะ branch นี้แค่ set field ทับด้วยค่าเดิม ไม่มีผลข้างเคียงสะสม)
-  [...filteredRows, ...profileRows].forEach((r: any) => {
+  [...filteredRows, ...profileRows].forEach((r) => {
     const rawEmp = extractCleanEmployeeName(r.key || "", r.name || "");
     if (!rawEmp) return;
 
@@ -398,7 +402,7 @@ export async function fetchAllExpensesData(timeRange: string = "this_month"): Pr
         const items = JSON.parse(r.name);
         if (Array.isArray(items)) {
           p.deductDetails = items;
-          p.otherDeductions = items.reduce((sum: number, i: any) => sum + Number(i.amount || 0), 0);
+          p.otherDeductions = items.reduce((sum: number, i) => sum + Number(i.amount || 0), 0);
         }
       } catch (err) {
         console.error(`[expenses] parse empd_deduct_items JSON ล้มเหลว (key=${r.key}):`, err);
@@ -413,7 +417,7 @@ export async function fetchAllExpensesData(timeRange: string = "this_month"): Pr
         try {
           const legacyItems = JSON.parse(r.name);
           if (Array.isArray(legacyItems) && legacyItems.length > 0) {
-            p.deductDetails = legacyItems.map((i: any) => ({
+            p.deductDetails = legacyItems.map((i) => ({
               name: [i.type, i.detail].filter(Boolean).join(" ") || "อื่นๆ",
               amount: Number(i.amount || 0),
             }));
@@ -500,8 +504,8 @@ export async function fetchAllExpensesData(timeRange: string = "this_month"): Pr
   // ตรงนี้ดึงมาแสดงแยกต่างหาก ไม่ปนกับค่าใช้จ่าย (ยังไม่มีข้อมูลเลขมิเตอร์ไฟ/ชื่อผู้เช่าจริงในตาราง
   // sc_opex ปัจจุบัน — ใส่ค่าว่าง/0 ไว้ก่อน ถ้าจะทำระบบมิเตอร์ไฟเต็มรูปแบบต้องเพิ่ม schema แยก)
   const rentals: RentalRecord[] = filteredRows
-    .filter((r: any) => r.category === "rental_income")
-    .map((r: any, idx: number) => ({
+    .filter((r) => r.category === "rental_income")
+    .map((r, idx: number) => ({
       roomId: idx,
       roomName: r.name || `ห้องเช่า ${idx + 1}`,
       tenantName: "",

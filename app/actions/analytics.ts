@@ -1,6 +1,7 @@
 "use server";
 
 import { requireProfile } from "@/lib/auth";
+import { withId, text } from "@/lib/db-rows";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export type MonthlySummary = {
@@ -130,19 +131,23 @@ export async function fetchAnalyticsData(targetMonth: string = "all"): Promise<A
   // 2. Fetch inventory items and stock
   const [itemsRes, stockRes] = await Promise.all([
     supabase.from("items").select("id, name, category, base_unit"),
-    supabase.from("item_stock").select("item_id, current_qty, min_stock, unit_cost"),
+    // ⚠️ (แก้บั๊ก 2026-09-07) เดิม select "min_stock, unit_cost" ซึ่งไม่มีอยู่จริงในตาราง
+    // (ของจริงคือ min_stock_level / avg_unit_cost) ⇒ query ทั้งชุด error แล้วสถิติคลังสินค้า
+    // ว่างเปล่ามาตลอด — ไม่มีใครเห็นเพราะโค้ดไม่ได้เช็ค error ที่คืนมา
+    supabase.from("item_stock").select("item_id, current_qty, min_stock_level, avg_unit_cost"),
   ]);
 
   const stockMap: Record<string, { currentQty: number; minStock: number; unitCost: number }> = {};
-  (stockRes.data || []).forEach((st: any) => {
+  (stockRes.data || []).forEach((st) => {
+    if (!st.item_id) return; // view alias คืน nullable — แถวไม่มี item_id ใช้เป็น key ไม่ได้
     stockMap[st.item_id] = {
       currentQty: Number(st.current_qty || 0),
-      minStock: Number(st.min_stock || 0),
-      unitCost: Number(st.unit_cost || 0),
+      minStock: Number(st.min_stock_level || 0),
+      unitCost: Number(st.avg_unit_cost || 0),
     };
   });
 
-  const inventoryItems: InventoryItemSummary[] = (itemsRes.data || []).map((it: any) => {
+  const inventoryItems: InventoryItemSummary[] = withId(itemsRes.data).map((it) => {
     const st = stockMap[it.id] || { currentQty: 0, minStock: 0, unitCost: 0 };
     const currentQty = st.currentQty;
     const minStock = st.minStock;
@@ -156,8 +161,8 @@ export async function fetchAnalyticsData(targetMonth: string = "all"): Promise<A
 
     return {
       id: it.id,
-      name: it.name,
-      category: it.category || "ทั่วไป",
+      name: text(it.name),
+      category: it.category ?? "ทั่วไป",
       baseUnit: it.base_unit || "ชิ้น",
       currentQty,
       minStock,
@@ -173,7 +178,7 @@ export async function fetchAnalyticsData(targetMonth: string = "all"): Promise<A
   // Group sales by month
   const monthlyGroups: Record<string, DailySaleRecord[]> = {};
 
-  (salesRows || []).forEach((row: any) => {
+  (salesRows || []).forEach((row) => {
     const dateStr = row.date; // YYYY-MM-DD
     const monthKey = dateStr.slice(0, 7); // YYYY-MM
     const sizeS = Number(row.size_s || 0);

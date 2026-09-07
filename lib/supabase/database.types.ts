@@ -1,7 +1,8 @@
 // ⚠️ ไฟล์นี้ generate จากฐานข้อมูล production โดยตรง — อย่าแก้ส่วน `Database` ด้วยมือ
 //
 // สร้างด้วย (รันบน VPS ที่มี SUPABASE_DB_URL อยู่แล้ว):
-//   npx supabase@latest gen types typescript --db-url "$SUPABASE_DB_URL" --schema public
+//   npx supabase@latest gen types typescript --db-url "$SUPABASE_DB_URL" \
+//     --schema public --schema extension_layer
 //
 // ⚠️ ก่อนหน้านี้ (จนถึง 2026-09-06) ไฟล์นี้เขียนมือและมีแค่ตารางฝั่งคลังสินค้า ทำให้โค้ดทั้งโปรเจกต์
 // ต้องใช้รูปแบบ `(supabase.from("sc_x" as any) as any)` เพื่อเข้าถึงตาราง sc_* ซึ่งปิดตาการตรวจของ
@@ -38,6 +39,797 @@ export type Json =
   | Json[]
 
 export type Database = {
+  extension_layer: {
+    Tables: {
+      ext_ai_embeddings: {
+        Row: {
+          content_chunk: string
+          embedding: string | null
+          entity_id: string | null
+          id: string
+          source_entity: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          content_chunk: string
+          embedding?: string | null
+          entity_id?: string | null
+          id?: string
+          source_entity?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          content_chunk?: string
+          embedding?: string | null
+          entity_id?: string | null
+          id?: string
+          source_entity?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      ext_billing_references: {
+        Row: {
+          balance_due: number
+          billing_note_id: string | null
+          created_at: string | null
+          id: string
+          paid_amount: number | null
+          ref_date: string
+          ref_doc_id: string | null
+          ref_doc_number: string
+          ref_doc_type: string
+          total_amount: number
+        }
+        Insert: {
+          balance_due: number
+          billing_note_id?: string | null
+          created_at?: string | null
+          id?: string
+          paid_amount?: number | null
+          ref_date: string
+          ref_doc_id?: string | null
+          ref_doc_number: string
+          ref_doc_type: string
+          total_amount: number
+        }
+        Update: {
+          balance_due?: number
+          billing_note_id?: string | null
+          created_at?: string | null
+          id?: string
+          paid_amount?: number | null
+          ref_date?: string
+          ref_doc_id?: string | null
+          ref_doc_number?: string
+          ref_doc_type?: string
+          total_amount?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ext_billing_references_billing_note_id_fkey"
+            columns: ["billing_note_id"]
+            isOneToOne: false
+            referencedRelation: "ext_documents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ext_billing_references_ref_doc_id_fkey"
+            columns: ["ref_doc_id"]
+            isOneToOne: false
+            referencedRelation: "ext_documents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ext_branch_stocks: {
+        Row: {
+          branch_id: string
+          item_id: string
+          quantity: number
+        }
+        Insert: {
+          branch_id: string
+          item_id: string
+          quantity?: number
+        }
+        Update: {
+          branch_id?: string
+          item_id?: string
+          quantity?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ext_branch_stocks_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "ext_branches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ext_branch_stocks_item_id_fkey"
+            columns: ["item_id"]
+            isOneToOne: false
+            referencedRelation: "ext_inventory_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ext_branches: {
+        Row: {
+          address: string | null
+          branch_code: string
+          id: string
+          is_active: boolean | null
+          name: string
+        }
+        Insert: {
+          address?: string | null
+          branch_code: string
+          id?: string
+          is_active?: boolean | null
+          name: string
+        }
+        Update: {
+          address?: string | null
+          branch_code?: string
+          id?: string
+          is_active?: boolean | null
+          name?: string
+        }
+        Relationships: []
+      }
+      ext_chart_of_accounts: {
+        Row: {
+          account_category: string
+          account_code: string
+          account_name_th: string
+          default_wht_rate: number | null
+          id: string
+          is_active: boolean | null
+        }
+        Insert: {
+          account_category: string
+          account_code: string
+          account_name_th: string
+          default_wht_rate?: number | null
+          id?: string
+          is_active?: boolean | null
+        }
+        Update: {
+          account_category?: string
+          account_code?: string
+          account_name_th?: string
+          default_wht_rate?: number | null
+          id?: string
+          is_active?: boolean | null
+        }
+        Relationships: []
+      }
+      ext_contacts: {
+        Row: {
+          address: string | null
+          branch_code: string | null
+          company_name: string
+          created_at: string | null
+          email: string | null
+          id: string
+          legacy_contact_id: string | null
+          phone: string | null
+          tax_id: string | null
+        }
+        Insert: {
+          address?: string | null
+          branch_code?: string | null
+          company_name: string
+          created_at?: string | null
+          email?: string | null
+          id?: string
+          legacy_contact_id?: string | null
+          phone?: string | null
+          tax_id?: string | null
+        }
+        Update: {
+          address?: string | null
+          branch_code?: string | null
+          company_name?: string
+          created_at?: string | null
+          email?: string | null
+          id?: string
+          legacy_contact_id?: string | null
+          phone?: string | null
+          tax_id?: string | null
+        }
+        Relationships: []
+      }
+      ext_document_items: {
+        Row: {
+          discount: number | null
+          document_id: string | null
+          id: string
+          item_id: string | null
+          item_name: string
+          quantity: number
+          sort_order: number | null
+          total_line_amount: number
+          unit_price: number
+        }
+        Insert: {
+          discount?: number | null
+          document_id?: string | null
+          id?: string
+          item_id?: string | null
+          item_name: string
+          quantity?: number
+          sort_order?: number | null
+          total_line_amount: number
+          unit_price?: number
+        }
+        Update: {
+          discount?: number | null
+          document_id?: string | null
+          id?: string
+          item_id?: string | null
+          item_name?: string
+          quantity?: number
+          sort_order?: number | null
+          total_line_amount?: number
+          unit_price?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ext_document_items_document_id_fkey"
+            columns: ["document_id"]
+            isOneToOne: false
+            referencedRelation: "ext_documents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ext_document_items_item_id_fkey"
+            columns: ["item_id"]
+            isOneToOne: false
+            referencedRelation: "ext_inventory_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ext_documents: {
+        Row: {
+          branch_id: string | null
+          contact_id: string | null
+          created_at: string | null
+          credit_term_days: number | null
+          discount_amount: number | null
+          doc_number: string
+          doc_type: string
+          due_date: string | null
+          grand_total: number
+          id: string
+          issue_date: string
+          notes: string | null
+          payment_details: string | null
+          promptpay_payload: string | null
+          ref_parent_doc_id: string | null
+          ref_parent_doc_number: string | null
+          share_token: string | null
+          status: string
+          subtotal_amount: number
+          vat_amount: number | null
+          vat_rate: number | null
+          wht_amount: number | null
+          wht_rate: number | null
+        }
+        Insert: {
+          branch_id?: string | null
+          contact_id?: string | null
+          created_at?: string | null
+          credit_term_days?: number | null
+          discount_amount?: number | null
+          doc_number: string
+          doc_type: string
+          due_date?: string | null
+          grand_total?: number
+          id?: string
+          issue_date?: string
+          notes?: string | null
+          payment_details?: string | null
+          promptpay_payload?: string | null
+          ref_parent_doc_id?: string | null
+          ref_parent_doc_number?: string | null
+          share_token?: string | null
+          status?: string
+          subtotal_amount?: number
+          vat_amount?: number | null
+          vat_rate?: number | null
+          wht_amount?: number | null
+          wht_rate?: number | null
+        }
+        Update: {
+          branch_id?: string | null
+          contact_id?: string | null
+          created_at?: string | null
+          credit_term_days?: number | null
+          discount_amount?: number | null
+          doc_number?: string
+          doc_type?: string
+          due_date?: string | null
+          grand_total?: number
+          id?: string
+          issue_date?: string
+          notes?: string | null
+          payment_details?: string | null
+          promptpay_payload?: string | null
+          ref_parent_doc_id?: string | null
+          ref_parent_doc_number?: string | null
+          share_token?: string | null
+          status?: string
+          subtotal_amount?: number
+          vat_amount?: number | null
+          vat_rate?: number | null
+          wht_amount?: number | null
+          wht_rate?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ext_documents_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "ext_branches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ext_documents_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "ext_contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ext_documents_ref_parent_doc_id_fkey"
+            columns: ["ref_parent_doc_id"]
+            isOneToOne: false
+            referencedRelation: "ext_documents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ext_etax_logs: {
+        Row: {
+          created_at: string | null
+          doc_type_code: string
+          document_id: string | null
+          id: string
+          pdf_a3_url: string | null
+          rd_error_message: string | null
+          rd_status: string | null
+          rd_transaction_id: string | null
+          recipient_email: string | null
+          signed_at: string | null
+          signed_xml_hash: string | null
+          submission_mode: string
+          xml_payload: string
+        }
+        Insert: {
+          created_at?: string | null
+          doc_type_code: string
+          document_id?: string | null
+          id?: string
+          pdf_a3_url?: string | null
+          rd_error_message?: string | null
+          rd_status?: string | null
+          rd_transaction_id?: string | null
+          recipient_email?: string | null
+          signed_at?: string | null
+          signed_xml_hash?: string | null
+          submission_mode: string
+          xml_payload: string
+        }
+        Update: {
+          created_at?: string | null
+          doc_type_code?: string
+          document_id?: string | null
+          id?: string
+          pdf_a3_url?: string | null
+          rd_error_message?: string | null
+          rd_status?: string | null
+          rd_transaction_id?: string | null
+          recipient_email?: string | null
+          signed_at?: string | null
+          signed_xml_hash?: string | null
+          submission_mode?: string
+          xml_payload?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ext_etax_logs_document_id_fkey"
+            columns: ["document_id"]
+            isOneToOne: false
+            referencedRelation: "ext_documents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ext_inventory_items: {
+        Row: {
+          cost_price: number | null
+          created_at: string | null
+          id: string
+          min_stock_alert: number | null
+          name: string
+          selling_price: number | null
+          sku: string
+          unit: string | null
+        }
+        Insert: {
+          cost_price?: number | null
+          created_at?: string | null
+          id?: string
+          min_stock_alert?: number | null
+          name: string
+          selling_price?: number | null
+          sku: string
+          unit?: string | null
+        }
+        Update: {
+          cost_price?: number | null
+          created_at?: string | null
+          id?: string
+          min_stock_alert?: number | null
+          name?: string
+          selling_price?: number | null
+          sku?: string
+          unit?: string | null
+        }
+        Relationships: []
+      }
+      ext_line_accounts: {
+        Row: {
+          account_type: string
+          contact_id: string | null
+          created_at: string | null
+          display_name: string | null
+          id: string
+          is_verified: boolean | null
+          line_user_id: string
+          picture_url: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          account_type: string
+          contact_id?: string | null
+          created_at?: string | null
+          display_name?: string | null
+          id?: string
+          is_verified?: boolean | null
+          line_user_id: string
+          picture_url?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          account_type?: string
+          contact_id?: string | null
+          created_at?: string | null
+          display_name?: string | null
+          id?: string
+          is_verified?: boolean | null
+          line_user_id?: string
+          picture_url?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ext_line_accounts_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "ext_contacts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ext_line_notifications_log: {
+        Row: {
+          id: string
+          line_message_id: string | null
+          line_user_id: string
+          notification_type: string
+          payload: Json | null
+          reference_document_id: string | null
+          sent_at: string | null
+          status: string | null
+        }
+        Insert: {
+          id?: string
+          line_message_id?: string | null
+          line_user_id: string
+          notification_type: string
+          payload?: Json | null
+          reference_document_id?: string | null
+          sent_at?: string | null
+          status?: string | null
+        }
+        Update: {
+          id?: string
+          line_message_id?: string | null
+          line_user_id?: string
+          notification_type?: string
+          payload?: Json | null
+          reference_document_id?: string | null
+          sent_at?: string | null
+          status?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ext_line_notifications_log_reference_document_id_fkey"
+            columns: ["reference_document_id"]
+            isOneToOne: false
+            referencedRelation: "ext_documents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ext_numbering_sequences: {
+        Row: {
+          current_sequence: number
+          doc_type: string
+          id: string
+          prefix: string
+          year_month: string
+        }
+        Insert: {
+          current_sequence?: number
+          doc_type: string
+          id?: string
+          prefix: string
+          year_month: string
+        }
+        Update: {
+          current_sequence?: number
+          doc_type?: string
+          id?: string
+          prefix?: string
+          year_month?: string
+        }
+        Relationships: []
+      }
+      ext_slip_verifications: {
+        Row: {
+          amount: number
+          bank_trans_ref: string
+          document_id: string | null
+          id: string
+          raw_payload: Json | null
+          receiving_bank: string | null
+          sending_bank: string | null
+          slip_image_url: string | null
+          trans_date: string
+          verification_status: string | null
+          verified_at: string | null
+        }
+        Insert: {
+          amount: number
+          bank_trans_ref: string
+          document_id?: string | null
+          id?: string
+          raw_payload?: Json | null
+          receiving_bank?: string | null
+          sending_bank?: string | null
+          slip_image_url?: string | null
+          trans_date: string
+          verification_status?: string | null
+          verified_at?: string | null
+        }
+        Update: {
+          amount?: number
+          bank_trans_ref?: string
+          document_id?: string | null
+          id?: string
+          raw_payload?: Json | null
+          receiving_bank?: string | null
+          sending_bank?: string | null
+          slip_image_url?: string | null
+          trans_date?: string
+          verification_status?: string | null
+          verified_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ext_slip_verifications_document_id_fkey"
+            columns: ["document_id"]
+            isOneToOne: false
+            referencedRelation: "ext_documents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ext_staged_expenses: {
+        Row: {
+          approval_status: string | null
+          created_at: string | null
+          extracted_date: string | null
+          extracted_tax_id: string | null
+          extracted_vendor_name: string | null
+          id: string
+          raw_ocr_payload: Json | null
+          receipt_image_url: string
+          subtotal: number | null
+          suggested_account_code: string | null
+          total_amount: number
+          vat_amount: number | null
+          wht_amount: number | null
+        }
+        Insert: {
+          approval_status?: string | null
+          created_at?: string | null
+          extracted_date?: string | null
+          extracted_tax_id?: string | null
+          extracted_vendor_name?: string | null
+          id?: string
+          raw_ocr_payload?: Json | null
+          receipt_image_url: string
+          subtotal?: number | null
+          suggested_account_code?: string | null
+          total_amount: number
+          vat_amount?: number | null
+          wht_amount?: number | null
+        }
+        Update: {
+          approval_status?: string | null
+          created_at?: string | null
+          extracted_date?: string | null
+          extracted_tax_id?: string | null
+          extracted_vendor_name?: string | null
+          id?: string
+          raw_ocr_payload?: Json | null
+          receipt_image_url?: string
+          subtotal?: number | null
+          suggested_account_code?: string | null
+          total_amount?: number
+          vat_amount?: number | null
+          wht_amount?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ext_staged_expenses_suggested_account_code_fkey"
+            columns: ["suggested_account_code"]
+            isOneToOne: false
+            referencedRelation: "ext_chart_of_accounts"
+            referencedColumns: ["account_code"]
+          },
+        ]
+      }
+      ext_vat_transactions: {
+        Row: {
+          base_amount: number
+          created_at: string | null
+          id: string
+          invoice_date: string
+          invoice_number: string
+          is_claimable: boolean | null
+          partner_branch_code: string | null
+          partner_name: string
+          partner_tax_id: string
+          tax_period_month: number
+          tax_period_year: number
+          vat_amount: number
+          vat_type: string
+        }
+        Insert: {
+          base_amount?: number
+          created_at?: string | null
+          id?: string
+          invoice_date: string
+          invoice_number: string
+          is_claimable?: boolean | null
+          partner_branch_code?: string | null
+          partner_name: string
+          partner_tax_id: string
+          tax_period_month: number
+          tax_period_year: number
+          vat_amount?: number
+          vat_type: string
+        }
+        Update: {
+          base_amount?: number
+          created_at?: string | null
+          id?: string
+          invoice_date?: string
+          invoice_number?: string
+          is_claimable?: boolean | null
+          partner_branch_code?: string | null
+          partner_name?: string
+          partner_tax_id?: string
+          tax_period_month?: number
+          tax_period_year?: number
+          vat_amount?: number
+          vat_type?: string
+        }
+        Relationships: []
+      }
+      ext_wht_records: {
+        Row: {
+          base_amount: number
+          certificate_number: string
+          created_at: string | null
+          document_id: string | null
+          filing_status: string | null
+          form_type: string
+          id: string
+          income_type_code: string
+          payment_date: string
+          pdf_certificate_url: string | null
+          tax_amount: number
+          tax_period_month: number
+          tax_period_year: number
+          vendor_address: string | null
+          vendor_name: string
+          vendor_tax_id: string
+          wht_rate: number
+        }
+        Insert: {
+          base_amount?: number
+          certificate_number: string
+          created_at?: string | null
+          document_id?: string | null
+          filing_status?: string | null
+          form_type: string
+          id?: string
+          income_type_code: string
+          payment_date: string
+          pdf_certificate_url?: string | null
+          tax_amount?: number
+          tax_period_month: number
+          tax_period_year: number
+          vendor_address?: string | null
+          vendor_name: string
+          vendor_tax_id: string
+          wht_rate?: number
+        }
+        Update: {
+          base_amount?: number
+          certificate_number?: string
+          created_at?: string | null
+          document_id?: string | null
+          filing_status?: string | null
+          form_type?: string
+          id?: string
+          income_type_code?: string
+          payment_date?: string
+          pdf_certificate_url?: string | null
+          tax_amount?: number
+          tax_period_month?: number
+          tax_period_year?: number
+          vendor_address?: string | null
+          vendor_name?: string
+          vendor_tax_id?: string
+          wht_rate?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ext_wht_records_document_id_fkey"
+            columns: ["document_id"]
+            isOneToOne: false
+            referencedRelation: "ext_documents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      fn_generate_document_number: {
+        Args: { p_date_str: string; p_doc_type: string; p_prefix: string }
+        Returns: string
+      }
+    }
+    Enums: {
+      [_ in never]: never
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
+  }
   public: {
     Tables: {
       customers: {
@@ -2274,6 +3066,9 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
+  extension_layer: {
+    Enums: {},
+  },
   public: {
     Enums: {
       inv_audit_action: ["INSERT", "UPDATE", "DELETE"],

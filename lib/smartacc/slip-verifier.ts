@@ -39,7 +39,7 @@ export async function verifyBankSlip(
   const supabase = createAdminClient();
 
   // Check duplicate
-  const { data: existingSlip } = await (supabase as any)
+  const { data: existingSlip } = await supabase
     .schema("extension_layer")
     .from("ext_slip_verifications")
     .select("id, bank_trans_ref, verified_at, amount")
@@ -50,12 +50,15 @@ export async function verifyBankSlip(
     return {
       isValid: false,
       transRef,
-      error: `สลิปนี้ถูกใช้งานไปแล้วเมื่อ ${new Date(existingSlip.verified_at).toLocaleString("th-TH")}`,
+      // verified_at เป็น nullable ในฐานข้อมูล — ถ้าไม่มีวันที่ยังต้องบอกว่าสลิปซ้ำอยู่ดี
+      error: existingSlip.verified_at
+        ? `สลิปนี้ถูกใช้งานไปแล้วเมื่อ ${new Date(existingSlip.verified_at).toLocaleString("th-TH")}`
+        : "สลิปนี้ถูกใช้งานไปแล้ว (ไม่ทราบวันที่)",
     };
   }
 
   // Insert verification
-  const { error: insertErr } = await (supabase as any)
+  const { error: insertErr } = await supabase
     .schema("extension_layer")
     .from("ext_slip_verifications")
     .insert({
@@ -74,7 +77,7 @@ export async function verifyBankSlip(
   }
 
   if (targetDocumentId) {
-    await (supabase as any)
+    await supabase
       .schema("extension_layer")
       .from("ext_documents")
       .update({

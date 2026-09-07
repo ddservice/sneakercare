@@ -84,9 +84,9 @@ export async function bulkImportSales(rows: Record<string, unknown>[]): Promise<
         await supabase.from("sc_sales").insert(payload);
       }
       imported++;
-    } catch (err: any) {
+    } catch (err) {
       failed++;
-      errors.push(`แถวที่ ${i + 1}: ${err.message}`);
+      errors.push(`แถวที่ ${i + 1}: ${err instanceof Error ? err.message : String(err)}`);
     }
   }
 
@@ -192,9 +192,9 @@ export async function bulkImportStock(rows: Record<string, unknown>[]): Promise<
       }
 
       imported++;
-    } catch (err: any) {
+    } catch (err) {
       failed++;
-      errors.push(`แถวที่ ${i + 1}: ${err.message}`);
+      errors.push(`แถวที่ ${i + 1}: ${err instanceof Error ? err.message : String(err)}`);
     }
   }
 
@@ -253,9 +253,9 @@ export async function bulkImportExpenses(rows: Record<string, unknown>[]): Promi
       });
 
       imported++;
-    } catch (err: any) {
+    } catch (err) {
       failed++;
-      errors.push(`แถวที่ ${i + 1}: ${err.message}`);
+      errors.push(`แถวที่ ${i + 1}: ${err instanceof Error ? err.message : String(err)}`);
     }
   }
 

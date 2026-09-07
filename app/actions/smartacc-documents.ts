@@ -64,7 +64,7 @@ export async function lookupDbdCompany(taxIdOrKeyword: string): Promise<DbdCompa
 
   // 1. Search in local contacts first
   try {
-    const { data: existingContact } = await (supabase as any)
+    const { data: existingContact } = await supabase
       .schema("extension_layer")
       .from("ext_contacts")
       .select("*")
@@ -322,7 +322,7 @@ export async function fetchSmartAccDocuments(filterType?: DocumentType) {
   await requireProfile();
   const supabase = createAdminClient();
 
-  let query = (supabase as any)
+  let query = supabase
     .schema("extension_layer")
     .from("ext_documents")
     .select("*, ext_contacts(*), ext_document_items(*)")
@@ -407,7 +407,7 @@ export async function createSmartAccDocument(payload: CreateDocumentPayload) {
   }
 
   // 5. Insert Document
-  const { data: doc, error: docErr } = await (supabase as any)
+  const { data: doc, error: docErr } = await supabase
     .schema("extension_layer")
     .from("ext_documents")
     .insert({
@@ -449,7 +449,7 @@ export async function createSmartAccDocument(payload: CreateDocumentPayload) {
       sort_order: idx,
     }));
 
-    await (supabase as any)
+    await supabase
       .schema("extension_layer")
       .from("ext_document_items")
       .insert(lineItems);
@@ -458,7 +458,7 @@ export async function createSmartAccDocument(payload: CreateDocumentPayload) {
   // 7. Insert Billing References if converting DOs
   if (payload.billingRefDocIds && payload.billingRefDocIds.length > 0) {
     for (const refId of payload.billingRefDocIds) {
-      await (supabase as any)
+      await supabase
         .schema("extension_layer")
         .from("ext_billing_references")
         .insert({
@@ -486,7 +486,7 @@ export async function convertDocument(sourceDocId: string, targetDocType: Docume
   const supabase = createAdminClient();
 
   // 1. Fetch Source Document
-  const { data: sourceDoc, error } = await (supabase as any)
+  const { data: sourceDoc, error } = await supabase
     .schema("extension_layer")
     .from("ext_documents")
     .select("*, ext_contacts(*), ext_document_items(*)")
@@ -525,7 +525,7 @@ export async function convertDocument(sourceDocId: string, targetDocType: Docume
   const res = await createSmartAccDocument(payload);
 
   // Update source doc status
-  await (supabase as any)
+  await supabase
     .schema("extension_layer")
     .from("ext_documents")
     .update({ status: "CONVERTED" })
@@ -539,7 +539,7 @@ export async function fetchPendingDeliveryOrders() {
   await requireProfile();
   const supabase = createAdminClient();
 
-  const { data, error } = await (supabase as any)
+  const { data, error } = await supabase
     .schema("extension_layer")
     .from("ext_documents")
     .select("id, doc_number, doc_type, issue_date, grand_total, status, ext_contacts(company_name)")
@@ -556,7 +556,7 @@ export async function fetchTaxFilingData(yearMonth?: string) {
   const supabase = createAdminClient();
 
   const [docsRes, expensesRes] = await Promise.all([
-    (supabase as any)
+    supabase
       .schema("extension_layer")
       .from("ext_documents")
       .select("*, ext_contacts(*)")
