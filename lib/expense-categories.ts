@@ -174,6 +174,32 @@ export const EXPENSE_CATEGORIES: Record<ExpenseCategoryKey, ExpenseCategoryMeta>
 export const CATEGORY_LIST = Object.values(EXPENSE_CATEGORIES);
 
 /**
+ * แผนที่ `shortLabel` → `key` ของหมวด
+ *
+ * ⚠️ ทำไมต้องมี: `sc_opex.category` เก็บ **shortLabel** (เช่น "น้ำยา & วัสดุสิ้นเปลือง")
+ * ส่วนตารางใหม่ `sc_expense_entries.category` เก็บ **key** (เช่น "supplies_cogs") ที่มี FK
+ * ไป `sc_expense_categories` — ระหว่างช่วงเขียนสองที่ (ขั้น 2 ของ docs/sc-opex-refactor-plan.md)
+ * ต้องแปลงไปมาได้อย่างแน่นอน ไม่ใช่เดาเอา
+ */
+export const CATEGORY_KEY_BY_SHORT_LABEL: ReadonlyMap<string, ExpenseCategoryKey> = new Map(
+  CATEGORY_LIST.map((c) => [c.shortLabel, c.key])
+);
+
+/**
+ * หา `key` ของหมวดจากค่าที่เก็บไว้ใน `sc_opex.category` (ซึ่งเป็น free-text)
+ *
+ * ลำดับการหา: ตรงกับ shortLabel เป๊ะ → ตรงกับ key อยู่แล้ว → เดาจากชื่อด้วย
+ * `classifyExpenseCategory()` (ตัวสุดท้ายไม่มีทางคืน null จึงปลอดภัยเสมอ)
+ */
+export function categoryKeyFor(rawCategory: string, name = ""): ExpenseCategoryKey {
+  const cat = String(rawCategory ?? "").trim();
+  const exact = CATEGORY_KEY_BY_SHORT_LABEL.get(cat);
+  if (exact) return exact;
+  if (cat in EXPENSE_CATEGORIES) return cat as ExpenseCategoryKey;
+  return classifyExpenseCategory(cat, name);
+}
+
+/**
  * Intelligent categorization of raw expense category or name into 1 of the 6 standard buckets
  */
 export function classifyExpenseCategory(rawCategory: string = "", name: string = ""): ExpenseCategoryKey {

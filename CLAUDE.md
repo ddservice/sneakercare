@@ -191,6 +191,9 @@ CLAUDE.md                 คู่มือนี้ — อัปเดตท�
 - `npm run test:migration` — รัน migration 0011 ใส่ Postgres จริง (PGlite/WASM ไม่ต้องมี Docker)
   พิสูจน์ว่า SQL รันได้ รันซ้ำได้ และ `sc_audit_logs` แก้/ลบ/TRUNCATE ไม่ได้จริง
 - `npm run export:csv [-- --month=2026-08]` — ส่งออกข้อมูลรายเดือนเป็น CSV (มี BOM เปิด Excel ภาษาไทยได้)
+- `npm run test:reconcile` — ยืนยันว่ากำไรรายเดือนบน production ยังตรงกับ Excel ที่กระทบยอดไว้ (7 เดือน)
+- `npm run check:expense-mirror` — เทียบ `sc_opex` กับ `sc_expense_entries` ทีละแถวระหว่างช่วงเขียนสองที่
+- `npm run gen:types` — regenerate `database.types.ts` จาก production ผ่าน VPS (รันทุกครั้งที่เพิ่มตาราง/คอลัมน์)
 - `npm run check:stock-vs-expenses` — ตรวจว่าเดือนไหน "ซื้อของเข้าคลัง" กับ "ค่าใช้จ่าย" บันทึกไม่ครบทั้งสองฝั่ง
 - `bash scripts/backup-monthly-csv.sh` — ตัวห่อสำหรับ cron: ส่งออก CSV เดือนที่แล้ว → tar.gz → Cloudflare R2
 

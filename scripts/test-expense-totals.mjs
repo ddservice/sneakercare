@@ -185,5 +185,26 @@ else bad("monthBounds ควรคืน null เมื่อรูปแบบ�
 if (SUPPLY_CATEGORIES.has("น้ำยา & วัสดุสิ้นเปลือง")) ok("SUPPLY_CATEGORIES มีหมวดน้ำยา");
 else bad("SUPPLY_CATEGORIES ต้องมีหมวดน้ำยา");
 
+
+console.log("\n[10] แปลงหมวดจาก sc_opex.category → key ของตารางใหม่ (ขั้นที่ 2 ของ refactor)");
+const { categoryKeyFor } = await import(
+  new URL("../.test-build/expense-categories.js", import.meta.url).href
+);
+const catCases = [
+  ["น้ำยา & วัสดุสิ้นเปลือง", "", "supplies_cogs", "shortLabel ตรงเป๊ะ"],
+  ["ดำเนินงาน & เบ็ดเตล็ด", "", "admin_general", "shortLabel ตรงเป๊ะ (เบ็ดเตล็ด)"],
+  ["ส่วนแบ่งหุ้นส่วน", "", "partner_share", "shortLabel ตรงเป๊ะ (ส่วนแบ่ง)"],
+  ["supplies_cogs", "", "supplies_cogs", "ส่งเป็น key มาอยู่แล้ว"],
+  ["ค่าดำเนินการ", "ค่าเช่าร้าน", "facility_utilities", "หมวดเก่าที่ไม่มีใน 7 หมวด → เดาจากชื่อ"],
+  ["ภาษี", "ประกันสังคมส่วนลูกจ้าง 5%", "payroll", "ประกันสังคมเข้าหมวดค่าแรงตาม classify เดิม"],
+  ["", "ค่าหุ้นส่วน 20%", "partner_share", "ไม่มีหมวด → เดาจากชื่อได้ว่าเป็นส่วนแบ่ง"],
+  ["", "เงินเดือนหุ้นส่วนผู้จัดการ (ไม่หัก ปกส.)", "payroll", "เงินเดือนหุ้นส่วน ≠ ส่วนแบ่งกำไร"],
+];
+for (const [cat, name, want, label] of catCases) {
+  const got = categoryKeyFor(cat, name);
+  if (got === want) ok(`${label} → ${got}`);
+  else bad(`categoryKeyFor("${cat}", "${name}") ได้ ${got} ควรเป็น ${want}`);
+}
+
 console.log(failures === 0 ? "\n✅ ผ่านทั้งหมด" : `\n❌ ไม่ผ่าน ${failures} ข้อ`);
 process.exitCode = failures === 0 ? 0 : 1;

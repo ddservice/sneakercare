@@ -6,6 +6,7 @@ import { revalidatePath } from "next/cache";
 import { logAudit } from "@/lib/audit";
 import { calculateExpenseBreakdown } from "@/lib/expense-totals";
 import { SUPPLY_CATEGORIES, sumStockPurchases, monthBounds } from "@/lib/stock-purchases";
+import { mirrorExpenseEntry, unmirrorExpenseEntry } from "@/lib/expense-mirror";
 
 /** เดือนปัจจุบันในรูปแบบ "MM/YYYY" ที่ตาราง sc_opex ใช้ทั้งไฟล์ */
 function currentMonthMY(): string {
@@ -916,6 +917,20 @@ export async function addExpense(
     detail: { month: monthKey, category, name: title, amount, pay_method: payMethod, expense_date: expenseDate },
   });
 
+  // เขียนกระจกเงาลงตารางใหม่ด้วย (ขั้นที่ 2 ของ docs/sc-opex-refactor-plan.md)
+  // sc_opex ยังเป็นแหล่งข้อมูลจริง — ตัวนี้พลาดแล้วต้องไม่ทำให้การบันทึกของผู้ใช้ล้มตาม
+  if (inserted?.id !== undefined && inserted?.id !== null) {
+    await mirrorExpenseEntry({
+      legacyOpexId: inserted.id,
+      entryDate: expenseDate,
+      amount,
+      rawCategory: category,
+      title,
+      payMethod,
+      createdBy: profile.id,
+    });
+  }
+
   revalidatePath("/", "layout");
   return { success: true };
 }
@@ -944,6 +959,9 @@ export async function deleteExpense(id: string | number) {
   if (error) {
     throw new Error(`ไม่สามารถลบรายการได้: ${error.message}`);
   }
+
+  // ลบกระจกเงาในตารางใหม่ให้ตรงกัน ไม่งั้นสองฝั่งจะเพี้ยนทันทีที่มีคนลบรายการ
+  await unmirrorExpenseEntry(numericId);
 
   await logAudit({
     action: "DELETE",
