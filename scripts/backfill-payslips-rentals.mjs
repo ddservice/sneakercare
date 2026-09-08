@@ -211,7 +211,10 @@ for (const slip of slipList) {
 let rentalsInserted = 0;
 for (let i = 0; i < rentalList.length; i += 100) {
   const chunk = rentalList.slice(i, i + 100);
-  const { error: e } = await sb.from("sc_rental_records").upsert(chunk, { onConflict: "legacy_ref" });
+  // ⚠️ ต้องชี้ไปที่ constraint จริง `unique (month, room_index)` ไม่ใช่ index ของ legacy_ref
+  // เพราะ legacy_ref เป็น **partial** unique index (where legacy_ref is not null) ซึ่ง
+  // Postgres ใช้อนุมาน ON CONFLICT ไม่ได้ ("no unique or exclusion constraint matching")
+  const { error: e } = await sb.from("sc_rental_records").upsert(chunk, { onConflict: "month,room_index" });
   if (e) { console.error(`  ✗ ห้องเช่าก้อนที่ ${i / 100 + 1}: ${e.message}`); failed++; }
   else rentalsInserted += chunk.length;
 }

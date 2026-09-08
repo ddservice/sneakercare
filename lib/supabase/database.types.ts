@@ -1790,6 +1790,192 @@ export type Database = {
         }
         Relationships: []
       }
+      sc_payslip_deductions: {
+        Row: {
+          amount: number
+          created_at: string
+          detail: string | null
+          id: number
+          kind: string | null
+          legacy_ref: string | null
+          minutes: number | null
+          name: string
+          payslip_id: number
+          rate: number | null
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          detail?: string | null
+          id?: number
+          kind?: string | null
+          legacy_ref?: string | null
+          minutes?: number | null
+          name: string
+          payslip_id: number
+          rate?: number | null
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          detail?: string | null
+          id?: number
+          kind?: string | null
+          legacy_ref?: string | null
+          minutes?: number | null
+          name?: string
+          payslip_id?: number
+          rate?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sc_payslip_deductions_payslip_id_fkey"
+            columns: ["payslip_id"]
+            isOneToOne: false
+            referencedRelation: "sc_payslips"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sc_payslips: {
+        Row: {
+          base_salary: number
+          branch_id: string | null
+          commission_pct: number
+          created_at: string
+          created_by: string | null
+          days_worked: number
+          deduction_total: number
+          diligence: number
+          employee_name: string
+          id: number
+          legacy_ref: string | null
+          month: string
+          net_pay: number
+          ot: number
+          updated_at: string
+          wht: number
+        }
+        Insert: {
+          base_salary?: number
+          branch_id?: string | null
+          commission_pct?: number
+          created_at?: string
+          created_by?: string | null
+          days_worked?: number
+          deduction_total?: number
+          diligence?: number
+          employee_name: string
+          id?: number
+          legacy_ref?: string | null
+          month: string
+          net_pay?: number
+          ot?: number
+          updated_at?: string
+          wht?: number
+        }
+        Update: {
+          base_salary?: number
+          branch_id?: string | null
+          commission_pct?: number
+          created_at?: string
+          created_by?: string | null
+          days_worked?: number
+          deduction_total?: number
+          diligence?: number
+          employee_name?: string
+          id?: number
+          legacy_ref?: string | null
+          month?: string
+          net_pay?: number
+          ot?: number
+          updated_at?: string
+          wht?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sc_payslips_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sc_payslips_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "inv_branches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sc_payslips_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sc_rental_records: {
+        Row: {
+          branch_id: string | null
+          created_at: string
+          curr_meter: number
+          id: number
+          income_amount: number
+          legacy_ref: string | null
+          month: string
+          prev_meter: number
+          rent_amount: number
+          room_index: number
+          room_name: string | null
+          updated_at: string
+        }
+        Insert: {
+          branch_id?: string | null
+          created_at?: string
+          curr_meter?: number
+          id?: number
+          income_amount?: number
+          legacy_ref?: string | null
+          month: string
+          prev_meter?: number
+          rent_amount?: number
+          room_index: number
+          room_name?: string | null
+          updated_at?: string
+        }
+        Update: {
+          branch_id?: string | null
+          created_at?: string
+          curr_meter?: number
+          id?: number
+          income_amount?: number
+          legacy_ref?: string | null
+          month?: string
+          prev_meter?: number
+          rent_amount?: number
+          room_index?: number
+          room_name?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sc_rental_records_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sc_rental_records_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "inv_branches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       sc_sales: {
         Row: {
           amount_paid: number | null

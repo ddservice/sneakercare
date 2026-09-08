@@ -19,7 +19,8 @@
     "check:stock-vs-expenses": "tsc lib/stock-purchases.ts --outDir .test-build --module commonjs --target es2022 --moduleResolution node10 --skipLibCheck && node --no-warnings=MODULE_TYPELESS_PACKAGE_JSON scripts/check-stock-vs-expenses.mjs",
     "test:reconcile": "tsc lib/expense-totals.ts --outDir .test-build --module commonjs --target es2022 --moduleResolution node10 --skipLibCheck && node --no-warnings=MODULE_TYPELESS_PACKAGE_JSON scripts/test-monthly-reconciliation.mjs",
     "gen:types": "node --no-warnings=MODULE_TYPELESS_PACKAGE_JSON scripts/gen-types-via-vps.mjs",
-    "check:expense-mirror": "tsc lib/expense-totals.ts --outDir .test-build --module commonjs --target es2022 --moduleResolution node10 --skipLibCheck && node --no-warnings=MODULE_TYPELESS_PACKAGE_JSON scripts/check-expense-mirror.mjs"
+    "check:expense-mirror": "tsc lib/expense-totals.ts --outDir .test-build --module commonjs --target es2022 --moduleResolution node10 --skipLibCheck && node --no-warnings=MODULE_TYPELESS_PACKAGE_JSON scripts/check-expense-mirror.mjs",
+    "check:payroll-mirror": "node --no-warnings=MODULE_TYPELESS_PACKAGE_JSON scripts/check-payroll-mirror.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",
