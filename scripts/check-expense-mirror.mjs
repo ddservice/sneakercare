@@ -34,7 +34,7 @@ const sb = createClient(env.NEXT_PUBLIC_SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_
 const baht = (n) => Number(n || 0).toLocaleString("th-TH", { minimumFractionDigits: 2 });
 
 const [{ data: opexRows, error: opexErr }, { data: entries, error: entErr }] = await Promise.all([
-  sb.from("sc_opex").select("id, month, category, key, name, amount"),
+  sb.from("sc_opex").select("id, month, category, key, name, amount, pay_method, recorded_by"),
   sb.from("sc_expense_entries").select("id, entry_date, amount, category, title, legacy_opex_id"),
 ]);
 
@@ -86,8 +86,32 @@ if (notMirrored.length) {
   if (notMirrored.length > oldest.length) console.log(`   … และอีก ${notMirrored.length - oldest.length} แถว`);
 }
 
+// ── ยอด OPEX รายเดือน: sc_opex (สูตรจริง) เทียบ sc_expense_entries ──────────
+//
+// ตัวนี้คือด่านสำคัญที่สุดก่อนขึ้นขั้นที่ 4 (สลับการอ่าน): ถ้าสองฝั่งให้ยอดไม่เท่ากัน
+// วันที่สลับไปอ่านตารางใหม่ ตัวเลขบนหน้าจอจะเปลี่ยนโดยไม่มีใครตั้งใจ
+const { calculateExpenseBreakdown } = await import(
+  new URL("../.test-build/expense-totals.js", import.meta.url).href
+);
+const months = [...new Set(opexRows.map((r) => r.month))].filter(Boolean).sort((a, b) => {
+  const [ma, ya] = String(a).split("/");
+  const [mb, yb] = String(b).split("/");
+  return `${ya}${ma}` < `${yb}${mb}` ? -1 : 1;
+});
+let monthMismatch = 0;
+console.log("\n── ยอด OPEX รายเดือน: sc_opex เทียบตารางใหม่ ──");
+for (const m of months) {
+  const [mm, yyyy] = String(m).split("/");
+  const iso = `${yyyy}-${String(mm).padStart(2, "0")}`;
+  const expected = calculateExpenseBreakdown(opexRows.filter((r) => r.month === m)).totalOpex;
+  const got = entries.filter((e) => String(e.entry_date).startsWith(iso)).reduce((a, e) => a + Number(e.amount), 0);
+  const diff = got - expected;
+  if (Math.abs(diff) > 0.005) monthMismatch++;
+  console.log(`  ${m}  ${baht(expected).padStart(14)}  ${baht(got).padStart(14)}  ${baht(diff).padStart(12)} ${Math.abs(diff) < 0.005 ? "✓" : "✗"}`);
+}
+
 // ล้มเหลวเฉพาะกรณีที่ "ผิดจริง" — แถวที่ยังไม่ backfill ไม่ถือว่าผิดในขั้นที่ 2
-const failures = amountMismatch.length + orphans.length;
+const failures = amountMismatch.length + orphans.length + monthMismatch;
 console.log(
   failures === 0
     ? "\n✅ ไม่มีการจับคู่ผิดหรือกระจกเงาค้าง"

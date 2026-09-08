@@ -1561,6 +1561,7 @@ export type Database = {
           entry_date: string
           id: number
           legacy_opex_id: number | null
+          legacy_ref: string | null
           note: string | null
           pay_method: string
           stock_txn_id: string | null
@@ -1576,6 +1577,7 @@ export type Database = {
           entry_date: string
           id?: number
           legacy_opex_id?: number | null
+          legacy_ref?: string | null
           note?: string | null
           pay_method?: string
           stock_txn_id?: string | null
@@ -1591,6 +1593,7 @@ export type Database = {
           entry_date?: string
           id?: number
           legacy_opex_id?: number | null
+          legacy_ref?: string | null
           note?: string | null
           pay_method?: string
           stock_txn_id?: string | null
