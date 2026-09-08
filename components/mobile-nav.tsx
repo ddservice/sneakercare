@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { useIsMounted } from "@/lib/use-is-mounted";
 import { createPortal } from "react-dom";
 import { usePathname } from "next/navigation";
 import { Menu, X, Footprints } from "lucide-react";
@@ -27,19 +28,20 @@ export function MobileNav({
   displayName,
 }: MobileNavProps) {
   const [open, setOpen] = useState(false);
-  const [mounted, setMounted] = useState(false);
   const pathname = usePathname();
 
   // Portal target must be read after mount — `document` doesn't exist during SSR,
   // and rendering the portal before mount would mismatch hydration.
-  useEffect(() => {
-    setMounted(true);
-  }, []);
+  const mounted = useIsMounted();
 
-  // Close drawer on route change
-  useEffect(() => {
+  // ปิด drawer เมื่อเปลี่ยนหน้า — ปรับ state ระหว่าง render ตามที่ React แนะนำสำหรับ
+  // "state ที่ต้องรีเซ็ตเมื่อค่าที่รับเข้ามาเปลี่ยน" ดีกว่าทำใน useEffect ซึ่งจะ render สองรอบ
+  // และทำให้ผู้ใช้เห็น drawer ค้างหนึ่งเฟรมหลังกดลิงก์
+  const [lastPathname, setLastPathname] = useState(pathname);
+  if (pathname !== lastPathname) {
+    setLastPathname(pathname);
     setOpen(false);
-  }, [pathname]);
+  }
 
   // Close on Escape key
   useEffect(() => {

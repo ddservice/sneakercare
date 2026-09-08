@@ -33,7 +33,7 @@ export default async function ReportsPage({
 
   const totalCogs = cogsRows.reduce((sum, row) => sum + Number(row.cogs ?? 0), 0);
 
-  const flatStock = (stockRows || []).map((item: any) => {
+  const flatStock = (stockRows || []).map((item) => {
     const stockRow = Array.isArray(item.item_stock) ? item.item_stock[0] : item.item_stock;
     return {
       id: item.id,

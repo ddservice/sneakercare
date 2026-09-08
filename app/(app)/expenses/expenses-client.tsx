@@ -11,7 +11,6 @@ import {
   createStaffMember,
   type ExpensesPayload,
   type StaffPayslip,
-  type RealExpenseRecord,
 } from "@/app/actions/expenses";
 import {
   EXPENSE_CATEGORIES,
@@ -27,6 +26,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
+import { errorMessage } from "@/lib/errors";
 import {
   Wallet,
   Building2,
@@ -34,19 +34,14 @@ import {
   Plus,
   Trash2,
   Receipt,
-  CheckCircle2,
-  Sparkles,
   Printer,
   X,
-  CreditCard,
   UserPlus,
   Save,
-  TrendingUp,
   Percent,
   IdCard,
   Edit,
   ShieldCheck,
-  Building,
   Check,
   Filter,
   Layers,
@@ -176,20 +171,16 @@ export function ExpensesClient({
   // otherDeductions ยังคงอยู่เป็นผลรวมที่คำนวณจาก deductItems เสมอ ให้โค้ดส่วนอื่นที่อ่าน
   // draft.otherDeductions ทำงานต่อได้โดยไม่ต้องแก้ทุกจุด
   type DeductItem = { name: string; amount: number };
-  const [staffDrafts, setStaffDrafts] = useState<
-    Record<
-      string,
-      {
-        diligence: number;
-        ot: number;
-        commPct: number;
-        daysWorked: number;
-        otherDeductions: number;
-        deductItems: DeductItem[];
-      }
-    >
-  >(() => {
-    const initial: Record<string, any> = {};
+  type StaffDraft = {
+    diligence: number;
+    ot: number;
+    commPct: number;
+    daysWorked: number;
+    otherDeductions: number;
+    deductItems: DeductItem[];
+  };
+  const [staffDrafts, setStaffDrafts] = useState<Record<string, StaffDraft>>(() => {
+    const initial: Record<string, StaffDraft> = {};
     initialData.payslips.forEach((p) => {
       const items: DeductItem[] =
         p.deductDetails && p.deductDetails.length > 0
@@ -266,7 +257,7 @@ export function ExpensesClient({
     startTransition(async () => {
       const updated = await fetchAllExpensesData(monthVal);
       setData(updated);
-      const newDrafts: Record<string, any> = {};
+      const newDrafts: Record<string, StaffDraft> = {};
       updated.payslips.forEach((p) => {
         const items: DeductItem[] =
           p.deductDetails && p.deductDetails.length > 0
@@ -556,8 +547,8 @@ export function ExpensesClient({
         toast.success(`ลบรายการ "${name}" เรียบร้อยแล้ว`);
         const updated = await fetchAllExpensesData(selectedMonth);
         setData(updated);
-      } catch (err: any) {
-        toast.error(err.message || "ไม่สามารถลบรายการได้");
+      } catch (err) {
+        toast.error(errorMessage(err, "ไม่สามารถลบรายการได้"));
       }
     });
   }

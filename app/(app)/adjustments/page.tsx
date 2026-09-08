@@ -1,5 +1,5 @@
 import { requireProfile, requireModuleView } from "@/lib/auth";
-import { withId, text, num, bool } from "@/lib/db-rows";
+import { withId, text, num } from "@/lib/db-rows";
 import { createClient } from "@/lib/supabase/server";
 import { getSelectedBranchId } from "@/lib/branch";
 import { canWrite } from "@/lib/permissions";

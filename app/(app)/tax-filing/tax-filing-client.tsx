@@ -13,6 +13,7 @@ import { PrintModalPortal } from "@/components/print-modal-portal";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
+import type { TaxFilingSalesDoc, TaxFilingExpense } from "@/app/actions/smartacc-documents";
 import {
   Landmark,
   FileSpreadsheet,
@@ -28,8 +29,8 @@ export function TaxFilingClient({
   initialExpenses,
   shopProfile,
 }: {
-  initialSalesDocs: any[];
-  initialExpenses: any[];
+  initialSalesDocs: TaxFilingSalesDoc[];
+  initialExpenses: TaxFilingExpense[];
   /** ข้อมูลบริษัทจริงจากหน้า /settings — ใช้พิมพ์หัวเอกสารทุกจุดในหน้านี้ ห้าม hardcode ทับ */
   shopProfile?: { name: string; address: string; taxId: string; phone: string };
 }) {

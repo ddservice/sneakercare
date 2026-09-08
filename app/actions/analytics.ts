@@ -244,7 +244,7 @@ export async function fetchAnalyticsData(targetMonth: string = "all"): Promise<A
     {
       value: "all",
       label: "📊 ดูข้อมูลสะสมทั้งหมด (All Time)",
-      totalRevenue: (salesRows || []).reduce((s: number, r: any) => s + Number(r.grand_total || 0), 0),
+      totalRevenue: (salesRows || []).reduce((s, r) => s + Number(r.grand_total || 0), 0),
     },
     ...monthlyTrends.map((m) => ({
       value: m.month,

@@ -26,7 +26,7 @@ function checkRateLimit(key: string): { blocked: boolean; remaining: number; res
   }
 
   if (entry.count >= MAX_ATTEMPTS) {
-    const remainingMs = Math.ceil((entry.resetAt - now) / 1000);
+    // ผู้เรียกคำนวณเวลาที่ต้องรอเองจาก resetAt ได้ ไม่ต้องส่งมาซ้ำ
     return { blocked: true, remaining: 0, resetAt: entry.resetAt };
   }
 

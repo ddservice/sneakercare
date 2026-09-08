@@ -23,15 +23,32 @@ import {
   Wallet,
   Users,
   CheckCircle2,
-  AlertTriangle,
   FileDown,
   FileUp,
-  Sparkles,
   ArrowRight,
-  TrendingUp,
   Printer,
 } from "lucide-react";
 import Link from "next/link";
+import { errorMessage } from "@/lib/errors";
+import type { Tables } from "@/lib/supabase/database.types";
+import type { MonthlyCogsRow } from "@/lib/reports";
+
+/** แถวจากไฟล์ Excel/CSV ที่ผู้ใช้อัปโหลด — คีย์คือหัวคอลัมน์ ค่าเป็นอะไรก็ได้ */
+type SheetRow = Record<string, unknown>;
+
+type SaleRow = Tables<"sc_sales">;
+type ExpenseRow = Tables<"sc_expenses">;
+
+/** รูปแบบที่ page.tsx แบนมาให้แล้ว (join items × item_stock) */
+export type ReportStockRow = {
+  id: string | null;
+  name: string | null;
+  category: string | null;
+  base_unit: string | null;
+  current_qty: number;
+  min_stock_level: number;
+  avg_unit_cost: number;
+};
 
 export function ReportsClient({
   salesData,
@@ -39,19 +56,19 @@ export function ReportsClient({
   expensesData,
   cogsData,
 }: {
-  salesData: any[];
-  stockData: any[];
-  expensesData: any[];
-  cogsData: { rows: any[]; total: number; range: { from: string; to: string } };
+  salesData: SaleRow[];
+  stockData: ReportStockRow[];
+  expensesData: ExpenseRow[];
+  cogsData: { rows: MonthlyCogsRow[]; total: number; range: { from: string; to: string } };
 }) {
   const [activeTab, setActiveTab] = useState<"export" | "import" | "cogs">("export");
   const [isPending, startTransition] = useTransition();
 
   // Import State
   const [importType, setImportType] = useState<"sales" | "stock" | "expenses">("sales");
-  const [previewRows, setPreviewRows] = useState<any[]>([]);
+  const [previewRows, setPreviewRows] = useState<SheetRow[]>([]);
   const [importHeaders, setImportHeaders] = useState<string[]>([]);
-  const [rawImportData, setRawImportData] = useState<any[]>([]);
+  const [rawImportData, setRawImportData] = useState<SheetRow[]>([]);
   const [importFileName, setImportFileName] = useState("");
 
   // ── EXPORT HANDLERS ──────────────────────────────────────────
@@ -106,8 +123,10 @@ export function ReportsClient({
       ลำดับ: idx + 1,
       วันที่: e.date,
       หมวดหมู่: e.category || "ทั่วไป",
-      รายการ: e.item_name,
-      จำนวนเงิน: e.total_amount || 0,
+      // คอลัมน์จริงของ sc_expenses คือ name/amount — เดิมอ่าน item_name/total_amount
+      // ที่ไม่มีอยู่จริง ไฟล์ที่ส่งออกจึงได้ช่อง "รายการ" ว่างและ "จำนวนเงิน" เป็น 0 ทุกแถว
+      รายการ: e.name,
+      จำนวนเงิน: e.amount ?? 0,
       ช่องทางชำระ: e.pay_method || "เงินสด",
       ผู้บันทึก: e.recorded_by || "Staff",
     }));
@@ -121,7 +140,7 @@ export function ReportsClient({
 
   // ── TEMPLATE DOWNLOAD ─────────────────────────────────────────
   function downloadTemplate(type: "sales" | "stock" | "expenses") {
-    let headers: any[][] = [];
+    let headers: (string | number)[][] = [];
     let fileName = "";
 
     if (type === "sales") {
@@ -166,21 +185,21 @@ export function ReportsClient({
         const sheetName = wb.SheetNames[0];
         const sheet = wb.Sheets[sheetName];
 
-        const rows: any[][] = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+        const rows = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1 });
         if (!rows || rows.length < 2) {
           toast.error("ไฟล์ไม่มีข้อมูลหรือรูปแบบไม่ถูกต้อง");
           return;
         }
 
         const headers = rows[0].map(String);
-        const dataRows = XLSX.utils.sheet_to_json(sheet);
+        const dataRows = XLSX.utils.sheet_to_json<SheetRow>(sheet);
 
         setImportHeaders(headers);
         setPreviewRows(dataRows.slice(0, 5));
         setRawImportData(dataRows);
         toast.info(`ตรวจพบข้อมูลทั้งหมด ${dataRows.length} แถว พร้อมนำเข้า`);
-      } catch (err: any) {
-        toast.error("ไม่สามารถอ่านไฟล์ได้: " + err.message);
+      } catch (err) {
+        toast.error("ไม่สามารถอ่านไฟล์ได้: " + errorMessage(err));
       }
     };
 
@@ -569,7 +588,7 @@ export function ReportsClient({
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200">
-                {cogsData.rows.map((row: any, idx: number) => (
+                {cogsData.rows.map((row, idx) => (
                   <tr key={idx} className="hover:bg-slate-50">
                     <td className="px-4 py-2.5 font-bold text-slate-800">{row.month}</td>
                     <td className="px-4 py-2.5 text-right font-mono font-bold text-teal-800">

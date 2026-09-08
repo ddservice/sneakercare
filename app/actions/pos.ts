@@ -146,7 +146,8 @@ export async function createServiceOrder(
 }
 
 export async function updateOrderStatus(orderId: string, status: "received" | "in_progress" | "ready" | "delivered" | "cancelled") {
-  const profile = await requireProfile();
+  // เรียกเพื่อบังคับให้ต้องล็อกอิน — ไม่ได้ใช้ค่าที่คืนมา แต่ห้ามตัดบรรทัดนี้ทิ้ง
+  await requireProfile();
   const supabase = await createClient();
 
   const updatePayload: {

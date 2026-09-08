@@ -5,6 +5,17 @@ import { requireProfile } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { generateDocumentNumber, type DocumentType } from "@/lib/smartacc/numbering";
 import { generatePromptPayPayload } from "@/lib/smartacc/promptpay";
+import { withId, text } from "@/lib/db-rows";
+
+/** หนึ่งรายการในสมุดที่อยู่ลูกค้า (sc_settings.dbd_company_registry) */
+export type DbdRegistryEntry = {
+  companyName: string;
+  taxId?: string;
+  branchCode?: string;
+  address?: string;
+  phone?: string;
+  email?: string;
+};
 
 export type DocumentItemInput = {
   itemName: string;
@@ -287,7 +298,7 @@ export async function fetchCatalogItems(): Promise<CatalogItem[]> {
   ];
 
   if (servicesRes.data) {
-    servicesRes.data.forEach((s: any) => {
+    servicesRes.data.forEach((s) => {
       catalog.push({
         id: s.id,
         name: s.name,
@@ -300,10 +311,12 @@ export async function fetchCatalogItems(): Promise<CatalogItem[]> {
   }
 
   if (itemsRes.data) {
-    itemsRes.data.forEach((i: any) => {
+    // `items` เป็น view alias จึงเป็น nullable ทุกคอลัมน์ — แถวที่ไม่มี id/ชื่อ เอาไปแสดง
+    // ในแคตตาล็อกไม่ได้อยู่แล้ว (กดเลือกก็ส่งค่าว่าง) ตัดทิ้งตรงนี้ดีกว่าปล่อยให้หลุดไปหน้าจอ
+    withId(itemsRes.data).forEach((i) => {
       catalog.push({
         id: i.id,
-        name: i.name,
+        name: text(i.name),
         category: "product",
         price: 0,
         unit: i.base_unit || "ชิ้น",
@@ -318,6 +331,12 @@ export async function fetchCatalogItems(): Promise<CatalogItem[]> {
 /**
  * Fetch real documents from database with relational items
  */
+/**
+ * เอกสารหนึ่งใบพร้อมลูกค้าและรายการย่อย — อนุมานจาก query จริง ไม่ประกาศมือ
+ * เพื่อให้ชนิดตามฐานข้อมูลเสมอเมื่อ regenerate database.types.ts
+ */
+export type SmartAccDocument = Awaited<ReturnType<typeof fetchSmartAccDocuments>>[number];
+
 export async function fetchSmartAccDocuments(filterType?: DocumentType) {
   await requireProfile();
   const supabase = createAdminClient();
@@ -362,7 +381,7 @@ export async function createSmartAccDocument(payload: CreateDocumentPayload) {
   }
 
   // 4. Upsert Contact to Persistent Registry
-  let contactId: string | null = null;
+  const contactId: string | null = null;
   if (payload.companyName) {
     try {
       const { data: regSetting } = await supabase.from("sc_settings")
@@ -370,7 +389,8 @@ export async function createSmartAccDocument(payload: CreateDocumentPayload) {
         .eq("key", "dbd_company_registry")
         .maybeSingle();
 
-      let currentRegistry: any[] = [];
+      // สมุดที่อยู่ลูกค้าที่เก็บเป็น JSON ก้อนเดียวใน sc_settings (ดูหัวข้อ SmartAcc ข้อ 4 ใน CLAUDE.md)
+      let currentRegistry: DbdRegistryEntry[] = [];
       if (regSetting?.value) {
         currentRegistry = JSON.parse(regSetting.value);
       }
@@ -497,7 +517,7 @@ export async function convertDocument(sourceDocId: string, targetDocType: Docume
     throw new Error("ไม่พบเอกสารต้นทางที่ต้องการแปลง");
   }
 
-  const items: DocumentItemInput[] = (sourceDoc.ext_document_items || []).map((it: any) => ({
+  const items: DocumentItemInput[] = (sourceDoc.ext_document_items || []).map((it) => ({
     itemName: it.item_name,
     quantity: Number(it.quantity),
     unitPrice: Number(it.unit_price),
@@ -535,6 +555,9 @@ export async function convertDocument(sourceDocId: string, targetDocType: Docume
   return res;
 }
 
+/** ใบส่งของ/ใบแจ้งหนี้ที่ยังไม่ชำระ — อนุมานจาก query จริงเช่นกัน */
+export type PendingDeliveryOrderRow = Awaited<ReturnType<typeof fetchPendingDeliveryOrders>>[number];
+
 export async function fetchPendingDeliveryOrders() {
   await requireProfile();
   const supabase = createAdminClient();
@@ -551,22 +574,30 @@ export async function fetchPendingDeliveryOrders() {
   return data ?? [];
 }
 
+/** ผลลัพธ์ของ fetchTaxFilingData() — อนุมานจาก query จริง ไม่ประกาศมือ */
+export type TaxFilingSalesDoc = Awaited<ReturnType<typeof fetchTaxFilingData>>["salesDocs"][number];
+export type TaxFilingExpense = Awaited<ReturnType<typeof fetchTaxFilingData>>["expenses"][number];
+
 export async function fetchTaxFilingData(yearMonth?: string) {
   await requireProfile();
   const supabase = createAdminClient();
 
-  const [docsRes, expensesRes] = await Promise.all([
-    supabase
-      .schema("extension_layer")
-      .from("ext_documents")
-      .select("*, ext_contacts(*)")
-      .in("doc_type", ["INVOICE", "TAX_INVOICE", "RECEIPT"])
-      .order("issue_date", { ascending: false }),
-    supabase
-      .from("expenses")
-      .select("*")
-      .order("expense_date", { ascending: false }),
-  ]);
+  // yearMonth ("YYYY-MM") เดิมรับเข้ามาแล้วไม่ถูกใช้เลย — หน้าเว็บกรองเองฝั่ง client
+  // จึงยังแสดงถูก แต่ signature โกหกและดึงข้อมูลมาเกินความจำเป็นทุกครั้ง
+  let docsQuery = supabase
+    .schema("extension_layer")
+    .from("ext_documents")
+    .select("*, ext_contacts(*)")
+    .in("doc_type", ["INVOICE", "TAX_INVOICE", "RECEIPT"])
+    .order("issue_date", { ascending: false });
+  let expensesQuery = supabase.from("expenses").select("*").order("expense_date", { ascending: false });
+
+  if (yearMonth && /^\d{4}-\d{2}$/.test(yearMonth)) {
+    docsQuery = docsQuery.like("issue_date", `${yearMonth}%`);
+    expensesQuery = expensesQuery.like("expense_date", `${yearMonth}%`);
+  }
+
+  const [docsRes, expensesRes] = await Promise.all([docsQuery, expensesQuery]);
 
   return {
     salesDocs: docsRes.data ?? [],

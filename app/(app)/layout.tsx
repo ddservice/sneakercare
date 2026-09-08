@@ -36,7 +36,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     // ไม่นับรายการที่ปิดแจ้งเตือนไว้ — ไม่งั้น badge จะขึ้นตัวเลขค้างที่พนักงานไม่มีทางเคลียร์ได้
     // (เพราะ Telegram ก็ไม่ส่งแจ้งรายการนั้นอยู่แล้วเช่นกัน ดู supabase/functions ที่ deploy จริง)
     lowStockCount = (stockRows || []).filter(
-      (s: any) => !s.alert_muted && Number(s.current_qty ?? 0) <= Number(s.min_stock_level ?? 0)
+      (s) => !s.alert_muted && Number(s.current_qty ?? 0) <= Number(s.min_stock_level ?? 0)
     ).length;
   } catch {
     // non-fatal — badge just won't show

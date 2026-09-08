@@ -32,8 +32,6 @@ import {
   TrendingUp,
   Receipt,
   RotateCcw,
-  Tag,
-  Layers,
   Search,
   Check,
   ChevronDown,
@@ -41,12 +39,9 @@ import {
   ChevronLeft,
   ChevronRight,
   X,
-  CreditCard,
   DollarSign,
-  CalendarDays,
   CalendarRange,
   BarChart3,
-  Filter,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -77,6 +72,8 @@ type ExtraLine = {
 
 type ViewPeriod = "all" | "day" | "week" | "month" | "custom";
 
+type CollectMethod = "โอน" | "เงินสด" | "อื่นๆ";
+
 export function DailyEntryClient({ initialRecords }: { initialRecords: DailySaleWithPayments[] }) {
   const [records, setRecords] = useState<DailySaleWithPayments[]>(initialRecords);
   const [isPending, startTransition] = useTransition();
@@ -104,13 +101,14 @@ export function DailyEntryClient({ initialRecords }: { initialRecords: DailySale
   const [collectTarget, setCollectTarget] = useState<DailySaleWithPayments | null>(null);
   const [collectDate, setCollectDate] = useState(new Date().toISOString().slice(0, 10));
   const [collectAmount, setCollectAmount] = useState<number>(0);
-  const [collectMethod, setCollectMethod] = useState<"โอน" | "เงินสด" | "อื่นๆ">("โอน");
+  const [collectMethod, setCollectMethod] = useState<CollectMethod>("โอน");
   const [collectNotes, setCollectNotes] = useState("");
 
   // View Period & Filters State
   const [viewPeriod, setViewPeriod] = useState<ViewPeriod>("month");
   const [filterDate, setFilterDate] = useState(new Date().toISOString().slice(0, 10));
-  const [customStartDate, setCustomStartDate] = useState(
+  // lazy initializer: คำนวณครั้งเดียวตอน mount ไม่ใช่ทุก render
+  const [customStartDate, setCustomStartDate] = useState(() =>
     new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10)
   );
   const [customEndDate, setCustomEndDate] = useState(new Date().toISOString().slice(0, 10));
@@ -1623,7 +1621,7 @@ export function DailyEntryClient({ initialRecords }: { initialRecords: DailySale
                 <Label className="text-xs font-bold text-slate-700">ช่องทางการรับเงิน</Label>
                 <select
                   value={collectMethod}
-                  onChange={(e) => setCollectMethod(e.target.value as any)}
+                  onChange={(e) => setCollectMethod(e.target.value as CollectMethod)}
                   className="w-full h-9 rounded-md border border-slate-300 bg-white px-3 text-xs font-medium focus:border-teal-600 focus:outline-none"
                 >
                   <option value="โอน">โอนเงินเข้าบัญชี (Transfer)</option>

@@ -7,7 +7,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
-import { Building2, Image as ImageIcon, Save, CheckCircle2, Phone, MapPin, QrCode } from "lucide-react";
+import { Building2, Image as ImageIcon, Save, QrCode } from "lucide-react";
+import { errorMessage } from "@/lib/errors";
 
 export function ShopProfileForm({ initialProfile }: { initialProfile: ShopProfile }) {
   const [profile, setProfile] = useState<ShopProfile>(initialProfile);
@@ -19,8 +20,8 @@ export function ShopProfileForm({ initialProfile }: { initialProfile: ShopProfil
       try {
         await updateShopProfile(profile);
         toast.success("บันทึกข้อมูลร้านและหัวบิลเรียบร้อยแล้ว");
-      } catch (err: any) {
-        toast.error(err.message || "เกิดข้อผิดพลาดในการบันทึก");
+      } catch (err) {
+        toast.error(errorMessage(err, "เกิดข้อผิดพลาดในการบันทึก"));
       }
     });
   }
@@ -42,12 +43,13 @@ export function ShopProfileForm({ initialProfile }: { initialProfile: ShopProfil
           <div className="flex flex-wrap items-center gap-6 rounded-xl border border-slate-200 bg-slate-50/50 p-4">
             <div className="h-20 w-20 rounded-xl border border-slate-200 bg-white p-1 flex items-center justify-center overflow-hidden shadow-xs shrink-0">
               {profile.logoUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element -- โลโก้ร้านเป็น URL ที่เจ้าของวางเองจากโฮสต์ใดก็ได้ และใช้ในเอกสาร A4 ที่สั่งพิมพ์ (next/image ต้องประกาศ remotePatterns ล่วงหน้า และแทรก wrapper ที่กวนการจัดหน้ากระดาษ)
                 <img
                   src={profile.logoUrl}
                   alt="Shop Logo"
                   className="h-full w-full object-contain"
                   onError={(e) => {
-                    (e.target as any).src = "";
+                    e.currentTarget.src = "";
                   }}
                 />
               ) : (

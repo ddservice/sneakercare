@@ -13,38 +13,46 @@ import {
   TrendingUp,
   TrendingDown,
   AlertTriangle,
-  CheckCircle2,
   Clock,
   ArrowRight,
   Receipt,
-  ArrowUpFromLine,
-  ArrowDownToLine,
   Plus,
   CalendarRange,
   ChevronLeft,
   ChevronRight,
-  Building,
-  Check,
 } from "lucide-react";
 import Link from "next/link";
 import { calculateExpenseBreakdown } from "@/lib/expense-totals";
+import type { Tables } from "@/lib/supabase/database.types";
 
 type DashboardPeriod = "all" | "day" | "week" | "month" | "custom";
+
+// แถวที่หน้านี้รับมาจาก page.tsx — อ้างชนิดจาก database.types.ts ที่ generate จาก production
+// (เดิมประกาศเป็น `any[]` ทั้ง 6 ตัว ซึ่งแปลว่าพิมพ์ชื่อคอลัมน์ผิดก็ไม่มีอะไรเตือน — บั๊ก
+// "ยอดเงินโชว์ 0" ที่ /pos เกิดจากรูปแบบนี้ตรงๆ ดูตารางใน CLAUDE.md)
+export type DashboardSaleRow = Tables<"sc_sales">;
+export type DashboardOpexRow = Tables<"sc_opex">;
+export type DashboardPaymentRow = Tables<"sc_payments">;
+export type DashboardOrderRow = Tables<"service_orders">;
+export type DashboardStockItemRow = Pick<Tables<"items">, "id" | "name"> & {
+  item_stock: Tables<"item_stock">[] | null;
+};
+export type DashboardLowStockRow = Tables<"v_low_stock">;
 
 export function DashboardClient({
   salesRows,
   opexRows,
   paymentsRows,
-  orders,
   stockItems,
   lowStock,
 }: {
-  salesRows: any[];
-  opexRows: any[];
-  paymentsRows: any[];
-  orders: any[];
-  stockItems: any[];
-  lowStock: any[];
+  salesRows: DashboardSaleRow[];
+  opexRows: DashboardOpexRow[];
+  paymentsRows: DashboardPaymentRow[];
+  /** งานบริการที่รับเข้ามา — ส่งมาแล้วแต่หน้านี้ยังไม่ได้ใช้แสดงผล (คงไว้ให้ page.tsx ส่งได้เหมือนเดิม) */
+  orders?: DashboardOrderRow[];
+  stockItems: DashboardStockItemRow[];
+  lowStock: DashboardLowStockRow[];
 }) {
   // Period state
   //

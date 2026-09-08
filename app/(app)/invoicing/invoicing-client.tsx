@@ -8,6 +8,8 @@ import {
   type CreateDocumentPayload,
   type DocumentItemInput,
   type CatalogItem,
+  type SmartAccDocument,
+  type PendingDeliveryOrderRow,
 } from "@/app/actions/smartacc-documents";
 import { DOC_TYPE_CONFIG, type DocumentType } from "@/lib/smartacc/types";
 import { thaiBahtText } from "@/lib/smartacc/baht-text";
@@ -28,23 +30,17 @@ import {
   Printer,
   CheckCircle2,
   Layers,
-  ArrowRight,
   Sparkles,
   History,
   Repeat,
 } from "lucide-react";
 
-export type PendingDeliveryOrder = {
-  id: string;
-  doc_number: string;
-  doc_type: string;
-  issue_date: string;
-  grand_total: number;
-  status: string;
-  ext_contacts?: { company_name?: string } | null;
-};
+// อนุมานจาก query จริงของ fetchPendingDeliveryOrders() — เดิมประกาศมือแล้วไม่ตรงกับฐานข้อมูล
+// จน page.tsx ต้องใส่ `as any` ปิดปาก TypeScript ตอนส่ง prop
+export type PendingDeliveryOrder = PendingDeliveryOrderRow;
 
 import type { ShopProfile } from "@/app/actions/shop-settings";
+import { errorMessage } from "@/lib/errors";
 
 export function InvoicingClient({
   pendingDOs,
@@ -54,7 +50,7 @@ export function InvoicingClient({
 }: {
   pendingDOs: PendingDeliveryOrder[];
   catalog: CatalogItem[];
-  existingDocs: any[];
+  existingDocs: SmartAccDocument[];
   shopProfile?: ShopProfile;
 }) {
   const [docType, setDocType] = useState<DocumentType>("INVOICE");
@@ -70,11 +66,14 @@ export function InvoicingClient({
 
   // Document meta
   const [issueDate, setIssueDate] = useState(new Date().toISOString().slice(0, 10));
-  const [dueDate, setDueDate] = useState(
+  // lazy initializer: คำนวณครั้งเดียวตอน mount ไม่ใช่ทุก render
+  // (ค่าเริ่มต้นที่อ้างเวลาปัจจุบันต้องเขียนแบบนี้เสมอ ไม่งั้นค่าจะขยับทุกครั้งที่ re-render)
+  const [dueDate, setDueDate] = useState(() =>
     new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
   );
-  const [creditTermDays, setCreditTermDays] = useState(30);
-  const [notes, setNotes] = useState("");
+  // ค่าคงที่ 30 วัน — ยังไม่มี UI ให้แก้ ถ้าจะทำให้แก้ได้ค่อยเปลี่ยนกลับเป็น useState
+  const creditTermDays = 30;
+  const notes = "";
   const [promptPayTarget, setPromptPayTarget] = useState(
     shopProfile?.promptPayId || shopProfile?.taxId || ""
   );
@@ -86,9 +85,8 @@ export function InvoicingClient({
   const [selectedDoIds, setSelectedDoIds] = useState<string[]>([]);
 
   // Catalog UI State
-  const [selectedCatalogCategory, setSelectedCatalogCategory] = useState<string>("all");
   const [catalogSearch, setCatalogSearch] = useState<string>("all");
-  const [printingDoc, setPrintingDoc] = useState<any | null>(null);
+  const [printingDoc, setPrintingDoc] = useState<SmartAccDocument | null>(null);
   const [catalogCategoryTab, setCatalogCategoryTab] = useState<string>("all");
 
   const filteredCatalog = useMemo(() => {
@@ -187,7 +185,13 @@ export function InvoicingClient({
     ]);
   }
 
-  function handleUpdateItem(index: number, field: keyof DocumentItemInput, value: any) {
+  // value เป็น union ของทุกชนิดที่ฟิลด์ใน DocumentItemInput เป็นได้ (string สำหรับชื่อ,
+  // number สำหรับจำนวน/ราคา) — ช่อง input ส่งมาเป็น string แล้วแปลงเป็นตัวเลขข้างล่างอีกที
+  function handleUpdateItem(
+    index: number,
+    field: keyof DocumentItemInput,
+    value: DocumentItemInput[keyof DocumentItemInput]
+  ) {
     const updated = [...items];
     const item = { ...updated[index], [field]: value };
 
@@ -265,8 +269,8 @@ export function InvoicingClient({
           setAddress("");
           setDbdSearchInput("");
         }
-      } catch (err: any) {
-        toast.error(err.message || "เกิดข้อผิดพลาดในการสร้างเอกสาร");
+      } catch (err) {
+        toast.error(errorMessage(err, "เกิดข้อผิดพลาดในการสร้างเอกสาร"));
       }
     });
   }
@@ -278,8 +282,8 @@ export function InvoicingClient({
         if (res.success) {
           toast.success(`แปลงเอกสารเป็น ${res.docNumber} (${DOC_TYPE_CONFIG[targetType].labelTh}) เรียบร้อย`);
         }
-      } catch (err: any) {
-        toast.error(err.message || "เกิดข้อผิดพลาดในการแปลงเอกสาร");
+      } catch (err) {
+        toast.error(errorMessage(err, "เกิดข้อผิดพลาดในการแปลงเอกสาร"));
       }
     });
   }
@@ -363,6 +367,7 @@ export function InvoicingClient({
                     {shopProfile && (
                       <div className="hidden sm:flex items-center gap-2 rounded-lg bg-teal-50 border border-teal-100 px-2.5 py-1 text-[11px] text-teal-800">
                         {shopProfile.logoUrl && (
+                          // eslint-disable-next-line @next/next/no-img-element -- โลโก้ร้านเป็น URL ที่เจ้าของวางเองจากโฮสต์ใดก็ได้ และใช้ในเอกสาร A4 ที่สั่งพิมพ์ (next/image ต้องประกาศ remotePatterns ล่วงหน้า และแทรก wrapper ที่กวนการจัดหน้ากระดาษ)
                           <img src={shopProfile.logoUrl} alt="Logo" className="h-4 w-4 object-contain rounded" />
                         )}
                         <span>ผู้ออกบิล: <strong>{shopProfile.name}</strong></span>
@@ -661,7 +666,7 @@ export function InvoicingClient({
                         {items.length === 0 ? (
                           <tr>
                             <td colSpan={5} className="p-6 text-center text-slate-400">
-                              ยังไม่มีรายการ กดเลือกจากรายการบริการด้านบน หรือกด "เพิ่มแถวเอง"
+                              ยังไม่มีรายการ กดเลือกจากรายการบริการด้านบน หรือกด &ldquo;เพิ่มแถวเอง&rdquo;
                             </td>
                           </tr>
                         ) : (
@@ -837,7 +842,7 @@ export function InvoicingClient({
                   {existingDocs.length === 0 ? (
                     <tr>
                       <td colSpan={7} className="p-8 text-center text-slate-400">
-                        ยังไม่มีเอกสารในระบบ สามารถกด "ออกเอกสารใหม่" เพื่อเริ่มต้น
+                        ยังไม่มีเอกสารในระบบ สามารถกด &ldquo;ออกเอกสารใหม่&rdquo; เพื่อเริ่มต้น
                       </td>
                     </tr>
                   ) : (
@@ -989,7 +994,7 @@ export function InvoicingClient({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-200">
-                  {printingDoc.ext_document_items?.map((it: any, idx: number) => (
+                  {printingDoc.ext_document_items?.map((it, idx) => (
                     <tr key={it.id || idx}>
                       <td className="p-2 text-center font-mono border-r border-slate-300">{idx + 1}</td>
                       <td className="p-2 font-medium border-r border-slate-300">{it.item_name}</td>
@@ -998,7 +1003,9 @@ export function InvoicingClient({
                         {Number(it.unit_price).toLocaleString("th-TH", { minimumFractionDigits: 2 })}
                       </td>
                       <td className="p-2 text-right font-mono font-bold">
-                        {Number(it.line_total || it.quantity * it.unit_price).toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+                        {/* คอลัมน์จริงชื่อ total_line_amount — เดิมอ่าน it.line_total ที่ไม่มีอยู่จริง
+                            เลยตกไปใช้ quantity × unit_price เสมอ ทำให้ส่วนลดรายบรรทัดหายไปจากใบพิมพ์ */}
+                        {Number(it.total_line_amount || it.quantity * it.unit_price).toLocaleString("th-TH", { minimumFractionDigits: 2 })}
                       </td>
                     </tr>
                   )) || (

@@ -120,7 +120,7 @@ export async function saveDailySale(data: DailySaleInput) {
   };
 
   // เก็บค่าเดิมไว้ก่อนแก้ เพื่อให้ audit log บอกได้ว่าอะไรเปลี่ยนจากอะไรเป็นอะไร
-  let before: Record<string, any> | null = null;
+  let before: Record<string, unknown> | null = null;
   if (data.id) {
     const { data: prev } = await supabase.from("sc_sales")
       .select("date, total_revenue, grand_total, discount, amount_paid, payment_status")

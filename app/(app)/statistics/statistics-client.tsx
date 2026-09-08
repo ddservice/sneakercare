@@ -10,7 +10,6 @@ import {
   TrendingUp,
   Receipt,
   Footprints,
-  Calendar,
   Boxes,
   PieChart,
   BarChart3,
@@ -18,8 +17,6 @@ import {
   AlertTriangle,
   ArrowUpRight,
   Wallet,
-  Building2,
-  Filter,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -36,8 +33,10 @@ export function StatisticsClient({ initialData }: { initialData: AnalyticsDashbo
   // วันที่ 27 ส.ค. ครั้งหนึ่ง ไม่มีประโยชน์อะไรอีกแล้วนอกจากทำให้งง)
   const now = new Date();
   const nowStr = now.toISOString().slice(0, 10);
-  const yesterdayStr = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
-  const sevenDaysAgoStr = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10);
+  // อ้างเวลาจาก `now` ตัวเดียวกันทั้งบล็อก ไม่เรียก Date.now() ซ้ำ — ทุกช่วงเวลาจึงคิดจาก
+  // จุดอ้างอิงเดียวกันเสมอ (เดิมเรียกแยกกัน ถ้าข้ามเที่ยงคืนพอดีจะได้วันคนละวันในหน้าจอเดียว)
+  const yesterdayStr = new Date(now.getTime() - 86400000).toISOString().slice(0, 10);
+  const sevenDaysAgoStr = new Date(now.getTime() - 7 * 86400000).toISOString().slice(0, 10);
   const thisMonthPrefix = nowStr.slice(0, 7); // "YYYY-MM"
   const lastMonthPrefix = new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString().slice(0, 7);
   const thisYearPrefix = nowStr.slice(0, 4); // "YYYY"

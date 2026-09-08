@@ -12,14 +12,10 @@ import {
   ChevronRight,
   Clock,
   Printer,
-  Sparkles,
   Users,
   Sun,
   Sunset,
-  DollarSign,
   Info,
-  Building,
-  CheckCircle2,
   Download,
 } from "lucide-react";
 
@@ -275,7 +271,10 @@ export function RosterClient() {
     });
 
     // 2. Daily Schedule Matrix Sheet
-    const dailyScheduleData = (calendarDays.filter(Boolean) as any[]).map((d) => ({
+    // type predicate แทน `as any[]` — filter(Boolean) เพียงอย่างเดียว TypeScript ยังคิดว่ามี null ปนอยู่
+    const dailyScheduleData = calendarDays
+      .filter((d): d is NonNullable<typeof d> => d !== null)
+      .map((d) => ({
       "วันที่": d.dateStr,
       "วัน": WEEKLY_SHIFTS[d.dayOfWeek]?.dayName || "",
       "กะเช้า (08:30-17:30)": d.morning.join(", "),

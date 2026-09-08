@@ -3,13 +3,11 @@ import { text } from "@/lib/db-rows";
 import { requireProfile, requireAdmin } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import {
   Settings,
   Users,
   ShieldCheck,
   Send,
-  Building2,
   PackagePlus,
   Key,
   DatabaseBackup,

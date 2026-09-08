@@ -4,6 +4,16 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { canView, canWrite, type ModuleKey } from "@/lib/permissions";
 
+/**
+ * `redirect()` ของ Next.js ทำงานด้วยการ throw error พิเศษที่มี `digest` ขึ้นต้นด้วย
+ * `NEXT_REDIRECT` — ถ้า `catch` ไหนกลืนมันไว้ การ redirect จะเงียบหายไปทั้งอัน
+ * จึงต้องเช็คแล้วโยนต่อเสมอในทุก try/catch ที่ครอบ redirect เอาไว้
+ */
+export function isNextRedirectError(err: unknown): boolean {
+  const digest = (err as { digest?: unknown } | null)?.digest;
+  return typeof digest === "string" && digest.startsWith("NEXT_REDIRECT");
+}
+
 export type Profile = {
   id: string;
   username: string;
@@ -57,10 +67,10 @@ export const requireProfile = cache(async (): Promise<Profile> => {
       role,
       branch_id: profile.branch_id,
     };
-  } catch (err: any) {
-    if (err?.digest?.startsWith("NEXT_REDIRECT")) {
-      throw err;
-    }
+  } catch (err: unknown) {
+    // Next.js สั่ง redirect ด้วยการ throw error ที่มี digest ขึ้นต้นว่า NEXT_REDIRECT
+    // ถ้ากลืนไว้ redirect("/login") ข้างบนจะไม่ทำงาน — ต้องโยนต่อเสมอ
+    if (isNextRedirectError(err)) throw err;
     redirect("/login");
   }
 });

@@ -11,8 +11,8 @@ export default async function TaxFilingPage() {
 
   return (
     <TaxFilingClient
-      initialSalesDocs={data.salesDocs as any}
-      initialExpenses={data.expenses as any}
+      initialSalesDocs={data.salesDocs}
+      initialExpenses={data.expenses}
       shopProfile={shopProfile}
     />
   );

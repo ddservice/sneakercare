@@ -17,6 +17,16 @@ const eslintConfig = defineConfig([
     // Deno runtime ไม่ใช่ Node/browser — lint แยกด้วย Deno tooling ถ้าจำเป็น
     "supabase/functions/**",
   ]),
+  {
+    rules: {
+      // พารามิเตอร์/ตัวแปรที่ขึ้นต้นด้วย _ = ตั้งใจไม่ใช้ (เช่น พารามิเตอร์ที่ต้องคงไว้ตาม
+      // signature ของ Next.js หรือของ API ที่ผู้เรียกใช้อยู่) — เขียน _ กำกับดีกว่าปิดกฎทั้งไฟล์
+      "@typescript-eslint/no-unused-vars": [
+        "warn",
+        { argsIgnorePattern: "^_", varsIgnorePattern: "^_", caughtErrorsIgnorePattern: "^_" },
+      ],
+    },
+  },
 ]);
 
 export default eslintConfig;

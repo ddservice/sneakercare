@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
+import { useIsMounted } from "@/lib/use-is-mounted";
 
 /**
  * ห่อ modal ที่ต้องพิมพ์ (backdrop + .printable-area) ให้ portal ไปที่ document.body ตรงๆ
@@ -21,12 +21,8 @@ import { createPortal } from "react-dom";
  * browser คิดว่าต้องพิมพ์หลายหน้า แล้ว .printable-area (position:fixed) จะถูกพิมพ์ซ้ำทุกหน้า
  */
 export function PrintModalPortal({ children }: { children: React.ReactNode }) {
-  const [mounted, setMounted] = useState(false);
-
   // ต้องรอ mount ก่อนถึงจะเรียก document.body ได้ (ไม่มีตอน SSR และกัน hydration mismatch)
-  useEffect(() => {
-    setMounted(true);
-  }, []);
+  const mounted = useIsMounted();
 
   if (!mounted) return null;
   return createPortal(<div id="print-portal-root">{children}</div>, document.body);

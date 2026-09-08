@@ -184,7 +184,7 @@ export async function fetchAllExpensesData(timeRange: string = "this_month"): Pr
   // เงินเดือนเลย) ข้อมูลโปรไฟล์นี้จะหายไปทั้งหมดทันที ทั้งที่ควรอยู่ติดกับพนักงานเสมอไม่ว่าจะดู
   // เดือนไหน — ดึงแยกจากทุกเดือน เอาแถวล่าสุดต่อ key (saveStaffProfileInfo ลบแถวเก่าแล้ว insert
   // ใหม่ทุกครั้งที่แก้ไข ปกติมีแถวเดียวต่อคนอยู่แล้ว แต่กันเหนียวด้วย id สูงสุดเผื่อมีซ้ำ)
-  const profileRowsLatest = new Map<string, any>();
+  const profileRowsLatest = new Map<string, (typeof allRows)[number]>();
   for (const r of allRows) {
     if (!r.key?.startsWith("empd_profile_") || !r.name) continue;
     const existing = profileRowsLatest.get(r.key);

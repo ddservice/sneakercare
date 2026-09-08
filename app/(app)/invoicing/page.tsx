@@ -20,9 +20,9 @@ export default async function InvoicingPage() {
 
   return (
     <InvoicingClient
-      pendingDOs={pendingDOs as any}
+      pendingDOs={pendingDOs}
       catalog={catalog}
-      existingDocs={existingDocs as any}
+      existingDocs={existingDocs}
       shopProfile={shopProfile}
     />
   );

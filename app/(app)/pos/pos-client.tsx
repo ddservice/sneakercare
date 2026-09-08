@@ -2,15 +2,15 @@
 
 import Link from "next/link";
 import { useState, useTransition } from "react";
-import { createServiceOrder, updateOrderStatus, type PosActionState } from "@/app/actions/pos";
+import { createServiceOrder, updateOrderStatus } from "@/app/actions/pos";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Pagination } from "@/components/pagination";
 import { rangeLabel, type PageInfo } from "@/lib/pagination";
 import { toast } from "sonner";
+import { errorMessage } from "@/lib/errors";
 import {
   Sparkles,
   Plus,
@@ -20,12 +20,8 @@ import {
   Footprints,
   Clock,
   CheckCircle2,
-  Truck,
-  DollarSign,
   Receipt,
   Search,
-  Filter,
-  RefreshCw,
 } from "lucide-react";
 
 export type OrderItem = {
@@ -75,6 +71,8 @@ const STATUS_CONFIG = {
   cancelled: { label: "ยกเลิก", color: "bg-rose-100 text-rose-800 border-rose-300 dark:bg-rose-900/50 dark:text-rose-300" },
 };
 
+type PaymentMethod = "cash" | "transfer" | "credit" | "unpaid";
+
 export function PosClient({
   initialOrders,
   pageInfo,
@@ -92,7 +90,7 @@ export function PosClient({
   const [discount, setDiscount] = useState<number>(0);
   const [customServiceName, setCustomServiceName] = useState("");
   const [customServicePrice, setCustomServicePrice] = useState<number>(0);
-  const [paymentMethod, setPaymentMethod] = useState<"cash" | "transfer" | "credit" | "unpaid">("cash");
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("cash");
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [searchTerm, setSearchTerm] = useState("");
   const [isPending, startTransition] = useTransition();
@@ -182,8 +180,8 @@ export function PosClient({
       await updateOrderStatus(orderId, newStatus);
       toast.success("อัปเดตสถานะสำเร็จ");
       setOrders(orders.map((o) => (o.id === orderId ? { ...o, status: newStatus } : o)));
-    } catch (err: any) {
-      toast.error(err.message || "เกิดข้อผิดพลาด");
+    } catch (err) {
+      toast.error(errorMessage(err, "เกิดข้อผิดพลาด"));
     }
   }
 
@@ -398,6 +396,29 @@ export function PosClient({
                       <Plus className="h-3.5 w-3.5" /> เพิ่ม
                     </Button>
                   </div>
+
+                  {/* รายการที่เลือกไว้ — เดิมบริการที่พิมพ์เพิ่มเองไม่มีที่แสดงเลย เห็นแค่ยอดรวมขยับ
+                      ถ้าพิมพ์ผิดหรือกดเพิ่มซ้ำจะลบไม่ได้ ต้องล้างทั้งบิลแล้วเริ่มใหม่อย่างเดียว */}
+                  {selectedServices.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 pt-1">
+                      {selectedServices.map((s) => (
+                        <span
+                          key={s.id}
+                          className="inline-flex items-center gap-1.5 rounded-full border border-teal-300 bg-teal-50 py-1 pl-2.5 pr-1.5 text-[11px] font-semibold text-teal-900 dark:border-teal-800 dark:bg-teal-950/40 dark:text-teal-200"
+                        >
+                          {s.name} · {s.price.toLocaleString()} ฿
+                          <button
+                            type="button"
+                            onClick={() => removeService(s.id)}
+                            aria-label={`เอา ${s.name} ออกจากบิล`}
+                            className="flex h-4 w-4 items-center justify-center rounded-full text-teal-700 hover:bg-teal-200 hover:text-teal-900 dark:text-teal-300 dark:hover:bg-teal-800"
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
                 <hr className="border-slate-100 dark:border-slate-800" />
@@ -446,7 +467,7 @@ export function PosClient({
                         <button
                           key={m.id}
                           type="button"
-                          onClick={() => setPaymentMethod(m.id as any)}
+                          onClick={() => setPaymentMethod(m.id as PaymentMethod)}
                           className={`rounded-lg py-1.5 text-xs font-semibold transition-all ${
                             paymentMethod === m.id
                               ? "bg-emerald-500 text-white shadow-xs"

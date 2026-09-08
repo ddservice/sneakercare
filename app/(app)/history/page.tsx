@@ -14,15 +14,11 @@ import {
   Boxes,
   ArrowDownToLine,
   ArrowUpFromLine,
-  Scale,
   CalendarRange,
-  Search,
-  Filter,
-  ArrowLeft,
-  Calendar,
 } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
+import { withId, text, num } from "@/lib/db-rows";
 
 type HistoryRow = {
   id: string;
@@ -131,13 +127,15 @@ export default async function HistoryPage({
     summaryQuery.limit(SUMMARY_CAP),
   ]);
 
-  const rows: HistoryRow[] = (rawRows || []).map((r: any) => ({
+  // view alias ทำให้ทุกคอลัมน์เป็น nullable — normalize ตรงนี้ครั้งเดียวแทนการ cast ทับ
+  // (แถวที่ไม่มี id ใช้งานต่อไม่ได้อยู่แล้ว จึงถูก withId() กรองทิ้ง)
+  const rows: HistoryRow[] = withId(rawRows).map((r) => ({
     id: r.id,
-    created_at: r.created_at,
-    txn_type: r.txn_type,
-    status: r.status,
-    quantity_delta: Number(r.quantity_delta || 0),
-    total_cost: Number(r.total_cost || 0),
+    created_at: text(r.created_at),
+    txn_type: text(r.txn_type),
+    status: text(r.status),
+    quantity_delta: num(r.quantity_delta),
+    total_cost: num(r.total_cost),
     reference_note: r.reference_note,
     reason: r.reason,
     item_name: r.items?.name || "สินค้าไม่ระบุชื่อ",

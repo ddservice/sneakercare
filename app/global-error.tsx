@@ -3,9 +3,11 @@
 import { useEffect } from "react";
 import { RefreshCw, LogIn } from "lucide-react";
 
+// รับ `reset` ตาม signature ของ Next.js แต่ไม่ได้ใช้ — เคสที่ error boundary ระดับ global
+// จับได้ส่วนใหญ่คือเซสชันหมดอายุ ซึ่ง reset() (render ใหม่เฉพาะ segment) มักไม่พอ
+// ปุ่มจึงตั้งใจให้โหลดทั้งหน้าใหม่ตามข้อความที่เขียนไว้บนปุ่ม
 export default function GlobalError({
   error,
-  reset,
 }: {
   error: Error & { digest?: string };
   reset: () => void;

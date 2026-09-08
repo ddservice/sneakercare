@@ -6,9 +6,8 @@ import {
   createInventoryItem,
   deleteInventoryItem,
   toggleItemAlertMute,
-  type InventoryItemInput,
 } from "@/app/actions/inventory";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -19,12 +18,9 @@ import {
   Boxes,
   ArrowDownToLine,
   ArrowUpFromLine,
-  Scale,
   History,
-  FileSpreadsheet,
   PackagePlus,
   AlertTriangle,
-  CheckCircle2,
   TrendingDown,
   Search,
   Edit2,
@@ -32,9 +28,6 @@ import {
   X,
   Check,
   Download,
-  Upload,
-  Layers,
-  Filter,
   Bell,
   BellOff,
 } from "lucide-react";

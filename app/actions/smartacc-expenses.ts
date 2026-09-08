@@ -30,7 +30,8 @@ export type StagedExpenseResult = {
  * Mobile Receipt OCR Engine: Parses receipt photo data and maps to Thai Chart of Accounts
  */
 export async function parseAndStageReceiptOcr(imageBase64OrUrl: string) {
-  const profile = await requireProfile();
+  // เรียกเพื่อบังคับให้ต้องล็อกอิน — ไม่ได้ใช้ค่าที่คืนมา แต่ห้ามตัดบรรทัดนี้ทิ้ง
+  await requireProfile();
   const supabase = createAdminClient();
 
   const mockVendorNames = [

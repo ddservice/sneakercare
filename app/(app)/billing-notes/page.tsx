@@ -7,13 +7,31 @@ import { Button } from "@/components/ui/button";
 import { ArrowLeft, Layers, Plus } from "lucide-react";
 import Link from "next/link";
 
+/**
+ * ดึงใบวางบิลพร้อมลูกค้าและรายการย่อย
+ *
+ * แยกออกมาเป็นฟังก์ชันเพื่อให้ TypeScript อนุมานชนิดของแถวที่ join มาได้เอง
+ * (เดิมประกาศเป็น `any[]` ซึ่งปิดตา type check ทั้งหน้า — ดูกฎ "ห้ามเพิ่ม as any" ใน CLAUDE.md)
+ */
+async function loadBillingNotes(supabase: ReturnType<typeof createAdminClient>) {
+  const { data } = await supabase
+    .schema("extension_layer")
+    .from("ext_documents")
+    .select("*, ext_contacts(*), ext_document_items(*)")
+    .eq("doc_type", "BILLING_NOTE")
+    .order("created_at", { ascending: false });
+  return data ?? [];
+}
+
+type BillingNoteDoc = Awaited<ReturnType<typeof loadBillingNotes>>[number];
+
 export default async function BillingNotesPage() {
   const profile = await requireProfile();
   // ใบวางบิลอยู่โดเมนเดียวกับการออกเอกสาร จึงใช้สิทธิ์ชุด invoicing
   requireModuleView(profile, "invoicing");
   const supabase = createAdminClient();
 
-  let documents: any[] = [];
+  let documents: BillingNoteDoc[] = [];
   let shopProfile = {
     name: "บริษัท รวยรับทรัพย์168 จำกัด (SneakerCare)",
     taxId: "0505566000000",
@@ -24,17 +42,12 @@ export default async function BillingNotesPage() {
   };
 
   try {
-    const [{ data: docs }, profile] = await Promise.all([
-      supabase
-        .schema("extension_layer")
-        .from("ext_documents")
-        .select("*, ext_contacts(*), ext_document_items(*)")
-        .eq("doc_type", "BILLING_NOTE")
-        .order("created_at", { ascending: false }),
+    const [docs, loadedProfile] = await Promise.all([
+      loadBillingNotes(supabase),
       fetchShopProfile().catch(() => shopProfile),
     ]);
-    if (docs) documents = docs;
-    if (profile) shopProfile = profile;
+    documents = docs;
+    if (loadedProfile) shopProfile = loadedProfile;
   } catch {
     // Graceful fallback if extension_layer is not configured
     documents = [];
@@ -60,7 +73,7 @@ export default async function BillingNotesPage() {
           <div className="space-y-1">
             <h3 className="text-base font-bold text-slate-900">ยังไม่มีใบวางบิล (Billing Note) ในระบบ</h3>
             <p className="text-xs text-slate-500">
-              คุณสามารถสร้างใบวางบิลใหม่ หรือรวมใบส่งของ (DO) มารวมวางบิลได้ที่หน้า "ออกเอกสาร & วางบิล"
+              คุณสามารถสร้างใบวางบิลใหม่ หรือรวมใบส่งของ (DO) มารวมวางบิลได้ที่หน้า &ldquo;ออกเอกสาร &amp; วางบิล&rdquo;
             </p>
           </div>
           <Link href="/invoicing">
@@ -96,6 +109,7 @@ export default async function BillingNotesPage() {
         <div className="flex justify-between items-start border-b border-slate-300 pb-4 mb-4">
           <div className="w-2/3 pr-4 flex items-start gap-3.5">
             {shopProfile.logoUrl && (
+              // eslint-disable-next-line @next/next/no-img-element -- โลโก้ร้านเป็น URL ที่เจ้าของวางเองจากโฮสต์ใดก็ได้ และใช้ในเอกสาร A4 ที่สั่งพิมพ์ (next/image ต้องประกาศ remotePatterns ล่วงหน้า และแทรก wrapper ที่กวนการจัดหน้ากระดาษ)
               <img
                 src={shopProfile.logoUrl}
                 alt="Logo"
@@ -151,7 +165,7 @@ export default async function BillingNotesPage() {
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-200 border-b border-slate-300">
-            {currentDoc.ext_document_items?.map((item: any, index: number) => (
+            {currentDoc.ext_document_items?.map((item, index) => (
               <tr key={index}>
                 <td className="p-2 text-center text-slate-500">{index + 1}</td>
                 <td className="p-2 font-medium text-slate-900">{item.item_name}</td>

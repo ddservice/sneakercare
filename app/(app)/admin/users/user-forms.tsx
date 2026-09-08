@@ -15,9 +15,9 @@ import {
 } from "@/components/ui/dialog";
 import type { UserRole } from "@/lib/supabase/database.types";
 
-type BranchOption = { id: string; name: string };
+export type BranchOption = { id: string; name: string };
 
-type UserRow = {
+export type UserRow = {
   id: string;
   username: string;
   display_name: string;

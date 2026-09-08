@@ -20,7 +20,7 @@ export async function fetchShopProfile(): Promise<ShopProfile> {
   const { data } = await supabase.from("sc_settings").select("key, value");
 
   const settingsMap: Record<string, string> = {};
-  (data || []).forEach((row: any) => {
+  (data || []).forEach((row) => {
     settingsMap[row.key] = row.value || "";
   });
 

@@ -5,15 +5,16 @@ import { ROLE_LABEL, type Role } from "@/lib/permissions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { EditUserForm, InviteUserForm } from "./user-forms";
+import { EditUserForm, InviteUserForm, type BranchOption, type UserRow } from "./user-forms";
+import { withId, text, bool } from "@/lib/db-rows";
 
 export default async function AdminUsersPage() {
   const profile = await requireProfile();
   requireAdmin(profile);
 
   const supabase = await createClient();
-  let users: any[] = [];
-  let branches: any[] = [];
+  let users: UserRow[] = [];
+  let branches: BranchOption[] = [];
 
   try {
     const [{ data: userRows }, branchRows] = await Promise.all([
@@ -23,8 +24,17 @@ export default async function AdminUsersPage() {
         .order("display_name"),
       getActiveBranches().catch(() => []),
     ]);
-    if (userRows) users = userRows;
-    if (branchRows) branches = branchRows;
+    // `profiles` เป็นตารางจริงก็จริง แต่ generate types มาเป็น nullable หลายคอลัมน์
+    // จึงต้อง normalize ตรงนี้ครั้งเดียว แทนที่จะปล่อย null ไหลเข้า UI แล้วขึ้น "undefined"
+    users = (userRows ?? []).map((u) => ({
+      id: u.id,
+      username: text(u.username),
+      display_name: text(u.display_name) || text(u.username) || "ผู้ใช้",
+      role: (u.role ?? "staff") as UserRow["role"],
+      branch_id: u.branch_id,
+      is_active: bool(u.is_active, true),
+    }));
+    branches = withId(branchRows).map((b) => ({ id: b.id, name: text(b.name) }));
   } catch {
     users = [];
     branches = [];

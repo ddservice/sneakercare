@@ -1,6 +1,5 @@
 import { requireProfile, requireModuleView } from "@/lib/auth";
 import { withId, text, num } from "@/lib/db-rows";
-import { getSelectedBranchId } from "@/lib/branch";
 import { createClient } from "@/lib/supabase/server";
 import { canSeeCost, canWrite } from "@/lib/permissions";
 import { InventoryClient, type InventoryRow } from "./inventory-client";
@@ -10,11 +9,15 @@ export const dynamic = "force-dynamic";
 export default async function InventoryHubPage() {
   const profile = await requireProfile();
   requireModuleView(profile, "inventory");
-  const selectedBranchId = await getSelectedBranchId(profile);
   const supabase = await createClient();
   const isCostVisible = canSeeCost(profile.role);
   const canEdit = canWrite(profile.role, "inventory");
 
+  // ⚠️ หน้านี้ **ไม่ได้** กรองสาขาด้วยคุกกี้ `sc_active_branch` เอง — พึ่ง WHERE ที่ฝังอยู่ใน
+  // staff-safe view `v_item_stock` (กรองด้วย inv_fn_current_branch()) เท่านั้น
+  // สำหรับ admin ฟังก์ชันนั้นคืน null = เห็นทุกสาขา ตอนนี้ยังไม่เห็นอาการเพราะมีสาขาเดียว
+  // **วันที่เปิดสาขาที่สอง ต้องกลับมาเติมตัวกรองสาขาที่นี่ก่อน** ไม่งั้นยอดจะรวมข้ามสาขาเงียบๆ
+  //
   // ⚠️ (แก้ 2026-09-07) เดิมหน้านี้ join `item_stock` เข้ามาตรงๆ ซึ่งผิดกฎข้อ 5 ใน CLAUDE.md
   // ("Staff ต้องไม่เห็นข้อมูลต้นทุน — ห้าม SELECT จากตาราง item_stock ตรงๆ") และหลังจาก
   // migration 0016/0021 บังคับ RLS จริงจัง พนักงานจะอ่าน item_stock ไม่ได้เลย = เห็นจำนวนเป็น 0 ทุกช่อง

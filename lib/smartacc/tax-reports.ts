@@ -30,7 +30,10 @@ export type VatTransaction = {
  * Generates Pipe-delimited text for PND3 / PND53 e-Filing
  * Format: Sequence|TaxID|Branch|Name|Address|Date|IncomeType|Rate|BaseAmount|TaxAmount|Condition
  */
-export function generatePndEFilingText(records: WhtRecord[], formType: "PND3" | "PND53"): string {
+// หมายเหตุ: ตัวเนื้อไฟล์ของ ภ.ง.ด.3 กับ ภ.ง.ด.53 ใช้รูปแบบ pipe-delimited ชุดเดียวกัน
+// ต่างกันที่ "ยื่นในแบบไหน" ไม่ใช่ที่เนื้อไฟล์ — รับ formType ไว้เพื่อให้ผู้เรียกระบุเจตนาชัดเจน
+// และเผื่อกรมสรรพากรแยกรูปแบบในอนาคต (ถ้าจะแยกจริง ให้แก้ที่นี่ที่เดียว)
+export function generatePndEFilingText(records: WhtRecord[], _formType: "PND3" | "PND53"): string {
   const lines = records.map((r) => {
     const d = new Date(r.date);
     const thaiYear = d.getFullYear() + 543;
