@@ -5,7 +5,7 @@ import { ROLE_LABEL, type Role } from "@/lib/permissions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { EditUserForm, InviteUserForm, type BranchOption, type UserRow } from "./user-forms";
+import { EditUserForm, InviteUserForm, UserAccountActions, type BranchOption, type UserRow } from "./user-forms";
 import { withId, text, bool } from "@/lib/db-rows";
 
 export default async function AdminUsersPage() {
@@ -73,7 +73,10 @@ export default async function AdminUsersPage() {
                   </Badge>
                 </TableCell>
                 <TableCell className="text-right">
-                  <EditUserForm user={user} branches={branches} />
+                  <div className="flex flex-wrap items-center justify-end gap-2">
+                    <EditUserForm user={user} branches={branches} />
+                    <UserAccountActions user={user} />
+                  </div>
                 </TableCell>
               </TableRow>
             ))}

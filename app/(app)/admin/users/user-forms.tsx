@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState, useState } from "react";
-import { inviteUser, updateUser, type UserActionState } from "@/app/actions/users";
+import { inviteUser, updateUser, sendPasswordReset, deleteUser, type UserActionState } from "@/app/actions/users";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -163,5 +163,72 @@ export function EditUserForm({
         </form>
       </DialogContent>
     </Dialog>
+  );
+}
+
+/**
+ * ปุ่มจัดการบัญชีที่ระบบเดิม (Google Apps Script) มีแต่ระบบใหม่ยังไม่มี
+ * — ตราบใดที่ยังไม่มี เจ้าของก็ต้องเปิดหน้าเดิมค้างไว้ (ดู docs/sc-opex-refactor-plan.md ขั้นที่ 6)
+ */
+export function UserAccountActions({ user }: { user: UserRow }) {
+  const [resetState, resetAction, resetPending] = useActionState<UserActionState, FormData>(
+    sendPasswordReset,
+    undefined
+  );
+  const [delOpen, setDelOpen] = useState(false);
+  const [delState, delAction, delPending] = useActionState<UserActionState, FormData>(deleteUser, undefined);
+  const [prevDel, setPrevDel] = useState(delState);
+  if (delState !== prevDel) {
+    setPrevDel(delState);
+    if (delState?.success) setDelOpen(false);
+  }
+
+  return (
+    <div className="flex items-center gap-2">
+      {/* ส่งลิงก์ให้เจ้าตัวตั้งรหัสเอง — จงใจไม่ให้แอดมินตั้งรหัสให้คนอื่นตรงๆ
+          ไม่งั้นแอดมินจะเข้าระบบในนามคนอื่นได้โดยที่ audit log บันทึกเป็นชื่อคนนั้น */}
+      <form action={resetAction}>
+        <input type="hidden" name="id" value={user.id} />
+        <Button type="submit" size="sm" variant="outline" disabled={resetPending}>
+          {resetPending ? "กำลังส่ง…" : "ส่งลิงก์ตั้งรหัสใหม่"}
+        </Button>
+      </form>
+
+      <Dialog open={delOpen} onOpenChange={setDelOpen}>
+        <DialogTrigger
+          render={
+            <Button size="sm" variant="outline" className="border-rose-300 text-rose-700 hover:bg-rose-50">
+              ลบ
+            </Button>
+          }
+        />
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>ลบบัญชี {user.display_name}?</DialogTitle>
+          </DialogHeader>
+          <form action={delAction} className="flex flex-col gap-4">
+            <input type="hidden" name="id" value={user.id} />
+            <p className="text-xs text-slate-600 leading-relaxed">
+              การลบนี้ย้อนกลับไม่ได้ · ถ้าบัญชีนี้เคยทำรายการในระบบคลังสินค้าไว้ ระบบจะปฏิเสธ
+              และให้ใช้ <strong>&ldquo;ปิดใช้งาน&rdquo;</strong> แทน เพราะการลบเท่ากับแก้ไขประวัติย้อนหลัง
+            </p>
+            {delState?.error && (
+              <p className="rounded-lg bg-rose-50 p-3 text-xs text-rose-700 leading-relaxed">{delState.error}</p>
+            )}
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="outline" size="sm" onClick={() => setDelOpen(false)}>
+                ยกเลิก
+              </Button>
+              <Button type="submit" size="sm" variant="destructive" disabled={delPending}>
+                {delPending ? "กำลังลบ…" : "ยืนยันลบ"}
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {resetState?.success && <span className="text-[11px] text-emerald-700 font-semibold">ส่งอีเมลแล้ว</span>}
+      {resetState?.error && <span className="text-[11px] text-rose-700">{resetState.error}</span>}
+    </div>
   );
 }

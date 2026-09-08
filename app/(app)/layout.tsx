@@ -9,7 +9,8 @@ import { BranchPicker } from "@/components/branch-picker";
 import { MainNav } from "@/components/main-nav";
 import { MobileNav } from "@/components/mobile-nav";
 import { ThemeToggle } from "@/components/theme-toggle";
-import { Footprints, LogOut, ShieldCheck } from "lucide-react";
+import { Footprints, LogOut, ShieldCheck, UserCircle } from "lucide-react";
+import Link from "next/link";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
@@ -104,6 +105,16 @@ export default async function AppLayout({ children }: { children: React.ReactNod
                 {profile.display_name}
               </span>
             </div>
+
+            {/* ทางเข้าหน้าบัญชีของฉัน — ทุก role เข้าได้ (เปลี่ยนรหัสผ่านของตัวเอง)
+                จงใจไม่ใส่ในเมนูหลัก เพราะไม่ใช่งานประจำวัน แต่ต้องหาเจอง่ายจากชื่อผู้ใช้ */}
+            <Link
+              href="/account"
+              title="บัญชีของฉัน (เปลี่ยนรหัสผ่าน)"
+              className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-teal-50 hover:text-teal-700 dark:text-slate-500 dark:hover:bg-teal-900/20 dark:hover:text-teal-300"
+            >
+              <UserCircle className="h-4 w-4" />
+            </Link>
 
             <ThemeToggle />
 
