@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * รัน migration 0024 ใส่ Postgres จริง (PGlite/WASM — ไม่ต้องมี Docker)
+ * รัน migration 0024 + 0025 ใส่ Postgres จริง (PGlite/WASM — ไม่ต้องมี Docker)
  *
  * ทำไมต้องมี: migration กลุ่มนี้ต้อง apply ด้วยมือผ่าน Supabase SQL Editor (repo ไม่มีสิทธิ์ DDL
  * ไปที่ SneakerCareDB) ⇒ ถ้า SQL พิมพ์ผิดจะไปรู้ตอนเจ้าของ paste ลง production แล้ว
@@ -26,6 +26,7 @@ import { fileURLToPath } from "node:url";
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const sql0024 = fs.readFileSync(path.join(root, "supabase/migrations/0024_sc_expense_entries.sql"), "utf8");
 const rollback0024 = fs.readFileSync(path.join(root, "supabase/migrations/rollback/0024_rollback.sql"), "utf8");
+const sql0025 = fs.readFileSync(path.join(root, "supabase/migrations/0025_expense_entries_legacy_ref.sql"), "utf8");
 
 const db = new PGlite();
 let failures = 0;
@@ -184,7 +185,41 @@ const touched = await count(
 );
 check(touched === 1, "updated_at ขยับเองเมื่อแก้ไขแถว", "updated_at ไม่ขยับหลัง update");
 
-console.log("\n[0024-7] rollback ต้องลบของที่สร้างได้หมด");
+console.log("\n[0024-7] migration 0025 (legacy_ref)");
+await shouldSucceed("รัน 0025 ต่อจาก 0024 ได้", sql0025);
+await shouldSucceed("รัน 0025 ซ้ำได้ (idempotent)", sql0025);
+const refFilled = await count(
+  `select count(*)::int as n from sc_expense_entries
+   where legacy_ref = legacy_opex_id::text and legacy_opex_id is not null`
+);
+check(refFilled > 0, "เติม legacy_ref ให้แถวเดิมที่มี legacy_opex_id แล้ว", "ไม่ได้เติม legacy_ref ให้แถวเดิม");
+await shouldSucceed(
+  "บันทึกรายการย่อยของ misc ด้วย legacy_ref แบบ <id>-misc-<index> ได้",
+  `insert into sc_expense_entries (entry_date, amount, category, title, legacy_ref)
+   values ('2026-06-01', 711, 'supplies_cogs', 'น้ำยาซักรองเท้าหนังกลับ', '2003-misc-0'),
+          ('2026-06-01', 438, 'supplies_cogs', 'น้ำหอม', '2003-misc-1')`
+);
+await shouldFail(
+  "กัน backfill ซ้ำ (legacy_ref ซ้ำ) — ถ้าพลาดคือค่าใช้จ่ายทั้งเดือนถูกนับสองรอบ",
+  `insert into sc_expense_entries (entry_date, amount, category, title, legacy_ref)
+   values ('2026-06-01', 711, 'supplies_cogs', 'น้ำยาซักรองเท้าหนังกลับ', '2003-misc-0')`
+);
+await shouldSucceed(
+  "insert ที่ส่งแต่ legacy_opex_id มา (โค้ด dual-write เดิม) ยังบันทึกได้",
+  `insert into sc_expense_entries (entry_date, amount, category, title, legacy_opex_id)
+   values ('2026-06-01', 55, 'admin_general', 'ทดสอบ trigger', 4242)`
+);
+const autoRef = await count(
+  `select count(*)::int as n from sc_expense_entries where legacy_opex_id = 4242 and legacy_ref = '4242'`
+);
+check(autoRef === 1, "trigger เติม legacy_ref ให้เองเมื่อโค้ดไม่ได้ส่งมา", "trigger ไม่ได้เติม legacy_ref");
+await shouldFail(
+  "จึงกัน dual-write ซ้ำได้ด้วย (legacy_ref ที่ trigger เติมชนกัน)",
+  `insert into sc_expense_entries (entry_date, amount, category, title, legacy_ref)
+   values ('2026-06-01', 55, 'admin_general', 'ซ้ำ', '4242')`
+);
+
+console.log("\n[0024-8] rollback ต้องลบของที่สร้างได้หมด");
 await shouldSucceed("รัน rollback ได้", rollback0024);
 const leftover = await count(
   `select count(*)::int as n from pg_tables where schemaname='public'
