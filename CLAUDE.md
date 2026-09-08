@@ -821,12 +821,24 @@ migration `0014` + `0015`** (ยิงซ้ำหลังปิดแล้ว
    เหลือเฉพาะ `admin`/`co-admin` ผ่าน `sc_get_my_role()` · `sc_sales`/`sc_payments`
    **จงใจไม่แตะ** เพราะพนักงานหน้าร้านต้องบันทึกยอดขายรายวัน (ยอดขายไม่ใช่ข้อมูลต้นทุนตามกฎข้อ 5)
 
-## Deploy ล่าสุด (2026-09-08)
+## Deploy ล่าสุด (2026-09-08, รอบดึก — ฟอนต์ Prompt + /expenses เร็วขึ้น)
 
-- **production รัน commit `d420290`** — `npm run deploy` สำเร็จ · ตรวจหลัง deploy:
-  `/login` 200 · **`/account` 307** (หน้าใหม่ขึ้นแล้ว — 307 คือถูกต้อง แปลว่าบังคับล็อกอิน)
-  · `/dashboard` 307 · `/admin/users` 307 · PM2 `sneakercare` online · unstable restarts 0
+- **production รัน commit `9bf4d81`** — `npm run deploy` สำเร็จ
+- **ยืนยันฟอนต์จาก CSS ที่ production เสิร์ฟจริง** ไม่ใช่แค่ดูโค้ด:
+  `curl <css ที่หน้า /login โหลด> | grep font-family` → `font-family:Prompt` ·
+  `Prompt Fallback` (next/font สร้าง fallback metric-matched ให้เอง กัน layout shift)
+- ตรวจหลัง deploy: `/login` 200 · `/account` 307 · `/expenses` 307 · PM2 online
+- **หมายเหตุวิธีตรวจ:** grep หาคำว่า "Prompt" ใน HTML จะไม่เจอ เพราะ next/font ฝังฟอนต์เป็น
+  ชื่อคลาสที่ถูก hash ไว้ ต้องตามไปดูไฟล์ CSS ที่หน้านั้นโหลดจริงเสมอ
+
+<details><summary>Deploy ก่อนหน้า (2026-09-08 — /account + user management)</summary>
+
+- **production รัน commit `d420290`** — `/login` 200 · **`/account` 307** (หน้าใหม่ขึ้นแล้ว —
+  307 คือถูกต้อง แปลว่าบังคับล็อกอิน) · `/dashboard` 307 · `/admin/users` 307
+  · PM2 `sneakercare` online · unstable restarts 0
 - crontab บน VPS มี `0 4 1 * *` ของ CSV รายเดือนแล้ว (ยืนยันด้วย `crontab -l`)
+
+</details>
 
 <details><summary>Deploy ก่อนหน้า (2026-09-08 — การ์ดกำไรก่อน/หลังแบ่ง)</summary>
 
