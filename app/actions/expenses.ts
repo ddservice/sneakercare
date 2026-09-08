@@ -6,7 +6,7 @@ import { revalidatePath } from "next/cache";
 import { logAudit } from "@/lib/audit";
 import { calculateExpenseBreakdown, applyEntriesToBreakdown } from "@/lib/expense-totals";
 import { SUPPLY_CATEGORIES, sumStockPurchases, monthBounds } from "@/lib/stock-purchases";
-import { mirrorExpenseEntry, unmirrorExpenseEntry } from "@/lib/expense-mirror";
+import { mirrorExpenseEntry, unmirrorExpenseEntry, mirrorPayslip } from "@/lib/expense-mirror";
 
 /** เดือนปัจจุบันในรูปแบบ "MM/YYYY" ที่ตาราง sc_opex ใช้ทั้งไฟล์ */
 function currentMonthMY(): string {
@@ -932,6 +932,26 @@ export async function saveStaffPayrollAdjustment(payload: {
       net_pay: payload.netPay,
       pay_method: payload.payMethod || "บัญชีร้าน",
     },
+  });
+
+  // เขียนกระจกเงาลง sc_payslips/sc_payslip_deductions ด้วย (ขั้นที่ 5 ของแผน)
+  //
+  // ⚠️ เจ้าของเลือกไม่สลับการอ่านเงินเดือน (2026-09-08) หน้าเว็บจึงยังอ่านจาก sc_opex
+  // เหมือนเดิม — แต่ถ้าไม่เขียนตาม ตารางใหม่จะค้างอยู่ที่ข้อมูลวันที่ backfill แล้วเก่าลง
+  // ทุกครั้งที่มีคนบันทึกเงินเดือน กลายเป็น "ตารางเงินที่ดูเหมือนใช้ได้แต่ผิด"
+  // ซึ่งอันตรายกว่าไม่มีตารางเลย · ตัวนี้ไม่ throw จึงไม่มีทางทำให้การบันทึกของผู้ใช้ล้ม
+  await mirrorPayslip({
+    month: m,
+    employeeName: cleanKeyName,
+    baseSalary: payload.baseSalary,
+    diligence: payload.diligence,
+    ot: payload.ot,
+    commissionPct: payload.commPct,
+    wht: payload.wht,
+    deductionTotal: deductTotal,
+    netPay: payload.netPay,
+    deductions: deductItems,
+    createdBy: profile.id,
   });
 
   revalidatePath("/", "layout");
