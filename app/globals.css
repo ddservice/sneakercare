@@ -417,10 +417,15 @@
     margin: 12mm 15mm;
   }
 
+  /* ⚠️ ฟอนต์ตอนพิมพ์ = IBM Plex Sans Thai ไม่ใช่ Prompt ที่ใช้บนหน้าเว็บ (ตั้งใจให้ต่างกัน)
+     เจ้าของสั่งไว้ 2026-09-08: หน้าเว็บเปลี่ยนเป็น Prompt ได้ แต่เอกสารที่พิมพ์ออกกระดาษ
+     (สลิปเงินเดือน · ใบกำกับภาษี · หนังสือรับรองหัก ณ ที่จ่าย · ใบวางบิล · ตารางงาน · รายงาน)
+     ต้องคงรูปแบบเดิมไว้ เพราะเป็นเอกสารที่ออกไปหาพนักงาน/ลูกค้า/สรรพากรมาตลอด
+     ตัวแปรมาจาก `ibmPlexSansThai` ใน app/layout.tsx — **ห้ามลบตัวนั้นทิ้ง** */
   html, body {
     background: #ffffff !important;
     color: #000000 !important;
-    font-family: var(--font-sans), 'Prompt', sans-serif !important;
+    font-family: var(--font-ibm-plex), 'IBM Plex Sans Thai', sans-serif !important;
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
     width: 100% !important;
@@ -439,6 +444,16 @@
     visibility: hidden !important;
   }
   .printable-area,
+  /* ต้องบังคับซ้ำที่ลูกทุกตัว ไม่ใช่ตั้งที่ body อย่างเดียว — element ข้างในเอกสารที่ติดคลาส
+     `font-sans` ของ Tailwind ไว้จะประกาศ font-family ของตัวเอง ซึ่งชนะการสืบทอดจาก body เสมอ
+     (specificity ชนะ inheritance) ⇒ ถ้าไม่ใส่ตรงนี้ บางบรรทัดในเอกสารจะเป็น Prompt ปนมา */
+  .printable-area,
+  .printable-area *,
+  #print-portal-root,
+  #print-portal-root * {
+    font-family: var(--font-ibm-plex), 'IBM Plex Sans Thai', sans-serif !important;
+  }
+
   .printable-area * {
     visibility: visible !important;
   }
