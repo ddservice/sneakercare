@@ -1,10 +1,13 @@
 import type { Metadata } from "next";
-import { IBM_Plex_Sans_Thai } from "next/font/google";
+import { Prompt } from "next/font/google";
 import { ThemeProvider } from "@/components/theme-provider";
 import "./globals.css";
 
-const ibmPlexSansThai = IBM_Plex_Sans_Thai({
-  variable: "--font-ibm-plex",
+// ⚠️ Prompt ไม่ใช่ variable font — ต้องระบุ weight ที่ใช้ให้ครบทุกตัว
+// ถ้าขาดตัวไหน เบราว์เซอร์จะ "ปลอม" น้ำหนักนั้นเอง (synthetic bold) ซึ่งภาษาไทยจะดูเละ
+// 300/400/500/600/700 = ครบทุกน้ำหนักที่ระบบใช้จริง (font-light ถึง font-bold)
+const prompt = Prompt({
+  variable: "--font-prompt",
   subsets: ["thai", "latin"],
   weight: ["300", "400", "500", "600", "700"],
   display: "swap",
@@ -34,7 +37,7 @@ export default function RootLayout({
     <html
       lang="th"
       suppressHydrationWarning
-      className={`${ibmPlexSansThai.variable} h-full antialiased`}
+      className={`${prompt.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col font-sans bg-slate-50 text-slate-900 antialiased selection:bg-teal-600 selection:text-white dark:bg-slate-950 dark:text-slate-100">
         <ThemeProvider attribute="class" defaultTheme="light" enableSystem={false}>

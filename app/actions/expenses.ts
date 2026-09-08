@@ -119,11 +119,10 @@ export async function fetchAllExpensesData(timeRange: string = "this_month"): Pr
   const supabase = createAdminClient();
 
   // Fetch all records from sc_opex
-  const { data: rows } = await supabase.from("sc_opex")
+  // (ยังไม่ await ตรงนี้ — รวมไปยิงพร้อมกับ query อื่นด้านล่าง ดูคอมเมนต์ "ยิง query พร้อมกัน")
+  const opexQuery = supabase.from("sc_opex")
     .select("*")
     .order("id", { ascending: false });
-
-  const allRows = rows || [];
 
   // Determine target month or all-time
   //
@@ -170,12 +169,56 @@ export async function fetchAllExpensesData(timeRange: string = "this_month"): Pr
     targetSalesMonth = `${y}-${m}`;
   }
 
-  // Fetch sales to calculate commission %
+  // ══ ยิง query พร้อมกัน (2026-09-08) ══════════════════════════════════════
+  // ทั้ง 5 ตัวไม่ได้ใช้ผลลัพธ์ของกันและกันเลย แต่เดิมเขียนเป็น `await` ทีละตัวไล่ลงมา
+  // ⇒ รอเน็ตทีละรอบซ้อนกัน 5 รอบ · Supabase อยู่ที่โซล วัดจริงจาก VPS ได้ ~230 ms/รอบ
+  // ⇒ เสียเวลาไปเปล่าๆ ประมาณ 1 วินาทีทุกครั้งที่เปิดหน้านี้ โดยไม่ได้อะไรตอบแทน
+  //
+  // ⚠️ **ต้องรวมใน `Promise.all` เท่านั้น** — query builder ของ Supabase เป็น thenable
+  // ที่ยิง HTTP ตอนถูก await ไม่ใช่ตอนสร้าง ⇒ ถ้าแค่ประกาศตัวแปรไว้แล้วไล่ `await` ทีละตัว
+  // มันจะยังทำงานแบบเรียงกันเหมือนเดิมทุกประการ (ดูเหมือนขนานแต่ไม่ขนาน)
+  //
+  // ⚠️ rental กับ stock ห่อ `.catch()` ไว้ เพราะของเดิมอยู่ใน try/catch ที่จงใจไม่ให้ทั้งหน้าพัง
+  //    เวลาสองตัวนี้ล้ม (ตัวหนึ่งเป็น fallback อีกตัวเป็นแค่แถบเตือน) — ถ้าใส่ดิบๆ ใน Promise.all
+  //    error จากตัวใดตัวหนึ่งจะทำให้ทั้งหน้าล้มแทน ซึ่งแย่กว่าเดิม
+  const failSoft = <T,>(q: PromiseLike<T> | null, label: string): Promise<T | null> =>
+    q === null ? Promise.resolve(null) : Promise.resolve(q).catch((err) => {
+      console.error(`[expenses] ${label} ล้มเหลว:`, err);
+      return null;
+    });
+
   let salesQuery = supabase.from("sc_sales").select("date, total_revenue, grand_total, discount");
   if (!isAllTime) {
     salesQuery = salesQuery.gte("date", `${targetSalesMonth}-01`).lte("date", `${targetSalesMonth}-31`);
   }
-  const { data: salesRows } = await salesQuery;
+
+  const rentalQuery = isAllTime
+    ? null
+    : supabase
+        .from("sc_rental_records")
+        .select("month, room_index, room_name, prev_meter, curr_meter, rent_amount, income_amount")
+        .eq("month", targetMonthFilter)
+        .order("room_index");
+
+  const stockBounds = isAllTime ? null : monthBounds(targetMonthFilter);
+  const stockQuery = stockBounds
+    ? supabase
+        .from("inv_stock_transactions")
+        .select("id, txn_type, status, corrects_txn_id, total_cost")
+        .gte("transaction_date", stockBounds.gte)
+        .lt("transaction_date", stockBounds.lt)
+    : null;
+
+  const [opexRes, salesRes, employeeRes, rentalRes, stockRes] = await Promise.all([
+    opexQuery,
+    salesQuery,
+    supabase.from("sc_employees").select("*"),
+    failSoft(rentalQuery, "อ่าน sc_rental_records"),
+    failSoft(stockQuery, "เทียบกับ ledger คลังสินค้า"),
+  ]);
+
+  const allRows = opexRes.data || [];
+  const salesRows = salesRes.data;
 
   const totalMonthlySales = (salesRows || []).reduce(
     (sum: number, r) => sum + Number(r.total_revenue || (Number(r.grand_total || 0) - Number(r.discount || 0))),
@@ -331,8 +374,8 @@ export async function fetchAllExpensesData(timeRange: string = "this_month"): Pr
     employeeRole: "ช่างสปารองเท้า (ทดลองงาน)",
   };
 
-  // Fetch registered staff from sc_employees to include 4th, 5th, etc.
-  const { data: dbEmployees } = await supabase.from("sc_employees").select("*");
+  // Fetch registered staff from sc_employees to include 4th, 5th, etc. (ยิงไปพร้อมก้อนบนแล้ว)
+  const dbEmployees = employeeRes.data;
   (dbEmployees || []).forEach((emp) => {
     const matchedKey = Object.keys(staffMap).find(
       (k) => k.includes(emp.name) || (emp.nickname && k.includes(emp.nickname))
@@ -563,12 +606,9 @@ export async function fetchAllExpensesData(timeRange: string = "this_month"): Pr
 
   let rentals: RentalRecord[] = legacyRentals;
   if (!isAllTime) {
-    try {
-      const { data: rentalRows, error: rentalError } = await supabase
-        .from("sc_rental_records")
-        .select("month, room_index, room_name, prev_meter, curr_meter, rent_amount, income_amount")
-        .eq("month", targetMonthFilter)
-        .order("room_index");
+    {
+      const rentalRows = rentalRes?.data ?? null;
+      const rentalError = rentalRes?.error ?? null;
       if (rentalError) {
         console.error("[expenses] อ่าน sc_rental_records ไม่สำเร็จ ใช้ sc_opex แทน:", rentalError.message);
       } else if (rentalRows && rentalRows.length > 0) {
@@ -589,8 +629,6 @@ export async function fetchAllExpensesData(timeRange: string = "this_month"): Pr
           };
         });
       }
-    } catch (err) {
-      console.error("[expenses] อ่าน sc_rental_records ล้มเหลว ใช้ sc_opex แทน:", err);
     }
   }
   const totalRentalIncome = rentals.reduce((sum, r) => sum + r.totalIncome, 0);
@@ -600,28 +638,15 @@ export async function fetchAllExpensesData(timeRange: string = "this_month"): Pr
   // ถ้าลงแค่ฝั่งคลัง เงินก้อนนั้นจะหายจากยอดค่าใช้จ่ายเงียบๆ — เคยขาดรวมกันเกือบ ฿21,000
   // ในช่วง ก.พ.–ก.ค. 69 โดยไม่มีใครรู้จนต้องกระทบยอดกับ Excel ทีละบรรทัด
   let stockCheck: ExpensesPayload["stockCheck"] = null;
-  if (!isAllTime) {
-    const bounds = monthBounds(targetMonthFilter);
-    if (bounds) {
-      try {
-        const { data: txnRows } = await supabase
-          .from("inv_stock_transactions")
-          .select("id, txn_type, status, corrects_txn_id, total_cost")
-          .gte("transaction_date", bounds.gte)
-          .lt("transaction_date", bounds.lt);
-        const supplyExpenses = filteredRows
-          .filter((r) => SUPPLY_CATEGORIES.has(String(r.category ?? "")))
-          .reduce((sum, r) => sum + Number(r.amount || 0), 0);
-        stockCheck = {
-          month: targetMonthFilter,
-          stockPurchases: sumStockPurchases(txnRows ?? []),
-          supplyExpenses: Math.round(supplyExpenses * 100) / 100,
-        };
-      } catch (err) {
-        // ไม่ให้ทั้งหน้าพังเพราะตัวเตือน — แต่ต้องไม่เงียบสนิท
-        console.error("[expenses] เทียบกับ ledger คลังสินค้าไม่สำเร็จ:", err);
-      }
-    }
+  if (stockRes) {
+    const supplyExpenses = filteredRows
+      .filter((r) => SUPPLY_CATEGORIES.has(String(r.category ?? "")))
+      .reduce((sum, r) => sum + Number(r.amount || 0), 0);
+    stockCheck = {
+      month: targetMonthFilter,
+      stockPurchases: sumStockPurchases(stockRes.data ?? []),
+      supplyExpenses: Math.round(supplyExpenses * 100) / 100,
+    };
   }
 
   return {
