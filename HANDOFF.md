@@ -1,6 +1,6 @@
 # HANDOFF — งานค้างและวิธีทำต่อ
 
-อัปเดต 2026-09-07 · เขียนไว้ให้ agent ตัวถัดไป (Antigravity / Claude Code / คนก็ได้) อ่านแล้วทำต่อได้เลย
+อัปเดต 2026-09-08 · เขียนไว้ให้ agent ตัวถัดไป (Antigravity / Claude Code / คนก็ได้) อ่านแล้วทำต่อได้เลย
 
 > **อ่าน `CLAUDE.md` ให้จบก่อนเริ่ม** โดยเฉพาะหัวข้อ "กฎทางธุรกิจที่ต้องไม่ละเมิด" 13 ข้อ
 > กฎพวกนั้นสำคัญกว่าความสะดวกทุกอย่างในเอกสารนี้ ถ้าขัดกันให้ยึด `CLAUDE.md`
@@ -42,10 +42,9 @@
 - branch `master` · tracking `origin/master` (`https://github.com/ddservice/sneakercare.git`)
 - ผ่านหมดแล้วบนเครื่อง dev: `npm run typecheck`, `npm run build`,
   `npm run test:legacy`, `npm run test:reports`, `npm run test:migration`
-- `npm run lint` **ยังแดงอยู่ทั้ง repo** (233 error) แต่เกือบทั้งหมดคือ `no-explicit-any` ที่มีมาก่อนแล้ว
-  จากรูปแบบ `(supabase.from("sc_x" as any) as any)` ที่ใช้ทั่วโปรเจกต์ เพราะตาราง `sc_*`
-  ไม่ได้อยู่ใน `lib/supabase/database.types.ts` — baseline ก่อนงานรอบนี้คือ 221 error
-  **ทางแก้ที่ถูกต้องคือ generate types ของตาราง `sc_*` เพิ่ม ไม่ใช่ปิด rule**
+- `npm run lint` **สะอาด 0 ปัญหาแล้ว** (2026-09-08 — เดิม 68 error + 71 warning ทำให้ CI แดงทุก push)
+  ทางแก้คือ generate types ของตาราง `sc_*`/`extension_layer` แล้วถอด `as any` ออกจริง ไม่ใช่ปิด rule
+  **ห้ามเพิ่ม `as any` ใหม่** — ดูรูปแบบที่ใช้แทนในหัวข้อ "lint สะอาด" ของ `CLAUDE.md`
 - **ยังไม่เคยรัน**: `supabase test db` (ต้องมี Docker),
   `scripts/verify-backup.sh --deep` (ต้องมี Docker + pg_restore)
 - **ยังไม่มีใครเปิดดูหน้าเว็บจริง** ของงานรอบนี้ (ดูงานที่ 4)
