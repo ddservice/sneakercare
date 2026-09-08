@@ -1,6 +1,7 @@
 import { requireProfile, requireModuleView } from "@/lib/auth";
 import { withId, text, num } from "@/lib/db-rows";
 import { createClient } from "@/lib/supabase/server";
+import { getSelectedBranchId } from "@/lib/branch";
 import { canSeeCost, canWrite } from "@/lib/permissions";
 import { InventoryClient, type InventoryRow } from "./inventory-client";
 
@@ -9,14 +10,17 @@ export const dynamic = "force-dynamic";
 export default async function InventoryHubPage() {
   const profile = await requireProfile();
   requireModuleView(profile, "inventory");
+  const selectedBranchId = await getSelectedBranchId(profile);
   const supabase = await createClient();
   const isCostVisible = canSeeCost(profile.role);
   const canEdit = canWrite(profile.role, "inventory");
 
-  // ⚠️ หน้านี้ **ไม่ได้** กรองสาขาด้วยคุกกี้ `sc_active_branch` เอง — พึ่ง WHERE ที่ฝังอยู่ใน
-  // staff-safe view `v_item_stock` (กรองด้วย inv_fn_current_branch()) เท่านั้น
-  // สำหรับ admin ฟังก์ชันนั้นคืน null = เห็นทุกสาขา ตอนนี้ยังไม่เห็นอาการเพราะมีสาขาเดียว
-  // **วันที่เปิดสาขาที่สอง ต้องกลับมาเติมตัวกรองสาขาที่นี่ก่อน** ไม่งั้นยอดจะรวมข้ามสาขาเงียบๆ
+  // ── ตัวกรองสาขา (กฎข้อ 12) ────────────────────────────────────────────────
+  // staff/co-admin ถูก view `v_item_stock` กรองสาขาให้ในตัวอยู่แล้ว (inv_fn_current_branch())
+  // แต่ **admin ฟังก์ชันนั้นคืน null = เห็นทุกสาขา** ⇒ ถ้า admin เลือกสาขาไว้ในคุกกี้
+  // `sc_active_branch` แล้วหน้านี้ไม่กรองตาม จะได้ยอดรวมข้ามสาขาเงียบๆ และถ้ามีมากกว่าหนึ่งสาขา
+  // จะมีหลายแถวต่อสินค้าหนึ่งชิ้น แล้ว Map ด้านล่างจะเก็บแค่แถวสุดท้าย = ตัวเลขมั่วโดยไม่มีใครรู้
+  // ตอนนี้มีสาขาเดียวจึงยังไม่เห็นอาการ — เติมไว้ก่อนเพื่อไม่ให้ระเบิดวันเปิดสาขาที่สอง
   //
   // ⚠️ (แก้ 2026-09-07) เดิมหน้านี้ join `item_stock` เข้ามาตรงๆ ซึ่งผิดกฎข้อ 5 ใน CLAUDE.md
   // ("Staff ต้องไม่เห็นข้อมูลต้นทุน — ห้าม SELECT จากตาราง item_stock ตรงๆ") และหลังจาก
@@ -25,11 +29,17 @@ export default async function InventoryHubPage() {
   // เปลี่ยนเป็น: อ่านจำนวนจาก staff-safe view (`v_item_stock` ไม่มีคอลัมน์ต้นทุน และกรองสาขา
   // ให้ในตัว) ส่วนต้นทุนดึงแยกเฉพาะคนที่มีสิทธิ์เห็นจริงเท่านั้น — พนักงานจะไม่มีทางได้ข้อมูล
   // ต้นทุนติดมากับ payload ตั้งแต่ฝั่งเซิร์ฟเวอร์ ไม่ใช่แค่ซ่อนตอนแสดงผล
+  let stockQuery = supabase.from("v_item_stock").select("item_id, current_qty, min_stock_level, alert_muted");
+  if (selectedBranchId) stockQuery = stockQuery.eq("branch_id", selectedBranchId);
+
+  let costQuery = supabase.from("item_stock").select("item_id, avg_unit_cost");
+  if (selectedBranchId) costQuery = costQuery.eq("branch_id", selectedBranchId);
+
   const [{ data: rawItems }, { data: stockRows }, { data: costRows }] = await Promise.all([
     supabase.from("items").select("*").order("name"),
-    supabase.from("v_item_stock").select("item_id, current_qty, min_stock_level, alert_muted"),
+    stockQuery,
     isCostVisible
-      ? supabase.from("item_stock").select("item_id, avg_unit_cost")
+      ? costQuery
       : Promise.resolve({ data: [] as { item_id: string | null; avg_unit_cost: number | null }[] }),
   ]);
 

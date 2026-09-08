@@ -21,6 +21,11 @@
 import { createClient } from "@supabase/supabase-js";
 import fs from "node:fs";
 
+// โหลดสูตรกลางจาก lib/stock-purchases.ts (คอมไพล์ไว้ที่ .test-build โดย npm script)
+const { SUPPLY_CATEGORIES, sumStockPurchases } = await import(
+  new URL("../.test-build/stock-purchases.js", import.meta.url).href
+);
+
 function loadEnv() {
   const out = {};
   for (const line of fs.readFileSync(".env.local", "utf8").split(/\r?\n/)) {
@@ -46,17 +51,17 @@ if (txnErr) {
   console.error("อ่าน inv_stock_transactions ไม่สำเร็จ:", txnErr.message);
   process.exitCode = 1;
 } else {
-  // แถวที่ถูก "แก้ไขทับ" ไปแล้ว (มีแถวใหม่อ้าง corrects_txn_id มาที่มัน) ห้ามนับซ้ำ
-  const superseded = new Set(txn.filter((t) => t.corrects_txn_id).map((t) => t.corrects_txn_id));
-
-  const stockByMonth = {};
+  // ใช้สูตรเดียวกับที่หน้า /expenses ใช้เตือนบนหน้าจอ (lib/stock-purchases.ts)
+  // เพื่อไม่ให้สคริปต์กับหน้าเว็บตอบคนละอย่าง — บทเรียนจากตอนที่ /dashboard กับ /expenses
+  // เขียนกฎกรอง sc_opex กันคนละชุดแล้วแสดงยอดไม่ตรงกันอยู่นาน
+  const byMonthRows = {};
   for (const t of txn) {
-    if (t.txn_type !== "stock_in" || t.status === "rejected") continue;
-    if (superseded.has(t.id)) continue;
     const m = String(t.transaction_date || "").slice(0, 7);
     if (!m) continue;
-    stockByMonth[m] = (stockByMonth[m] || 0) + Math.abs(Number(t.total_cost || 0));
+    (byMonthRows[m] ||= []).push(t);
   }
+  const stockByMonth = {};
+  for (const [m, rows] of Object.entries(byMonthRows)) stockByMonth[m] = sumStockPurchases(rows);
 
   // ── 2) ค่าใช้จ่ายฝั่งการเงินของเดือนเดียวกัน ─────────────────────────────
   const { data: opex, error: opexErr } = await sb.from("sc_opex").select("month, category, key, name, amount");
@@ -64,8 +69,6 @@ if (txnErr) {
     console.error("อ่าน sc_opex ไม่สำเร็จ:", opexErr.message);
     process.exitCode = 1;
   } else {
-    // หมวดที่ใช้บันทึก "ของที่ซื้อเข้าร้าน" — ถ้าเพิ่มหมวดใหม่ในอนาคตต้องมาเติมที่นี่
-    const SUPPLY_CATEGORIES = new Set(["น้ำยา & วัสดุสิ้นเปลือง", "ดำเนินงาน & เบ็ดเตล็ด"]);
     const supplyByMonth = {};
     for (const r of opex) {
       if (!SUPPLY_CATEGORIES.has(String(r.category ?? ""))) continue;

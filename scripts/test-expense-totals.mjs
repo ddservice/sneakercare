@@ -156,5 +156,34 @@ else bad("คืนเงินหุ้นส่วน ต้องไม่ถ
 if (isPartnerShareEntry("อะไรก็ตาม", PARTNER_SHARE_CATEGORY)) ok("isPartnerShareEntry: ยึด category ใหม่เป็นหลักได้");
 else bad("แถวที่ category เป็น " + PARTNER_SHARE_CATEGORY + " ควรถูกนับเป็นส่วนแบ่ง");
 
+
+console.log("\n[9] สูตรรวมเงินซื้อของเข้าคลัง (lib/stock-purchases.ts)");
+const { sumStockPurchases, monthBounds, SUPPLY_CATEGORIES } = await import(
+  new URL("../.test-build/stock-purchases.js", import.meta.url).href
+);
+eq("นับเฉพาะ stock_in", sumStockPurchases([
+  { id: "a", txn_type: "stock_in", total_cost: 100 },
+  { id: "b", txn_type: "stock_out", total_cost: 999 },
+  { id: "c", txn_type: "adjustment_decrease", total_cost: 999 },
+]), 100);
+eq("ข้ามแถวที่ถูกแก้ไขทับแล้ว", sumStockPurchases([
+  { id: "a", txn_type: "stock_in", total_cost: 796 },
+  { id: "b", txn_type: "adjustment_decrease", corrects_txn_id: "a", total_cost: 754.1 },
+  { id: "c", txn_type: "stock_in", corrects_txn_id: "a", total_cost: 531 },
+]), 531);
+eq("ข้ามแถวที่ถูก reject", sumStockPurchases([
+  { id: "a", txn_type: "stock_in", total_cost: 100 },
+  { id: "b", txn_type: "stock_in", status: "rejected", total_cost: 999 },
+]), 100);
+eq("ต้นทุนติดลบนับเป็นค่าสัมบูรณ์", sumStockPurchases([{ id: "a", txn_type: "stock_in", total_cost: -250 }]), 250);
+eq("ไม่มีแถวเลย = 0", sumStockPurchases([]), 0);
+const mb = monthBounds("12/2026");
+if (mb && mb.gte === "2026-12-01" && mb.lt === "2027-01-01") ok("monthBounds ข้ามปีถูกต้อง");
+else bad(`monthBounds("12/2026") ได้ ${JSON.stringify(mb)}`);
+if (monthBounds("ไม่ใช่เดือน") === null) ok("monthBounds คืน null เมื่อรูปแบบผิด");
+else bad("monthBounds ควรคืน null เมื่อรูปแบบผิด");
+if (SUPPLY_CATEGORIES.has("น้ำยา & วัสดุสิ้นเปลือง")) ok("SUPPLY_CATEGORIES มีหมวดน้ำยา");
+else bad("SUPPLY_CATEGORIES ต้องมีหมวดน้ำยา");
+
 console.log(failures === 0 ? "\n✅ ผ่านทั้งหมด" : `\n❌ ไม่ผ่าน ${failures} ข้อ`);
 process.exitCode = failures === 0 ? 0 : 1;

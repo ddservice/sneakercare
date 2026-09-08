@@ -50,6 +50,7 @@ import {
   ChevronLeft,
   ChevronRight,
   RefreshCw,
+  AlertCircle,
 } from "lucide-react";
 
 const THAI_MONTH_NAMES = [
@@ -768,6 +769,37 @@ export function ExpensesClient({
           <div className="text-lg font-black text-emerald-700 dark:text-emerald-300 font-mono shrink-0">
             +฿{data.totalRentalIncome.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
           </div>
+        </div>
+      )}
+
+      {/* ── เตือนเมื่อ "ของที่ซื้อเข้าคลัง" กับ "ค่าใช้จ่ายหมวดของใช้" ไม่ตรงกัน ──────────
+          ระบบมี ledger เงินสองสายที่แยกกันสนิท และหน้านี้อ่านแค่ sc_opex ⇒ ของที่ซื้อแล้ว
+          บันทึกเฉพาะฝั่งคลังจะหายจากยอดค่าใช้จ่ายโดยไม่มี error ให้เห็น (เคยขาดเกือบ ฿21,000
+          ช่วง ก.พ.–ก.ค. 69) แถบนี้ทำให้ความต่างนั้นมองเห็นได้ทันทีบนหน้าจอ ไม่ต้องรอกระทบยอด */}
+      {data.stockCheck && data.stockCheck.stockPurchases - data.stockCheck.supplyExpenses > 0.02 && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-300 bg-amber-50/80 dark:bg-amber-900/20 dark:border-amber-800/60 px-4 py-3 print:hidden">
+          <div className="flex items-start gap-3">
+            <div className="rounded-lg bg-amber-100 dark:bg-amber-900/40 p-2 text-amber-700 dark:text-amber-300">
+              <AlertCircle className="h-4 w-4" />
+            </div>
+            <div>
+              <div className="text-xs font-bold text-amber-900 dark:text-amber-200">
+                เดือนนี้มีของที่รับเข้าคลังแล้ว แต่ยังไม่ได้ลงเป็นค่าใช้จ่าย ฿
+                {(data.stockCheck.stockPurchases - data.stockCheck.supplyExpenses).toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+              </div>
+              <div className="text-[11px] text-amber-800/80 dark:text-amber-400/80">
+                รับเข้าคลัง ฿{data.stockCheck.stockPurchases.toLocaleString("th-TH", { minimumFractionDigits: 2 })} ·
+                ลงค่าใช้จ่ายไว้ ฿{data.stockCheck.supplyExpenses.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+                {" — "}ตราบใดที่ยังไม่ลง กำไรที่เห็นจะสูงกว่าความเป็นจริง
+              </div>
+            </div>
+          </div>
+          <a
+            href="/inventory"
+            className="shrink-0 rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-[11px] font-bold text-amber-900 hover:bg-amber-100 dark:bg-slate-900 dark:text-amber-200"
+          >
+            ดูรายการที่รับเข้าคลัง
+          </a>
         </div>
       )}
 

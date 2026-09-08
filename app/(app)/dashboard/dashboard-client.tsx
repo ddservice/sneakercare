@@ -71,6 +71,14 @@ export function DashboardClient({
   };
 
   const [period, setPeriod] = useState<DashboardPeriod>("month");
+
+  // ── เกณฑ์รายรับ ───────────────────────────────────────────────────────────
+  // "cash" = เงินเข้าจริงในช่วงเวลานี้ · "accrual" = ยอดตามบิลที่ออกในช่วงเวลานี้
+  //
+  // ⚠️ ค่าเริ่มต้นต้องเป็น "cash" เสมอ — เจ้าของกระทบยอดกับ Excel ด้วยเกณฑ์เงินเข้าจริง
+  // (ส.ค. 2569 = ฿24,524.79) **ห้ามเปลี่ยนค่าเริ่มต้นโดยไม่ถามเจ้าของ** (ดู CLAUDE.md)
+  // ตัวเลือกนี้เพิ่มมาเพื่อให้เทียบกับ Excel เดือนอื่นที่คิดตามบิลได้โดยไม่ต้องแก้โค้ด
+  const [revenueBasis, setRevenueBasis] = useState<"cash" | "accrual">("cash");
   const [filterDate, setFilterDate] = useState(toTodayLocal);
   const [customStartDate, setCustomStartDate] = useState(toFirstOfMonthLocal);
   const [customEndDate, setCustomEndDate] = useState(toTodayLocal);
@@ -228,11 +236,6 @@ export function DashboardClient({
     };
   }, [salesRows, opexRows, paymentsRows, period, filterDate, customStartDate, customEndDate]);
 
-  // Financial KPI Calculations
-  const totalNetRevenue = filteredSales.reduce(
-    (acc, s) => acc + Number(s.total_revenue || (Number(s.grand_total || 0) - Number(s.discount || 0))),
-    0
-  );
   const totalTransfer = filteredSales.reduce((acc, s) => acc + Number(s.transfer_amount || 0), 0);
   const totalCash = filteredSales.reduce((acc, s) => acc + Number(s.cash_amount || 0), 0);
 
@@ -246,12 +249,19 @@ export function DashboardClient({
   const sizeXLCount = filteredSales.reduce((acc, s) => acc + Number(s.size_xl || 0), 0);
   const totalShoes = sizeSCount + sizeMCount + sizeLCount + sizeXLCount;
 
+  // ยอด "ตามบิล" ของช่วงเวลาที่เลือก (ไม่สนว่าลูกค้าจ่ายแล้วหรือยัง)
+  const totalNetRevenue = filteredSales.reduce(
+    (acc, s) => acc + Number(s.total_revenue || (Number(s.grand_total || 0) - Number(s.discount || 0))),
+    0
+  );
+
   // ── กำไรสุทธิ ────────────────────────────────────────────────────────────
   //
   // ⚠️ ใช้เกณฑ์ "เงินเข้าจริง" ให้ตรงกับที่เจ้าของกระทบยอดเอง (ยืนยันกับ Excel เดือน ส.ค. 69
   // แล้วตรงเป๊ะที่ ฿24,524.79) — ห้ามเปลี่ยนกลับไปใช้ total_revenue ตามบิลโดยไม่คุยกันก่อน
   //   กำไรสุทธิ = เงินเข้าจากบริการ + รายรับห้องเช่า − ค่าใช้จ่ายทั้งหมด
-  const totalIncomeForPeriod = cashRevenueForPeriod + rentalIncomeForPeriod;
+  const serviceRevenueForPeriod = revenueBasis === "cash" ? cashRevenueForPeriod : totalNetRevenue;
+  const totalIncomeForPeriod = serviceRevenueForPeriod + rentalIncomeForPeriod;
   const netProfit = totalIncomeForPeriod - totalExpensesForPeriod;
   const profitMarginPct = totalIncomeForPeriod > 0 ? (netProfit / totalIncomeForPeriod) * 100 : 0;
   const isProfitable = netProfit >= 0;
@@ -392,6 +402,38 @@ export function DashboardClient({
               </Button>
             </div>
 
+            {/* ── เกณฑ์รายรับ ────────────────────────────────────────────────
+                "เงินเข้าจริง" = เงินที่เข้าบัญชี/มือในช่วงนี้ (ค่าเริ่มต้น ตรงกับที่เจ้าของกระทบยอด)
+                "ตามบิล" = ยอดของบิลที่ออกในช่วงนี้ ไม่ว่าลูกค้าจะจ่ายแล้วหรือยัง
+                มีไว้ให้เทียบกับ Excel ที่บางเดือนคิดคนละเกณฑ์ โดยไม่ต้องแก้โค้ด */}
+            <div className="flex flex-wrap items-center gap-2 pt-1">
+              <span className="text-[11px] font-semibold text-slate-500">เกณฑ์รายรับ:</span>
+              {([
+                ["cash", "💵 เงินเข้าจริง"],
+                ["accrual", "🧾 ตามบิล"],
+              ] as const).map(([value, label]) => (
+                <Button
+                  key={value}
+                  type="button"
+                  size="sm"
+                  variant={revenueBasis === value ? "default" : "outline"}
+                  onClick={() => setRevenueBasis(value)}
+                  className={`h-7 text-[11px] font-bold ${
+                    revenueBasis === value
+                      ? "bg-slate-800 text-white hover:bg-slate-700"
+                      : "bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700"
+                  }`}
+                >
+                  {label}
+                </Button>
+              ))}
+              {revenueBasis === "accrual" && (
+                <span className="text-[11px] text-amber-700 font-medium">
+                  รวมบิลที่ลูกค้ายังไม่จ่ายด้วย — ตัวเลขนี้จะไม่ตรงกับเงินในบัญชี
+                </span>
+              )}
+            </div>
+
             {/* Date Navigator for Day / Week / Month */}
             {period !== "all" && period !== "custom" && (
               <div className="flex items-center gap-1.5 bg-white dark:bg-slate-800 p-1 rounded-lg border border-slate-200 dark:border-slate-700 shadow-sm">
@@ -496,17 +538,21 @@ export function DashboardClient({
           <CardContent className="p-5 flex items-center justify-between">
             <div className="space-y-1">
               <span className="text-xs font-semibold text-slate-500">
-                รายรับจากการบริการ <span className="text-slate-400">(เงินเข้าจริงในช่วงนี้)</span>
+                รายรับจากการบริการ{" "}
+                <span className="text-slate-400">
+                  ({revenueBasis === "cash" ? "เงินเข้าจริงในช่วงนี้" : "ตามบิลที่ออกในช่วงนี้"})
+                </span>
               </span>
               <div className="text-2xl font-black text-slate-900 dark:text-slate-100 font-mono">
-                ฿{cashRevenueForPeriod.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+                ฿{serviceRevenueForPeriod.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
               </div>
               {/* แสดงยอดตามบิลกำกับไว้ด้วยเมื่อไม่เท่ากัน เพื่อให้เห็นว่าส่วนต่างคือหนี้ที่ยังไม่เข้า */}
               {/* แสดงเฉพาะตอนที่ยอดตามบิล > เงินเข้าจริง (= ยังมีหนี้ค้าง) — ถ้าติดลบแปลว่า
                   เดือนนี้ได้รับเงินของบิลเดือนก่อน ซึ่งเห็นได้จากตัวเลขเงินเข้าอยู่แล้ว ไม่ต้องบอกซ้ำ */}
               {totalNetRevenue - cashRevenueForPeriod > 0.005 && (
                 <div className="text-[11px] text-slate-500">
-                  ยอดตามบิล ฿{totalNetRevenue.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+                  {revenueBasis === "cash" ? "ยอดตามบิล " : "เงินเข้าจริง "}
+                  ฿{(revenueBasis === "cash" ? totalNetRevenue : cashRevenueForPeriod).toLocaleString("th-TH", { minimumFractionDigits: 2 })}
                   <span className="text-amber-700 font-semibold">
                     {" "}(ยังไม่เข้า ฿{(totalNetRevenue - cashRevenueForPeriod).toLocaleString("th-TH", { minimumFractionDigits: 2 })})
                   </span>

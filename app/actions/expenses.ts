@@ -5,6 +5,7 @@ import { requireProfile } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
 import { logAudit } from "@/lib/audit";
 import { calculateExpenseBreakdown } from "@/lib/expense-totals";
+import { SUPPLY_CATEGORIES, sumStockPurchases, monthBounds } from "@/lib/stock-purchases";
 
 /** เดือนปัจจุบันในรูปแบบ "MM/YYYY" ที่ตาราง sc_opex ใช้ทั้งไฟล์ */
 function currentMonthMY(): string {
@@ -70,6 +71,11 @@ export type ExpensesPayload = {
   totalRentalIncome: number;
   /** ส่วนแบ่งกำไรหุ้นส่วน — รวมอยู่ใน totalOpex/netExpenses แล้ว แยกมาเพื่อแสดงผลเท่านั้น */
   totalPartnerShare: number;
+  /**
+   * ตัวเทียบ "ของที่ซื้อเข้าคลัง" กับ "ค่าใช้จ่ายหมวดของใช้" ของเดือนที่กำลังดู
+   * ใช้เตือนบนหน้าจอเมื่อสองฝั่งไม่ตรงกัน (null = ดูแบบรวมทุกเดือน จึงเทียบไม่ได้)
+   */
+  stockCheck: { month: string; stockPurchases: number; supplyExpenses: number } | null;
   netExpenses: number;
   opexList: RealExpenseRecord[];
   payslips: StaffPayslip[];
@@ -520,6 +526,35 @@ export async function fetchAllExpensesData(timeRange: string = "this_month"): Pr
     }));
   const totalRentalIncome = rentals.reduce((sum, r) => sum + r.totalIncome, 0);
 
+  // ── เทียบกับ ledger คลังสินค้า ────────────────────────────────────────────
+  // ของที่ซื้อเข้าร้านต้องบันทึกทั้งฝั่งคลัง (ตัดสต๊อก) และฝั่ง sc_opex (เงินที่จ่ายออก)
+  // ถ้าลงแค่ฝั่งคลัง เงินก้อนนั้นจะหายจากยอดค่าใช้จ่ายเงียบๆ — เคยขาดรวมกันเกือบ ฿21,000
+  // ในช่วง ก.พ.–ก.ค. 69 โดยไม่มีใครรู้จนต้องกระทบยอดกับ Excel ทีละบรรทัด
+  let stockCheck: ExpensesPayload["stockCheck"] = null;
+  if (!isAllTime) {
+    const bounds = monthBounds(targetMonthFilter);
+    if (bounds) {
+      try {
+        const { data: txnRows } = await supabase
+          .from("inv_stock_transactions")
+          .select("id, txn_type, status, corrects_txn_id, total_cost")
+          .gte("transaction_date", bounds.gte)
+          .lt("transaction_date", bounds.lt);
+        const supplyExpenses = filteredRows
+          .filter((r) => SUPPLY_CATEGORIES.has(String(r.category ?? "")))
+          .reduce((sum, r) => sum + Number(r.amount || 0), 0);
+        stockCheck = {
+          month: targetMonthFilter,
+          stockPurchases: sumStockPurchases(txnRows ?? []),
+          supplyExpenses: Math.round(supplyExpenses * 100) / 100,
+        };
+      } catch (err) {
+        // ไม่ให้ทั้งหน้าพังเพราะตัวเตือน — แต่ต้องไม่เงียบสนิท
+        console.error("[expenses] เทียบกับ ledger คลังสินค้าไม่สำเร็จ:", err);
+      }
+    }
+  }
+
   return {
     timeRange,
     totalMonthlySales,
@@ -527,6 +562,7 @@ export async function fetchAllExpensesData(timeRange: string = "this_month"): Pr
     totalOpex,
     totalRentalIncome,
     totalPartnerShare: breakdown.totalPartnerShare,
+    stockCheck,
     netExpenses: totalOpex + totalPayroll,
     opexList,
     payslips,
