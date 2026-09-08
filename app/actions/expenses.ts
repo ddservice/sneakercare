@@ -4,7 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { requireProfile } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
 import { logAudit } from "@/lib/audit";
-import { calculateExpenseBreakdown } from "@/lib/expense-totals";
+import { calculateExpenseBreakdown, applyEntriesToBreakdown } from "@/lib/expense-totals";
 import { SUPPLY_CATEGORIES, sumStockPurchases, monthBounds } from "@/lib/stock-purchases";
 import { mirrorExpenseEntry, unmirrorExpenseEntry } from "@/lib/expense-mirror";
 
@@ -227,10 +227,35 @@ export async function fetchAllExpensesData(timeRange: string = "this_month"): Pr
   // แล้ว — เดิมหน้านี้กับหน้าภาพรวม (/dashboard) เขียนกฎกันคนละชุด ทำให้ยอดของเดือนเดียวกัน
   // ไม่ตรงกันมาตลอด (ส.ค. 2569 ต่างกัน ฿6,600.51) ตอนนี้ทั้งสองหน้าเรียกฟังก์ชันเดียวกัน
   // และมี npm run test:expenses ล็อกพฤติกรรมไว้ — **ห้ามเขียนกฎกรองซ้ำที่นี่อีก**
-  const breakdown = calculateExpenseBreakdown(filteredRows, (rowId, err) => {
+  const legacyBreakdown = calculateExpenseBreakdown(filteredRows, (rowId, err) => {
     // ข้ามแถวที่ JSON เสียแถวเดียว ไม่ให้ทั้งหน้าพัง แต่ต้องไม่เงียบ — id ช่วยตามไปดูใน sc_opex ได้
     console.error(`[expenses] parse misc_items_json ล้มเหลว (row id=${rowId}):`, err);
   });
+
+  // ── ขั้นที่ 4 ของ docs/sc-opex-refactor-plan.md: อ่านฝั่ง OPEX จาก sc_expense_entries ──
+  //
+  // เงินเดือน/รายรับห้องเช่ายังมาจาก sc_opex เหมือนเดิม (ยังไม่ย้าย จนกว่าจะถึงขั้นที่ 5)
+  // **ถ้าอ่านตารางใหม่ไม่ได้ จะตกกลับไปใช้ sc_opex ทั้งก้อนเหมือนเดิม** — ยอมให้ตัวเลขมาจาก
+  // แหล่งเก่าดีกว่าให้หน้าค่าใช้จ่ายพังหรือแสดงยอดขาด (พิสูจน์แล้วว่าสองแหล่งให้ยอดเท่ากันทุกเดือน
+  // ด้วย npm run check:expense-mirror)
+  let breakdown = legacyBreakdown;
+  try {
+    let entryQuery = supabase
+      .from("sc_expense_entries")
+      .select("id, entry_date, amount, category, title, pay_method, legacy_ref");
+    if (!isAllTime) {
+      const b = monthBounds(targetMonthFilter);
+      if (b) entryQuery = entryQuery.gte("entry_date", b.gte).lt("entry_date", b.lt);
+    }
+    const { data: entryRows, error: entryError } = await entryQuery;
+    if (entryError) {
+      console.error("[expenses] อ่าน sc_expense_entries ไม่สำเร็จ ใช้ sc_opex แทน:", entryError.message);
+    } else {
+      breakdown = applyEntriesToBreakdown(legacyBreakdown, entryRows ?? [], filteredRows);
+    }
+  } catch (err) {
+    console.error("[expenses] อ่าน sc_expense_entries ล้มเหลว ใช้ sc_opex แทน:", err);
+  }
 
   const opexList: RealExpenseRecord[] = breakdown.opexLines;
   const totalOpex = breakdown.totalOpex;

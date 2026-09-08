@@ -19,6 +19,7 @@ const {
   isOpexRow,
   isPayrollRow,
   isPartnerShareEntry,
+  applyEntriesToBreakdown,
   PARTNER_SHARE_CATEGORY,
   MAX_REASONABLE_AMOUNT,
 } = await import(
@@ -205,6 +206,39 @@ for (const [cat, name, want, label] of catCases) {
   if (got === want) ok(`${label} → ${got}`);
   else bad(`categoryKeyFor("${cat}", "${name}") ได้ ${got} ควรเป็น ${want}`);
 }
+
+
+console.log("\n[11] อ่านฝั่ง OPEX จาก sc_expense_entries (ขั้นที่ 4 ของ refactor)");
+// เงินเดือน/ห้องเช่าต้องยังมาจาก sc_opex เหมือนเดิม เปลี่ยนเฉพาะฝั่ง OPEX
+const baseForEntries = calculateExpenseBreakdown(rows);
+const entryRows = [
+  { id: 1, entry_date: "2026-08-01", amount: 18000, category: "facility_utilities", title: "ค่าเช่าร้าน", pay_method: "บัญชีร้าน", legacy_ref: "1" },
+  { id: 2, entry_date: "2026-08-01", amount: 5269, category: "partner_share", title: "ค่าหุ้นส่วน 20%", pay_method: "เงินสดร้าน", legacy_ref: "2" },
+  { id: 3, entry_date: "2026-08-01", amount: 400, category: "admin_general", title: "ค่าบรอดแคสไลน์", pay_method: "บัญชีร้าน", legacy_ref: "6-misc-0" },
+  { id: 4, entry_date: "2026-08-01", amount: 0, category: "admin_general", title: "ยอดศูนย์", legacy_ref: "9" },
+];
+const fromEntries = applyEntriesToBreakdown(baseForEntries, entryRows, rows);
+eq("totalOpex มาจากตารางใหม่", fromEntries.totalOpex, 18000 + 5269 + 400);
+eq("totalPayroll ยังมาจาก sc_opex เหมือนเดิม", fromEntries.totalPayroll, baseForEntries.totalPayroll);
+eq("totalRentalIncome ยังมาจาก sc_opex เหมือนเดิม", fromEntries.totalRentalIncome, baseForEntries.totalRentalIncome);
+eq("totalExpenses = opex ใหม่ + payroll เดิม", fromEntries.totalExpenses, 23669 + baseForEntries.totalPayroll);
+eq("แยกส่วนแบ่งหุ้นส่วนได้จากหมวด partner_share", fromEntries.totalPartnerShare, 5269);
+eq("ยอดศูนย์ถูกกันออก", fromEntries.opexLines.length, 3);
+
+const rentLine = fromEntries.opexLines.find((l) => l.name === "ค่าเช่าร้าน");
+if (rentLine?.id === "1") ok("id ของบรรทัดเป็น legacy_ref (ปุ่มลบยังลบผ่าน sc_opex ได้)");
+else bad(`id ควรเป็น "1" แต่ได้ ${JSON.stringify(rentLine?.id)}`);
+if (rentLine?.category === "สาธารณูปโภค & ค่าเช่า") ok("แปลง key → shortLabel ให้ UI แล้ว");
+else bad(`category ควรเป็น shortLabel แต่ได้ ${JSON.stringify(rentLine?.category)}`);
+if (rentLine?.month === "08/2026") ok("แปลง entry_date → เดือนแบบ MM/YYYY แล้ว");
+else bad(`month ควรเป็น 08/2026 แต่ได้ ${JSON.stringify(rentLine?.month)}`);
+if (rentLine?.recordedBy === "Milo") ok("ผู้บันทึกดึงมาจากแถว sc_opex ต้นทาง");
+else bad(`recordedBy ได้ ${JSON.stringify(rentLine?.recordedBy)}`);
+
+const shareLine2 = fromEntries.opexLines.find((l) => l.isPartnerShare);
+if (shareLine2?.category === PARTNER_SHARE_CATEGORY) ok("รายการส่วนแบ่งยังอยู่หมวดของตัวเอง");
+else bad("รายการส่วนแบ่งควรอยู่หมวด " + PARTNER_SHARE_CATEGORY);
+eq("รายการที่ legacy_ref มี -misc- ถูกจัดเป็นรายจ่ายเบ็ดเตล็ด", fromEntries.miscItems.length, 1);
 
 console.log(failures === 0 ? "\n✅ ผ่านทั้งหมด" : `\n❌ ไม่ผ่าน ${failures} ข้อ`);
 process.exitCode = failures === 0 ? 0 : 1;

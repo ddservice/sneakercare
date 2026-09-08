@@ -22,7 +22,7 @@ import {
   ChevronRight,
 } from "lucide-react";
 import Link from "next/link";
-import { calculateExpenseBreakdown } from "@/lib/expense-totals";
+import { calculateExpenseBreakdown, applyEntriesToBreakdown, type ExpenseEntryLike } from "@/lib/expense-totals";
 import type { Tables } from "@/lib/supabase/database.types";
 
 type DashboardPeriod = "all" | "day" | "week" | "month" | "custom";
@@ -45,6 +45,7 @@ export function DashboardClient({
   paymentsRows,
   stockItems,
   lowStock,
+  expenseEntries = [],
 }: {
   salesRows: DashboardSaleRow[];
   opexRows: DashboardOpexRow[];
@@ -53,6 +54,12 @@ export function DashboardClient({
   orders?: DashboardOrderRow[];
   stockItems: DashboardStockItemRow[];
   lowStock: DashboardLowStockRow[];
+  /**
+   * แถวจาก `sc_expense_entries` — ฝั่ง OPEX ของยอดค่าใช้จ่ายมาจากตารางนี้แล้ว
+   * (ขั้นที่ 4 ของ docs/sc-opex-refactor-plan.md) ส่วนเงินเดือน/ห้องเช่ายังมาจาก `sc_opex`
+   * ถ้าไม่ส่งมา จะตกกลับไปคำนวณจาก `sc_opex` ทั้งก้อนเหมือนเดิม
+   */
+  expenseEntries?: ExpenseEntryLike[];
 }) {
   // Period state
   //
@@ -153,7 +160,21 @@ export function DashboardClient({
       return true; // all time
     });
 
-    const breakdown = calculateExpenseBreakdown(monthRows);
+    // ฝั่ง OPEX มาจาก sc_expense_entries · เงินเดือน/ห้องเช่ายังมาจาก sc_opex
+    // กรองด้วย entry_date (วันจริง) แทนคีย์เดือนแบบข้อความ — ตรงไปตรงมากว่าและกรองช่วงวันได้จริง
+    const periodEntries = (expenseEntries || []).filter((e) => {
+      const d = String(e.entry_date ?? "");
+      if (!d) return false;
+      if (period === "month" || period === "day" || period === "week") return d.startsWith(monthPrefixISO);
+      if (period === "custom") return d.slice(0, 7) >= customStartDate.slice(0, 7) && d.slice(0, 7) <= customEndDate.slice(0, 7);
+      return true; // all time
+    });
+
+    const legacyBreakdown = calculateExpenseBreakdown(monthRows);
+    const breakdown =
+      (expenseEntries?.length ?? 0) > 0
+        ? applyEntriesToBreakdown(legacyBreakdown, periodEntries, monthRows)
+        : legacyBreakdown;
     let expSum = breakdown.totalExpenses;
     let partnerShare = breakdown.totalPartnerShare;
 
@@ -234,7 +255,7 @@ export function DashboardClient({
       // ไม่งั้นการ์ดสรุปกับตารางจะบอกคนละเรื่องในบิลใบเดียวกัน
       paidBySaleDate,
     };
-  }, [salesRows, opexRows, paymentsRows, period, filterDate, customStartDate, customEndDate]);
+  }, [salesRows, opexRows, paymentsRows, expenseEntries, period, filterDate, customStartDate, customEndDate]);
 
   const totalTransfer = filteredSales.reduce((acc, s) => acc + Number(s.transfer_amount || 0), 0);
   const totalCash = filteredSales.reduce((acc, s) => acc + Number(s.cash_amount || 0), 0);

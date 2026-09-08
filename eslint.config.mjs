@@ -16,6 +16,8 @@ const eslintConfig = defineConfig([
     "legacy/**",
     // Deno runtime ไม่ใช่ Node/browser — lint แยกด้วย Deno tooling ถ้าจำเป็น
     "supabase/functions/**",
+    // ผลลัพธ์ที่ tsc คอมไพล์ไว้ให้เทสต์ (npm run test:expenses ฯลฯ) — ไม่ใช่โค้ดที่คนเขียน
+    ".test-build/**",
   ]),
   {
     rules: {

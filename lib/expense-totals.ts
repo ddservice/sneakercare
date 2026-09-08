@@ -15,6 +15,8 @@
  * แยกกันด้วย `category`/`key` ที่เป็น free-text ไม่มี enum บังคับที่ระดับฐานข้อมูล
  */
 
+import { EXPENSE_CATEGORIES, type ExpenseCategoryKey } from "./expense-categories";
+
 /** แถวดิบจาก sc_opex เท่าที่การคำนวณต้องใช้ */
 export type OpexRowLike = {
   id?: string | number;
@@ -254,5 +256,100 @@ export function calculateExpenseBreakdown(
     totalExpensesBeforePartnerShare: totalExpenses - totalPartnerShare,
     totalRentalIncome,
     miscItems,
+  };
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ขั้นที่ 4 ของ docs/sc-opex-refactor-plan.md — อ่านฝั่ง OPEX จากตารางใหม่
+// ═══════════════════════════════════════════════════════════════════════════
+
+/** แถวจาก `sc_expense_entries` เท่าที่การคำนวณต้องใช้ */
+export type ExpenseEntryLike = {
+  id?: number | string | null;
+  entry_date?: string | null;
+  amount?: number | string | null;
+  /** เก็บเป็น **key** ของหมวด (เช่น "supplies_cogs") ไม่ใช่ shortLabel เหมือน sc_opex */
+  category?: string | null;
+  title?: string | null;
+  pay_method?: string | null;
+  /** `"<opexId>"` หรือ `"<opexId>-misc-<index>"` — ดู migration 0025 */
+  legacy_ref?: string | null;
+};
+
+/** "YYYY-MM-DD" → "MM/YYYY" (รูปแบบที่หน้าเว็บใช้แสดงผลอยู่) */
+function monthMYFromDate(date: string): string {
+  return date.length >= 7 ? `${date.slice(5, 7)}/${date.slice(0, 4)}` : "";
+}
+
+/**
+ * แทนที่ "ฝั่ง OPEX" ของ breakdown ด้วยข้อมูลจาก `sc_expense_entries`
+ *
+ * ⚠️ **เงินเดือนและรายรับห้องเช่ายังมาจาก `sc_opex` เหมือนเดิม** (ยังไม่ถูกย้าย จนกว่าจะถึง
+ * ขั้นที่ 5) จึงรับ `base` ที่คำนวณจาก `sc_opex` มาแล้วเป็นฐาน แล้วเปลี่ยนเฉพาะส่วน OPEX
+ *
+ * ⚠️ `id` ของแต่ละบรรทัดยังเป็น `legacy_ref` เสมอ ไม่ใช่ id ของตารางใหม่ — เพราะปุ่มลบ
+ * ในหน้า /expenses ยังลบผ่าน `sc_opex` (ซึ่งเป็นแหล่งข้อมูลจริง และระบบเดิมยังอ่านอยู่)
+ * `legacy_ref` ถูกออกแบบให้มีรูปแบบเดียวกับ id สังเคราะห์ที่ UI ใช้อยู่แล้วพอดี
+ *
+ * `sourceRows` ใช้แค่หา "ผู้บันทึก" ของแต่ละรายการ ซึ่งตารางใหม่ยังไม่มีคอลัมน์นั้น
+ * (มีแต่ `created_by` ที่เป็น uuid) — ถ้าไม่ส่งมาจะแสดงเป็น "Milo" เหมือนค่าเดิมของระบบ
+ */
+export function applyEntriesToBreakdown(
+  base: ExpenseBreakdown,
+  entries: readonly ExpenseEntryLike[],
+  sourceRows: readonly OpexRowLike[] = []
+): ExpenseBreakdown {
+  const recordedByOpexId = new Map<string, string>();
+  for (const r of sourceRows) {
+    if (r.id === undefined || r.id === null) continue;
+    recordedByOpexId.set(String(r.id), String(r.recorded_by || "Milo"));
+  }
+
+  const opexLines: ExpenseLine[] = [];
+  const miscItems: ExpenseBreakdown["miscItems"] = [];
+  let totalOpex = 0;
+  let totalPartnerShare = 0;
+
+  for (const e of entries) {
+    const amount = toAmount(e.amount);
+    if (!isUsableAmount(amount)) continue;
+
+    const ref = String(e.legacy_ref ?? e.id ?? "");
+    const month = monthMYFromDate(String(e.entry_date ?? ""));
+    const categoryKey = String(e.category ?? "");
+    const meta = EXPENSE_CATEGORIES[categoryKey as ExpenseCategoryKey];
+    const isShare = categoryKey === "partner_share";
+    const title = String(e.title ?? "");
+    const payMethod = String(e.pay_method || "บัญชีร้าน");
+    // ref เป็น "<opexId>" หรือ "<opexId>-misc-<index>" — ตัดส่วนหลังออกเพื่อหาผู้บันทึก
+    const sourceId = ref.split("-misc-")[0];
+
+    totalOpex += amount;
+    if (isShare) totalPartnerShare += amount;
+
+    opexLines.push({
+      id: ref,
+      month,
+      category: isShare ? PARTNER_SHARE_CATEGORY : meta?.shortLabel || categoryKey || "ค่าดำเนินการ",
+      name: title,
+      amount,
+      payMethod,
+      recordedBy: recordedByOpexId.get(sourceId) ?? "Milo",
+      key: ref,
+      isPartnerShare: isShare,
+    });
+
+    if (ref.includes("-misc-")) miscItems.push({ name: title, amount, method: payMethod, month });
+  }
+
+  const totalExpenses = totalOpex + base.totalPayroll;
+  return {
+    ...base,
+    opexLines,
+    miscItems,
+    totalOpex,
+    totalExpenses,
+    totalPartnerShare,
+    totalExpensesBeforePartnerShare: totalExpenses - totalPartnerShare,
   };
 }
