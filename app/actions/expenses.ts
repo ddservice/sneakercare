@@ -537,7 +537,17 @@ export async function fetchAllExpensesData(timeRange: string = "this_month"): Pr
   // Rental Income (Dormitory/Rooms) — category "rental_income" ถูกกรองออกจาก opexList ไปแล้วข้างบน
   // ตรงนี้ดึงมาแสดงแยกต่างหาก ไม่ปนกับค่าใช้จ่าย (ยังไม่มีข้อมูลเลขมิเตอร์ไฟ/ชื่อผู้เช่าจริงในตาราง
   // sc_opex ปัจจุบัน — ใส่ค่าว่าง/0 ไว้ก่อน ถ้าจะทำระบบมิเตอร์ไฟเต็มรูปแบบต้องเพิ่ม schema แยก)
-  const rentals: RentalRecord[] = filteredRows
+  // ── ขั้นที่ 5 ของ docs/sc-opex-refactor-plan.md: อ่านห้องเช่าจาก sc_rental_records ──
+  //
+  // ของเดิมอ่านจากแถว category="rental_income" ใน sc_opex ซึ่งมีแต่ "ยอดรายรับ" ก้อนเดียว
+  // เลขมิเตอร์/ค่าเช่าอยู่คนละ category (rental_meter) และไม่เคยถูกอ่านมาแสดงเลย —
+  // ทุกช่องจึงถูกใส่ 0 ไว้ตายตัว และ rentAmount ถูกใส่ด้วย "ยอดรายรับ" ซึ่งไม่ใช่ค่าเช่าจริง
+  // ตารางใหม่รวมทั้งสามอย่างไว้แถวเดียวแล้ว จึงแสดงได้ครบตามความจริง
+  //
+  // **ถ้าอ่านตารางใหม่ไม่ได้ จะตกกลับไปใช้ sc_opex เหมือนเดิม** — ยอมให้ตัวเลขมาจากแหล่งเก่า
+  // ดีกว่าให้รายรับห้องเช่าหายไปจากกำไรสุทธิ (พิสูจน์แล้วว่าสองแหล่งให้ยอดเท่ากันทุกเดือน
+  // ด้วย npm run check:payroll-mirror)
+  const legacyRentals: RentalRecord[] = filteredRows
     .filter((r) => r.category === "rental_income")
     .map((r, idx: number) => ({
       roomId: idx,
@@ -550,6 +560,39 @@ export async function fetchAllExpensesData(timeRange: string = "this_month"): Pr
       totalIncome: Number(r.amount || 0),
       month: r.month,
     }));
+
+  let rentals: RentalRecord[] = legacyRentals;
+  if (!isAllTime) {
+    try {
+      const { data: rentalRows, error: rentalError } = await supabase
+        .from("sc_rental_records")
+        .select("month, room_index, room_name, prev_meter, curr_meter, rent_amount, income_amount")
+        .eq("month", targetMonthFilter)
+        .order("room_index");
+      if (rentalError) {
+        console.error("[expenses] อ่าน sc_rental_records ไม่สำเร็จ ใช้ sc_opex แทน:", rentalError.message);
+      } else if (rentalRows && rentalRows.length > 0) {
+        rentals = rentalRows.map((r) => {
+          const income = Number(r.income_amount || 0);
+          const rent = Number(r.rent_amount || 0);
+          return {
+            roomId: Number(r.room_index),
+            roomName: r.room_name || `ห้องเช่า ${Number(r.room_index) + 1}`,
+            tenantName: "",
+            rentAmount: rent,
+            prevMeter: Number(r.prev_meter || 0),
+            currMeter: Number(r.curr_meter || 0),
+            // ส่วนที่เกินค่าเช่าคือค่าไฟที่เก็บเพิ่ม — เดิมแสดงเป็น 0 เสมอเพราะไม่เคยอ่านมา
+            electricCost: Math.max(0, income - rent),
+            totalIncome: income,
+            month: String(r.month),
+          };
+        });
+      }
+    } catch (err) {
+      console.error("[expenses] อ่าน sc_rental_records ล้มเหลว ใช้ sc_opex แทน:", err);
+    }
+  }
   const totalRentalIncome = rentals.reduce((sum, r) => sum + r.totalIncome, 0);
 
   // ── เทียบกับ ledger คลังสินค้า ────────────────────────────────────────────
