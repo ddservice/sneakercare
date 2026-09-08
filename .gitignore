@@ -51,3 +51,6 @@ next-env.d.ts
 # ผลลัพธ์ของ scripts/export-monthly-csv.mjs — ข้อมูลจริงของร้าน ห้ามหลุดเข้า git
 /exports/
 .test-build/
+
+# ไฟล์ชั่วคราวของ agent ระหว่างตรวจข้อมูล — ห้าม commit
+.scratch-*
