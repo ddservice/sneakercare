@@ -13,7 +13,7 @@
     "migrate:legacy": "node --env-file=.env.local scripts/migrate-from-legacy.mjs",
     "deploy": "node scripts/deploy-vps.mjs",
     "export:csv": "node --env-file=.env.local scripts/export-monthly-csv.mjs",
-    "test:migration": "node --no-warnings=MODULE_TYPELESS_PACKAGE_JSON scripts/test-migration-0011.mjs && node --no-warnings=MODULE_TYPELESS_PACKAGE_JSON scripts/test-migration-0012.mjs && node --no-warnings=MODULE_TYPELESS_PACKAGE_JSON scripts/test-migration-0024.mjs",
+    "test:migration": "node --no-warnings=MODULE_TYPELESS_PACKAGE_JSON scripts/test-migration-0011.mjs && node --no-warnings=MODULE_TYPELESS_PACKAGE_JSON scripts/test-migration-0012.mjs && node --no-warnings=MODULE_TYPELESS_PACKAGE_JSON scripts/test-migration-0024.mjs && node --no-warnings=MODULE_TYPELESS_PACKAGE_JSON scripts/test-migration-0026.mjs",
     "test:expenses": "tsc lib/expense-totals.ts lib/stock-purchases.ts lib/expense-categories.ts --outDir .test-build --module commonjs --target es2022 --moduleResolution node10 --skipLibCheck && node --no-warnings=MODULE_TYPELESS_PACKAGE_JSON scripts/test-expense-totals.mjs",
     "test:staff": "node --env-file=.env.local --no-warnings=MODULE_TYPELESS_PACKAGE_JSON scripts/test-staff-permissions.mjs",
     "check:stock-vs-expenses": "tsc lib/stock-purchases.ts --outDir .test-build --module commonjs --target es2022 --moduleResolution node10 --skipLibCheck && node --no-warnings=MODULE_TYPELESS_PACKAGE_JSON scripts/check-stock-vs-expenses.mjs",

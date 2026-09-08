@@ -139,10 +139,12 @@ if (skippedNoDate.length) {
   for (const s of skippedNoDate) console.log(`   ${s.ref} ${s.title} ${baht(s.amount)}`);
 }
 
+// ⚠️ ห้ามใช้ process.exit() ที่นี่ — libuv จะ abort ด้วย "Assertion failed: !(handle->flags &
+// UV_HANDLE_CLOSING)" แล้วคืน exit code 127 ทั้งที่ทำงานสำเร็จ (เจอจริงบน Node 24 / Windows
+// ดู CLAUDE.md 2026-09-06 ข้อ 4) — ใช้ if ครอบส่วนที่เขียนจริงแทน
 if (!APPLY) {
   console.log("\n(ยังไม่ได้เขียนอะไรลงฐานข้อมูล)");
-  process.exit(0);
-}
+} else {
 
 // ── ลงมือจริง — ทีละก้อน 100 แถว ───────────────────────────────────────────
 let inserted = 0;
@@ -164,3 +166,4 @@ for (let i = 0; i < todo.length; i += 100) {
 console.log(`\nเขียนสำเร็จ ${inserted} แถว · ล้มเหลว ${failed} แถว`);
 console.log("ต่อไป: npm run check:expense-mirror แล้ว npm run test:reconcile");
 process.exitCode = failed === 0 ? 0 : 1;
+}
