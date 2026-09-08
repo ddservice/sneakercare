@@ -209,7 +209,7 @@ export function ExpensesClient({
     return initial;
   });
 
-  // Calculate 6-Category Aggregation
+  // Calculate Category Aggregation
   const categoryBreakdown = useMemo(() => {
     const map: Record<ExpenseCategoryKey, { total: number; count: number }> = {
       payroll: { total: data.totalPayroll, count: data.payslips.length },
@@ -218,6 +218,7 @@ export function ExpensesClient({
       marketing: { total: 0, count: 0 },
       tax_professional: { total: 0, count: 0 },
       admin_general: { total: 0, count: 0 },
+      partner_share: { total: 0, count: 0 },
     };
 
     (data.opexList || []).forEach((item) => {
@@ -572,7 +573,7 @@ export function ExpensesClient({
           </div>
           <h2 className="text-2xl font-bold tracking-tight">ระบบบันทึกค่าใช้จ่าย & จัดการเงินเดือนมาตรฐาน</h2>
           <p className="text-xs sm:text-sm text-teal-100/80">
-            โครงสร้างค่าใช้จ่าย 6 หมวดหมู่มาตรฐาน ออกสลิปเงินเดือนทางการสำหรับธุรกรรมธนาคาร และควบคุมต้นทุนครบวงจร
+            โครงสร้างค่าใช้จ่ายตามหมวดหมู่มาตรฐาน ออกสลิปเงินเดือนทางการสำหรับธุรกรรมธนาคาร และควบคุมต้นทุนครบวงจร
           </p>
         </div>
 
@@ -744,7 +745,10 @@ export function ExpensesClient({
               <div className="text-xl font-black text-white font-mono">
                 ฿{data.netExpenses.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
               </div>
-              <div className="text-[10px] text-teal-200">เงินเดือน + ค่าดำเนินการ 6 หมวด</div>
+              <div className="text-[10px] text-teal-200">
+                เงินเดือน + ค่าดำเนินการ
+                {data.totalPartnerShare > 0 && " (รวมส่วนแบ่งหุ้นส่วนแล้ว)"}
+              </div>
             </div>
             <div className="rounded-xl bg-teal-700/60 p-2.5 text-teal-100">
               <Wallet className="h-5 w-5" />
@@ -776,20 +780,43 @@ export function ExpensesClient({
         </div>
       )}
 
+      {/* ── ส่วนแบ่งกำไรหุ้นส่วน — แยกให้เห็นชัดเพราะเป็นเงินที่คำนวณ *จาก* กำไรสุทธิ
+          แล้วบันทึกกลับเข้ามาเป็นค่าใช้จ่าย ถ้าไม่แยกออกมาจะไม่มีทางรู้ว่ากำไรก่อนแบ่งคือเท่าไร ── */}
+      {data.totalPartnerShare > 0 && (
+        <div className="flex items-center justify-between gap-4 rounded-xl border border-indigo-200 bg-indigo-50/70 dark:bg-indigo-900/20 dark:border-indigo-800/60 px-4 py-3 print:hidden">
+          <div className="flex items-center gap-3">
+            <div className="rounded-lg bg-indigo-100 dark:bg-indigo-900/40 p-2 text-indigo-700 dark:text-indigo-300">
+              <Users className="h-4 w-4" />
+            </div>
+            <div>
+              <div className="text-xs font-bold text-indigo-900 dark:text-indigo-200">
+                ส่วนแบ่งกำไรหุ้นส่วน (20% ของกำไรสุทธิ)
+              </div>
+              <div className="text-[10px] text-indigo-700/80 dark:text-indigo-400/80">
+                รวมอยู่ในยอด &ldquo;รวมค่าใช้จ่ายทั้งหมด&rdquo; แล้ว — คนละรายการกับเงินเดือนหุ้นส่วนผู้จัดการ
+              </div>
+            </div>
+          </div>
+          <div className="text-lg font-black text-indigo-700 dark:text-indigo-300 font-mono shrink-0">
+            ฿{data.totalPartnerShare.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+          </div>
+        </div>
+      )}
+
       {/* ── 6-CATEGORY VISUAL BREAKDOWN SECTION ── */}
       <Card className="border-slate-200 shadow-sm print:hidden">
         <CardHeader className="p-4 bg-slate-50 border-b border-slate-200 flex flex-wrap items-center justify-between gap-2">
           <div>
             <CardTitle className="text-sm font-bold text-slate-900 flex items-center gap-2">
               <PieChart className="h-4 w-4 text-teal-700" />
-              โครงสร้างการแจกแจงค่าใช้จ่าย 6 หมวดหมู่มาตรฐาน (Expense Breakdown)
+              โครงสร้างการแจกแจงค่าใช้จ่ายตามหมวดหมู่มาตรฐาน (Expense Breakdown)
             </CardTitle>
             <CardDescription className="text-xs text-slate-500">
               วิเคราะห์สัดส่วนและยอดค่าใช้จ่ายที่เกิดขึ้นจริงในแต่ละประเภทธุรกิจ
             </CardDescription>
           </div>
           <div className="text-xs font-semibold text-slate-600 bg-white px-3 py-1 rounded-full border border-slate-200 shadow-2xs">
-            รวม 6 หมวด: <strong className="text-slate-900 font-mono">฿{data.netExpenses.toLocaleString()}</strong>
+            รวมทุกหมวด: <strong className="text-slate-900 font-mono">฿{data.netExpenses.toLocaleString()}</strong>
           </div>
         </CardHeader>
 
@@ -1314,7 +1341,7 @@ export function ExpensesClient({
                   <Plus className="h-4 w-4" />
                 </div>
                 <div>
-                  <h3 className="text-base font-bold text-slate-900 dark:text-slate-100">บันทึกค่าใช้จ่ายใหม่ (6 หมวดหมู่มาตรฐาน)</h3>
+                  <h3 className="text-base font-bold text-slate-900 dark:text-slate-100">บันทึกค่าใช้จ่ายใหม่ (หมวดหมู่มาตรฐาน)</h3>
                   <p className="text-xs text-slate-500">บันทึกรายจ่ายดำเนินงานร้าน ค่าน้ำ ค่าไฟ เคมีภัณฑ์ หรือการตลาด</p>
                 </div>
               </div>

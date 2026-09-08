@@ -68,6 +68,8 @@ export type ExpensesPayload = {
   totalPayroll: number;
   totalOpex: number;
   totalRentalIncome: number;
+  /** ส่วนแบ่งกำไรหุ้นส่วน — รวมอยู่ใน totalOpex/netExpenses แล้ว แยกมาเพื่อแสดงผลเท่านั้น */
+  totalPartnerShare: number;
   netExpenses: number;
   opexList: RealExpenseRecord[];
   payslips: StaffPayslip[];
@@ -524,6 +526,7 @@ export async function fetchAllExpensesData(timeRange: string = "this_month"): Pr
     totalPayroll,
     totalOpex,
     totalRentalIncome,
+    totalPartnerShare: breakdown.totalPartnerShare,
     netExpenses: totalOpex + totalPayroll,
     opexList,
     payslips,

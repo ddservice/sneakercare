@@ -88,6 +88,7 @@ export function DashboardClient({
   const {
     filteredSales,
     totalExpensesForPeriod,
+    partnerShareForPeriod,
     cashRevenueForPeriod,
     rentalIncomeForPeriod,
     outstandingForPeriod,
@@ -136,12 +137,16 @@ export function DashboardClient({
       return true; // all time
     });
 
-    let expSum = calculateExpenseBreakdown(monthRows).totalExpenses;
+    const breakdown = calculateExpenseBreakdown(monthRows);
+    let expSum = breakdown.totalExpenses;
+    let partnerShare = breakdown.totalPartnerShare;
 
     // มุมมองรายวัน/รายสัปดาห์: ค่าใช้จ่ายบันทึกเป็นรายเดือน จึงเฉลี่ยลงตามสัดส่วนวัน
     if (period === "day" || period === "week") {
       const daysInMonth = 31;
-      expSum *= period === "day" ? 1 / daysInMonth : 7 / daysInMonth;
+      const ratio = period === "day" ? 1 / daysInMonth : 7 / daysInMonth;
+      expSum *= ratio;
+      partnerShare *= ratio;
     }
 
     // ── รายรับ "เงินเข้าจริงในช่วงเวลา" (cash basis) ──────────────────────────
@@ -166,7 +171,7 @@ export function DashboardClient({
 
     // รายรับค่าเช่าห้องชั้น 3 — เป็นรายรับของร้านเหมือนกัน ต้องรวมในกำไรสุทธิ
     // (เดิมหน้านี้ไม่นับเลย ทำให้กำไรต่ำกว่าที่ควรเป็น 6,000 บาท/เดือน)
-    let rentalIncome = calculateExpenseBreakdown(monthRows).totalRentalIncome;
+    let rentalIncome = breakdown.totalRentalIncome;
     if (period === "day" || period === "week") {
       const daysInMonth = 31;
       rentalIncome *= period === "day" ? 1 / daysInMonth : 7 / daysInMonth;
@@ -205,6 +210,7 @@ export function DashboardClient({
     return {
       filteredSales: fSales,
       totalExpensesForPeriod: Math.round(expSum * 100) / 100,
+      partnerShareForPeriod: Math.round(partnerShare * 100) / 100,
       cashRevenueForPeriod: Math.round((paidOnBills + arReceived) * 100) / 100,
       rentalIncomeForPeriod: Math.round(rentalIncome * 100) / 100,
       outstandingForPeriod: Math.round(outstanding * 100) / 100,
@@ -241,6 +247,14 @@ export function DashboardClient({
   const netProfit = totalIncomeForPeriod - totalExpensesForPeriod;
   const profitMarginPct = totalIncomeForPeriod > 0 ? (netProfit / totalIncomeForPeriod) * 100 : 0;
   const isProfitable = netProfit >= 0;
+
+  // ── ส่วนแบ่งกำไรหุ้นส่วน ──────────────────────────────────────────────────
+  //
+  // ส่วนแบ่งหุ้นส่วนคิดเป็น % ของ "กำไรสุทธิก่อนแบ่ง" แต่ถูกบันทึกกลับเข้ามาเป็นค่าใช้จ่าย
+  // ⇒ ตัวเลข netProfit ข้างบนคือยอด*หลัง*แบ่งไปแล้ว เอาไปคูณ % ซ้ำไม่ได้ (งูกินหาง)
+  // จึงต้องโชว์ฐานก่อนแบ่งกำกับไว้ด้วย ให้ตรงกับ Excel ที่เจ้าของกระทบยอด (แสดงสองบรรทัดเสมอ)
+  const netProfitBeforePartnerShare = netProfit + partnerShareForPeriod;
+  const hasPartnerShare = partnerShareForPeriod > 0;
 
   // Period label
   const periodLabel = useMemo(() => {
@@ -518,6 +532,12 @@ export function DashboardClient({
               <div className="text-[11px] text-amber-700">
                 ค่าดำเนินการ + เงินเดือนพนักงาน + ภาษี + ค่าเช่า
               </div>
+              {hasPartnerShare && (
+                <div className="text-[11px] text-indigo-700">
+                  รวมส่วนแบ่งหุ้นส่วน ฿
+                  {partnerShareForPeriod.toLocaleString("th-TH", { minimumFractionDigits: 2 })} ไว้แล้ว
+                </div>
+              )}
             </div>
             <div className="rounded-xl bg-amber-50 dark:bg-amber-900/20 p-3 text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-700">
               <Wallet className="h-6 w-6" />
@@ -530,7 +550,9 @@ export function DashboardClient({
           <CardContent className="p-5 flex items-center justify-between">
             <div className="space-y-1">
               <div className="flex items-center gap-1.5">
-                <span className="text-xs font-bold text-slate-700">กำไรสุทธิ (Net Profit)</span>
+                <span className="text-xs font-bold text-slate-700">
+                  {hasPartnerShare ? "กำไรสุทธิ (หลังหักส่วนแบ่งหุ้นส่วน)" : "กำไรสุทธิ (Net Profit)"}
+                </span>
                 <Badge
                   variant="outline"
                   className={`text-[10px] font-black ${
@@ -545,9 +567,24 @@ export function DashboardClient({
               <div className={`text-2xl font-black font-mono ${isProfitable ? "text-emerald-700" : "text-rose-600"}`}>
                 ฿{netProfit.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
               </div>
-              <div className="text-[11px] text-slate-500 font-medium">
-                (ยอดขายสุทธิ − ค่าใช้จ่ายและเงินเดือนรวม)
-              </div>
+              {hasPartnerShare ? (
+                <div className="text-[11px] text-slate-600 font-medium leading-relaxed">
+                  <div>
+                    ก่อนแบ่ง{" "}
+                    <span className="font-mono font-bold text-slate-800">
+                      ฿{netProfitBeforePartnerShare.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+                    </span>
+                  </div>
+                  <div className="text-indigo-700">
+                    − ส่วนแบ่งหุ้นส่วน ฿
+                    {partnerShareForPeriod.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+                  </div>
+                </div>
+              ) : (
+                <div className="text-[11px] text-slate-500 font-medium">
+                  (ยอดขายสุทธิ − ค่าใช้จ่ายและเงินเดือนรวม)
+                </div>
+              )}
             </div>
             <div className={`rounded-xl p-3 ${isProfitable ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-600"}`}>
               {isProfitable ? <TrendingUp className="h-6 w-6" /> : <TrendingDown className="h-6 w-6" />}

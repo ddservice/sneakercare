@@ -37,6 +37,8 @@ export type ExpenseLine = {
   payMethod: string;
   recordedBy: string;
   key: string;
+  /** true = เป็นส่วนแบ่งกำไรหุ้นส่วน ไม่ใช่ค่าใช้จ่ายดำเนินงานปกติ (ดู PARTNER_SHARE_CATEGORY) */
+  isPartnerShare?: boolean;
 };
 
 /**
@@ -64,6 +66,36 @@ export const PAYROLL_CATEGORY = "ค่าแรงพนักงาน";
  */
 export const MISC_SUMMARY_KEY = "misc";
 export const MISC_ITEMS_KEY = "misc_items_json";
+
+/**
+ * หมวด "ส่วนแบ่งกำไรหุ้นส่วน" — เงินที่แบ่งให้หุ้นส่วนตามสัดส่วนของกำไรสุทธิ (ปัจจุบัน 20%)
+ *
+ * ⚠️ ทำไมต้องแยกออกมาจากค่าใช้จ่ายอื่น (2026-09-08): ยอดนี้ **คำนวณจากกำไรสุทธิ** แล้วถูกบันทึก
+ * กลับเข้ามาเป็นค่าใช้จ่าย ⇒ ถ้าแสดงรวมอยู่ในก้อนเดียว ตัวเลข "กำไรสุทธิ" ที่เห็นบนหน้าจอจะเป็น
+ * ยอด*หลัง*หักส่วนแบ่งไปแล้ว ซึ่งเอาไปคูณ 20% ซ้ำไม่ได้ (วนเป็นงูกินหาง) — Excel ที่เจ้าของ
+ * กระทบยอดจึงแสดงสองบรรทัดเสมอ: กำไรสุทธิ แล้วค่อยหักส่วนแบ่งหุ้นส่วนต่างหาก
+ *
+ * ยอดนี้ยัง **นับรวมใน `totalExpenses` เหมือนเดิม** (เงินออกจากร้านจริง) — ที่เพิ่มมาคือ
+ * `totalPartnerShare` และ `totalExpensesBeforePartnerShare` ไว้ให้หน้าจอแสดงทั้งสองมุมได้
+ */
+export const PARTNER_SHARE_CATEGORY = "ส่วนแบ่งหุ้นส่วน";
+
+/**
+ * รายการรุ่นเก่าถูกบันทึกฝังอยู่ใน `misc_items_json` ชื่อ "ค่าหุ้นส่วน 20%" (พ.ค.–ก.ค. 69)
+ * จับด้วยรูปแบบที่แคบที่สุดเท่าที่พอ เพราะคำว่า "หุ้นส่วน" เฉยๆ ไม่ได้แปลว่าเป็นส่วนแบ่งกำไร:
+ *  - "เงินเดือนหุ้นส่วนผู้จัดการ (ไม่หัก ปกส.)" = เงินเดือน ไม่ใช่ส่วนแบ่ง (ต้องไม่เข้าเงื่อนไข)
+ *  - "คืนเงินหุ้นส่วน" (02/2569) = คืนเงินลงทุน ไม่ใช่ส่วนแบ่ง (ต้องไม่เข้าเงื่อนไข)
+ * จึงบังคับให้ต้องมีเครื่องหมาย % หรือคำว่า "ส่วนแบ่ง" อยู่ในชื่อด้วย
+ */
+const LEGACY_PARTNER_SHARE_NAME = /หุ้นส่วน/;
+const PARTNER_SHARE_QUALIFIER = /(\d+\s*%|ส่วนแบ่ง)/;
+
+/** รายการนี้เป็น "ส่วนแบ่งกำไรหุ้นส่วน" หรือไม่ (ใช้ได้ทั้งแถว sc_opex และรายการย่อยใน misc) */
+export function isPartnerShareEntry(name?: string | null, category?: string | null): boolean {
+  if (String(category ?? "") === PARTNER_SHARE_CATEGORY) return true;
+  const label = String(name ?? "");
+  return LEGACY_PARTNER_SHARE_NAME.test(label) && PARTNER_SHARE_QUALIFIER.test(label);
+}
 
 /**
  * เพดานกันค่าผิดปกติ — ระบบเดิมเคยเก็บ epoch milliseconds (ระดับ 1.78 ล้านล้าน) ไว้ในคอลัมน์
@@ -116,6 +148,10 @@ export type ExpenseBreakdown = {
   totalPayroll: number;
   /** totalOpex + totalPayroll — ตัวเลข "รวมค่าใช้จ่ายทั้งหมด" ที่ทุกหน้าต้องใช้ร่วมกัน */
   totalExpenses: number;
+  /** ส่วนแบ่งกำไรหุ้นส่วน (รวมอยู่ใน totalOpex/totalExpenses แล้ว — แยกมาเพื่อแสดงผลเท่านั้น) */
+  totalPartnerShare: number;
+  /** totalExpenses หักส่วนแบ่งหุ้นส่วนออก = ฐานที่เอาไปคำนวณกำไรก่อนแบ่งได้ */
+  totalExpensesBeforePartnerShare: number;
   /** รายรับค่าเช่าห้อง (แยกออกมา ไม่ปนกับค่าใช้จ่าย) */
   totalRentalIncome: number;
   /** ชื่อ→ยอด ของรายการย่อยในรายจ่ายเบ็ดเตล็ด ใช้แสดงรายละเอียด */
@@ -137,6 +173,7 @@ export function calculateExpenseBreakdown(
   let totalOpex = 0;
   let totalPayroll = 0;
   let totalRentalIncome = 0;
+  let totalPartnerShare = 0;
 
   for (const row of rows) {
     const amount = toAmount(row.amount);
@@ -166,16 +203,19 @@ export function calculateExpenseBreakdown(
               month: String(row.month ?? ""),
             });
             if (isUsableAmount(itemAmount)) {
+              const partnerShare = isPartnerShareEntry(String(item?.name ?? ""));
               totalOpex += itemAmount;
+              if (partnerShare) totalPartnerShare += itemAmount;
               opexLines.push({
                 id: `${row.id}-misc-${idx}`,
                 month: String(row.month ?? ""),
-                category: "ค่าใช้จ่ายเบ็ดเตล็ด",
+                category: partnerShare ? PARTNER_SHARE_CATEGORY : "ค่าใช้จ่ายเบ็ดเตล็ด",
                 name: String(item?.name ?? "อื่นๆ"),
                 amount: itemAmount,
                 payMethod: method,
                 recordedBy: String(row.recorded_by ?? "Milo"),
                 key: `${row.key}-${idx}`,
+                isPartnerShare: partnerShare,
               });
             }
           });
@@ -188,7 +228,9 @@ export function calculateExpenseBreakdown(
 
     if (!isOpexRow(row) || !isUsableAmount(amount)) continue;
 
+    const partnerShare = isPartnerShareEntry(row.name, row.category);
     totalOpex += amount;
+    if (partnerShare) totalPartnerShare += amount;
     opexLines.push({
       id: String(row.id ?? `${row.month}-${row.key}`),
       month: String(row.month ?? ""),
@@ -198,14 +240,18 @@ export function calculateExpenseBreakdown(
       payMethod: String(row.pay_method || "บัญชีร้าน"),
       recordedBy: String(row.recorded_by || "Milo"),
       key: String(row.key ?? ""),
+      isPartnerShare: partnerShare,
     });
   }
 
+  const totalExpenses = totalOpex + totalPayroll;
   return {
     opexLines,
     totalOpex,
     totalPayroll,
-    totalExpenses: totalOpex + totalPayroll,
+    totalExpenses,
+    totalPartnerShare,
+    totalExpensesBeforePartnerShare: totalExpenses - totalPartnerShare,
     totalRentalIncome,
     miscItems,
   };

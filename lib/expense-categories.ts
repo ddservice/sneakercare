@@ -4,7 +4,8 @@ export type ExpenseCategoryKey =
   | "supplies_cogs"
   | "marketing"
   | "tax_professional"
-  | "admin_general";
+  | "admin_general"
+  | "partner_share";
 
 export interface ExpenseCategoryMeta {
   key: ExpenseCategoryKey;
@@ -151,6 +152,23 @@ export const EXPENSE_CATEGORIES: Record<ExpenseCategoryKey, ExpenseCategoryMeta>
       "ค่าใช้จ่ายเบ็ดเตล็ดทั่วไป",
     ],
   },
+  partner_share: {
+    key: "partner_share",
+    label: "ส่วนแบ่งกำไรหุ้นส่วน (Partner Profit Share)",
+    // ⚠️ shortLabel ตัวนี้คือค่าที่ถูกเขียนลง sc_opex.category จริง ต้องตรงกับ
+    // PARTNER_SHARE_CATEGORY ใน lib/expense-totals.ts เป๊ะ ไม่งั้นยอดจะไม่ถูกแยกออกมา
+    shortLabel: "ส่วนแบ่งหุ้นส่วน",
+    icon: "🤝",
+    description: "เงินแบ่งกำไรให้หุ้นส่วนตามสัดส่วน (20% ของกำไรสุทธิ) — ไม่ใช่เงินเดือนหุ้นส่วนผู้จัดการ",
+    colorClass: {
+      badge: "bg-indigo-100 text-indigo-900 border-indigo-300",
+      border: "border-indigo-300",
+      bg: "bg-indigo-50/60",
+      text: "text-indigo-900",
+      bar: "bg-indigo-600",
+    },
+    presets: ["ส่วนแบ่งกำไรหุ้นส่วน 20%"],
+  },
 };
 
 export const CATEGORY_LIST = Object.values(EXPENSE_CATEGORIES);
@@ -162,6 +180,16 @@ export function classifyExpenseCategory(rawCategory: string = "", name: string =
   const cat = (rawCategory || "").toLowerCase().trim();
   const title = (name || "").toLowerCase().trim();
   const combined = `${cat} ${title}`;
+
+  // 0. ส่วนแบ่งกำไรหุ้นส่วน — ต้องเช็คก่อน payroll เพราะชื่อรายการมักมีคำว่า "เงิน"/"ค่า" ปนอยู่
+  //    เงื่อนไขต้องแคบ: "เงินเดือนหุ้นส่วนผู้จัดการ" คือเงินเดือน และ "คืนเงินหุ้นส่วน" คือคืนทุน
+  //    ทั้งคู่ต้อง **ไม่** เข้าหมวดนี้ จึงบังคับให้ต้องมี % หรือคำว่า "ส่วนแบ่ง" กำกับด้วย
+  if (
+    cat.includes("ส่วนแบ่งหุ้นส่วน") ||
+    (combined.includes("หุ้นส่วน") && /(\d+\s*%|ส่วนแบ่ง)/.test(combined))
+  ) {
+    return "partner_share";
+  }
 
   // 1. Staff & Payroll
   if (

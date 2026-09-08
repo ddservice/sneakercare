@@ -14,7 +14,14 @@
 
 // รัน TypeScript ตรงๆ ไม่ได้ npm script จึงคอมไพล์ lib/expense-totals.ts ด้วย tsc ลง .test-build
 // ก่อน แล้วไฟล์นี้ค่อยโหลด JS ที่ได้ (ทดสอบโค้ดตัวจริง ไม่ใช่สำเนาที่ลอกมา)
-const { calculateExpenseBreakdown, isOpexRow, isPayrollRow, MAX_REASONABLE_AMOUNT } = await import(
+const {
+  calculateExpenseBreakdown,
+  isOpexRow,
+  isPayrollRow,
+  isPartnerShareEntry,
+  PARTNER_SHARE_CATEGORY,
+  MAX_REASONABLE_AMOUNT,
+} = await import(
   new URL("../.test-build/expense-totals.js", import.meta.url).href
 );
 
@@ -116,6 +123,38 @@ if (isPayrollRow({ category: "ค่าแรงพนักงาน", key: "em
 else bad("isPayrollRow: แถวเงินเดือนควรนับ");
 if (!isPayrollRow({ category: "ค่าแรงพนักงาน", key: "empd_base_sal_ก" })) ok("isPayrollRow: แถว empd_* ไม่นับ");
 else bad("isPayrollRow: แถว empd_* ไม่ควรนับ");
+
+
+console.log("\n[8] ส่วนแบ่งกำไรหุ้นส่วนต้องแยกออกมาได้ แต่ยังนับรวมในยอดค่าใช้จ่าย");
+// ทำไมต้องล็อกไว้: ยอดนี้คำนวณ *จาก* กำไรสุทธิแล้วบันทึกกลับเข้ามาเป็นค่าใช้จ่าย
+// ถ้าไม่แยกออกมา ตัวเลขกำไรบนหน้าจอจะเป็นยอดหลังแบ่งแล้ว เอาไปคูณ 20% ซ้ำไม่ได้
+const shareRows = [
+  { id: 200, month: "07/2026", category: "ค่าดำเนินการ", key: "rent", name: "ค่าเช่าร้าน", amount: 18000 },
+  {
+    id: 201, month: "07/2026", category: "payslip_detail", key: "misc_items_json", amount: 0,
+    name: JSON.stringify([
+      { name: "ค่าที่ปรึกษา", amount: 10000, method: "บัญชีร้าน" },
+      { name: "ค่าหุ้นส่วน 20%", amount: 5269, method: "เงินสดร้าน" },
+    ]),
+  },
+  // เงินเดือนหุ้นส่วนผู้จัดการ = เงินเดือน ไม่ใช่ส่วนแบ่งกำไร ต้องไม่ถูกนับเป็นส่วนแบ่ง
+  { id: 202, month: "07/2026", category: "ค่าแรง & เงินเดือน", key: "custom_9", name: "เงินเดือนหุ้นส่วนผู้จัดการ (ไม่หัก ปกส.)", amount: 10000 },
+];
+const sh = calculateExpenseBreakdown(shareRows);
+eq("ส่วนแบ่งหุ้นส่วนแยกออกมาได้", sh.totalPartnerShare, 5269);
+eq("ยอดค่าใช้จ่ายรวมยังนับส่วนแบ่งอยู่", sh.totalExpenses, 18000 + 10000 + 5269 + 10000);
+eq("ยอดก่อนหักส่วนแบ่ง", sh.totalExpensesBeforePartnerShare, 18000 + 10000 + 10000);
+const shareLine = sh.opexLines.find((l) => l.isPartnerShare);
+if (shareLine && shareLine.category === PARTNER_SHARE_CATEGORY) ok("รายการส่วนแบ่งถูกย้ายไปหมวดของตัวเอง");
+else bad("รายการส่วนแบ่งควรอยู่หมวด " + PARTNER_SHARE_CATEGORY);
+if (isPartnerShareEntry("ค่าหุ้นส่วน 20%")) ok("isPartnerShareEntry: 'ค่าหุ้นส่วน 20%' ใช่");
+else bad("isPartnerShareEntry: 'ค่าหุ้นส่วน 20%' ควรใช่");
+if (!isPartnerShareEntry("เงินเดือนหุ้นส่วนผู้จัดการ (ไม่หัก ปกส.)")) ok("isPartnerShareEntry: เงินเดือนหุ้นส่วนผู้จัดการ ไม่ใช่");
+else bad("เงินเดือนหุ้นส่วนผู้จัดการ ต้องไม่ถูกนับเป็นส่วนแบ่งกำไร");
+if (!isPartnerShareEntry("คืนเงินหุ้นส่วน")) ok("isPartnerShareEntry: คืนเงินหุ้นส่วน (คืนทุน) ไม่ใช่");
+else bad("คืนเงินหุ้นส่วน ต้องไม่ถูกนับเป็นส่วนแบ่งกำไร");
+if (isPartnerShareEntry("อะไรก็ตาม", PARTNER_SHARE_CATEGORY)) ok("isPartnerShareEntry: ยึด category ใหม่เป็นหลักได้");
+else bad("แถวที่ category เป็น " + PARTNER_SHARE_CATEGORY + " ควรถูกนับเป็นส่วนแบ่ง");
 
 console.log(failures === 0 ? "\n✅ ผ่านทั้งหมด" : `\n❌ ไม่ผ่าน ${failures} ข้อ`);
 process.exitCode = failures === 0 ? 0 : 1;
