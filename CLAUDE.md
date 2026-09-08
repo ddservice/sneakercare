@@ -212,37 +212,52 @@ CLAUDE.md                 คู่มือนี้ — อัปเดตท�
   ใช้ `pg_dump` รันผ่าน cron บน VPS ตี 3 ทุกคืน (`scripts/backup-db-to-r2.sh`) อัปโหลดไป Cloudflare R2 (`ddservicedb`)
   พร้อมลบไฟล์เก่าเกิน 90 วันทั้งบน VPS และ R2 อัตโนมัติ ตามด้วย `verify-backup.sh` ตรวจสอบความสมบูรณ์และส่ง Heartbeat เข้า Telegram
 
-## 🔴 ต้องทำก่อนใช้งานจริง (ค้างอยู่ ณ 2026-09-06 — เหลือขั้นตอนเดียว)
+## ✅ งานที่ต้องกดบน Dashboard/VPS — ปิดครบทุกข้อแล้ว (2026-09-08)
 
-**กด disable legacy anon / service_role key ที่ Supabase Dashboard** (Settings → API Keys →
-แท็บ `Legacy anon, service_role API keys`) — ทุกอย่างฝั่งเราย้ายไป key แบบใหม่เรียบร้อยและทดสอบผ่านหมดแล้ว
-(ดูหัวข้อสถานะงานล่าสุด) เหลือแค่ปิดของเก่าที่ยังใช้งานได้อยู่และหลุดอยู่ใน git history
+### 1. ปิด legacy API key (JWT-based) — ✅ เสร็จ
+เจ้าของกดปิดที่ Supabase → Project Settings → API Keys → **Disable JWT-based API keys**
+(ชื่อใหม่ของ legacy `anon`/`service_role` ที่ขึ้นต้นด้วย `eyJ...`)
 
-**⚠️ ความเสี่ยงที่ต้องเฝ้าทันทีหลังกด disable — Edge Function `inv-low-stock-alert`**
-ซอร์สของฟังก์ชันนี้ไม่ได้อยู่ใน repo นี้ (deploy มาจากที่อื่น) จึงยังไม่รู้ว่าข้างในสร้าง Supabase client
-ด้วย env var ตัวไหน ถ้ามันอ่าน `SUPABASE_SERVICE_ROLE_KEY` (legacy ที่ Supabase inject ให้อัตโนมัติ)
-การ disable legacy key จะทำให้ query ข้างในฟังก์ชันพัง = **แจ้งเตือนสต๊อกต่ำตายเงียบ**
-ด่านหน้า (gateway auth) ไม่พังแน่นอนเพราะ cron ใช้ key ใหม่จาก Vault แล้ว
+**ตรวจหลังกดแล้วทันที ผ่านหมด:**
+- `service_role` (`sb_secret_…`) อ่าน `sc_sales` ได้ 291 แถว
+- `publishable` (`sb_publishable_…`) เรียก `auth/v1/settings` → 200 (หน้า `/login` ใช้ตัวนี้)
+- `service_role` เรียก `auth/v1/admin/users` → 200 (หน้าเชิญผู้ใช้)
+- **Edge Function `inv-low-stock-alert` → `200 {"status":"ok","results":[{"branch":"SneakerCare","sent":0}]}`**
+  ⇒ **ข้างในฟังก์ชันไม่ได้ใช้ legacy key** ตามที่เคยกังวลไว้ แจ้งเตือนสต๊อกต่ำยังทำงานปกติ
+- `anon` ยังถูกกันครบ (`sc_opex` · `profiles` · `integration_secrets` → 401)
+- production 6 หน้าปกติ · PM2 online
 
-**วิธีตรวจทันทีหลัง disable** (ทำได้จาก VPS ผ่าน psql — รันแล้วรอ 8 วินาที):
-```sql
-select net.http_post(
-  url := 'https://mdlxogfkpwejnqpzhmoy.supabase.co/functions/v1/inv-low-stock-alert',
-  headers := jsonb_build_object('Content-Type','application/json',
-    'Authorization','Bearer ' || (select decrypted_secret from vault.decrypted_secrets
-                                  where name = 'inv_service_role_key')),
-  body := '{}'::jsonb);
--- แล้วดูผลจริง (อย่าดูแค่ cron.job_run_details — มันขึ้น succeeded เสมอ)
-select status_code, content from net._http_response order by created desc limit 1;
+**key เก่าที่หลุดใน git history ตายสนิทแล้ว** — ใครถือไปก็ใช้ไม่ได้อีก
+
+### 2. Leaked Password Protection — ❌ ทำไม่ได้บนแผน FREE (ปิดเคส ห้ามไล่ให้ทำซ้ำ)
+กดแล้วได้ error: *"Configuring leaked password protection via HaveIBeenPwned.org is available
+on Pro Plans and up"* — โปรเจกต์นี้อยู่แผน FREE
+
+**ทำไมไม่ใช่ช่องโหว่เร่งด่วน (ตรวจจากโค้ดจริงแล้ว):**
+- แอป **ไม่เคยจับรหัสผ่านตอนสร้างบัญชี** — `/admin/users` ใช้ `inviteUserByEmail()`
+  ผู้ใช้ตั้งรหัสเองผ่านหน้าของ Supabase รหัสผ่านไม่เคยผ่านโค้ดเรา
+- มี rate limit ล็อกอินอยู่แล้ว: `MAX_ATTEMPTS = 5` ล็อก 5 นาที (`app/actions/auth.ts`)
+- รหัสผ่านทั้ง 2 บัญชี rotate เป็นสุ่ม 20 ตัวอักษรเมื่อ 2026-09-06 ไม่มีทางอยู่ในฐาน HIBP
+
+**ทำแทนได้ฟรี (ควรทำก่อนเชิญพนักงานเข้าระบบ):** Authentication → Sign In / Providers → Email
+→ ตั้ง **Minimum password length = 12** (ค่าเริ่มต้น 6 สั้นเกินไป) + เปิด Password Requirements
+
+### 3. Dead-man switch — ✅ เสร็จ
+`HEALTHCHECK_URL` ตั้งใน `/home/ddservice/sneakercare-backup.env` แล้ว (healthchecks.io
+check "RRS DB backup" · Period 1 day · Grace 2 hours) · ทดสอบรันจริงแล้วขึ้นเขียว "Up"
+ได้ไฟล์ `rrs-backup-20260908_133207.dump` (622 KB) ครบทั้ง pg_dump → R2 → ping
+
+**สำคัญเพราะ:** ข้อความ "สำเร็จ" เข้า Telegram ถูกปิดไว้ (2026-09-06) ⇒ ถ้า cron ตายทั้งตัว
+จะไม่มีอะไรเกิดขึ้นเลย จึงไม่มีข้อความส่ง ตอนนี้ healthchecks.io จะอีเมลเตือนเองถ้าเลย Grace
+
+**⬜ ยังไม่ได้ตั้ง: cron ของ CSV รายเดือน** — `scripts/backup-monthly-csv.sh` เขียนไว้แต่
+**ไม่เคยถูกใส่ใน crontab เลย** (ตรวจ `crontab -l` บน VPS แล้ว มีแต่ backup รายวัน)
+ถ้าต้องการใช้ ให้เพิ่ม:
 ```
-ต้องได้ `200` พร้อม body `{"status":"ok",...}` ถ้าไม่ใช่ **ให้กลับไป enable legacy key ที่ Dashboard
-ทันที** แล้วค่อยไล่แก้ซอร์สของ Edge Function ให้ใช้ key ใหม่ก่อน (ดาวน์โหลดซอร์สด้วย
-`supabase functions download inv-low-stock-alert --project-ref mdlxogfkpwejnqpzhmoy`)
-
-**เครื่องมือที่ agent ตัวถัดไปไม่มี:** ไม่มี `supabase` CLI ทั้งบนเครื่อง dev และ VPS และไม่มี
-Personal Access Token — Management API จึงเรียกไม่ได้ งานที่ต้องกดบนหน้าเว็บต้องให้เจ้าของทำ
-(browser extension สั่งงานได้ แต่แท็บที่ไม่ได้อยู่หน้าจอจะถูก Chrome throttle จนหน้า Dashboard
-โหลดไม่ทันแล้วเด้งไป sign-in — เจอมาแล้ว 3 รอบ อย่าเสียเวลาวน)
+0 4 1 * * /usr/bin/env bash -c 'set -a; source /home/ddservice/sneakercare-backup.env; set +a; /var/www/sneakercare/scripts/backup-monthly-csv.sh' >> /home/ddservice/sneakercare-backup.log 2>&1
+```
+แล้วสร้าง healthchecks check **ตัวที่สอง** (Period 1 month · Grace 2 days) ใส่เป็น
+`HEALTHCHECK_CSV_URL` — ต้องคนละ check เพราะรอบทำงานคนละความถี่
 
 ### [เสร็จแล้ว — ตัดออกจากรายการค้าง]
 - ~~รัน migration `0011`~~ apply ตั้งแต่ 2026-09-01 ยืนยันซ้ำ 2026-09-06 กับฐานข้อมูลจริง

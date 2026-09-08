@@ -198,11 +198,12 @@ flag `--exclude` ตัดบริการที่ไม่จำเป็น
 
 ## 🔜 งานถัดไปที่แนะนำ (ทบทวนใหม่ 2026-09-08 — ตรวจกับ production จริงทุกข้อ)
 
-**ต้องให้เจ้าของกดเอง (agent ไม่มี CLI/PAT):**
-1. **disable legacy anon/service_role key** ที่ Supabase Dashboard — ดู "งานที่ 6" ข้างล่าง
-   **ห้ามลืมเช็ค `inv-low-stock-alert` ทันทีหลังกด** (สคริปต์อยู่ใน CLAUDE.md) ถ้าไม่ได้ 200 ให้ enable กลับ
-2. **เปิด Leaked Password Protection** (1 คลิก)
-3. **Dead-man switch** — โค้ดพร้อมแล้ว รอแค่ 2 URL จาก healthchecks.io (~5 นาที ดูหัวข้อด้านบน)
+**✅ งานที่ต้องกดบน Dashboard/VPS — ปิดครบแล้ว 2026-09-08** (รายละเอียดใน `CLAUDE.md`)
+1. ~~disable legacy API key~~ **เสร็จ** · ตรวจแล้วไม่มีอะไรพัง — `inv-low-stock-alert` ยังคืน 200
+2. ~~เปิด Leaked Password Protection~~ **ทำไม่ได้บนแผน FREE (Pro only) — ปิดเคส ห้ามไล่ให้ทำซ้ำ**
+   แทนด้วยการตั้ง Minimum password length = 12 ก่อนเชิญพนักงานเข้าระบบ
+3. ~~Dead-man switch~~ **เสร็จ** · ทดสอบขึ้นเขียวแล้ว
+   ⬜ เหลือ: cron ของ **CSV รายเดือน** ยังไม่เคยถูกใส่ใน crontab เลย (ถ้าต้องการใช้ ดูคำสั่งใน CLAUDE.md)
 
 **งานโค้ด:**
 4. **แตก `sc_opex` ออกจาก key-value store — ทำไปแล้ว 5 ขั้นจาก 6 (2026-09-08)**
