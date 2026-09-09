@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { requireProfile } from "@/lib/auth";
+import { requireProfile, requireModuleWrite } from "@/lib/auth";
 import { getSelectedBranchId } from "@/lib/branch";
 import { createClient } from "@/lib/supabase/server";
 
@@ -16,6 +16,7 @@ export async function createServiceOrder(
   formData: FormData
 ): Promise<PosActionState> {
   const profile = await requireProfile();
+  requireModuleWrite(profile, "pos");
   const selectedBranchId = await getSelectedBranchId(profile);
 
   const customerName = String(formData.get("customer_name") ?? "").trim();
@@ -147,7 +148,8 @@ export async function createServiceOrder(
 
 export async function updateOrderStatus(orderId: string, status: "received" | "in_progress" | "ready" | "delivered" | "cancelled") {
   // เรียกเพื่อบังคับให้ต้องล็อกอิน — ไม่ได้ใช้ค่าที่คืนมา แต่ห้ามตัดบรรทัดนี้ทิ้ง
-  await requireProfile();
+  const profile = await requireProfile();
+  requireModuleWrite(profile, "pos");
   const supabase = await createClient();
 
   const updatePayload: {

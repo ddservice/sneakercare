@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { requireProfile } from "@/lib/auth";
+import { requireProfile, requireModuleView, requireModuleWrite } from "@/lib/auth";
 import { logAudit } from "@/lib/audit";
 import type { Database } from "@/lib/supabase/database.types";
 
@@ -59,6 +59,7 @@ export type DailySaleWithPayments = {
 
 export async function saveDailySale(data: DailySaleInput) {
   const profile = await requireProfile();
+  requireModuleWrite(profile, "pos");
   const supabase = createAdminClient();
 
   const cash = Number(data.cash_amount || 0);
@@ -173,6 +174,7 @@ export async function saveDailySale(data: DailySaleInput) {
 
 export async function deleteDailySale(id: number) {
   const profile = await requireProfile();
+  requireModuleWrite(profile, "pos");
   const supabase = createAdminClient();
 
   // อ่านแถวเก็บไว้ก่อน เพราะพอลบแล้วไม่มีทางรู้ย้อนหลังว่ายอดที่หายไปคือเท่าไหร่
@@ -207,7 +209,8 @@ export async function deleteDailySale(id: number) {
 
 /** นับยอดขายรายวันทั้งหมด — ใช้บอกผู้ใช้ว่าหน้าจอกำลังแสดงไม่ครบ */
 export async function countDailySales(): Promise<number> {
-  await requireProfile();
+  const profile = await requireProfile();
+  requireModuleView(profile, "pos");
   const supabase = createAdminClient();
   const { count } = await supabase.from("sc_sales").select("id", {
     count: "exact",
@@ -217,7 +220,8 @@ export async function countDailySales(): Promise<number> {
 }
 
 export async function fetchRecentDailySales(limit: number = 300): Promise<DailySaleWithPayments[]> {
-  await requireProfile();
+  const profile = await requireProfile();
+  requireModuleView(profile, "pos");
   const supabase = createAdminClient();
 
   const { data: salesData, error: salesError } = await supabase.from("sc_sales")
@@ -312,6 +316,7 @@ export async function recordArPayment(data: {
   notes?: string;
 }) {
   const profile = await requireProfile();
+  requireModuleWrite(profile, "pos");
   const supabase = createAdminClient();
 
   if (!data.sale_date || !data.received_date || Number(data.amount) <= 0) {
@@ -387,6 +392,7 @@ export async function recordArPayment(data: {
  */
 export async function deleteArPayment(paymentId: number, saleDate: string) {
   const profile = await requireProfile();
+  requireModuleWrite(profile, "pos");
   const supabase = createAdminClient();
 
   // อ่านใบรับชำระเก็บไว้ก่อนลบ — ยอดเงินที่หายต้องตรวจย้อนหลังได้

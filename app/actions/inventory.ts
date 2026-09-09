@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { requireProfile } from "@/lib/auth";
+import { requireProfile, requireModuleWrite } from "@/lib/auth";
 import { getSelectedBranchId } from "@/lib/branch";
 import { logAudit } from "@/lib/audit";
 
@@ -30,6 +30,7 @@ export type InventoryItemInput = {
  */
 export async function toggleItemAlertMute(itemId: string, muted: boolean) {
   const profile = await requireProfile();
+  requireModuleWrite(profile, "inventory");
   const branchId = await getSelectedBranchId(profile);
   const supabase = createAdminClient();
 
@@ -62,6 +63,7 @@ export async function toggleItemAlertMute(itemId: string, muted: boolean) {
  */
 export async function updateInventoryItem(data: InventoryItemInput) {
   const profile = await requireProfile();
+  requireModuleWrite(profile, "inventory");
   const branchId = await getSelectedBranchId(profile);
   const supabase = createAdminClient();
 
@@ -153,6 +155,7 @@ export async function updateInventoryItem(data: InventoryItemInput) {
  */
 export async function createInventoryItem(data: InventoryItemInput) {
   const profile = await requireProfile();
+  requireModuleWrite(profile, "inventory");
   const branchId = await getSelectedBranchId(profile);
   const supabase = createAdminClient();
 
@@ -215,7 +218,8 @@ export async function createInventoryItem(data: InventoryItemInput) {
  * Delete or deactivate inventory item
  */
 export async function deleteInventoryItem(itemId: string) {
-  await requireProfile();
+  const profile = await requireProfile();
+  requireModuleWrite(profile, "inventory");
   const supabase = createAdminClient();
 
   // Try delete if no foreign key constraints, else deactivate

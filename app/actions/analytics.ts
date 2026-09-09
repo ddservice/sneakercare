@@ -1,6 +1,6 @@
 "use server";
 
-import { requireProfile } from "@/lib/auth";
+import { requireProfile, requireModuleView } from "@/lib/auth";
 import { withId, text } from "@/lib/db-rows";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -98,7 +98,8 @@ function formatMonthLabel(yyyyMm: string): string {
 }
 
 export async function fetchAnalyticsData(targetMonth: string = "all"): Promise<AnalyticsDashboardData> {
-  await requireProfile();
+  const profile = await requireProfile();
+  requireModuleView(profile, "statistics");
   const supabase = createAdminClient();
 
   // 1. Fetch sales from sc_sales — only needed columns, with date range limit

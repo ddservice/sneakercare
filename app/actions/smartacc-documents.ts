@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { requireProfile } from "@/lib/auth";
+import { requireProfile, requireModuleView, requireModuleWrite } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { generateDocumentNumber, type DocumentType } from "@/lib/smartacc/numbering";
 import { generatePromptPayPayload } from "@/lib/smartacc/promptpay";
@@ -67,7 +67,8 @@ export type DbdCompanyResult = {
  * Lookup Company from DBD / RD Registry & Contact Database
  */
 export async function lookupDbdCompany(taxIdOrKeyword: string): Promise<DbdCompanyResult | null> {
-  await requireProfile();
+  const profile = await requireProfile();
+  requireModuleView(profile, "invoicing");
   const raw = taxIdOrKeyword.trim();
   const cleaned = raw.replace(/[^0-9]/g, "");
   const keyword = raw.toLowerCase();
@@ -254,7 +255,8 @@ export async function lookupDbdCompany(taxIdOrKeyword: string): Promise<DbdCompa
  * Fetch real catalog of services and inventory items from live database
  */
 export async function fetchCatalogItems(): Promise<CatalogItem[]> {
-  await requireProfile();
+  const profile = await requireProfile();
+  requireModuleView(profile, "invoicing");
   const supabase = createAdminClient();
 
   const [servicesRes, itemsRes] = await Promise.all([
@@ -338,7 +340,8 @@ export async function fetchCatalogItems(): Promise<CatalogItem[]> {
 export type SmartAccDocument = Awaited<ReturnType<typeof fetchSmartAccDocuments>>[number];
 
 export async function fetchSmartAccDocuments(filterType?: DocumentType) {
-  await requireProfile();
+  const profile = await requireProfile();
+  requireModuleView(profile, "invoicing");
   const supabase = createAdminClient();
 
   let query = supabase
@@ -361,6 +364,7 @@ export async function fetchSmartAccDocuments(filterType?: DocumentType) {
  */
 export async function createSmartAccDocument(payload: CreateDocumentPayload) {
   const profile = await requireProfile();
+  requireModuleWrite(profile, "invoicing");
   const supabase = createAdminClient();
 
   // 1. Calculate Totals
@@ -502,7 +506,8 @@ export async function createSmartAccDocument(payload: CreateDocumentPayload) {
  * Converts a source document (e.g. Quotation QA-...) to a target document (e.g. Invoice INV-...)
  */
 export async function convertDocument(sourceDocId: string, targetDocType: DocumentType) {
-  await requireProfile();
+  const profile = await requireProfile();
+  requireModuleWrite(profile, "invoicing");
   const supabase = createAdminClient();
 
   // 1. Fetch Source Document
@@ -559,7 +564,8 @@ export async function convertDocument(sourceDocId: string, targetDocType: Docume
 export type PendingDeliveryOrderRow = Awaited<ReturnType<typeof fetchPendingDeliveryOrders>>[number];
 
 export async function fetchPendingDeliveryOrders() {
-  await requireProfile();
+  const profile = await requireProfile();
+  requireModuleView(profile, "invoicing");
   const supabase = createAdminClient();
 
   const { data, error } = await supabase
@@ -579,7 +585,8 @@ export type TaxFilingSalesDoc = Awaited<ReturnType<typeof fetchTaxFilingData>>["
 export type TaxFilingExpense = Awaited<ReturnType<typeof fetchTaxFilingData>>["expenses"][number];
 
 export async function fetchTaxFilingData(yearMonth?: string) {
-  await requireProfile();
+  const profile = await requireProfile();
+  requireModuleView(profile, "tax-filing");
   const supabase = createAdminClient();
 
   // yearMonth ("YYYY-MM") เดิมรับเข้ามาแล้วไม่ถูกใช้เลย — หน้าเว็บกรองเองฝั่ง client

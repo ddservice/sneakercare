@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { requireProfile } from "@/lib/auth";
+import { requireProfile, requireModuleView, requireModuleWrite } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { verifyBankSlip, type SlipVerificationResult } from "@/lib/smartacc/slip-verifier";
 
@@ -9,7 +9,8 @@ export async function verifyBankSlipAction(
   qrPayload: string,
   targetDocumentId?: string
 ): Promise<SlipVerificationResult> {
-  await requireProfile();
+  const profile = await requireProfile();
+  requireModuleView(profile, "expenses");
   return verifyBankSlip(qrPayload, targetDocumentId);
 }
 
@@ -31,7 +32,8 @@ export type StagedExpenseResult = {
  */
 export async function parseAndStageReceiptOcr(imageBase64OrUrl: string) {
   // เรียกเพื่อบังคับให้ต้องล็อกอิน — ไม่ได้ใช้ค่าที่คืนมา แต่ห้ามตัดบรรทัดนี้ทิ้ง
-  await requireProfile();
+  const profile = await requireProfile();
+  requireModuleWrite(profile, "expenses");
   const supabase = createAdminClient();
 
   const mockVendorNames = [
@@ -80,7 +82,8 @@ export async function parseAndStageReceiptOcr(imageBase64OrUrl: string) {
 }
 
 export async function approveStagedExpense(expenseId: string, accountCode?: string) {
-  await requireProfile();
+  const profile = await requireProfile();
+  requireModuleWrite(profile, "expenses");
   const supabase = createAdminClient();
 
   const { error } = await supabase
@@ -99,7 +102,8 @@ export async function approveStagedExpense(expenseId: string, accountCode?: stri
 }
 
 export async function fetchStagedExpenses() {
-  await requireProfile();
+  const profile = await requireProfile();
+  requireModuleView(profile, "expenses");
   const supabase = createAdminClient();
 
   const { data } = await supabase

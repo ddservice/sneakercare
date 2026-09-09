@@ -15,6 +15,10 @@ export type ShopProfile = {
 };
 
 export async function fetchShopProfile(): Promise<ShopProfile> {
+  // ⚠️ Server Action = endpoint สาธารณะ ใครก็ยิงเข้ามาตรงๆ ได้ ไม่ได้ถูกกันด้วยการ์ดของหน้าเว็บ
+  // ข้อมูลนี้ไปอยู่บนหัวเอกสารที่พิมพ์ให้ลูกค้าอยู่แล้วจึงไม่ใช่ความลับ แต่ก็ไม่มีเหตุผลให้คนนอก
+  // ที่ไม่ได้ล็อกอินเรียกดูได้ · ทุกที่ที่เรียกฟังก์ชันนี้เป็นหน้าใน (app) ซึ่งล็อกอินแล้วทั้งหมด
+  await requireProfile();
   const supabase = createAdminClient();
 
   const { data } = await supabase.from("sc_settings").select("key, value");
@@ -83,6 +87,7 @@ export async function updateShopProfile(profile: Partial<ShopProfile>) {
 const BACKUP_HEARTBEAT_KEY = "backup_success_notify";
 
 export async function fetchBackupHeartbeatEnabled(): Promise<boolean> {
+  await requireProfile();
   const supabase = createAdminClient();
   const { data } = await supabase
     .from("sc_settings")

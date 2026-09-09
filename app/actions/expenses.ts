@@ -1,7 +1,7 @@
 "use server";
 
 import { createAdminClient } from "@/lib/supabase/admin";
-import { requireProfile } from "@/lib/auth";
+import { requireProfile, requireModuleView, requireModuleWrite } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
 import { logAudit } from "@/lib/audit";
 import { calculateExpenseBreakdown, applyEntriesToBreakdown } from "@/lib/expense-totals";
@@ -115,7 +115,8 @@ function extractCleanEmployeeName(key: string, name: string): string | null {
 }
 
 export async function fetchAllExpensesData(timeRange: string = "this_month"): Promise<ExpensesPayload> {
-  await requireProfile();
+  const profile = await requireProfile();
+  requireModuleView(profile, "expenses");
   const supabase = createAdminClient();
 
   // Fetch all records from sc_opex
@@ -695,6 +696,7 @@ export async function saveStaffProfileInfo(payload: {
   ssoExempt?: boolean;
 }): Promise<ExpenseActionState> {
   const profile = await requireProfile();
+  requireModuleWrite(profile, "expenses");
   const supabase = createAdminClient();
 
   let cleanKeyName = payload.employeeKeyName;
@@ -798,6 +800,7 @@ export async function createStaffMember(payload: {
   ssoExempt?: boolean;
 }): Promise<ExpenseActionState> {
   const profile = await requireProfile();
+  requireModuleWrite(profile, "expenses");
   const supabase = createAdminClient();
 
   if (!payload.fullName.trim()) {
@@ -890,6 +893,7 @@ export async function saveStaffPayrollAdjustment(payload: {
   payMethod: string;
 }): Promise<ExpenseActionState> {
   const profile = await requireProfile();
+  requireModuleWrite(profile, "expenses");
   const supabase = createAdminClient();
 
   const m = payload.month;
@@ -988,6 +992,7 @@ export async function addExpense(
   formData: FormData
 ): Promise<ExpenseActionState> {
   const profile = await requireProfile();
+  requireModuleWrite(profile, "expenses");
   const supabase = createAdminClient();
 
   const title = (formData.get("title") as string)?.trim();
@@ -1050,6 +1055,7 @@ export async function addExpense(
 
 export async function deleteExpense(id: string | number) {
   const profile = await requireProfile();
+  requireModuleWrite(profile, "expenses");
   const supabase = createAdminClient();
 
   // อ่านรายการเก็บไว้ก่อนลบ — ยอดค่าใช้จ่ายที่หายไปต้องตรวจย้อนหลังได้
@@ -1105,6 +1111,7 @@ export async function deleteExpense(id: string | number) {
  */
 export async function deleteMiscExpenseItem(rowId: number, itemIndex: number) {
   const profile = await requireProfile();
+  requireModuleWrite(profile, "expenses");
   const supabase = createAdminClient();
 
   const { data: row, error: fetchError } = await supabase.from("sc_opex")

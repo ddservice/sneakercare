@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { requireProfile } from "@/lib/auth";
+import { requireProfile, requireModuleView } from "@/lib/auth";
 import { getSelectedBranchId } from "@/lib/branch";
 import { parseSalesRow, parseStockRow, parseExpensesRow } from "@/lib/schemas/import-schemas";
 
@@ -20,6 +20,7 @@ export type BulkImportResult = {
  */
 export async function bulkImportSales(rows: Record<string, unknown>[]): Promise<BulkImportResult> {
   const profile = await requireProfile();
+  requireModuleView(profile, "reports");
   const supabase = createAdminClient();
 
   if (!rows || rows.length === 0) {
@@ -107,6 +108,7 @@ export async function bulkImportSales(rows: Record<string, unknown>[]): Promise<
  */
 export async function bulkImportStock(rows: Record<string, unknown>[]): Promise<BulkImportResult> {
   const profile = await requireProfile();
+  requireModuleView(profile, "reports");
   const branchId = await getSelectedBranchId(profile);
   const supabase = createAdminClient();
 
@@ -215,6 +217,7 @@ export async function bulkImportStock(rows: Record<string, unknown>[]): Promise<
  */
 export async function bulkImportExpenses(rows: Record<string, unknown>[]): Promise<BulkImportResult> {
   const profile = await requireProfile();
+  requireModuleView(profile, "reports");
   const supabase = createAdminClient();
 
   if (!rows || rows.length === 0) {

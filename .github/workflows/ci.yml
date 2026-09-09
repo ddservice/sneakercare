@@ -44,6 +44,12 @@ jobs:
       - name: Reports & pagination logic
         run: npm run test:reports
 
+      # Server Action ของ Next คือ endpoint สาธารณะ — การ์ดที่หน้าเว็บกันไม่ถึงมัน
+      # เคยมี 27 action ที่ใช้ service_role (ข้าม RLS) แต่การ์ดมีแค่ requireProfile()
+      # = พนักงานคนไหนก็อ่านเงินเดือน/เลขบัตร/เลขบัญชีของทุกคนได้ถ้ารู้ชื่อ action
+      - name: Server Action guards (ทุก action ต้องมีการ์ดสิทธิ์)
+        run: npm run test:guards
+
       # สูตรกลาง "อะไรนับเป็นค่าใช้จ่าย" — หน้า /dashboard กับ /expenses เคยแสดงยอด
       # ของเดือนเดียวกันไม่ตรงกัน เพราะเขียนกฎกรองกันคนละชุด และเป็นตัวเลข "ขาด" ที่ไม่มี error ให้เห็น
       - name: Expense totals (สูตรกลางของค่าใช้จ่าย)

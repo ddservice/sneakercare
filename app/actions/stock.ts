@@ -288,6 +288,13 @@ async function callDbFunction(
 }
 
 export async function approveAdjustment(txnId: string, approve: boolean) {
+  // ด่านจริงของกฎข้อ 3 อยู่ที่ฐานข้อมูล — `inv_fn_approve_adjustment()` เช็ค
+  // `inv_fn_current_role() in ('admin','co-admin')` และเช็คสาขาของ co-admin ให้อยู่แล้ว
+  // (ยืนยันจาก prosrc บน production 2026-09-09) การ์ดตรงนี้จึงเป็นด่านที่สอง ไม่ใช่ด่านเดียว
+  // แต่จำเป็นเพราะ (1) กันไว้เผื่อวันหน้ามีคนเปลี่ยนมาใช้ service_role ที่ข้าม RLS
+  // (2) ผู้ใช้ได้ข้อความไทยที่อ่านรู้เรื่อง แทน exception ดิบจาก Postgres
+  const profile = await requireProfile();
+  requireModuleWrite(profile, "adjustments");
   const supabase = await createClient();
   const { error } = await callDbFunction(supabase, "inv_fn_approve_adjustment", "fn_approve_adjustment", {
     p_txn_id: txnId,
