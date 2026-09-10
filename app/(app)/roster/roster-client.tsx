@@ -81,9 +81,39 @@ const EMPLOYEES: EmployeeInfo[] = [
   },
 ];
 
+export type ShiftPreset = {
+  id: string;
+  name: string;
+  description: string;
+  morningTime: string;
+  lateTime: string;
+};
+
+export const SHIFT_PRESETS: ShiftPreset[] = [
+  {
+    id: "prep_close",
+    name: "09:00 - 20:00 (รวมเวลาเตรียมร้าน & ปิดร้าน)",
+    description: "กะเช้า 08:30 - 17:30 น. (เตรียมเปิดร้าน 9:00) · กะสาย 11:30 - 20:30 น. (ปิดร้าน 20:00 + เคลียร์ยอด 30 นาที)",
+    morningTime: "08:30 - 17:30",
+    lateTime: "11:30 - 20:30",
+  },
+  {
+    id: "exact_hours",
+    name: "09:00 - 20:00 (ตรงเวลาเปิด-ปิดร้าน)",
+    description: "กะเช้า 09:00 - 18:00 น. · กะสาย 11:00 - 20:00 น.",
+    morningTime: "09:00 - 18:00",
+    lateTime: "11:00 - 20:00",
+  },
+  {
+    id: "legacy",
+    name: "กะเดิม (08:30-17:30 / 10:30-19:30)",
+    description: "กะเช้า 08:30 - 17:30 น. · กะสาย 10:30 - 19:30 น.",
+    morningTime: "08:30 - 17:30",
+    lateTime: "10:30 - 19:30",
+  },
+];
+
 // Weekly Shift Template (Day of week: 0=Sun, 1=Mon, 2=Tue, 3=Wed, 4=Thu, 5=Fri, 6=Sat)
-// Morning: 08:30 - 17:30
-// Late: 10:30 - 19:30
 const WEEKLY_SHIFTS: Record<
   number,
   {
@@ -159,6 +189,28 @@ export function RosterClient() {
   // ปัจจุบันจริงเสมอ
   const [currentYear, setCurrentYear] = useState<number>(() => new Date().getFullYear());
   const [currentMonth, setCurrentMonth] = useState<number>(() => new Date().getMonth());
+  const [selectedPresetId, setSelectedPresetId] = useState<string>("prep_close");
+  const [customMorningTime, setCustomMorningTime] = useState<string>("08:30 - 17:30");
+  const [customLateTime, setCustomLateTime] = useState<string>("11:30 - 20:30");
+  const [isCustomModalOpen, setIsCustomModalOpen] = useState<boolean>(false);
+
+  // State to store custom day-by-day shift overrides (e.g. { "2026-09-15": { morning: [...], late: [...], off: [...] } })
+  const [customDayOverrides, setCustomDayOverrides] = useState<
+    Record<string, { morning: string[]; late: string[]; off: string[] }>
+  >({});
+
+  // Load custom overrides from localStorage on mount
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("sc_roster_custom_shifts");
+      if (saved) {
+        setCustomDayOverrides(JSON.parse(saved));
+      }
+    } catch {
+      // Ignore JSON parse errors on invalid localStorage
+    }
+  }, []);
+
   const [selectedDayDetail, setSelectedDayDetail] = useState<{
     dateStr: string;
     dayOfWeek: number;
@@ -167,9 +219,29 @@ export function RosterClient() {
     morning: string[];
     late: string[];
     off: string[];
+    isCustomized?: boolean;
   } | null>(null);
 
-  // Generate Calendar Days for Current Month
+  // Active shift times based on selected preset or custom input
+  const currentShiftTimes = useMemo(() => {
+    const preset = SHIFT_PRESETS.find((p) => p.id === selectedPresetId);
+    if (preset) {
+      return {
+        morning: preset.morningTime,
+        late: preset.lateTime,
+        name: preset.name,
+        description: preset.description,
+      };
+    }
+    return {
+      morning: customMorningTime,
+      late: customLateTime,
+      name: "กำหนดเวลาเอง (Custom)",
+      description: `กะเช้า ${customMorningTime} น. · กะสาย ${customLateTime} น.`,
+    };
+  }, [selectedPresetId, customMorningTime, customLateTime]);
+
+  // Generate Calendar Days for Current Month (incorporating custom overrides)
   const calendarDays = useMemo(() => {
     const firstDay = new Date(currentYear, currentMonth, 1);
     const lastDay = new Date(currentYear, currentMonth + 1, 0);
@@ -189,7 +261,9 @@ export function RosterClient() {
       const dayOfWeek = dateObj.getDay();
       const dateStr = `${currentYear}-${String(currentMonth + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
       const holiday = THAI_LABOR_HOLIDAYS[dateStr];
-      const shift = WEEKLY_SHIFTS[dayOfWeek];
+      const defaultShift = WEEKLY_SHIFTS[dayOfWeek];
+      const isCustomized = Boolean(customDayOverrides[dateStr]);
+      const shift = customDayOverrides[dateStr] || defaultShift;
 
       days.push({
         dateStr,
@@ -199,11 +273,101 @@ export function RosterClient() {
         morning: shift.morning,
         late: shift.late,
         off: shift.off,
+        isCustomized,
       });
     }
 
     return days;
-  }, [currentYear, currentMonth]);
+  }, [currentYear, currentMonth, customDayOverrides]);
+
+  // Helper to change an employee's shift on a specific date
+  function setEmployeeShift(dateStr: string, empName: string, targetShift: "morning" | "late" | "off") {
+    const dayObj = calendarDays.find((d) => d?.dateStr === dateStr);
+    if (!dayObj) return;
+
+    const newMorning = dayObj.morning.filter((name) => name !== empName);
+    const newLate = dayObj.late.filter((name) => name !== empName);
+    const newOff = dayObj.off.filter((name) => name !== empName);
+
+    if (targetShift === "morning") {
+      newMorning.push(empName);
+    } else if (targetShift === "late") {
+      newLate.push(empName);
+    } else if (targetShift === "off") {
+      newOff.push(empName);
+    }
+
+    const updatedShift = {
+      morning: newMorning,
+      late: newLate,
+      off: newOff,
+    };
+
+    setCustomDayOverrides((prev) => {
+      const next = { ...prev, [dateStr]: updatedShift };
+      try {
+        localStorage.setItem("sc_roster_custom_shifts", JSON.stringify(next));
+      } catch {}
+      return next;
+    });
+
+    setSelectedDayDetail((prev) => {
+      if (!prev || prev.dateStr !== dateStr) return prev;
+      return {
+        ...prev,
+        morning: newMorning,
+        late: newLate,
+        off: newOff,
+        isCustomized: true,
+      };
+    });
+
+    toast.success(`ปรับกะของ ${empName} วันที่ ${dateStr} เรียบร้อยแล้ว`);
+  }
+
+  // Reset a single day's shift override back to default weekly template
+  function resetDayToDefault(dateStr: string, dayOfWeek: number) {
+    setCustomDayOverrides((prev) => {
+      const next = { ...prev };
+      delete next[dateStr];
+      try {
+        localStorage.setItem("sc_roster_custom_shifts", JSON.stringify(next));
+      } catch {}
+      return next;
+    });
+
+    const defaultShift = WEEKLY_SHIFTS[dayOfWeek];
+    setSelectedDayDetail((prev) => {
+      if (!prev || prev.dateStr !== dateStr) return prev;
+      return {
+        ...prev,
+        morning: defaultShift.morning,
+        late: defaultShift.late,
+        off: defaultShift.off,
+        isCustomized: false,
+      };
+    });
+
+    toast.info(`คืนค่าตารางมาตรฐานของวันที่ ${dateStr} แล้ว`);
+  }
+
+  // Reset all custom overrides for the current month
+  function resetMonthOverrides() {
+    const prefix = `${currentYear}-${String(currentMonth + 1).padStart(2, "0")}`;
+    setCustomDayOverrides((prev) => {
+      const next: Record<string, { morning: string[]; late: string[]; off: string[] }> = {};
+      Object.keys(prev).forEach((key) => {
+        if (!key.startsWith(prefix)) {
+          next[key] = prev[key];
+        }
+      });
+      try {
+        localStorage.setItem("sc_roster_custom_shifts", JSON.stringify(next));
+      } catch {}
+      return next;
+    });
+    toast.info(`รีเซ็ตตารางเดือน ${MONTH_NAMES_THAI[currentMonth]} เป็นค่ามาตรฐานทั้งหมดแล้ว`);
+  }
 
   // Monthly stats for Jae (Daily Wage @ 350฿) & Chiang/Milk
   const monthlyStats = useMemo(() => {
@@ -271,14 +435,13 @@ export function RosterClient() {
     });
 
     // 2. Daily Schedule Matrix Sheet
-    // type predicate แทน `as any[]` — filter(Boolean) เพียงอย่างเดียว TypeScript ยังคิดว่ามี null ปนอยู่
     const dailyScheduleData = calendarDays
       .filter((d): d is NonNullable<typeof d> => d !== null)
       .map((d) => ({
       "วันที่": d.dateStr,
       "วัน": WEEKLY_SHIFTS[d.dayOfWeek]?.dayName || "",
-      "กะเช้า (08:30-17:30)": d.morning.join(", "),
-      "กะสาย (10:30-19:30)": d.late.join(", "),
+      [`กะเช้า (${currentShiftTimes.morning})`]: d.morning.join(", "),
+      [`กะสาย (${currentShiftTimes.late})`]: d.late.join(", "),
       "วันหยุด": d.off.join(", ") || "ไม่มี",
       "หมายเหตุวันหยุดแรงงาน": d.holiday || "",
     }));
@@ -302,15 +465,15 @@ export function RosterClient() {
         <div className="space-y-1">
           <div className="inline-flex items-center gap-2 rounded-full bg-teal-500/20 px-3 py-1 text-xs font-semibold text-teal-200 ring-1 ring-teal-400/30">
             <CalendarIcon className="h-3.5 w-3.5" />
-            SneakerCare Smart Roster System (1 ก.ย. 2569 เป็นต้นไป)
+            SneakerCare Smart Roster System (เวลาเปิดร้าน 09:00 - 20:00 น.)
           </div>
           <h2 className="text-2xl font-bold tracking-tight">ตารางการทำงาน & ปฏิทินกะพนักงาน</h2>
           <p className="text-sm text-teal-100/80">
-            ระบบจัดตารางกะรายวัน, วันหยุดประจำตัวพนักงาน, ไฮไลท์วันหยุดตามกฎหมายแรงงาน และคำนวณค่าจ้างทดลองงานรายวัน (วันละ 350฿)
+            ระบบจัดตารางกะรายวัน, กำหนดเวลาเข้า-ออกงาน, วันหยุดประจำตัวพนักงาน, ไฮไลท์วันหยุดตามกฎหมายแรงงาน และคำนวณค่าจ้างทดลองงาน
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <Button
             variant="outline"
             onClick={exportRosterToExcel}
@@ -325,6 +488,59 @@ export function RosterClient() {
           >
             <Printer className="h-4 w-4" /> พิมพ์ตารางงาน (Print A4)
           </Button>
+        </div>
+      </div>
+
+      {/* ── Shift Preset Selector Bar (Hidden on Print) ── */}
+      <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-2xs print:hidden space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-3">
+          <div className="flex items-center gap-2">
+            <Clock className="h-4 w-4 text-teal-700" />
+            <span className="text-sm font-bold text-slate-900">รูปแบบเวลาเข้า-ออกงาน (Shift Timing):</span>
+            <Badge variant="outline" className="text-xs font-mono font-bold text-teal-800 bg-teal-50 border-teal-200">
+              ร้านเปิด 09:00 - 20:00 น.
+            </Badge>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setIsCustomModalOpen(true)}
+            className="h-7 text-xs text-slate-600 font-semibold hover:text-teal-700"
+          >
+            ⚙️ กำหนดเวลาเอง
+          </Button>
+        </div>
+
+        <div className="grid gap-2 sm:grid-cols-3">
+          {SHIFT_PRESETS.map((preset) => {
+            const isSelected = selectedPresetId === preset.id;
+            return (
+              <button
+                key={preset.id}
+                type="button"
+                onClick={() => setSelectedPresetId(preset.id)}
+                className={`flex flex-col text-left rounded-xl p-3 border transition-all ${
+                  isSelected
+                    ? "bg-teal-50/70 border-teal-500 ring-2 ring-teal-500/20 shadow-2xs"
+                    : "bg-slate-50/50 border-slate-200 hover:bg-slate-100/70 hover:border-slate-300"
+                }`}
+              >
+                <div className="flex items-center justify-between w-full">
+                  <span className={`text-xs font-bold ${isSelected ? "text-teal-900" : "text-slate-800"}`}>
+                    {preset.name}
+                  </span>
+                  {isSelected && (
+                    <span className="flex h-2 w-2 rounded-full bg-teal-600" />
+                  )}
+                </div>
+                <div className="mt-1.5 text-[11px] font-medium text-slate-600 flex items-center gap-2">
+                  <span className="text-emerald-700 font-bold">เช้า {preset.morningTime}</span>
+                  <span className="text-slate-300">|</span>
+                  <span className="text-indigo-800 font-bold">สาย {preset.lateTime}</span>
+                </div>
+              </button>
+            );
+          })}
         </div>
       </div>
 
@@ -385,7 +601,7 @@ export function RosterClient() {
                   ตารางงานประจำเดือน {MONTH_NAMES_THAI[currentMonth]} {currentYear + 543}
                 </h3>
                 <p className="text-xs text-slate-500">
-                  [กะเช้า: 08:30 - 17:30 น.] · [กะสาย: 10:30 - 19:30 น.]
+                  [กะเช้า: {currentShiftTimes.morning} น.] · [กะสาย: {currentShiftTimes.late} น.] (ร้านเปิด 09:00 - 20:00 น.)
                 </p>
               </div>
             </div>
@@ -449,6 +665,8 @@ export function RosterClient() {
                   className={`min-h-[110px] rounded-xl border p-2 text-xs flex flex-col justify-between transition-all cursor-pointer hover:shadow-md ${
                     isHoliday
                       ? "bg-rose-50/70 border-rose-300 ring-1 ring-rose-300"
+                      : day.isCustomized
+                      ? "bg-teal-50/40 border-teal-400 ring-1 ring-teal-300/50"
                       : day.dayOfWeek === 0
                       ? "bg-amber-50/20 border-slate-200"
                       : "bg-white border-slate-200 hover:border-teal-400"
@@ -457,17 +675,24 @@ export function RosterClient() {
                   {/* Day Header */}
                   <div>
                     <div className="flex items-center justify-between">
-                      <span
-                        className={`font-mono text-sm font-black ${
-                          isHoliday
-                            ? "text-rose-700"
-                            : day.dayOfWeek === 0
-                            ? "text-rose-600"
-                            : "text-slate-800"
-                        }`}
-                      >
-                        {day.dayNum}
-                      </span>
+                      <div className="flex items-center gap-1.5">
+                        <span
+                          className={`font-mono text-sm font-black ${
+                            isHoliday
+                              ? "text-rose-700"
+                              : day.dayOfWeek === 0
+                              ? "text-rose-600"
+                              : "text-slate-800"
+                          }`}
+                        >
+                          {day.dayNum}
+                        </span>
+                        {day.isCustomized && (
+                          <span className="text-[9px] font-bold text-teal-700 bg-teal-100 px-1 py-0.2 rounded">
+                            ✏️ ปรับแล้ว
+                          </span>
+                        )}
+                      </div>
                       {isHoliday && (
                         <Badge className="bg-rose-600 text-white font-bold text-[9px] px-1 py-0 h-4">
                           วันหยุดแรงงาน
@@ -488,7 +713,7 @@ export function RosterClient() {
                       <div className="flex items-start gap-1 text-[10px] text-slate-700">
                         <Sun className="h-3 w-3 text-amber-500 shrink-0 mt-0.5" />
                         <span className="font-semibold text-emerald-600 dark:text-emerald-400">
-                          เช้า: {day.morning.join(", ")}
+                          เช้า ({currentShiftTimes.morning.split(" - ")[0]}): {day.morning.length > 0 ? day.morning.join(", ") : "-"}
                         </span>
                       </div>
 
@@ -496,7 +721,7 @@ export function RosterClient() {
                       <div className="flex items-start gap-1 text-[10px] text-slate-700">
                         <Sunset className="h-3 w-3 text-indigo-500 shrink-0 mt-0.5" />
                         <span className="font-semibold text-indigo-800">
-                          สาย: {day.late.join(", ")}
+                          สาย ({currentShiftTimes.late.split(" - ")[0]}): {day.late.length > 0 ? day.late.join(", ") : "-"}
                         </span>
                       </div>
                     </div>
@@ -514,6 +739,20 @@ export function RosterClient() {
               );
             })}
           </div>
+
+          <div className="mt-3 flex items-center justify-between text-xs text-slate-500 pt-2 border-t border-slate-100 print:hidden">
+            <span className="flex items-center gap-1.5">
+              💡 <strong>วิธีใช้งาน:</strong> สามารถคลิกที่วันใดก็ได้บนปฏิทิน เพื่อสลับกะหรือเปลี่ยนวันหยุดพนักงานได้ทันที
+            </span>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={resetMonthOverrides}
+              className="h-6 text-[11px] text-slate-400 hover:text-rose-600 font-medium"
+            >
+              🔄 รีเซ็ตตารางเดือนนี้เป็นค่ามาตรฐาน
+            </Button>
+          </div>
         </CardContent>
       </Card>
 
@@ -524,72 +763,211 @@ export function RosterClient() {
         </div>
         <ul className="text-xs text-teal-100 space-y-1.5 list-disc list-inside print:text-slate-700">
           <li>
+            <strong>เวลาทำการร้าน:</strong> 09:00 – 20:00 น. ทุกวัน โดยจัดกะทำงาน 2 กะ (เช้า {currentShiftTimes.morning} น. และ สาย {currentShiftTimes.late} น.) ชั่วโมงทำงานมาตรฐาน 8 ชั่วโมง/วัน (พัก 1 ชั่วโมง)
+          </li>
+          <li>
             <strong>วันหยุดประจำสัปดาห์ (1 วัน/สัปดาห์):</strong> พนักงานทุกคนมีวันหยุดประจำสัปดาห์คนละ 1 วันแน่นอนตามตาราง (เชียง: พุธ, เจ: ศุกร์, มิ้ว: อาทิตย์)
           </li>
           <li>
             <strong>วันหยุดตามประเพณี / นักขัตฤกษ์:</strong> ตาม พ.ร.บ. คุ้มครองแรงงาน นายจ้างต้องกำหนดวันหยุดตามประเพณีไม่น้อยกว่า 13 วัน/ปี หากพนักงานมาปฏิบัติงานในวันหยุดนักขัตฤกษ์ จะได้รับค่าตอบแทนทำงานในวันหยุด (Holiday Pay) หรือได้รับสิทธิ์หยุดชดเชยตามตกลง
           </li>
           <li>
-            <strong>พนักงานทดลองงาน (มิ้ว - วันละ 350 บาท):</strong> คำนวณค่าจ้างตามจำนวนวันที่มาปฏิบัติงานจริงในแต่ละเดือน (ปกติ 26 วัน/เดือน = 9,100 บาท) และสามารถบันทึกค่าล่วงเวลา (OT) เพิ่มเติมได้
+            <strong>พนักงานทดลองงาน (เจ - วันละ 350 บาท):</strong> คำนวณค่าจ้างตามจำนวนวันที่มาปฏิบัติงานจริงในแต่ละเดือน (ปกติ 26 วัน/เดือน = 9,100 บาท) และสามารถบันทึกค่าล่วงเวลา (OT) เพิ่มเติมได้
           </li>
         </ul>
       </div>
 
-      {/* ── Day Detail Modal (Optional Quick View) ── */}
-      {selectedDayDetail && (
+      {/* ── Custom Shift Time Modal ── */}
+      {isCustomModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-xs print:hidden">
           <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl border border-slate-200 space-y-4">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <h4 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-                <CalendarIcon className="h-4 w-4 text-teal-700" />
-                รายละเอียดกะวันที่ {selectedDayDetail.dayNum} {MONTH_NAMES_THAI[currentMonth]} {currentYear + 543}
+                <Clock className="h-4 w-4 text-teal-700" />
+                กำหนดเวลาเข้า-ออกงานเอง (Custom Shift)
               </h4>
               <button
-                onClick={() => setSelectedDayDetail(null)}
+                onClick={() => setIsCustomModalOpen(false)}
                 className="text-slate-400 hover:text-slate-600 font-bold"
               >
                 ✕
               </button>
             </div>
 
+            <div className="space-y-3 text-xs">
+              <div>
+                <label className="font-bold text-slate-700 block mb-1">เวลากะเช้า (Morning Shift):</label>
+                <input
+                  type="text"
+                  value={customMorningTime}
+                  onChange={(e) => setCustomMorningTime(e.target.value)}
+                  placeholder="เช่น 08:30 - 17:30"
+                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-xs font-mono font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                />
+              </div>
+
+              <div>
+                <label className="font-bold text-slate-700 block mb-1">เวลากะสาย / ปิดร้าน (Late Shift):</label>
+                <input
+                  type="text"
+                  value={customLateTime}
+                  onChange={(e) => setCustomLateTime(e.target.value)}
+                  placeholder="เช่น 11:30 - 20:30"
+                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-xs font-mono font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setIsCustomModalOpen(false)}
+                className="text-xs"
+              >
+                ยกเลิก
+              </Button>
+              <Button
+                size="sm"
+                onClick={() => {
+                  setSelectedPresetId("custom");
+                  setIsCustomModalOpen(false);
+                  toast.success("บันทึกเวลาเข้า-ออกงานเรียบร้อยแล้ว");
+                }}
+                className="bg-teal-800 hover:bg-teal-900 text-white font-bold text-xs"
+              >
+                นำไปใช้ในตาราง
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Interactive Day Detail & Shift Switcher Modal ── */}
+      {selectedDayDetail && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-xs print:hidden">
+          <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl border border-slate-200 space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div>
+                <h4 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                  <CalendarIcon className="h-4 w-4 text-teal-700" />
+                  จัดการกะวันที่ {selectedDayDetail.dayNum} {MONTH_NAMES_THAI[currentMonth]} {currentYear + 543}
+                </h4>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  แตะเลือกปุ่มกะที่ต้องการเพื่อเปลี่ยนกะพนักงานในวันนี้ได้ทันที
+                </p>
+              </div>
+              <button
+                onClick={() => setSelectedDayDetail(null)}
+                className="text-slate-400 hover:text-slate-600 font-bold text-sm"
+              >
+                ✕
+              </button>
+            </div>
+
             {selectedDayDetail.holiday && (
-              <div className="rounded-xl bg-rose-50 border border-rose-200 p-3 text-xs text-rose-900 font-bold">
-                ★ วันหยุดนักขัตฤกษ์: {selectedDayDetail.holiday}
+              <div className="rounded-xl bg-rose-50 border border-rose-200 p-2.5 text-xs text-rose-900 font-bold flex items-center gap-2">
+                <span>★</span> วันหยุดนักขัตฤกษ์: {selectedDayDetail.holiday}
               </div>
             )}
 
-            <div className="space-y-2 text-xs">
-              <div className="rounded-xl bg-teal-50 p-3 border border-teal-100">
-                <div className="font-bold text-teal-900 flex items-center gap-1.5 pb-1">
-                  <Sun className="h-3.5 w-3.5 text-amber-500" /> กะเช้า (08:30 - 17:30 น.)
-                </div>
-                <div className="text-teal-800 font-semibold">{selectedDayDetail.morning.join(", ")}</div>
-              </div>
+            {/* Employee 1-Click Shift Controls */}
+            <div className="space-y-3">
+              {[
+                { name: "เชียง", role: "ช่างหลัก", type: "ประจำ" },
+                { name: "มิ้ว", role: "ผู้จัดการหน้าร้าน", type: "ประจำ" },
+                { name: "เจ", role: "ทดลองงาน", type: "รายวัน" },
+              ].map((emp) => {
+                const isMorning = selectedDayDetail.morning.includes(emp.name);
+                const isLate = selectedDayDetail.late.includes(emp.name);
+                const isOff = selectedDayDetail.off.includes(emp.name);
 
-              <div className="rounded-xl bg-indigo-50 p-3 border border-indigo-100">
-                <div className="font-bold text-indigo-900 flex items-center gap-1.5 pb-1">
-                  <Sunset className="h-3.5 w-3.5 text-indigo-500" /> กะสาย (10:30 - 19:30 น.)
-                </div>
-                <div className="text-indigo-800 font-semibold">{selectedDayDetail.late.join(", ")}</div>
-              </div>
+                return (
+                  <div
+                    key={emp.name}
+                    className="rounded-xl border border-slate-200 p-3 bg-slate-50/50 space-y-2"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-xs text-slate-900">{emp.name}</span>
+                        <span className="text-[11px] text-slate-500">({emp.role})</span>
+                      </div>
+                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-200/70 text-slate-700">
+                        {isMorning
+                          ? `☀️ กะเช้า (${currentShiftTimes.morning})`
+                          : isLate
+                          ? `🌙 กะสาย (${currentShiftTimes.late})`
+                          : `🏖️ หยุด (OFF)`}
+                      </span>
+                    </div>
 
-              {selectedDayDetail.off.length > 0 && (
-                <div className="rounded-xl bg-slate-100 p-3 border border-slate-200">
-                  <div className="font-bold text-slate-700 pb-1">❌ วันหยุดประจำสัปดาห์ (OFF)</div>
-                  <div className="text-slate-600 font-semibold">{selectedDayDetail.off.join(", ")}</div>
-                </div>
-              )}
+                    <div className="grid grid-cols-3 gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => setEmployeeShift(selectedDayDetail.dateStr, emp.name, "morning")}
+                        className={`py-1.5 px-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1 border ${
+                          isMorning
+                            ? "bg-emerald-600 text-white border-emerald-600 shadow-xs ring-2 ring-emerald-600/20"
+                            : "bg-white text-slate-700 border-slate-200 hover:bg-emerald-50 hover:text-emerald-700"
+                        }`}
+                      >
+                        <Sun className="h-3.5 w-3.5" /> กะเช้า
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setEmployeeShift(selectedDayDetail.dateStr, emp.name, "late")}
+                        className={`py-1.5 px-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1 border ${
+                          isLate
+                            ? "bg-indigo-700 text-white border-indigo-700 shadow-xs ring-2 ring-indigo-700/20"
+                            : "bg-white text-slate-700 border-slate-200 hover:bg-indigo-50 hover:text-indigo-700"
+                        }`}
+                      >
+                        <Sunset className="h-3.5 w-3.5" /> กะสาย
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setEmployeeShift(selectedDayDetail.dateStr, emp.name, "off")}
+                        className={`py-1.5 px-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1 border ${
+                          isOff
+                            ? "bg-rose-600 text-white border-rose-600 shadow-xs ring-2 ring-rose-600/20"
+                            : "bg-white text-slate-700 border-slate-200 hover:bg-rose-50 hover:text-rose-700"
+                        }`}
+                      >
+                        ❌ วันหยุด
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
 
-            <Button
-              onClick={() => setSelectedDayDetail(null)}
-              className="w-full bg-teal-800 hover:bg-teal-900 text-white font-bold text-xs"
-            >
-              ปิดหน้าต่าง
-            </Button>
+            <div className="flex items-center justify-between pt-2 border-t border-slate-100">
+              {selectedDayDetail.isCustomized ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => resetDayToDefault(selectedDayDetail.dateStr, selectedDayDetail.dayOfWeek)}
+                  className="text-xs text-rose-600 hover:bg-rose-50 border-rose-200 font-semibold"
+                >
+                  🔄 คืนค่ามาตรฐานของวันนี้
+                </Button>
+              ) : (
+                <span className="text-[11px] text-slate-400">ตารางมาตรฐานประจำสัปดาห์</span>
+              )}
+
+              <Button
+                onClick={() => setSelectedDayDetail(null)}
+                className="bg-teal-800 hover:bg-teal-900 text-white font-bold text-xs"
+              >
+                บันทึก & ปิด
+              </Button>
+            </div>
           </div>
         </div>
       )}
     </div>
   );
 }
+
