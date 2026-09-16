@@ -27,6 +27,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { errorMessage } from "@/lib/errors";
+import { ModalBackdrop } from "@/components/modal-shell";
 import {
   Wallet,
   Building2,
@@ -561,7 +562,7 @@ export function ExpensesClient({
         <div className="space-y-1">
           <div className="inline-flex items-center gap-2 rounded-full bg-teal-500/20 px-3 py-1 text-xs font-semibold text-teal-200 ring-1 ring-teal-400/30">
             <Wallet className="h-3.5 w-3.5" />
-            SneakerCare Standard Expense & Payroll Hub
+            DD-Management Standard Expense & Payroll Hub
           </div>
           <h2 className="text-2xl font-bold tracking-tight">ระบบบันทึกค่าใช้จ่าย & จัดการเงินเดือนมาตรฐาน</h2>
           <p className="text-xs sm:text-sm text-teal-100/80">
@@ -1356,7 +1357,11 @@ export function ExpensesClient({
 
       {/* ── ADD EXPENSE MODAL (WITH 6 STANDARD CATEGORIES & PRESETS) ── */}
       {showAddExpenseModal && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/60 p-4 backdrop-blur-xs">
+        <ModalBackdrop
+          onClose={() => setShowAddExpenseModal(false)}
+          dismissOnBackdrop={false}
+          className="bg-black/60 backdrop-blur-xs"
+        >
           <div className="my-auto w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-150">
             <div className="flex items-center justify-between border-b border-slate-200 pb-3">
               <div className="flex items-center gap-2">
@@ -1482,12 +1487,16 @@ export function ExpensesClient({
               </div>
             </form>
           </div>
-        </div>
+        </ModalBackdrop>
       )}
 
       {/* ── EDIT STAFF PROFILE & STATUS MODAL ── */}
       {editingProfileStaff && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/60 p-4 backdrop-blur-xs">
+        <ModalBackdrop
+          onClose={() => setEditingProfileStaff(null)}
+          dismissOnBackdrop={false}
+          className="bg-black/60 backdrop-blur-xs"
+        >
           <div className="my-auto w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-150">
             <div className="flex items-center justify-between border-b border-slate-200 pb-3">
               <div className="flex items-center gap-2">
@@ -1680,12 +1689,16 @@ export function ExpensesClient({
               </div>
             </form>
           </div>
-        </div>
+        </ModalBackdrop>
       )}
 
       {/* ── CREATE NEW STAFF MEMBER MODAL ── */}
       {showAddStaffModal && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/60 p-4 backdrop-blur-xs">
+        <ModalBackdrop
+          onClose={() => setShowAddStaffModal(false)}
+          dismissOnBackdrop={false}
+          className="bg-black/60 backdrop-blur-xs"
+        >
           <div className="my-auto w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-150">
             <div className="flex items-center justify-between border-b border-slate-200 pb-3">
               <div className="flex items-center gap-2">
@@ -1863,13 +1876,16 @@ export function ExpensesClient({
               </div>
             </form>
           </div>
-        </div>
+        </ModalBackdrop>
       )}
 
       {/* ── OFFICIAL STANDARD PAYSLIP VOUCHER MODAL ── */}
       {selectedPayslip && (
         <PrintModalPortal>
-        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-950/80 p-4 backdrop-blur-xs print:p-0 print:bg-white print:static print:overflow-visible">
+        <ModalBackdrop
+          onClose={() => setSelectedPayslip(null)}
+          className="bg-slate-950/80 backdrop-blur-xs print:p-0 print:bg-white print:static print:overflow-visible"
+        >
           <div className="my-auto w-full max-w-2xl rounded-2xl bg-white p-4 sm:p-8 shadow-2xl border border-slate-300 print:shadow-none print:border-none print:p-0 print:max-w-none print:w-full space-y-4 sm:space-y-6">
             {/* Top Toolbar (Hidden on Print) */}
             {/* sticky: กันปุ่มพิมพ์/ปุ่มปิดหลุดจอเมื่อสลิปยาวกว่าหน้าจอ (โดยเฉพาะบนมือถือ)
@@ -2109,7 +2125,10 @@ export function ExpensesClient({
                   <div>
                     <div className="font-bold">ลงชื่อ ................................................................</div>
                     <div className="text-[11px] text-slate-600 pt-1">(ผู้มีอำนาจลงนาม / ฝ่ายการเงินและบัญชี)</div>
-                    <div className="text-[10px] text-slate-400">{shopProfile?.name || "SneakerCare"}</div>
+                    {/* fallback เดิมเคยเป็นชื่อแบรนด์ตัวระบบ ("SneakerCare") — บนสลิปเงินเดือน
+                        ของ tenant ไหนก็ตาม ถ้า fetch ไม่สำเร็จ ต้องไม่แสดงชื่อกิจการของ tenant
+                        อื่น/ชื่อแพลตฟอร์มปนไปในเอกสารที่ออกจริง จึงใช้ข้อความกลางแทนเสมอ */}
+                    <div className="text-[10px] text-slate-400">{shopProfile?.name || "ยังไม่ได้ตั้งชื่อกิจการ"}</div>
                   </div>
                 </div>
 
@@ -2129,7 +2148,7 @@ export function ExpensesClient({
               </div>
             </div>
           </div>
-        </div>
+        </ModalBackdrop>
         </PrintModalPortal>
       )}
     </div>

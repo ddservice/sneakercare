@@ -277,6 +277,152 @@ CLAUDE.md                 คู่มือนี้ — อัปเดตท�
 ไม่ได้ (ไม่มีบนเซิร์ฟเวอร์ตอน SSR + ทำให้ hydration ไม่ตรงกัน) การอ่านหลัง mount จึงถูกต้องแล้ว
 และรันครั้งเดียว ไม่ใช่ cascading render ที่ rule นี้ตั้งใจกัน
 
+## 🏢 หลายนิติบุคคลบนฐานข้อมูลเดียว (multi-tenant) — เฟส 1 เขียนแล้ว ยังไม่ apply (2026-09-16)
+
+เจ้าของจะเปิดให้ธุรกิจอื่น (สปากระเป๋า/สปารองเท้า — **คนละนิติบุคคล ไม่แชร์ลูกค้ากัน**) ใช้ระบบ
+ร่วมกัน โดยห้ามเห็นข้อมูลข้ามกันเด็ดขาด แม้แต่ role `admin` ของอีกฝั่ง
+
+**⚠️ เหตุผลที่ใช้ `branch_id` เดิมกันไม่ได้:** `role='admin'` + `branch_id=null` แปลว่า
+"เห็นทุกสาขา" อยู่แล้วโดยตั้งใจ (กฎข้อ 11/12) ถ้าใช้ branch_id เป็นเส้นแบ่งนิติบุคคล เจ้าของ
+ธุรกิจแรก (admin) จะยังเห็นข้อมูลธุรกิจสองอยู่ดี — ตรงข้ามกับที่ต้องการ จึงต้องมี `tenant_id`
+เป็นเส้นแบ่งใหม่ที่แยกชั้นจาก `branch_id` เสมอ (**ไม่มีใคร tenant_id เป็น null ได้ แม้แต่ admin**)
+`branch_id` ยังใช้แยก "สาขาภายในนิติบุคคลเดียวกัน" ตามเดิม
+
+**เลือกสถาปัตยกรรมแบบฐานข้อมูลเดียว + `tenant_id`** (ไม่ใช่แยก deployment/Supabase project
+คนละชุด) — เจ้าของยืนยันแล้ว 2026-09-16 (ทางเลือกอื่นที่เสนอไปคือแยก deployment ซึ่งกันข้อมูล
+รั่วได้แน่นอนกว่าแต่ต้องดูแล 2 ชุดขนานกันตลอดไป)
+
+### สถานะ: เฟส 1 (โครงพื้นฐาน) — `0028_tenants_foundation.sql`
+เขียนและทดสอบผ่าน PGlite แล้ว (`npm run test:migration` รวม `test-migration-0028.mjs`)
+**ยังไม่ได้ apply ขึ้น production** — ปลอดภัยที่จะรันได้ทันทีเพราะเป็นแค่โครงเพิ่มเข้ามา
+ไม่กระทบพฤติกรรมเดิมเลยแม้แต่นิดเดียว (ไม่มี RLS policy ไหนอ้างถึง `tenant_id` จนกว่าจะถึงเฟส 2):
+
+- สร้างตาราง `tenants` + backfill ธุรกิจเดิมเป็น tenant #1
+  (`00000000-0000-0000-0000-000000000001` — UUID คงที่ตั้งใจ ไม่ใช่สุ่ม เพื่อให้ migration
+  รันซ้ำได้แบบ idempotent และเฟสถัดไปอ้างอิงได้แน่นอน)
+- เพิ่มคอลัมน์ `tenant_id` (NOT NULL, FK → tenants, DEFAULT = tenant #1) ให้ทุกตารางธุรกิจ
+  (~24 ตาราง: profiles, items/branches/suppliers/item_stock/stock_transactions/
+  integration_secrets/notification_log/audit_logs ฝั่งคลัง + sc_sales/sc_opex/sc_payments/
+  sc_employees/sc_expenses/... ฝั่งการเงิน + customers/services/service_orders ฝั่ง POS)
+  DEFAULT ทำให้ insert เดิมที่ไม่รู้จัก tenant_id เลยยังทำงานได้ปกติทุกจุด **ไม่ต้องแก้โค้ดแอป**
+- สร้าง `fn_current_tenant()` ไว้เฉยๆ (ยังไม่มี policy เรียกใช้)
+- **จงใจไม่แตะ:** `sc_expense_categories` (enum กลาง ใช้ร่วมกันได้ทุกธุรกิจ), `app_settings`
+  (ตารางตาย ไม่มีใครใช้), `sc_users` (deprecated ตาม 0023), โมดูล `ext_*` (SmartAcc บิล/ภาษี
+  17 ตาราง — เลื่อนไปก่อนเพราะธุรกิจใหม่ยังไม่ต้องใช้ใบกำกับภาษีวันแรก **ต้องกลับมาทำก่อนเปิด
+  `/invoicing` หรือ `/tax-filing` ให้ tenant ที่สอง**)
+
+**⚠️ บทเรียนจากการเทสต์ (สำคัญกับ view alias ทุกตัวในระบบ ไม่ใช่แค่ migration นี้):**
+`create view v as select * from t` ขยาย `*` เป็น **รายชื่อคอลัมน์ตายตัวตอน CREATE VIEW**
+ไม่ใช่ query สดทุกครั้งที่เรียก — เติมคอลัมน์ใหม่ที่ตารางจริงแล้ว view ที่ alias ไว้
+(`items`, `branches`, `item_stock`, `stock_transactions`, `audit_logs`, `suppliers`,
+`integration_secrets`) **ไม่เห็นคอลัมน์ใหม่เองจนกว่าจะ `create or replace view` ซ้ำ**
+0028 จัดการเรื่องนี้ให้อัตโนมัติแล้ว **และต้องตั้ง `security_invoker = on` ซ้ำทุกครั้งหลัง
+`create or replace view` เสมอ** — พิสูจน์ด้วยเทสต์แล้วว่า Postgres รีเซ็ต reloptions
+(รวม security_invoker) ทิ้งทุกครั้งที่ replace view ถ้าลืมจุดนี้คือเปิดช่องโหว่ SECURITY
+DEFINER View ที่ 0016 เพิ่งปิดไปกลับมาทันทีแบบเงียบๆ
+
+### role `super_admin` — โครงพื้นฐานเขียนแล้ว (`0029`+`0030`) ยังไม่ apply เช่นกัน
+เจ้าของถามเพิ่ม 2026-09-16: "กำหนด user ที่ login เข้าไปเห็นแค่สาขาตัวเอง และถ้าเป็น super
+admin เห็นทุกสาขา ได้ไหม" — คำตอบคือได้ แต่ **`admin` เดิมทำแบบนั้นไม่ได้** เพราะ
+`role='admin'` + `branch_id=null` ถูกออกแบบไว้แล้วว่า "เห็นทุกสาขา**ภายใน tenant ตัวเอง**
+เท่านั้น" (ดูหัวข้อบนสุด) จึงต้องเป็น role ใหม่แยกต่างหากที่ข้ามเส้น tenant ได้ ไม่ใช่ทำให้
+`admin` เดิมพฤติกรรมเปลี่ยน
+
+- `0029_super_admin_role.sql` — เพิ่มค่า `'super_admin'` ให้ role
+- `0030_super_admin_constraints.sql` — อนุญาตให้ `super_admin` ไม่ต้องมี `branch_id`/`tenant_id`
+- **⚠️ ต้อง apply สองไฟล์นี้แยกกันคนละครั้งเสมอ** (Postgres ห้ามใช้ค่า enum ใหม่ในทรานแซกชัน
+  เดียวกับที่เพิ่งเพิ่มมัน — ปนกันจะได้ error "unsafe use of new value" ทันที พิสูจน์ด้วยเทสต์แล้ว)
+  รัน `0029` → กด Run → รัน `0030` → กด Run คนละรอบใน SQL Editor
+
+**🔴 [แก้ตัวเอง 2026-09-16 — เจ้าของรันจริงแล้ว error] รอบแรกเขียน 0029 ผิด** เชื่อว่า
+`profiles.role` บน production เป็น `user_role` enum ตาม `0001_init.sql` แล้วสั่ง
+`alter type public.user_role add value ...` ตรงๆ — เจ้าของรันแล้วได้
+`ERROR: 42704: type "public.user_role" does not exist` ทันที **ตรวจกับ production จริงผ่าน
+`pg_get_constraintdef` แล้วพบว่า `profiles.role` เป็น `text` ธรรมดา + CHECK constraint
+(`profiles_role_check`) มาตั้งแต่ต้น ตรงกับที่ `0022_allow_staff_role.sql` เคยบันทึกไว้แล้ว**
+— นี่คือ prod/local divergence แบบเดียวกับที่ `0012` เจอกับตาราง `inv_*` พอดี ลืมเช็คซ้ำ
+ทั้งที่มีบทเรียนอยู่แล้วในไฟล์เดียวกันของ repo
+
+**พบเพิ่มระหว่างแก้:** `chk_branch_required_for_non_admin` (constraint ของ branch_id ตาม
+`0001_init.sql`) **ก็ไม่เคยมีอยู่บน production เลยเช่นกัน** (ยิง
+`select conname, pg_get_constraintdef(oid) from pg_constraint where conrelid = 'public.profiles'::regclass`
+กับของจริงแล้วเห็นแค่ 5 constraint: `profiles_id_fkey`, `profiles_pkey`, `profiles_role_check`,
+`profiles_tenant_id_fkey`, `profiles_username_key`) — 0030 จึงไม่ใช่แค่ "ผ่อนคลาย constraint
+เดิม" แต่เป็นการ**เพิ่ม constraint บังคับใหม่ที่ไม่เคยมีมาก่อน** ตรวจข้อมูลจริงก่อน apply แล้ว
+(`select id, username, role, branch_id, tenant_id from profiles`) — มีแค่ 2 บัญชี (`admin`,
+`milo`) role `admin` ทั้งคู่ และมี `branch_id` ตั้งไว้แล้วทั้งคู่ ⇒ ปลอดภัย 100% ที่จะเพิ่ม
+
+**แก้แล้ว:** ทั้ง 0029 และ 0030 ตรวจก่อนเสมอว่ากำลังอยู่ในโลกไหน (`pg_type` มี `user_role`
+เป็น enum จริงไหม / `profiles_role_check` มีอยู่จริงไหม) แล้วเลือกเส้นทางให้ถูก —
+ใช้ได้ทั้ง production จริงและ local/CI (enum) โดยไม่ต้องรู้ล่วงหน้าว่ากำลังรันบนอันไหน
+ทดสอบผ่าน PGlite แล้วทั้งสองโลกพร้อมกัน (`test-migration-0029.mjs` จำลอง "โลก A: enum"
+กับ "โลก B: text+CHECK แบบ production จริง" แยกกันในทุกเคส) — idempotent ทั้งคู่, constraint
+ทำงานถูกทั้งสองทิศ, rollback สะอาด
+
+**บทเรียน:** เทสต์ที่จำลองแค่สภาพแวดล้อมเดียว (ตอนนั้นจำลองแค่ enum) ผ่านหมดทุกข้อ แต่จับบั๊ก
+จริงไม่ได้เลยเพราะ production ไม่ใช่โลกที่จำลองไว้ — **ทุก migration ที่แตะ `profiles.role`
+หรือตารางที่เคยมีประวัติ prod/local แยกทาง (`items`/`branches`/ฯลฯ ดู 0012) ต้องเทสต์ทั้งสอง
+รูปแบบเสมอ ไม่ใช่แค่รูปแบบที่ `0001_init.sql` นิยามไว้**
+- **แก้ชั้นแอป (TypeScript) ให้รู้จัก `super_admin` แล้ว** เพราะไม่งั้น `requireProfile()`
+  จะเดา role แปลกๆ ที่ไม่รู้จักเป็น "staff" เงียบๆ (บั๊กคลาสเดียวกับ `sc_users`→`profiles`
+  ที่เจอกับ staff ไม่ได้ branch_id เมื่อก่อน): `lib/auth.ts` (`Profile.role`,
+  `requireProfile()`, `requireAdmin()`), `lib/permissions.ts` (`canView`/`canWrite`/
+  `visibleModulesFor`/`mainNavItemsFor`/`canSeeCost`/`canManageUsers`/`canEditMinStock`/
+  `canRecordWaste` ผ่านหมดสำหรับ super_admin), `lib/supabase/database.types.ts`
+  (`UserRole` — เขียนมือได้ตามที่ไฟล์กำกับไว้ ไม่ใช่ auto-generated)
+  **ตั้งใจไม่ใส่ `super_admin` ใน `ROLES`** (array ที่ dropdown เชิญผู้ใช้ที่ `/admin/users`
+  ใช้) — ไม่งั้น admin ของ tenant ไหนก็สร้างบัญชีข้าม tenant ให้ตัวเองได้ ต้องสร้าง
+  super_admin นอกช่องทางแอปเท่านั้น (ตรงๆ ผ่าน SQL โดยผู้ดูแลแพลตฟอร์ม)
+- **⚠️ ที่แก้ไปคือชั้น UI เท่านั้น (เมนู/ปุ่มไม่ถูกซ่อนจาก super_admin) — DB (RLS) ยังไม่รู้จัก
+  `super_admin` เป็นพิเศษเลยจนกว่าจะถึงเฟส 2** จุดที่ยังต้องแก้ (พบระหว่างไล่ grep แล้ว
+  จดไว้กันหลุด — รวมเป็นชุดเดียวกับ ~30 จุดที่เช็ค `fn_current_role() = 'admin'` ฝั่ง DB):
+  `app/(app)/adjustments/page.tsx`, `app/(app)/layout.tsx` (branch picker),
+  `app/actions/stock.ts` (auto-approve adjustment), `app/actions/users.ts` (สร้างผู้ใช้/
+  ป้องกันลดสิทธิ์ตัวเอง), `lib/branch.ts` (`getSelectedBranchId`/`assertWritableBranch`)
+  **ห้ามสร้างบัญชี `super_admin` จริงแล้วคาดหวังว่าจะข้าม tenant ได้ก่อนจุดพวกนี้จะแก้ครบ**
+  — ตอนนี้จะพฤติกรรมเหมือน staff ที่ทำอะไรไม่ได้เลยในหลายจุด (fail-closed ปลอดภัย แต่ใช้งานไม่ได้)
+
+### แผนที่เหลือ — ยังไม่ได้เริ่ม
+- **เฟส 2 (บังคับใช้จริง — เสี่ยงที่สุด):** แก้ RLS ทุกตารางให้ AND ด้วย
+  `tenant_id = fn_current_tenant() or fn_current_role() = 'super_admin'` ก่อนเช็คอย่างอื่นเสมอ
+  (รูปแบบเดียวกับที่ `admin`/`fn_current_branch()` ใช้อยู่แล้วทุกจุด) + ไล่แก้ทุกจุดที่เช็ค
+  `= 'admin'` ตรงๆ ทั้งฝั่ง DB (~30 จุด) และฝั่งแอป (5 จุดข้างบน) ให้รับ `super_admin` ด้วย
+  + trigger เซ็ต tenant_id อัตโนมัติตอน insert (แทน DEFAULT ตายตัว) ต้องสร้างบัญชีทดสอบ
+  tenant ปลอมยิงจริงก่อนเสมอ (แบบเดียวกับ `npm run test:staff`) ยืนยันเห็น 0 แถวข้ามฝั่ง
+  ก่อนถึงจะกล้าประกาศว่าเสร็จ **ห้ามเชิญผู้ใช้ tenant ที่สองเข้าระบบก่อนเฟสนี้ apply และ
+  ทดสอบผ่านเด็ดขาด**
+- **เฟส 3 (ขึ้นระบบจริง):** เจ้าของยืนยัน 2026-09-16 ว่าทั้งข้อมูลบริษัท (ชื่อ/เลขผู้เสียภาษี/
+  ที่อยู่/PromptPay), Telegram bot token, และแคตตาล็อกสินค้า/บริการ **ให้เป็นช่องกรอกเองทั้งหมด
+  ผ่าน UI ไม่ hardcode/ไม่ seed ข้อมูลจาก tenant เดิมให้** — งานที่ต้องทำ:
+  - **[ตรวจแล้ว 2026-09-16 — จุดสำคัญที่สุดของเฟส 3] `fetchShopProfile()`
+    (`app/actions/shop-settings.ts`) query ตาราง `sc_settings` ทั้งตาราง แบบไม่กรอง
+    `tenant_id` เลย** แม้ 0028 จะเพิ่มคอลัมน์ `tenant_id` ให้ `sc_settings` ไปแล้ว โค้ดแอปยัง
+    ไม่ได้แก้ให้ใช้ ⇒ **ต่อให้เฟส 1/2 เสร็จสมบูรณ์ tenant ที่สองจะยังอ่าน/เขียนทับข้อมูลบริษัท
+    ของ tenant เดิมได้อยู่ดีผ่านหน้า `/settings` ปกติ** (ไม่ใช่แค่กรณี fallback พลาดแบบ 2 ข้อ
+    ถัดไป) — **ต้องแก้ก่อนเปิดให้ tenant ที่สองเข้าหน้า `/settings` เด็ดขาด** ไม่งั้นชื่อ/เลขผู้เสีย
+    ภาษี/PromptPay ของทั้งสองธุรกิจจะไปกองอยู่ใน `sc_settings.key` เดียวกันทับกันไปมา
+  - แยก `integration_secrets`/`inv_integration_secrets` (Telegram bot token) ให้กรอกแยกต่อ
+    tenant ได้เหมือนกัน — เดิมเป็น global ตัวเดียวทั้งระบบ (`fn_set_integration_secret()`
+    ก็ต้องแก้ให้รับ/กรอง tenant_id ด้วยเช่นกัน)
+  - **[แก้แล้ว 2026-09-16] fallback ที่ hardcode ข้อมูลบริษัทของ tenant เดิมตายตัว** — เจอ
+    4 จุด ไม่ใช่แค่เลขผู้เสียภาษีอย่างเดียว: `invoicing-client.tsx` (หัวใบกำกับภาษี + ท้าย
+    ลายเซ็น), `tax-filing-client.tsx` (ท้ายลายเซ็นหนังสือรับรองหัก ณ ที่จ่าย),
+    `billing-notes/page.tsx` (ชื่อ/เลขผู้เสียภาษี/ที่อยู่/เบอร์โทร/PromptPay ทั้งก้อน — ร้ายแรง
+    สุดเพราะเป็น PromptPay ID จริงที่รับเงินได้) เปลี่ยนเป็นข้อความกลาง ("ยังไม่ได้ตั้งค่า...")
+    ทั้งหมดแล้ว **แต่ fallback ข้างใน `fetchShopProfile()` เองยังเป็นข้อมูลจริงของ tenant เดิม
+    อยู่** (ดูข้อด้านบน) — ยังไม่แก้เพราะต้องรอกรอง tenant_id ก่อนถึงจะรู้ว่า default ที่ถูกต้อง
+    ของแต่ละ tenant ควรเป็นอะไร
+  - **[เสร็จแล้ว 2026-09-16] เปลี่ยนชื่อ "ตัวระบบ/แพลตฟอร์ม" เป็น `DD-Management`** — แทนที่
+    "SneakerCare"/"Sneaker Care"/"SNEAKER CARE" ครบทุกจุดที่เป็นแบรนด์ตัวระบบ (ไม่ใช่ข้อมูล
+    ร้าน): `app/layout.tsx` (`title`, `appleWebApp.title`), หน้า `/login`, `mobile-nav.tsx`,
+    header ใน `(app)/layout.tsx`, หัวข้อหน้า dashboard/expenses/pos/roster/statistics/reports,
+    ชื่อไฟล์ export ทั้งหมด (`DD-Management_Sales_Export_...xlsx` ฯลฯ) **ห้ามแก้**
+    `SneakerCareDB` (ชื่อโปรเจกต์ Supabase จริง — เป็นชื่อภายนอกระบบ เปลี่ยนได้แค่ที่ Supabase
+    Dashboard เท่านั้น ไม่ใช่จากโค้ด) และ `sneakercare.ddserviceth.com` (โดเมนจริงที่ deploy
+    อยู่ — เปลี่ยนโดเมนเป็นงานแยกที่กระทบ DNS/SSL/redirect ต้องคุยก่อนถ้าจะทำ)
+    **ชื่อร้าน/นิติบุคคลของแต่ละ tenant ตั้งได้เองอยู่แล้วที่ `/settings` ไม่เกี่ยวกับชื่อแพลตฟอร์ม**
+  - สร้างบัญชี admin แรกของ tenant ที่สอง (ต้องระบุ `tenant_id` ตรงๆ ตอนสร้าง ไม่ใช้ DEFAULT)
+
 ## ✅ งานที่ต้องกดบน Dashboard/VPS — ปิดครบทุกข้อแล้ว (2026-09-08)
 
 ### 1. ปิด legacy API key (JWT-based) — ✅ เสร็จ

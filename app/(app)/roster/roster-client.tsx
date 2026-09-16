@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import * as XLSX from "xlsx";
+import { ModalBackdrop } from "@/components/modal-shell";
 import {
   Calendar as CalendarIcon,
   ChevronLeft,
@@ -457,7 +458,7 @@ export function RosterClient() {
     XLSX.utils.book_append_sheet(wb, wsStaff, "สรุปพนักงานและเงินเดือน");
     XLSX.utils.book_append_sheet(wb, wsSchedule, `ตารางกะ_${MONTH_NAMES_THAI[currentMonth]}`);
 
-    const fileName = `SneakerCare_Roster_${MONTH_NAMES_THAI[currentMonth]}_${currentYear + 543}.xlsx`;
+    const fileName = `DD-Management_Roster_${MONTH_NAMES_THAI[currentMonth]}_${currentYear + 543}.xlsx`;
     XLSX.writeFile(wb, fileName);
     toast.success(`ดาวน์โหลดไฟล์ ${fileName} เรียบร้อยแล้ว`);
   }
@@ -469,7 +470,7 @@ export function RosterClient() {
         <div className="space-y-1">
           <div className="inline-flex items-center gap-2 rounded-full bg-teal-500/20 px-3 py-1 text-xs font-semibold text-teal-200 ring-1 ring-teal-400/30">
             <CalendarIcon className="h-3.5 w-3.5" />
-            SneakerCare Smart Roster System (เวลาเปิดร้าน 09:00 - 20:00 น.)
+            DD-Management Smart Roster System (เวลาเปิดร้าน 09:00 - 20:00 น.)
           </div>
           <h2 className="text-2xl font-bold tracking-tight">ตารางการทำงาน & ปฏิทินกะพนักงาน</h2>
           <p className="text-sm text-teal-100/80">
@@ -763,7 +764,7 @@ export function RosterClient() {
       {/* ── Thai Labor Law & Shop Notice Footer ── */}
       <div className="rounded-2xl bg-teal-900 p-6 text-white space-y-3 print:bg-white print:text-slate-900 print:border print:border-slate-300">
         <div className="flex items-center gap-2 text-teal-300 font-bold text-sm">
-          <Info className="h-4 w-4" /> หมายเหตุและแนวทางปฏิบัติตามกฎหมายแรงงานไทย (SneakerCare Shop Policy)
+          <Info className="h-4 w-4" /> หมายเหตุและแนวทางปฏิบัติตามกฎหมายแรงงานไทย (DD-Management Shop Policy)
         </div>
         <ul className="text-xs text-teal-100 space-y-1.5 list-disc list-inside print:text-slate-700">
           <li>
@@ -783,7 +784,11 @@ export function RosterClient() {
 
       {/* ── Custom Shift Time Modal ── */}
       {isCustomModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-950/60 p-4 backdrop-blur-xs print:hidden">
+        <ModalBackdrop
+          onClose={() => setIsCustomModalOpen(false)}
+          dismissOnBackdrop={false}
+          className="bg-slate-950/60 backdrop-blur-xs print:hidden"
+        >
           <div className="my-auto w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl border border-slate-200 space-y-4">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <h4 className="text-sm font-bold text-slate-900 flex items-center gap-2">
@@ -844,12 +849,15 @@ export function RosterClient() {
               </Button>
             </div>
           </div>
-        </div>
+        </ModalBackdrop>
       )}
 
       {/* ── Interactive Day Detail & Shift Switcher Modal ── */}
       {selectedDayDetail && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-950/60 p-4 backdrop-blur-xs print:hidden">
+        <ModalBackdrop
+          onClose={() => setSelectedDayDetail(null)}
+          className="bg-slate-950/60 backdrop-blur-xs print:hidden"
+        >
           <div className="my-auto w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl border border-slate-200 space-y-4">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <div>
@@ -969,7 +977,7 @@ export function RosterClient() {
               </Button>
             </div>
           </div>
-        </div>
+        </ModalBackdrop>
       )}
     </div>
   );

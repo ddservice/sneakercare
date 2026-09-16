@@ -19,7 +19,10 @@
 // ── ชนิดข้อมูลที่เขียนมือ (ไม่ได้มาจาก generator) ────────────────────────
 // เป็น union ที่ใช้ทั่วแอปเพื่อความอ่านง่าย ต้องคงไว้ ตัว generator ไม่สร้างให้เพราะฐานข้อมูล
 // เก็บคอลัมน์พวกนี้เป็น text ธรรมดา ไม่ใช่ enum จริง
-export type UserRole = "admin" | "co_admin" | "staff";
+// "super_admin" เพิ่มเข้า enum จริงบน DB ผ่าน migration 0029 (ยังไม่ apply ขึ้น production
+// ณ ตอนที่เขียนบรรทัดนี้ — เมื่อ apply แล้วรัน `npm run gen:types` จะได้ค่านี้มาจาก generator เอง
+// แต่ใส่ไว้ล่วงหน้าที่นี่ก่อนเพราะ UserRole เป็น type ที่เขียนมือของไฟล์นี้อยู่แล้ว ไม่ใช่ generated)
+export type UserRole = "admin" | "co_admin" | "staff" | "super_admin";
 export type ItemType = "inventory" | "consumable";
 export type StockTxnType =
   | "stock_in"

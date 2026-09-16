@@ -32,13 +32,17 @@ export default async function BillingNotesPage() {
   const supabase = createAdminClient();
 
   let documents: BillingNoteDoc[] = [];
+  // ⚠️ fallback ต้องเป็นข้อความกลาง ห้าม hardcode ข้อมูลของ tenant ใดตายตัว (เดิมเป็นข้อมูลจริง
+  // ของ "รวยรับทรัพย์168") — ตั้งแต่มีหลายนิติบุคคลใช้ระบบร่วมกัน ถ้า fetchShopProfile() ของ
+  // tenant อื่นพลาด ค่าพวกนี้จะหลุดไปอยู่บนใบวางบิลของเขาแทน (ชื่อ/เลขผู้เสียภาษี/PromptPay
+  // ข้ามนิติบุคคล) — เป็นการรั่วไหลข้อมูลที่ร้ายแรงกว่าค่าว่างเฉยๆ มาก
   let shopProfile = {
-    name: "บริษัท รวยรับทรัพย์168 จำกัด (SneakerCare)",
-    taxId: "0505566000000",
-    phone: "089-xxx-xxxx",
-    address: "552/4 ถ.เชียงใหม่-ลำพูน ต.หนองหอย อ.เมือง จ.เชียงใหม่ 50000",
+    name: "ยังไม่ได้ตั้งค่าชื่อกิจการ — ไปที่ /settings",
+    taxId: "-",
+    phone: "",
+    address: "-",
     logoUrl: "",
-    promptPayId: "0505566000000",
+    promptPayId: "",
   };
 
   try {

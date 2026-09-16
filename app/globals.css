@@ -411,6 +411,14 @@
 /* ══════════════════════════════════════════════════
    PRINT ENGINE — A4 Default
    ══════════════════════════════════════════════════ */
+/* ล็อกไม่ให้หน้าข้างหลังเลื่อนตามขณะ modal เปิดอยู่ (ใส่/ถอดโดย useModalDismiss ใน
+   components/modal-shell.tsx) — ใช้คลาสแทน inline style เพราะต้องปลดล็อกตอนพิมพ์:
+   body ที่ overflow:hidden ทำให้เบราว์เซอร์บางตัวตัดเนื้อหาส่วนที่เกิน 1 หน้ากระดาษทิ้ง
+   ซึ่งจะพังทันทีกับสลิปเงินเดือน/ใบกำกับภาษีที่สั่งพิมพ์จากใน modal */
+.modal-scroll-lock {
+  overflow: hidden;
+}
+
 @media print {
   @page {
     size: A4 portrait;
@@ -432,6 +440,11 @@
     height: auto !important;
     margin: 0 !important;
     padding: 0 !important;
+  }
+
+  /* ปลดล็อกสกรอลล์ที่ modal ใส่ไว้ตอนพิมพ์ — ไม่งั้นเอกสารที่ยาวเกิน 1 หน้าจะถูกตัดทิ้ง */
+  .modal-scroll-lock {
+    overflow: visible !important;
   }
 
   /* เดิมซ่อนแค่ header/nav/aside/footer/button ฯลฯ ตาม selector ตายตัว โดยหวังให้แต่ละหน้า

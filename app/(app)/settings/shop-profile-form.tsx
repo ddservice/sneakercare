@@ -78,7 +78,7 @@ export function ShopProfileForm({ initialProfile }: { initialProfile: ShopProfil
               <Input
                 value={profile.name}
                 onChange={(e) => setProfile({ ...profile, name: e.target.value })}
-                placeholder="เช่น บริษัท รวยรับทรัพย์168 จำกัด หรือ Sneaker Care"
+                placeholder="เช่น บริษัท รวยรับทรัพย์168 จำกัด หรือ ชื่อร้าน/กิจการของคุณ"
                 className="text-xs h-9"
                 required
               />

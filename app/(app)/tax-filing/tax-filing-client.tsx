@@ -14,6 +14,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import type { TaxFilingSalesDoc, TaxFilingExpense } from "@/app/actions/smartacc-documents";
+import { ModalBackdrop } from "@/components/modal-shell";
 import {
   Landmark,
   FileSpreadsheet,
@@ -419,7 +420,10 @@ export function TaxFilingClient({
       {/* ── OFFICIAL 50 TAWI PRINT MODAL (A4 ISOLATION) ── */}
       {selectedWhtCert && (
         <PrintModalPortal>
-        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/60 p-4 backdrop-blur-xs">
+        <ModalBackdrop
+          onClose={() => setSelectedWhtCert(null)}
+          className="bg-black/60 backdrop-blur-xs"
+        >
           <div className="my-auto w-full max-w-3xl rounded-2xl bg-white p-6 shadow-2xl border border-slate-300 space-y-4">
             <div className="flex items-center justify-between border-b border-slate-200 pb-3 print:hidden">
               <div className="flex items-center gap-2">
@@ -522,7 +526,7 @@ export function TaxFilingClient({
               <div className="grid grid-cols-2 gap-8 pt-6 text-xs text-center">
                 <div className="border-t border-slate-400 pt-2 space-y-1">
                   <div>ลงชื่อ .............................................................. ผู้มีหน้าที่หักภาษี</div>
-                  <div className="text-slate-500 font-medium">({shopProfile?.name || "SneakerCare"})</div>
+                  <div className="text-slate-500 font-medium">({shopProfile?.name || "ยังไม่ได้ตั้งชื่อกิจการ"})</div>
                 </div>
                 <div className="border-t border-slate-400 pt-2 space-y-1">
                   <div>ลงชื่อ .............................................................. ผู้รับเงิน</div>
@@ -531,7 +535,7 @@ export function TaxFilingClient({
               </div>
             </div>
           </div>
-        </div>
+        </ModalBackdrop>
         </PrintModalPortal>
       )}
     </div>

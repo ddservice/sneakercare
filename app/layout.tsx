@@ -29,13 +29,13 @@ const ibmPlexSansThai = IBM_Plex_Sans_Thai({
 });
 
 export const metadata: Metadata = {
-  title: "SNEAKER CARE — Service & Inventory System",
-  description: "ระบบบริหารจัดการร้านซักรองเท้าและคลังสินค้า",
+  title: "DD-Management — Service & Inventory System",
+  description: "ระบบบริหารจัดการงานบริการ ยอดขาย และคลังสินค้า",
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
-    title: "SneakerCare",
+    title: "DD-Management",
   },
   icons: {
     icon: "/icon-192.png",

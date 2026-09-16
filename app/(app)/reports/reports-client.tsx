@@ -94,7 +94,7 @@ export function ReportsClient({
     const ws = XLSX.utils.json_to_sheet(data);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "DailySales");
-    XLSX.writeFile(wb, `SneakerCare_Sales_Export_${new Date().toISOString().slice(0, 10)}.xlsx`);
+    XLSX.writeFile(wb, `DD-Management_Sales_Export_${new Date().toISOString().slice(0, 10)}.xlsx`);
     toast.success("ส่งออกข้อมูลยอดขายเรียบร้อย");
   }
 
@@ -114,7 +114,7 @@ export function ReportsClient({
     const ws = XLSX.utils.json_to_sheet(data);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Inventory");
-    XLSX.writeFile(wb, `SneakerCare_Stock_Export_${new Date().toISOString().slice(0, 10)}.xlsx`);
+    XLSX.writeFile(wb, `DD-Management_Stock_Export_${new Date().toISOString().slice(0, 10)}.xlsx`);
     toast.success("ส่งออกข้อมูลคลังสินค้าเรียบร้อย");
   }
 
@@ -134,7 +134,7 @@ export function ReportsClient({
     const ws = XLSX.utils.json_to_sheet(data);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Expenses");
-    XLSX.writeFile(wb, `SneakerCare_Expenses_Export_${new Date().toISOString().slice(0, 10)}.xlsx`);
+    XLSX.writeFile(wb, `DD-Management_Expenses_Export_${new Date().toISOString().slice(0, 10)}.xlsx`);
     toast.success("ส่งออกข้อมูลรายจ่ายเรียบร้อย");
   }
 
@@ -148,19 +148,19 @@ export function ReportsClient({
         ["วันที่", "Package S", "Package M", "Package L", "Package XL", "ยอดสุทธิ", "ยอดเงินโอน", "ยอดเงินสด", "ส่วนลด"],
         ["2026-08-31", 5, 2, 1, 0, 2400, 2000, 400, 0],
       ];
-      fileName = "SneakerCare_Sales_Template.xlsx";
+      fileName = "DD-Management_Sales_Template.xlsx";
     } else if (type === "stock") {
       headers = [
         ["รายการวัสดุ", "หมวดหมู่", "หน่วย", "คงเหลือ", "ราคาต้นทุน", "จุดสั่งซื้อขั้นต่ำ"],
         ["น้ำยาทำความสะอาดขวดใหญ่", "น้ำยาซัก", "ขวด", 20, 150, 5],
       ];
-      fileName = "SneakerCare_Stock_Template.xlsx";
+      fileName = "DD-Management_Stock_Template.xlsx";
     } else {
       headers = [
         ["วันที่", "หมวดหมู่", "รายการ", "จำนวนเงิน", "ช่องทางชำระ"],
         ["2026-08-31", "น้ำยา/เคมี", "ซื้อแปรงขัดพิเศษ", 350, "เงินสด"],
       ];
-      fileName = "SneakerCare_Expenses_Template.xlsx";
+      fileName = "DD-Management_Expenses_Template.xlsx";
     }
 
     const ws = XLSX.utils.aoa_to_sheet(headers);
@@ -562,7 +562,7 @@ export function ReportsClient({
                 รายงานต้นทุนวัสดุที่ใช้ไป (COGS) รายเดือน
               </CardTitle>
               <CardDescription className="text-xs text-slate-500">
-                สรุปบัญชีต้นทุนคลังสินค้าตามช่วงเดือนที่เลือก (Sneaker Care)
+                สรุปบัญชีต้นทุนคลังสินค้าตามช่วงเดือนที่เลือก (DD-Management)
               </CardDescription>
             </div>
             <div className="flex items-center gap-3">

@@ -2,12 +2,19 @@ import type { UserRole } from "@/lib/supabase/database.types";
 
 export type Role = UserRole;
 
+// ⚠️ ตั้งใจไม่ใส่ "super_admin" ใน ROLES — array นี้ใช้เป็นตัวเลือกใน dropdown เชิญผู้ใช้ที่
+// /admin/users ซึ่งเปิดให้ role admin ของแต่ละ tenant กดใช้เอง ถ้าใส่ super_admin ไว้ที่นี่
+// เท่ากับให้ admin ของ tenant ไหนก็ได้สร้างบัญชีที่มองเห็นข้อมูลข้าม tenant ได้เอง — ต้องสร้าง
+// super_admin นอกช่องทางนี้เท่านั้น (ตรงๆ ผ่าน SQL โดยผู้ดูแลแพลตฟอร์ม)
 export const ROLES = ["admin", "co_admin", "staff"] as const;
 
 export const ROLE_LABEL: Record<Role, string> = {
   admin: "Admin",
   co_admin: "Co-Admin",
   staff: "Staff",
+  // Super Admin = ผู้ดูแลแพลตฟอร์ม เห็นได้ทุก tenant (ดู CLAUDE.md หัวข้อ multi-tenant)
+  // ⚠️ ตอนนี้เป็นแค่ label เฉยๆ — DB ยังไม่ให้สิทธิ์พิเศษจริงจนกว่าจะถึง migration เฟส 2
+  super_admin: "Super Admin",
 };
 
 export type ModuleKey =
@@ -182,41 +189,55 @@ export const APP_MODULES: readonly AppModule[] = [
   },
 ] as const;
 
+// ⚠️ super_admin ผ่านทุกจุดในไฟล์นี้เสมอ (ชั้น UI เท่านั้น) — "เห็นได้ทุกอย่างทุก tenant"
+// เป็นนิยามของ role นี้โดยตรง ไม่ใช่ความสะดวก ⇒ ไม่ต้องไล่แก้ viewRoles/writeRoles ของ
+// AppModule ทุกตัว (เสี่ยงพลาดตกหล่นบางโมดูลแบบเงียบๆ เหมือนที่เคยเกิดกับ INTENTIONALLY_OPEN
+// ของ test:guards) แค่เช็คจุดเดียวตรงนี้พอ **แต่ชั้น DB (RLS) ยังไม่รู้จัก super_admin เป็นพิเศษ
+// จนกว่าจะถึง migration เฟส 2** จึงยังไม่ใช่ช่องโหว่สิทธิ์จริง — แค่ทำให้ UI ไม่ซ่อนเมนู/ปุ่ม
+// จากบัญชี super_admin เฉยๆ ข้อมูลจริงที่ query กลับมายังถูกกรองโดย RLS ตามเดิม
+function isSuperAdmin(role: Role): boolean {
+  return role === "super_admin";
+}
+
 export function canView(role: Role, key: ModuleKey): boolean {
+  if (isSuperAdmin(role)) return true;
   const mod = APP_MODULES.find((m) => m.key === key);
   if (!mod) return false;
   return (mod.viewRoles as readonly string[]).includes(role);
 }
 
 export function canWrite(role: Role, key: ModuleKey): boolean {
+  if (isSuperAdmin(role)) return true;
   const mod = APP_MODULES.find((m) => m.key === key);
   if (!mod) return false;
   return (mod.writeRoles as readonly string[]).includes(role);
 }
 
 export function visibleModulesFor(role: Role): readonly AppModule[] {
+  if (isSuperAdmin(role)) return APP_MODULES;
   return APP_MODULES.filter((m) => (m.viewRoles as readonly string[]).includes(role));
 }
 
 export function mainNavItemsFor(role: Role): readonly AppModule[] {
+  if (isSuperAdmin(role)) return APP_MODULES.filter((m) => m.isMainTab);
   return APP_MODULES.filter(
     (m) => m.isMainTab && (m.viewRoles as readonly string[]).includes(role)
   );
 }
 
 export function canSeeCost(role: Role): boolean {
-  return role === "admin" || role === "co_admin";
+  return role === "admin" || role === "co_admin" || isSuperAdmin(role);
 }
 
 export function canManageUsers(role: Role): boolean {
-  return role === "admin";
+  return role === "admin" || isSuperAdmin(role);
 }
 
 export function canEditMinStock(role: Role): boolean {
-  return role === "admin" || role === "co_admin";
+  return role === "admin" || role === "co_admin" || isSuperAdmin(role);
 }
 
 export function canRecordWaste(role: Role): boolean {
-  return role === "admin" || role === "co_admin";
+  return role === "admin" || role === "co_admin" || isSuperAdmin(role);
 }
 

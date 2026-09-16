@@ -330,7 +330,7 @@ export function DashboardClient({
         <div className="space-y-1">
           <div className="inline-flex items-center gap-2 rounded-full bg-teal-500/20 px-3 py-1 text-xs font-semibold text-teal-200 ring-1 ring-teal-400/30">
             <Sparkles className="h-3.5 w-3.5" />
-            SneakerCare Smart Analytics Dashboard
+            DD-Management Smart Analytics Dashboard
           </div>
           <h2 className="text-2xl font-bold tracking-tight">ภาพรวมผลประกอบการ & กำไรสุทธิ</h2>
           <p className="text-xs sm:text-sm text-teal-100/80">

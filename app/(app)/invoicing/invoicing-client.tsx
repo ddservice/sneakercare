@@ -41,6 +41,7 @@ export type PendingDeliveryOrder = PendingDeliveryOrderRow;
 
 import type { ShopProfile } from "@/app/actions/shop-settings";
 import { errorMessage } from "@/lib/errors";
+import { ModalBackdrop } from "@/components/modal-shell";
 
 export function InvoicingClient({
   pendingDOs,
@@ -924,7 +925,10 @@ export function InvoicingClient({
       {/* ── OFFICIAL A4 DOCUMENT PRINT MODAL (INVOICE / TAX INVOICE / DO / RECEIPT) ── */}
       {printingDoc && (
         <PrintModalPortal>
-        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/60 p-4 backdrop-blur-xs">
+        <ModalBackdrop
+          onClose={() => setPrintingDoc(null)}
+          className="bg-black/60 backdrop-blur-xs"
+        >
           <div className="my-auto w-full max-w-4xl rounded-2xl bg-white p-6 shadow-2xl border border-slate-300 space-y-4">
             <div className="flex items-center justify-between border-b border-slate-200 pb-3 print:hidden">
               <div className="flex items-center gap-2">
@@ -955,10 +959,13 @@ export function InvoicingClient({
               {/* Header: Company & Doc Type */}
               <div className="flex justify-between items-start border-b-2 border-slate-900 pb-4">
                 <div className="space-y-1">
-                  <h1 className="text-lg font-black tracking-tight uppercase">{shopProfile?.name || "SneakerCare"}</h1>
-                  <div className="text-xs text-slate-700">{shopProfile?.address || "เชียงใหม่"}</div>
+                  {/* ⚠️ fallback ต้องเป็นข้อความกลาง ห้าม hardcode ชื่อ/ที่อยู่/เลขผู้เสียภาษีของ
+                      tenant ใดตายตัว — เอกสารนี้พิมพ์ให้ลูกค้าจริง ถ้า fetch shopProfile พลาด
+                      ต้องไม่มีทางที่เลขผู้เสียภาษีของ tenant อื่นหลุดออกไปบนใบกำกับภาษี */}
+                  <h1 className="text-lg font-black tracking-tight uppercase">{shopProfile?.name || "ยังไม่ได้ตั้งค่าชื่อกิจการ — ไปที่ /settings"}</h1>
+                  <div className="text-xs text-slate-700">{shopProfile?.address || "ยังไม่ได้ตั้งค่าที่อยู่"}</div>
                   <div className="text-xs text-slate-700">
-                    เลขประจำตัวผู้เสียภาษี: <strong className="font-mono">{shopProfile?.taxId || "0505566000000"}</strong> {shopProfile?.phone ? `· โทร. ${shopProfile.phone}` : ""}
+                    เลขประจำตัวผู้เสียภาษี: <strong className="font-mono">{shopProfile?.taxId || "-"}</strong> {shopProfile?.phone ? `· โทร. ${shopProfile.phone}` : ""}
                   </div>
                 </div>
                 <div className="text-right space-y-1">
@@ -1058,12 +1065,12 @@ export function InvoicingClient({
                 </div>
                 <div className="border-t border-slate-400 pt-2 space-y-1">
                   <div>ลงชื่อ .............................................................. ผู้มีอำนาจลงนาม</div>
-                  <div className="text-slate-500 font-medium">({shopProfile?.name || "SneakerCare"})</div>
+                  <div className="text-slate-500 font-medium">({shopProfile?.name || "ยังไม่ได้ตั้งชื่อกิจการ"})</div>
                 </div>
               </div>
             </div>
           </div>
-        </div>
+        </ModalBackdrop>
         </PrintModalPortal>
       )}
     </div>

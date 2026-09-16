@@ -62,7 +62,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             <MobileNav
               items={mainNav}
               alerts={alerts}
-              brandName="Sneaker Care"
+              brandName="DD-Management"
               roleBadge={ROLE_LABEL[profile.role]}
               displayName={profile.display_name}
             />
@@ -76,14 +76,14 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             <div className="min-w-0">
               <div className="flex items-center gap-2">
                 <span className="text-base font-bold tracking-tight text-slate-900 dark:text-white truncate">
-                  Sneaker Care
+                  DD-Management
                 </span>
                 <span className="hidden sm:inline-flex items-center rounded-md bg-emerald-50 dark:bg-emerald-900/30 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/40 shrink-0">
                   {branchName}
                 </span>
               </div>
               <p className="hidden sm:block text-[11px] text-slate-400 dark:text-slate-500 leading-none mt-0.5">
-                ระบบบริหารจัดการร้านซักรองเท้า
+                ระบบบริหารจัดการร้าน
               </p>
             </div>
           </div>

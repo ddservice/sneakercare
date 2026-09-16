@@ -90,7 +90,7 @@ export function StatisticsClient({ initialData }: { initialData: AnalyticsDashbo
             Shop Performance & Full Stock Analytics
           </div>
           <h2 className="text-2xl font-bold tracking-tight text-slate-900">
-            สถิติ & รายงานประสิทธิภาพร้าน (Sneaker Care)
+            สถิติ & รายงานประสิทธิภาพร้าน (DD-Management)
           </h2>
           <p className="text-xs text-slate-500">
             ข้อมูลยอดขายจริงย้อนหลังทุกช่วงเวลา พร้อมสรุปขนาดรองเท้าและสถานะคลังสินค้าทั้งหมด
@@ -465,7 +465,7 @@ export function StatisticsClient({ initialData }: { initialData: AnalyticsDashbo
                 <CardDescription className="text-xs">
                   {statInventoryFilter === "low_stock"
                     ? "กรองเฉพาะสินค้าที่ต้องสั่งซื้อเพิ่มเร่งด่วน"
-                    : "รายการน้ำยา สี กาว และอุปกรณ์ในระบบ Sneaker Care"}
+                    : "รายการน้ำยา สี กาว และอุปกรณ์ในระบบ DD-Management"}
                 </CardDescription>
               </div>
               <div className="flex items-center gap-2">

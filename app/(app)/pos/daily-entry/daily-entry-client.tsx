@@ -44,6 +44,7 @@ import {
   BarChart3,
 } from "lucide-react";
 import Link from "next/link";
+import { ModalBackdrop } from "@/components/modal-shell";
 
 // Size price presets based on official SneakerCare package standards
 export const SIZE_PRICES = {
@@ -598,7 +599,7 @@ export function DailyEntryClient({ initialRecords }: { initialRecords: DailySale
         <div className="space-y-1">
           <div className="inline-flex items-center gap-2 rounded-full bg-teal-500/20 px-3 py-1 text-xs font-semibold text-teal-200 ring-1 ring-teal-400/30">
             <Footprints className="h-3.5 w-3.5" />
-            SneakerCare POS & Multi-Period View
+            DD-Management POS & Multi-Period View
           </div>
           <h2 className="text-2xl font-bold tracking-tight">บันทึกยอดขาย & สรุปภาพรวมย้อนหลัง</h2>
           <p className="text-xs sm:text-sm text-teal-100/80">
@@ -1553,7 +1554,11 @@ export function DailyEntryClient({ initialRecords }: { initialRecords: DailySale
 
       {/* ── AR Collect Payment Modal ── */}
       {collectTarget && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 p-4 backdrop-blur-xs">
+        <ModalBackdrop
+          onClose={() => closeCollectModal()}
+          dismissOnBackdrop={false}
+          className="bg-black/50 backdrop-blur-xs"
+        >
           <div className="my-auto w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-150">
             <div className="flex items-center justify-between border-b border-slate-200 pb-3">
               <div className="flex items-center gap-2">
@@ -1662,7 +1667,7 @@ export function DailyEntryClient({ initialRecords }: { initialRecords: DailySale
               </div>
             </form>
           </div>
-        </div>
+        </ModalBackdrop>
       )}
     </div>
   );

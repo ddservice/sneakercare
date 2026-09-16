@@ -32,6 +32,7 @@ import {
   BellOff,
 } from "lucide-react";
 import Link from "next/link";
+import { ModalBackdrop } from "@/components/modal-shell";
 
 export type InventoryRow = {
   id: string;
@@ -297,7 +298,7 @@ export function InventoryClient({
     const ws = XLSX.utils.json_to_sheet(data);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Inventory");
-    XLSX.writeFile(wb, `SneakerCare_Inventory_${new Date().toISOString().slice(0, 10)}.xlsx`);
+    XLSX.writeFile(wb, `DD-Management_Inventory_${new Date().toISOString().slice(0, 10)}.xlsx`);
     toast.success("ดาวน์โหลดไฟล์ Excel คลังสินค้าเรียบร้อย");
   }
 
@@ -669,7 +670,11 @@ export function InventoryClient({
 
       {/* ── Edit Item Modal ── */}
       {editingItem && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 p-4 backdrop-blur-xs">
+        <ModalBackdrop
+          onClose={() => handleCloseEdit()}
+          dismissOnBackdrop={false}
+          className="bg-black/50 backdrop-blur-xs"
+        >
           <div className="my-auto w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-150">
             <div className="flex items-center justify-between border-b border-slate-200 pb-3">
               <div className="flex items-center gap-2">
@@ -813,12 +818,16 @@ export function InventoryClient({
               </div>
             </form>
           </div>
-        </div>
+        </ModalBackdrop>
       )}
 
       {/* ── Create New Item Modal ── */}
       {isCreateOpen && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 p-4 backdrop-blur-xs">
+        <ModalBackdrop
+          onClose={() => setIsCreateOpen(false)}
+          dismissOnBackdrop={false}
+          className="bg-black/50 backdrop-blur-xs"
+        >
           <div className="my-auto w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-150">
             <div className="flex items-center justify-between border-b border-slate-200 pb-3">
               <div className="flex items-center gap-2">
@@ -933,7 +942,7 @@ export function InventoryClient({
               </div>
             </form>
           </div>
-        </div>
+        </ModalBackdrop>
       )}
     </div>
   );

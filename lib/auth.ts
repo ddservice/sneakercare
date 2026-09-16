@@ -18,7 +18,7 @@ export type Profile = {
   id: string;
   username: string;
   display_name: string;
-  role: "admin" | "co_admin" | "staff";
+  role: "admin" | "co_admin" | "staff" | "super_admin";
   branch_id: string | null;
 };
 
@@ -56,9 +56,18 @@ export const requireProfile = cache(async (): Promise<Profile> => {
       redirect("/login");
     }
 
+    // ⚠️ ต้องเช็ค super_admin ตรงๆ ในนี้ ไม่งั้นจะร่วงไปตกกับ else สุดท้ายเป็น "staff"
+    // (role ที่ต่ำสุด) เงียบๆ — ไม่มี error ให้เห็น เหมือนบั๊ก "ไม่รู้จัก role แล้วเดาเป็นอันที่
+    // แคบสุด" ที่เคยเจอกับ staff ไม่ได้ branch_id มาก่อน (0023)
     const rawRole = String(profile.role ?? "staff").toLowerCase().replace("-", "_");
-    const role: "admin" | "co_admin" | "staff" =
-      rawRole === "admin" ? "admin" : rawRole === "co_admin" ? "co_admin" : "staff";
+    const role: "admin" | "co_admin" | "staff" | "super_admin" =
+      rawRole === "super_admin"
+        ? "super_admin"
+        : rawRole === "admin"
+          ? "admin"
+          : rawRole === "co_admin"
+            ? "co_admin"
+            : "staff";
 
     return {
       id: profile.id,
@@ -76,7 +85,7 @@ export const requireProfile = cache(async (): Promise<Profile> => {
 });
 
 export function requireAdmin(profile: Profile) {
-  if (profile.role !== "admin") {
+  if (profile.role !== "admin" && profile.role !== "super_admin") {
     redirect("/dashboard");
   }
 }

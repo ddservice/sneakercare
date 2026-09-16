@@ -11,7 +11,7 @@ export default function LoginPage() {
             <Footprints className="h-4 w-4" />
           </div>
           <span className="text-sm font-bold tracking-wider text-slate-900 uppercase">
-            Sneaker Care
+            DD-Management
           </span>
         </div>
         <div className="flex items-center gap-2">
@@ -40,7 +40,7 @@ export default function LoginPage() {
       {/* ── Footer ── */}
       <footer className="w-full max-w-5xl flex flex-wrap items-center justify-between gap-4 py-4 text-xs text-slate-500 border-t border-slate-200">
         <div>
-          © 2026 Sneaker Care. All rights reserved.
+          © 2026 DD-Management. All rights reserved.
         </div>
         <div className="text-[11px]">
           DD Service

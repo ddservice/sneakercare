@@ -23,7 +23,7 @@ interface MobileNavProps {
 export function MobileNav({
   items,
   alerts = {},
-  brandName = "Sneaker Care",
+  brandName = "DD-Management",
   roleBadge,
   displayName,
 }: MobileNavProps) {
@@ -139,7 +139,7 @@ export function MobileNav({
             {/* Drawer footer */}
             <div className="border-t border-slate-200 dark:border-slate-800 px-4 py-3">
               <p className="text-[11px] text-slate-400 dark:text-slate-500 text-center">
-                Sneaker Care Management System
+                DD-Management System
               </p>
             </div>
           </aside>
