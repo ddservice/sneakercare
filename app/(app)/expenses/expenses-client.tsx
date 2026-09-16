@@ -1356,8 +1356,8 @@ export function ExpensesClient({
 
       {/* ── ADD EXPENSE MODAL (WITH 6 STANDARD CATEGORIES & PRESETS) ── */}
       {showAddExpenseModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs overflow-y-auto">
-          <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-150">
+        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/60 p-4 backdrop-blur-xs">
+          <div className="my-auto w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-150">
             <div className="flex items-center justify-between border-b border-slate-200 pb-3">
               <div className="flex items-center gap-2">
                 <div className="h-8 w-8 rounded-full bg-amber-100 text-amber-800 flex items-center justify-center font-bold">
@@ -1487,8 +1487,8 @@ export function ExpensesClient({
 
       {/* ── EDIT STAFF PROFILE & STATUS MODAL ── */}
       {editingProfileStaff && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs overflow-y-auto">
-          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-150">
+        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/60 p-4 backdrop-blur-xs">
+          <div className="my-auto w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-150">
             <div className="flex items-center justify-between border-b border-slate-200 pb-3">
               <div className="flex items-center gap-2">
                 <div className="h-8 w-8 rounded-full bg-teal-100 text-teal-800 flex items-center justify-center font-bold">
@@ -1685,8 +1685,8 @@ export function ExpensesClient({
 
       {/* ── CREATE NEW STAFF MEMBER MODAL ── */}
       {showAddStaffModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs overflow-y-auto">
-          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-150">
+        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/60 p-4 backdrop-blur-xs">
+          <div className="my-auto w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-150">
             <div className="flex items-center justify-between border-b border-slate-200 pb-3">
               <div className="flex items-center gap-2">
                 <div className="h-8 w-8 rounded-full bg-emerald-100 text-emerald-800 flex items-center justify-center font-bold">
@@ -1869,25 +1869,31 @@ export function ExpensesClient({
       {/* ── OFFICIAL STANDARD PAYSLIP VOUCHER MODAL ── */}
       {selectedPayslip && (
         <PrintModalPortal>
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-xs overflow-y-auto print:p-0 print:bg-white print:static print:overflow-visible">
-          <div className="w-full max-w-2xl rounded-2xl bg-white p-8 shadow-2xl border border-slate-300 print:shadow-none print:border-none print:p-0 print:max-w-none print:w-full space-y-6">
+        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-950/80 p-4 backdrop-blur-xs print:p-0 print:bg-white print:static print:overflow-visible">
+          <div className="my-auto w-full max-w-2xl rounded-2xl bg-white p-4 sm:p-8 shadow-2xl border border-slate-300 print:shadow-none print:border-none print:p-0 print:max-w-none print:w-full space-y-4 sm:space-y-6">
             {/* Top Toolbar (Hidden on Print) */}
-            <div className="flex items-center justify-between border-b border-slate-200 pb-3 print:hidden">
-              <div className="flex items-center gap-2">
-                <ShieldCheck className="h-5 w-5 text-teal-700" />
-                <span className="text-sm font-bold text-slate-900 dark:text-slate-100">
-                  ใบแจ้งเงินเดือน / สลิปเงินเดือนพนักงาน (Official Payslip Voucher)
+            {/* sticky: กันปุ่มพิมพ์/ปุ่มปิดหลุดจอเมื่อสลิปยาวกว่าหน้าจอ (โดยเฉพาะบนมือถือ)
+                — ตัว backdrop คือ scroll container ของ modal นี้ */}
+            <div className="sticky top-0 z-10 -mx-4 -mt-4 rounded-t-2xl flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 bg-white px-4 pt-4 pb-3 sm:-mx-8 sm:-mt-8 sm:px-8 sm:pt-8 print:hidden">
+              <div className="flex min-w-0 items-center gap-2">
+                <ShieldCheck className="h-5 w-5 shrink-0 text-teal-700" />
+                <span className="truncate text-sm font-bold text-slate-900">
+                  <span className="hidden sm:inline">ใบแจ้งเงินเดือน / สลิปเงินเดือนพนักงาน (Official Payslip Voucher)</span>
+                  <span className="sm:hidden">สลิปเงินเดือน</span>
                 </span>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex shrink-0 items-center gap-2">
                 <Button
                   size="sm"
                   onClick={() => window.print()}
                   className="bg-teal-700 hover:bg-emerald-600 text-white font-bold text-xs gap-1.5 shadow-md"
                 >
-                  <Printer className="h-4 w-4" /> พิมพ์สลิปเงินเดือนทางการ (Print A4)
+                  <Printer className="h-4 w-4" />
+                  <span className="hidden sm:inline">พิมพ์สลิปเงินเดือนทางการ (Print A4)</span>
+                  <span className="sm:hidden">พิมพ์ A4</span>
                 </Button>
                 <button
+                  aria-label="ปิด"
                   onClick={() => setSelectedPayslip(null)}
                   className="rounded-full p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
                 >

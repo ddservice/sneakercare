@@ -924,8 +924,8 @@ export function InvoicingClient({
       {/* ── OFFICIAL A4 DOCUMENT PRINT MODAL (INVOICE / TAX INVOICE / DO / RECEIPT) ── */}
       {printingDoc && (
         <PrintModalPortal>
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs overflow-y-auto">
-          <div className="w-full max-w-4xl rounded-2xl bg-white p-6 shadow-2xl border border-slate-300 space-y-4">
+        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/60 p-4 backdrop-blur-xs">
+          <div className="my-auto w-full max-w-4xl rounded-2xl bg-white p-6 shadow-2xl border border-slate-300 space-y-4">
             <div className="flex items-center justify-between border-b border-slate-200 pb-3 print:hidden">
               <div className="flex items-center gap-2">
                 <FileText className="h-5 w-5 text-teal-700" />
