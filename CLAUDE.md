@@ -271,6 +271,12 @@ CLAUDE.md                 คู่มือนี้ — อัปเดตท�
 **ไม่กระทบการพิมพ์:** เส้นทางพิมพ์ยังเป็น `print:static` + `#print-portal-root` เหมือนเดิม
 (ดูหัวข้อ PrintModalPortal) แถบเครื่องมือมี `print:hidden` อยู่แล้ว
 
+**เก็บระหว่างทาง:** `npm run lint` **แดงอยู่ 1 error** ตั้งแต่คอมมิต `c928383` (ฟีเจอร์ตารางกะ)
+— `roster-client.tsx` เรียก `setCustomDayOverrides()` ตรงๆ ใน `useEffect` (`react-hooks/set-state-in-effect`)
+⇒ **CI แดงมาตั้งแต่ตอนนั้น** ปิดด้วย `eslint-disable-next-line` พร้อมเหตุผล: `localStorage` อ่านตอน render
+ไม่ได้ (ไม่มีบนเซิร์ฟเวอร์ตอน SSR + ทำให้ hydration ไม่ตรงกัน) การอ่านหลัง mount จึงถูกต้องแล้ว
+และรันครั้งเดียว ไม่ใช่ cascading render ที่ rule นี้ตั้งใจกัน
+
 ## ✅ งานที่ต้องกดบน Dashboard/VPS — ปิดครบทุกข้อแล้ว (2026-09-08)
 
 ### 1. ปิด legacy API key (JWT-based) — ✅ เสร็จ

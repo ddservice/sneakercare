@@ -200,10 +200,14 @@ export function RosterClient() {
   >({});
 
   // Load custom overrides from localStorage on mount
+  // localStorage อ่านตอน render ไม่ได้ (ไม่มีบนเซิร์ฟเวอร์ตอน SSR และจะทำให้ hydration ไม่ตรงกัน)
+  // การอ่านหลัง mount แล้ว setState จึงเป็นวิธีที่ถูกต้องสำหรับค่าที่มีเฉพาะฝั่งเบราว์เซอร์
+  // — รันครั้งเดียวตอน mount ([] ว่าง) ไม่ใช่ cascading render ที่ rule นี้ตั้งใจจะกัน
   useEffect(() => {
     try {
       const saved = localStorage.getItem("sc_roster_custom_shifts");
       if (saved) {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setCustomDayOverrides(JSON.parse(saved));
       }
     } catch {
