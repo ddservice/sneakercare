@@ -20,6 +20,8 @@ export type Profile = {
   display_name: string;
   role: "admin" | "co_admin" | "staff" | "super_admin";
   branch_id: string | null;
+  // null เฉพาะ super_admin (ดู migration 0030) — ทุก role อื่นมีค่าเสมอ
+  tenant_id: string | null;
 };
 
 export const requireProfile = cache(async (): Promise<Profile> => {
@@ -43,7 +45,7 @@ export const requireProfile = cache(async (): Promise<Profile> => {
 
     const { data: profile, error } = await supabase
       .from("profiles")
-      .select("id, username, display_name, role, branch_id, is_active")
+      .select("id, username, display_name, role, branch_id, tenant_id, is_active")
       .eq("id", user.id)
       .single();
 
@@ -75,6 +77,7 @@ export const requireProfile = cache(async (): Promise<Profile> => {
       display_name: profile.display_name || profile.username || "ผู้ใช้",
       role,
       branch_id: profile.branch_id,
+      tenant_id: profile.tenant_id,
     };
   } catch (err: unknown) {
     // Next.js สั่ง redirect ด้วยการ throw error ที่มี digest ขึ้นต้นว่า NEXT_REDIRECT

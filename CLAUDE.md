@@ -382,7 +382,7 @@ admin เห็นทุกสาขา ได้ไหม" — คำตอบ�
   **ห้ามสร้างบัญชี `super_admin` จริงแล้วคาดหวังว่าจะข้าม tenant ได้ก่อนจุดพวกนี้จะแก้ครบ**
   — ตอนนี้จะพฤติกรรมเหมือน staff ที่ทำอะไรไม่ได้เลยในหลายจุด (fail-closed ปลอดภัย แต่ใช้งานไม่ได้)
 
-### เฟส 2 (บังคับใช้จริงด้วย RLS) — เขียน+ทดสอบผ่านแล้ว 2026-09-16 ยังไม่ apply
+### เฟส 2 (บังคับใช้จริงด้วย RLS) — ✅ apply แล้ว 2026-09-16 ยืนยันครบ 54/54 policy
 `0031_tenant_rls_enforcement.sql` — แก้ RLS ทุกตารางธุรกิจ (54 policy จาก 28 ตาราง — ตรวจกับ
 `pg_policies` ของ production จริงก่อนเขียนทุกตัว ไม่เดาจากไฟล์ migration เก่า บทเรียนจาก
 0029/0030 ที่เดาผิดสองรอบ) ให้ AND ด้วยเงื่อนไข tenant ก่อนเช็คอย่างอื่นเสมอ
@@ -406,21 +406,53 @@ super_admin เห็นทั้งสองฝั่ง, **`profiles` (เส�
 คนละอันแล้วก็ตาม** — RLS filter ได้ถูกต้อง แต่ schema ยังไม่พร้อมให้ 2 tenant ใช้ sc_settings
 พร้อมกันจริง ต้องแก้ PK เป็น composite ก่อน (งานเฟส 3 เพิ่มเติมจากที่บันทึกไว้แล้ว)
 
-**ยังไม่ apply ขึ้น production** — รอสรุปขั้นตอนกับเจ้าของก่อน เพราะแก้ RLS ของ `profiles`
-โดยตรง (จุดเดียวที่พลาดแล้วล็อกทุกคนออกจากระบบได้ทันที)
+**✅ apply แล้ว ยืนยันด้วย query ที่ไม่ขึ้นกับการตัดข้อความของ SQL Editor** (`ilike '%super_admin%'`
++ `ilike '%fn_current_tenant%'` กับทุก policy — ครบ 54/54 `true/true`) **เจอปัญหาระหว่างทาง:
+apply รอบแรกของ `profiles_update` ตกหล่น 1 เงื่อนไขไปเงียบๆ แม้จะรันไฟล์เดิมซ้ำอีกรอบก็ยัง
+ไม่ติด** (สาเหตุไม่ทราบแน่ชัด — สงสัยว่า paste ไฟล์ยาวบางทีตกหล่นบางส่วน) ต้องแก้ด้วย snippet
+สั้นแยกต่างหากถึงจะติด **บทเรียน: อย่าเชื่อว่า "รันไฟล์เดิมซ้ำ" จะได้ผลเหมือนเดิมเสมอ — verify
+ด้วย query ที่ไม่ขึ้นกับการแสดงผลทุกครั้งหลัง apply policy ที่มีความเสี่ยงสูง (โดยเฉพาะ
+`profiles`) และอย่าเชื่อ raw text ที่ SQL Editor แสดง (ตัดข้อความแบบไม่มี "..." บอก)
 
 - **ตารางที่ *ไม่* แตะใน 0031 (เหตุผลเดียวกับ 0028):** `sc_users` (deprecated),
   `sc_expense_categories` (enum กลาง), `ui_permissions` (แสดงผลอย่างเดียว), `ext_*` (ยังไม่มี
   tenant_id เลย)
-- **ยังไม่ทำใน 0031:** trigger เซ็ต tenant_id อัตโนมัติตอน insert แทน DEFAULT ตายตัว —
-  **[ตรวจแล้ว 2026-09-16] ทำไม่ได้แบบเดิมที่วางแผนไว้เลย** เพราะ ~10 ใน 15 ไฟล์ server action
-  (รวม `expenses.ts`, `shop-settings.ts`, `daily-sales.ts` ที่เป็นเป้าหมายหลัก) ใช้
-  `createAdminClient()` (service_role) ซึ่ง **bypass RLS ทั้งหมดและไม่มี session ผู้ใช้เลย**
-  (`auth.uid()` เป็น null เสมอ) trigger ที่อิง `fn_current_tenant()` จะไม่ทำงานสำหรับ insert
-  พวกนี้ ⇒ ต้องแก้ที่**โค้ดแอปโดยตรง** ให้ส่ง `tenant_id` มาชัดเจนในทุก insert (มิเรอร์วิธีที่
-  `branch_id` ถูกจัดการอยู่แล้วทุกที่ในระบบ ไม่มี DEFAULT ที่ไหนเลย) — นี่คืองานก้อนใหญ่ที่สุด
-  ที่เหลืออยู่ ต้องไล่ทีละ action file ทั้ง 10 ไฟล์
-- **ห้ามเชิญผู้ใช้ tenant ที่สองเข้าระบบก่อน 0031 apply + ทดสอบกับบัญชีจริงเสร็จเด็ดขาด**
+### ✅ ชั้นแอป — กรอง tenant_id เองในทุกไฟล์ที่ใช้ service_role (เสร็จแล้ว 2026-09-16)
+
+**[ตรวจแล้ว] trigger เซ็ต tenant_id อัตโนมัติตอน insert แทน DEFAULT ตายตัว ทำไม่ได้ตามแผนเดิม**
+เพราะ 10 ใน 15 ไฟล์ server action ใช้ `createAdminClient()` (service_role) ซึ่ง **bypass RLS
+ทั้งหมดและไม่มี session ผู้ใช้เลย** (`auth.uid()` เป็น null เสมอ) trigger ที่อิง
+`fn_current_tenant()` จึงไม่ทำงานกับ insert พวกนี้ — RLS (0031) ป้องกันได้แค่ query ที่ผ่าน
+session ของผู้ใช้เอง (~5 ไฟล์ที่ใช้ `lib/supabase/server.ts`) เท่านั้น
+
+**แก้โดยเพิ่ม `lib/tenant.ts`** (`tenantFilter(profile)` คืน tenant_id หรือ `null` สำหรับ
+super_admin เท่านั้น · `requireTenantId(profile)` throw ถ้าไม่มี tenant ให้ใช้) แล้วไล่แก้
+**ครบทั้ง 10 ไฟล์** ที่ใช้ service_role ให้กรอง `.eq("tenant_id", ...)` ทุก read/update/delete
+และใส่ `tenant_id` ในทุก insert — มิเรอร์วิธีที่ `branch_id` ถูกจัดการอยู่แล้วทุกที่ในระบบ
+(`analytics.ts`, `daily-sales.ts`, `expenses.ts`, `import-export.ts`, `inventory.ts`,
+`shop-settings.ts`, `users.ts` ครบ · `smartacc-documents.ts`/`smartacc-expenses.ts` ครบเฉพาะ
+ส่วนที่แตะ `sc_settings` — ส่วน `ext_*` ยังเลื่อนไว้ตาม 0028 มีคอมเมนต์กำกับชัดเจนในไฟล์)
+
+**เจอบั๊กจริงระหว่างแก้ (ไม่ใช่แค่ "ลืมกรอง" — เป็นบั๊กที่ต่างกัน):**
+- `inviteUser()` (`users.ts`) ไม่เคยระบุ `tenant_id` ตอนสร้างโปรไฟล์ใหม่เลย ⇒ ถ้าไม่แก้ ทุกคน
+  ที่ถูกเชิญเข้าระบบ (ไม่ว่า admin ของ tenant ไหนกดเชิญ) จะตกไปอยู่ tenant #1 เสมอ ตาม DEFAULT
+  ของ 0028 — ไม่ใช่ tenant ของ admin ที่เชิญ
+- `sendPasswordReset()`/`deleteUser()` ใช้ user id ตรงๆ ผ่าน admin client โดยไม่เช็ค tenant
+  เลย ⇒ admin ของ tenant ไหนก็ส่งอีเมลรีเซ็ตรหัส/ลบผู้ใช้ของอีก tenant ได้ถ้ารู้/เดา user id —
+  เพิ่มเช็ค `profiles.tenant_id` ตรงก่อนดำเนินการทั้งคู่แล้ว
+- `updateUser()` ใช้ session client (RLS ป้องกันข้าม tenant อยู่แล้วจริง) แต่ RLS ที่ไม่แมตช์
+  แถวไหนเลยไม่คืน error — แค่ affected rows = 0 เงียบๆ (รูปแบบ silent-failure เดียวกับที่เจอ
+  ซ้ำๆ ในโปรเจกต์นี้) เพิ่ม `.select()` แล้วเช็คว่ามีแถวจริงกลับมา ไม่งั้นรายงาน error แทนที่จะ
+  บอกว่า "บันทึกสำเร็จ" ทั้งที่ไม่ได้แก้อะไรเลย
+- `lib/expense-mirror.ts` (`mirrorExpenseEntry`/`mirrorPayslip`) ก็ใช้ service_role ภายใน —
+  เพิ่ม `tenantId` เป็น field บังคับใน input type ทั้งสองฟังก์ชัน แล้วอัปเดตทุกจุดที่เรียก
+  **หมายเหตุ:** `sc_payslips` upsert ยัง `onConflict: "month,employee_name"` เฉยๆ (ไม่มี
+  tenant_id ในคีย์) — ยังไม่แก้เพราะตารางนี้ไม่มีหน้าไหนอ่านเลยตอนนี้ (dead write path) แต่ต้อง
+  แก้ก่อนจะเปิดใช้จริงในอนาคต (มีคอมเมนต์กำกับไว้ในโค้ดแล้ว)
+
+**ยังไม่ทำ:** ขึ้น production เอง — ต้อง `npm run typecheck`/`test:migration` ผ่านครบ + apply
+migration `0032` (sc_settings composite key) ก่อน แล้วค่อย commit/push/deploy
+- **ห้ามเชิญผู้ใช้ tenant ที่สองเข้าระบบก่อนงานชุดนี้ deploy ขึ้น production + ทดสอบกับบัญชีจริงเสร็จเด็ดขาด**
 - **เฟส 3 (ขึ้นระบบจริง):** เจ้าของยืนยัน 2026-09-16 ว่าทั้งข้อมูลบริษัท (ชื่อ/เลขผู้เสียภาษี/
   ที่อยู่/PromptPay), Telegram bot token, และแคตตาล็อกสินค้า/บริการ **ให้เป็นช่องกรอกเองทั้งหมด
   ผ่าน UI ไม่ hardcode/ไม่ seed ข้อมูลจาก tenant เดิมให้** — งานที่ต้องทำ:

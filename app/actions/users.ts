@@ -6,6 +6,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { logAudit } from "@/lib/audit";
 import type { UserRole } from "@/lib/supabase/database.types";
+import { requireTenantId } from "@/lib/tenant";
 
 export type UserActionState = { error?: string; success?: boolean } | undefined;
 
@@ -18,6 +19,10 @@ function parseRole(value: string): UserRole | null {
 export async function inviteUser(_prev: UserActionState, formData: FormData): Promise<UserActionState> {
   const profile = await requireProfile();
   requireAdmin(profile);
+  // ⚠️ [แก้บั๊กจริง 2026-09-16] ต้องเป็น tenant เดียวกับ admin ที่เชิญเสมอ — ถ้าไม่ระบุตรงนี้
+  // จะตกไปใช้ DEFAULT ของ 0028 (tenant #1 ตายตัว) ⇒ admin ของ tenant ไหนก็ตามเชิญคน จะได้
+  // สมาชิกใหม่ไปโผล่ที่ tenant #1 เสมอ ไม่ใช่ tenant ของ admin คนนั้นเอง
+  const tenantId = requireTenantId(profile);
 
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
   const displayName = String(formData.get("display_name") ?? "").trim();
@@ -52,6 +57,7 @@ export async function inviteUser(_prev: UserActionState, formData: FormData): Pr
     role,
     branch_id: branchId,
     is_active: true,
+    tenant_id: tenantId,
   });
 
   if (profileError) {
@@ -84,8 +90,12 @@ export async function updateUser(_prev: UserActionState, formData: FormData): Pr
     return { error: "ไม่สามารถปิดใช้งานหรือลดสิทธิ์บัญชีตัวเองได้" };
   }
 
+  // ⚠️ ใช้ session client (ไม่ใช่ admin) โดยตั้งใจ — RLS ของ migration 0031 (profiles_update)
+  // จะกันไม่ให้แก้ไขโปรไฟล์ของ tenant อื่นได้เองอยู่แล้ว แต่ RLS ที่ไม่แมตช์แถวใดเลยไม่ทำให้เกิด
+  // error กลับมา (แค่ affected rows = 0) — ต้อง .select() แล้วเช็คว่ามีแถวจริงกลับมา ไม่งั้น
+  // ถ้าใครหลุด id ของ tenant อื่นมาได้ ฟังก์ชันจะรายงาน "บันทึกสำเร็จ" ทั้งที่ไม่ได้แก้อะไรเลย
   const supabase = await createClient();
-  const { error } = await supabase
+  const { data: updated, error } = await supabase
     .from("profiles")
     .update({
       display_name: displayName,
@@ -94,10 +104,14 @@ export async function updateUser(_prev: UserActionState, formData: FormData): Pr
       is_active: isActive,
       updated_at: new Date().toISOString(),
     })
-    .eq("id", id);
+    .eq("id", id)
+    .select("id");
 
   if (error) {
     return { error: `บันทึกไม่สำเร็จ: ${error.message}` };
+  }
+  if (!updated || updated.length === 0) {
+    return { error: "ไม่พบผู้ใช้นี้ หรือไม่มีสิทธิ์แก้ไข" };
   }
 
   revalidatePath("/admin/users");
@@ -161,11 +175,23 @@ export async function changeOwnPassword(_prev: UserActionState, formData: FormDa
 export async function sendPasswordReset(_prev: UserActionState, formData: FormData): Promise<UserActionState> {
   const profile = await requireProfile();
   requireAdmin(profile);
+  const tenantId = requireTenantId(profile);
 
   const id = String(formData.get("id") ?? "");
   if (!id) return { error: "ไม่พบผู้ใช้ที่ต้องการรีเซ็ต" };
 
   const admin = createAdminClient();
+  // ⚠️ ใช้ admin client (bypass RLS) — ต้องเช็ค tenant เองตรงๆ ไม่งั้น admin ของ tenant ไหน
+  // ก็ส่งอีเมลรีเซ็ตรหัสผ่านให้ผู้ใช้ของ tenant อื่นได้ถ้ารู้/เดา user id ถูก
+  const { data: targetProfile } = await admin
+    .from("profiles")
+    .select("tenant_id")
+    .eq("id", id)
+    .maybeSingle();
+  if (!targetProfile || targetProfile.tenant_id !== tenantId) {
+    return { error: "ไม่พบผู้ใช้นี้ในระบบของคุณ" };
+  }
+
   const { data: target, error: getError } = await admin.auth.admin.getUserById(id);
   if (getError || !target?.user?.email) {
     return { error: `ไม่พบบัญชีนี้: ${getError?.message ?? "ไม่มีอีเมล"}` };
@@ -203,12 +229,20 @@ export async function sendPasswordReset(_prev: UserActionState, formData: FormDa
 export async function deleteUser(_prev: UserActionState, formData: FormData): Promise<UserActionState> {
   const profile = await requireProfile();
   requireAdmin(profile);
+  const tenantId = requireTenantId(profile);
 
   const id = String(formData.get("id") ?? "");
   if (!id) return { error: "ไม่พบผู้ใช้ที่ต้องการลบ" };
   if (id === profile.id) return { error: "ลบบัญชีตัวเองไม่ได้" };
 
   const admin = createAdminClient();
+
+  // ⚠️ ใช้ admin client (bypass RLS) — ต้องเช็ค tenant เองก่อนเสมอ ไม่งั้น admin ของ tenant
+  // ไหนก็ตามลบผู้ใช้ของ tenant อื่นได้ถ้ารู้/เดา user id ถูก
+  const { data: targetCheck } = await admin.from("profiles").select("tenant_id").eq("id", id).maybeSingle();
+  if (!targetCheck || targetCheck.tenant_id !== tenantId) {
+    return { error: "ไม่พบผู้ใช้นี้ในระบบของคุณ" };
+  }
 
   const [{ count: auditCount }, { count: txnCount }] = await Promise.all([
     admin.from("inv_audit_logs").select("*", { count: "exact", head: true }).eq("performed_by", id),
@@ -229,7 +263,8 @@ export async function deleteUser(_prev: UserActionState, formData: FormData): Pr
     .eq("id", id)
     .maybeSingle();
 
-  const { error: profileError } = await admin.from("profiles").delete().eq("id", id);
+  // .eq("tenant_id", ...) เป็น defense-in-depth ซ้ำ (เช็ค tenant ไปแล้วข้างบน)
+  const { error: profileError } = await admin.from("profiles").delete().eq("id", id).eq("tenant_id", tenantId);
   if (profileError) return { error: `ลบโปรไฟล์ไม่สำเร็จ: ${profileError.message}` };
 
   const { error: authError } = await admin.auth.admin.deleteUser(id);

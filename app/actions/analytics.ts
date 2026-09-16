@@ -3,6 +3,7 @@
 import { requireProfile, requireModuleView } from "@/lib/auth";
 import { withId, text } from "@/lib/db-rows";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { tenantFilter } from "@/lib/tenant";
 
 export type MonthlySummary = {
   month: string; // YYYY-MM
@@ -101,6 +102,9 @@ export async function fetchAnalyticsData(targetMonth: string = "all"): Promise<A
   const profile = await requireProfile();
   requireModuleView(profile, "statistics");
   const supabase = createAdminClient();
+  // ⚠️ ใช้ createAdminClient() (service_role) — bypass RLS ของ migration 0031 ทั้งหมด ต้องกรอง
+  // tenant_id เองตรงนี้เสมอ ไม่งั้นสถิติของ tenant นี้จะรวมยอดขาย/สต๊อกของ tenant อื่นปนเข้ามา
+  const tenantId = tenantFilter(profile);
 
   // 1. Fetch sales from sc_sales — only needed columns, with date range limit
   // "all" mode: rolling 13-month window (12 months history + current month)
@@ -110,6 +114,7 @@ export async function fetchAnalyticsData(targetMonth: string = "all"): Promise<A
   let salesQuery = supabase.from("sc_sales")
     .select(NEEDED_COLS)
     .order("date", { ascending: false });
+  if (tenantId) salesQuery = salesQuery.eq("tenant_id", tenantId);
 
   if (targetMonth !== "all") {
     // Specific month: e.g. "2026-08" → filter 2026-08-01 to 2026-08-31
@@ -130,13 +135,16 @@ export async function fetchAnalyticsData(targetMonth: string = "all"): Promise<A
 
 
   // 2. Fetch inventory items and stock
-  const [itemsRes, stockRes] = await Promise.all([
-    supabase.from("items").select("id, name, category, base_unit"),
-    // ⚠️ (แก้บั๊ก 2026-09-07) เดิม select "min_stock, unit_cost" ซึ่งไม่มีอยู่จริงในตาราง
-    // (ของจริงคือ min_stock_level / avg_unit_cost) ⇒ query ทั้งชุด error แล้วสถิติคลังสินค้า
-    // ว่างเปล่ามาตลอด — ไม่มีใครเห็นเพราะโค้ดไม่ได้เช็ค error ที่คืนมา
-    supabase.from("item_stock").select("item_id, current_qty, min_stock_level, avg_unit_cost"),
-  ]);
+  let itemsQuery = supabase.from("items").select("id, name, category, base_unit");
+  // ⚠️ (แก้บั๊ก 2026-09-07) เดิม select "min_stock, unit_cost" ซึ่งไม่มีอยู่จริงในตาราง
+  // (ของจริงคือ min_stock_level / avg_unit_cost) ⇒ query ทั้งชุด error แล้วสถิติคลังสินค้า
+  // ว่างเปล่ามาตลอด — ไม่มีใครเห็นเพราะโค้ดไม่ได้เช็ค error ที่คืนมา
+  let stockQuery = supabase.from("item_stock").select("item_id, current_qty, min_stock_level, avg_unit_cost");
+  if (tenantId) {
+    itemsQuery = itemsQuery.eq("tenant_id", tenantId);
+    stockQuery = stockQuery.eq("tenant_id", tenantId);
+  }
+  const [itemsRes, stockRes] = await Promise.all([itemsQuery, stockQuery]);
 
   const stockMap: Record<string, { currentQty: number; minStock: number; unitCost: number }> = {};
   (stockRes.data || []).forEach((st) => {

@@ -5,6 +5,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { requireProfile, requireModuleView } from "@/lib/auth";
 import { getSelectedBranchId } from "@/lib/branch";
 import { parseSalesRow, parseStockRow, parseExpensesRow } from "@/lib/schemas/import-schemas";
+import { requireTenantId } from "@/lib/tenant";
 
 export type BulkImportResult = {
   success: boolean;
@@ -22,6 +23,7 @@ export async function bulkImportSales(rows: Record<string, unknown>[]): Promise<
   const profile = await requireProfile();
   requireModuleView(profile, "reports");
   const supabase = createAdminClient();
+  const tenantId = requireTenantId(profile);
 
   if (!rows || rows.length === 0) {
     return { success: false, total: 0, imported: 0, failed: 0, errors: ["ไม่พบข้อมูลสำหรับนำเข้า"] };
@@ -69,18 +71,21 @@ export async function bulkImportSales(rows: Record<string, unknown>[]): Promise<
         payment_status: status,
         recorded_by: profile.display_name || "Import Tool",
         last_updated: new Date().toISOString(),
+        tenant_id: tenantId,
       };
 
       // Check if row exists on same date
       const { data: existing } = await supabase.from("sc_sales")
         .select("id")
         .eq("date", validated.date)
+        .eq("tenant_id", tenantId)
         .maybeSingle();
 
       if (existing) {
         await supabase.from("sc_sales")
           .update(payload)
-          .eq("id", existing.id);
+          .eq("id", existing.id)
+          .eq("tenant_id", tenantId);
       } else {
         await supabase.from("sc_sales").insert(payload);
       }
@@ -111,6 +116,7 @@ export async function bulkImportStock(rows: Record<string, unknown>[]): Promise<
   requireModuleView(profile, "reports");
   const branchId = await getSelectedBranchId(profile);
   const supabase = createAdminClient();
+  const tenantId = requireTenantId(profile);
 
   if (!rows || rows.length === 0) {
     return { success: false, total: 0, imported: 0, failed: 0, errors: ["ไม่พบข้อมูลสำหรับนำเข้า"] };
@@ -140,6 +146,7 @@ export async function bulkImportStock(rows: Record<string, unknown>[]): Promise<
       const { data: existingItem } = await supabase.from("items")
         .select("id")
         .eq("name", validated.name)
+        .eq("tenant_id", tenantId)
         .maybeSingle();
 
       let itemId = existingItem?.id;
@@ -154,6 +161,7 @@ export async function bulkImportStock(rows: Record<string, unknown>[]): Promise<
             default_min_stock_level: validated.min_stock,
             item_type: "inventory",
             is_active: true,
+            tenant_id: tenantId,
           })
           .select()
           .single();
@@ -169,7 +177,8 @@ export async function bulkImportStock(rows: Record<string, unknown>[]): Promise<
       // Upsert item_stock
       let qStock = supabase.from("item_stock")
         .select("id")
-        .eq("item_id", itemId!);
+        .eq("item_id", itemId!)
+        .eq("tenant_id", tenantId);
       if (branchId) qStock = qStock.eq("branch_id", branchId);
       const { data: existingStock } = await qStock.maybeSingle();
 
@@ -182,7 +191,8 @@ export async function bulkImportStock(rows: Record<string, unknown>[]): Promise<
             // ⚠️ (แก้บั๊ก 2026-09-06) item_stock ไม่มีคอลัมน์ last_counted_at — ใส่แล้ว update ล้มทั้ง statement
             updated_at: new Date().toISOString(),
           })
-          .eq("id", existingStock.id!);
+          .eq("id", existingStock.id!)
+          .eq("tenant_id", tenantId);
       } else {
         await supabase.from("item_stock").insert({
           item_id: itemId,
@@ -190,6 +200,7 @@ export async function bulkImportStock(rows: Record<string, unknown>[]): Promise<
           current_qty: validated.qty,
           avg_unit_cost: validated.unit_cost,
           min_stock_level: validated.min_stock,
+          tenant_id: tenantId,
         });
       }
 
@@ -219,6 +230,7 @@ export async function bulkImportExpenses(rows: Record<string, unknown>[]): Promi
   const profile = await requireProfile();
   requireModuleView(profile, "reports");
   const supabase = createAdminClient();
+  const tenantId = requireTenantId(profile);
 
   if (!rows || rows.length === 0) {
     return { success: false, total: 0, imported: 0, failed: 0, errors: ["ไม่พบข้อมูลสำหรับนำเข้า"] };
@@ -253,6 +265,7 @@ export async function bulkImportExpenses(rows: Record<string, unknown>[]): Promi
         pay_method: validated.pay_method,
         recorded_by: profile.display_name || "Import Tool",
         created_at: new Date().toISOString(),
+        tenant_id: tenantId,
       });
 
       imported++;

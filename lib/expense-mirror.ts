@@ -30,6 +30,9 @@ export type MirrorExpenseInput = {
   payMethod?: string;
   createdBy?: string | null;
   branchId?: string | null;
+  /** tenant_id ของผู้เรียก — บังคับส่งมาเสมอ ฟังก์ชันนี้ใช้ createAdminClient() (bypass RLS)
+   * จึงพึ่งพา migration 0031 กันข้าม tenant ไม่ได้เลย ต้องกรอง/ระบุเองตรงนี้ */
+  tenantId: string;
 };
 
 /** เขียนกระจกเงาของค่าใช้จ่ายหนึ่งรายการ — ไม่ throw ไม่ว่ากรณีใด */
@@ -53,6 +56,7 @@ export async function mirrorExpenseEntry(input: MirrorExpenseInput): Promise<voi
       legacy_opex_id: legacyId,
       created_by: input.createdBy ?? null,
       branch_id: input.branchId ?? null,
+      tenant_id: input.tenantId,
     });
 
     if (error) {
@@ -67,7 +71,9 @@ export async function mirrorExpenseEntry(input: MirrorExpenseInput): Promise<voi
   }
 }
 
-/** ลบกระจกเงาเมื่อแถวต้นทางใน sc_opex ถูกลบ — ไม่ throw ไม่ว่ากรณีใด */
+/** ลบกระจกเงาเมื่อแถวต้นทางใน sc_opex ถูกลบ — ไม่ throw ไม่ว่ากรณีใด
+ * (ไม่ต้องรับ tenantId — legacy_opex_id คือ sc_opex.id ซึ่งเป็น bigserial กลางที่ไม่ซ้ำกัน
+ * ข้าม tenant อยู่แล้ว ระบุแถวเดียวได้แน่นอนโดยไม่ต้องกรองซ้ำ) */
 export async function unmirrorExpenseEntry(legacyOpexId: number | string): Promise<void> {
   try {
     const legacyId = Number(legacyOpexId);
@@ -109,6 +115,12 @@ export type MirrorPayslipInput = {
   netPay: number;
   deductions: Array<{ name: string; amount: number }>;
   createdBy?: string | null;
+  /** tenant_id ของผู้เรียก — บังคับส่งมาเสมอ (เหตุผลเดียวกับ MirrorExpenseInput)
+   * ⚠️ onConflict ของ upsert ด้านล่างยังเป็น "month,employee_name" เฉยๆ ไม่ใช่ composite ที่มี
+   * tenant_id ด้วย — ถ้าสอง tenant มีพนักงานชื่อซ้ำกันเป๊ะในเดือนเดียวกัน จะ upsert ทับกันได้
+   * (ยังไม่แก้ตอนนี้เพราะตารางนี้ไม่มีหน้าไหนอ่านเลย — ไม่กระทบผู้ใช้จริง แต่ต้องแก้ก่อนจะเปิดใช้
+   * ตารางนี้จริงในอนาคต ดู CLAUDE.md) */
+  tenantId: string;
 };
 
 /** เขียนกระจกเงาของสลิปเงินเดือนหนึ่งใบ — ไม่ throw ไม่ว่ากรณีใด */
@@ -142,6 +154,7 @@ export async function mirrorPayslip(input: MirrorPayslipInput): Promise<void> {
           net_pay: clamp(input.netPay),
           legacy_ref: legacyRef,
           created_by: input.createdBy ?? null,
+          tenant_id: input.tenantId,
         },
         // ⚠️ ต้องชี้ไปที่ constraint จริง ไม่ใช่ partial unique index ของ legacy_ref
         // (Postgres ใช้ partial index อนุมาน ON CONFLICT ไม่ได้)
@@ -166,6 +179,7 @@ export async function mirrorPayslip(input: MirrorPayslipInput): Promise<void> {
         name: d.name.trim(),
         amount: Number(d.amount),
         legacy_ref: `${legacyRef}|new-${idx}`,
+        tenant_id: input.tenantId,
       }));
     if (rows.length > 0) {
       const { error: dErr } = await supabase.from("sc_payslip_deductions").insert(rows);

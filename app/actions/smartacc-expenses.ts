@@ -1,5 +1,9 @@
 "use server";
 
+// ⚠️ [multi-tenant] ตาราง ext_staged_expenses (โมดูล SmartAcc OCR ใบเสร็จ) ยังไม่มีคอลัมน์
+// tenant_id เลย — อยู่ในกลุ่ม ext_* ที่ 0028 จงใจเลื่อนไว้ (ยังไม่จำเป็นสำหรับ MVP ของ tenant
+// ที่สอง) ⇒ ทุก query ในไฟล์นี้ยังไม่กรอง tenant และใช้ createAdminClient() (bypass RLS ด้วย)
+// **ห้ามเปิดฟีเจอร์นี้ให้ tenant ที่สองใช้ก่อนจะกลับมาเพิ่ม tenant_id ให้ ext_* ทั้งชุดก่อน**
 import { revalidatePath } from "next/cache";
 import { requireProfile, requireModuleView, requireModuleWrite } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";

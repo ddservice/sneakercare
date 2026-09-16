@@ -5,6 +5,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { requireProfile, requireModuleView, requireModuleWrite } from "@/lib/auth";
 import { logAudit } from "@/lib/audit";
 import type { Database } from "@/lib/supabase/database.types";
+import { requireTenantId, tenantFilter } from "@/lib/tenant";
 
 export type DailySaleInput = {
   id?: number;
@@ -61,6 +62,8 @@ export async function saveDailySale(data: DailySaleInput) {
   const profile = await requireProfile();
   requireModuleWrite(profile, "pos");
   const supabase = createAdminClient();
+  // ⚠️ ใช้ service_role — bypass RLS ทั้งหมด ต้องกรอง/ระบุ tenant_id เองทุกจุดในไฟล์นี้
+  const tenantId = requireTenantId(profile);
 
   const cash = Number(data.cash_amount || 0);
   const transfer = Number(data.transfer_amount || 0);
@@ -85,7 +88,8 @@ export async function saveDailySale(data: DailySaleInput) {
   // Check if there are existing AR payments in sc_payments for this sale date
   const { data: existingAr } = await supabase.from("sc_payments")
     .select("amount")
-    .eq("sale_date", data.date);
+    .eq("sale_date", data.date)
+    .eq("tenant_id", tenantId);
 
   const arPaidSum = (existingAr || []).reduce((sum: number, p) => sum + Number(p.amount || 0), 0);
   const totalPaidAll = actualPaid + arPaidSum;
@@ -118,6 +122,7 @@ export async function saveDailySale(data: DailySaleInput) {
     extra_items: data.extra_items || "",
     recorded_by: profile.display_name || profile.username || "Staff",
     last_updated: new Date().toISOString(),
+    tenant_id: tenantId,
   };
 
   // เก็บค่าเดิมไว้ก่อนแก้ เพื่อให้ audit log บอกได้ว่าอะไรเปลี่ยนจากอะไรเป็นอะไร
@@ -126,6 +131,7 @@ export async function saveDailySale(data: DailySaleInput) {
     const { data: prev } = await supabase.from("sc_sales")
       .select("date, total_revenue, grand_total, discount, amount_paid, payment_status")
       .eq("id", data.id)
+      .eq("tenant_id", tenantId)
       .maybeSingle();
     before = prev ?? null;
   }
@@ -133,9 +139,12 @@ export async function saveDailySale(data: DailySaleInput) {
   let error;
   let savedId: number | undefined = data.id;
   if (data.id) {
+    // ⚠️ ต้อง .eq("tenant_id", ...) ด้วยเสมอ ไม่งั้นถ้า id เป็นของ tenant อื่น (เดา/หลุดมา)
+    // update จะไปแก้แถวของ tenant อื่นได้ตรงๆ เพราะ service_role ไม่ผ่าน RLS
     const res = await supabase.from("sc_sales")
       .update(payload)
-      .eq("id", data.id);
+      .eq("id", data.id)
+      .eq("tenant_id", tenantId);
     error = res.error;
   } else {
     const res = await supabase.from("sc_sales")
@@ -176,16 +185,20 @@ export async function deleteDailySale(id: number) {
   const profile = await requireProfile();
   requireModuleWrite(profile, "pos");
   const supabase = createAdminClient();
+  const tenantId = requireTenantId(profile);
 
   // อ่านแถวเก็บไว้ก่อน เพราะพอลบแล้วไม่มีทางรู้ย้อนหลังว่ายอดที่หายไปคือเท่าไหร่
   const { data: doomed } = await supabase.from("sc_sales")
     .select("date, total_revenue, grand_total, discount, amount_paid, payment_status, recorded_by")
     .eq("id", id)
+    .eq("tenant_id", tenantId)
     .maybeSingle();
 
+  // ⚠️ .eq("tenant_id", ...) กัน id ของ tenant อื่นถูกลบข้ามฝั่ง
   const { error } = await supabase.from("sc_sales")
     .delete()
-    .eq("id", id);
+    .eq("id", id)
+    .eq("tenant_id", tenantId);
 
   if (error) {
     return { success: false, error: error.message };
@@ -212,10 +225,13 @@ export async function countDailySales(): Promise<number> {
   const profile = await requireProfile();
   requireModuleView(profile, "pos");
   const supabase = createAdminClient();
-  const { count } = await supabase.from("sc_sales").select("id", {
+  const tenantId = tenantFilter(profile);
+  let query = supabase.from("sc_sales").select("id", {
     count: "exact",
     head: true,
   });
+  if (tenantId) query = query.eq("tenant_id", tenantId);
+  const { count } = await query;
   return count ?? 0;
 }
 
@@ -223,22 +239,29 @@ export async function fetchRecentDailySales(limit: number = 300): Promise<DailyS
   const profile = await requireProfile();
   requireModuleView(profile, "pos");
   const supabase = createAdminClient();
+  const tenantId = tenantFilter(profile);
 
-  const { data: salesData, error: salesError } = await supabase.from("sc_sales")
+  let salesQuery = supabase.from("sc_sales")
     .select("*")
     .order("date", { ascending: false })
     .limit(limit);
+  if (tenantId) salesQuery = salesQuery.eq("tenant_id", tenantId);
+  const { data: salesData, error: salesError } = await salesQuery;
 
   if (salesError || !salesData) return [];
 
   // ดึงเฉพาะใบรับชำระของวันที่โหลดมาจริง — ของเดิม select ทั้งตาราง sc_payments
   // โดยไม่มี limit ซึ่งจะโตไม่มีเพดานไปเรื่อยๆ ตามจำนวนงวดที่เก็บเงินย้อนหลัง
+  // ⚠️ ต้องกรอง tenant_id ด้วย ไม่ใช่แค่ .in("sale_date", ...) — วันที่ไม่ใช่ค่าที่ผูกกับ
+  // tenant เดียว สองธุรกิจอาจมี "ยอดขายวันที่เดียวกัน" ได้ตามปกติ
   const loadedDates = [...new Set(salesData.map((s) => s.date))];
+  let paymentsQuery = supabase.from("sc_payments")
+    .select("*")
+    .in("sale_date", loadedDates)
+    .order("created_at", { ascending: false });
+  if (tenantId) paymentsQuery = paymentsQuery.eq("tenant_id", tenantId);
   const { data: paymentsData } = loadedDates.length
-    ? await supabase.from("sc_payments")
-        .select("*")
-        .in("sale_date", loadedDates)
-        .order("created_at", { ascending: false })
+    ? await paymentsQuery
     // ให้ชนิดตรงกับผลลัพธ์ของ query ด้านบน แทน any[] เพื่อให้ TypeScript ตรวจการใช้งานต่อได้จริง
     : { data: [] as Database["public"]["Tables"]["sc_payments"]["Row"][] };
 
@@ -318,6 +341,7 @@ export async function recordArPayment(data: {
   const profile = await requireProfile();
   requireModuleWrite(profile, "pos");
   const supabase = createAdminClient();
+  const tenantId = requireTenantId(profile);
 
   if (!data.sale_date || !data.received_date || Number(data.amount) <= 0) {
     return { success: false, error: "กรุณาระบุข้อมูลวันที่และจำนวนเงินให้ถูกต้อง" };
@@ -330,6 +354,7 @@ export async function recordArPayment(data: {
     pay_method: data.pay_method || "โอน",
     notes: data.notes || "",
     recorded_by: profile.display_name || profile.username || "Staff",
+    tenant_id: tenantId,
   };
 
   const { data: inserted, error: paymentError } = await supabase.from("sc_payments")
@@ -350,15 +375,19 @@ export async function recordArPayment(data: {
   });
 
   // Update sale status in sc_sales
+  // ⚠️ .eq("tenant_id", ...) จำเป็น ไม่ใช่แค่ .eq("date", ...) — วันที่ไม่ใช่ค่าที่ผูกกับ
+  // tenant เดียว ถ้าไม่กรอง อาจไปอัปเดตสถานะยอดขายของอีกธุรกิจที่บังเอิญขายวันเดียวกัน
   const { data: sale } = await supabase.from("sc_sales")
     .select("*")
     .eq("date", data.sale_date)
+    .eq("tenant_id", tenantId)
     .maybeSingle();
 
   if (sale) {
     const { data: allAr } = await supabase.from("sc_payments")
       .select("amount")
-      .eq("sale_date", data.sale_date);
+      .eq("sale_date", data.sale_date)
+      .eq("tenant_id", tenantId);
 
     const totalAr = (allAr || []).reduce((sum: number, p) => sum + Number(p.amount || 0), 0);
     const initialPaid = Number(
@@ -370,12 +399,14 @@ export async function recordArPayment(data: {
     const totalPaidAll = initialPaid + totalAr;
 
     const newStatus = totalPaidAll >= netRevenue ? "ชำระครบ" : "ค้างชำระ";
+    // sale.id มาจาก query ที่กรอง tenant_id แล้วข้างบน แต่ใส่ซ้ำอีกชั้นเป็น defense-in-depth
     await supabase.from("sc_sales")
       .update({
         payment_status: newStatus,
         last_updated: new Date().toISOString(),
       })
-      .eq("id", sale.id);
+      .eq("id", sale.id)
+      .eq("tenant_id", tenantId);
   }
 
   revalidatePath("/dashboard");
@@ -394,16 +425,20 @@ export async function deleteArPayment(paymentId: number, saleDate: string) {
   const profile = await requireProfile();
   requireModuleWrite(profile, "pos");
   const supabase = createAdminClient();
+  const tenantId = requireTenantId(profile);
 
   // อ่านใบรับชำระเก็บไว้ก่อนลบ — ยอดเงินที่หายต้องตรวจย้อนหลังได้
   const { data: doomed } = await supabase.from("sc_payments")
     .select("sale_date, received_date, amount, pay_method, notes, recorded_by")
     .eq("id", paymentId)
+    .eq("tenant_id", tenantId)
     .maybeSingle();
 
+  // ⚠️ .eq("tenant_id", ...) กัน id ของ tenant อื่นถูกลบข้ามฝั่ง
   const { error } = await supabase.from("sc_payments")
     .delete()
-    .eq("id", paymentId);
+    .eq("id", paymentId)
+    .eq("tenant_id", tenantId);
 
   if (error) {
     return { success: false, error: error.message };
@@ -422,12 +457,14 @@ export async function deleteArPayment(paymentId: number, saleDate: string) {
   const { data: sale } = await supabase.from("sc_sales")
     .select("*")
     .eq("date", saleDate)
+    .eq("tenant_id", tenantId)
     .maybeSingle();
 
   if (sale) {
     const { data: allAr } = await supabase.from("sc_payments")
       .select("amount")
-      .eq("sale_date", saleDate);
+      .eq("sale_date", saleDate)
+      .eq("tenant_id", tenantId);
 
     const totalAr = (allAr || []).reduce((sum: number, p) => sum + Number(p.amount || 0), 0);
     const initialPaid = Number(
@@ -444,7 +481,8 @@ export async function deleteArPayment(paymentId: number, saleDate: string) {
         payment_status: newStatus,
         last_updated: new Date().toISOString(),
       })
-      .eq("id", sale.id);
+      .eq("id", sale.id)
+      .eq("tenant_id", tenantId);
   }
 
   revalidatePath("/", "layout");

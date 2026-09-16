@@ -7,6 +7,7 @@ import { logAudit } from "@/lib/audit";
 import { calculateExpenseBreakdown, applyEntriesToBreakdown } from "@/lib/expense-totals";
 import { SUPPLY_CATEGORIES, sumStockPurchases, monthBounds } from "@/lib/stock-purchases";
 import { mirrorExpenseEntry, unmirrorExpenseEntry, mirrorPayslip } from "@/lib/expense-mirror";
+import { requireTenantId, tenantFilter } from "@/lib/tenant";
 
 /** เดือนปัจจุบันในรูปแบบ "MM/YYYY" ที่ตาราง sc_opex ใช้ทั้งไฟล์ */
 function currentMonthMY(): string {
@@ -118,12 +119,15 @@ export async function fetchAllExpensesData(timeRange: string = "this_month"): Pr
   const profile = await requireProfile();
   requireModuleView(profile, "expenses");
   const supabase = createAdminClient();
+  // ⚠️ ใช้ service_role — bypass RLS ทั้งหมด ต้องกรอง tenant_id เองทุก query ในไฟล์นี้
+  const tenantId = tenantFilter(profile);
 
   // Fetch all records from sc_opex
   // (ยังไม่ await ตรงนี้ — รวมไปยิงพร้อมกับ query อื่นด้านล่าง ดูคอมเมนต์ "ยิง query พร้อมกัน")
-  const opexQuery = supabase.from("sc_opex")
+  let opexQuery = supabase.from("sc_opex")
     .select("*")
     .order("id", { ascending: false });
+  if (tenantId) opexQuery = opexQuery.eq("tenant_id", tenantId);
 
   // Determine target month or all-time
   //
@@ -192,28 +196,34 @@ export async function fetchAllExpensesData(timeRange: string = "this_month"): Pr
   if (!isAllTime) {
     salesQuery = salesQuery.gte("date", `${targetSalesMonth}-01`).lte("date", `${targetSalesMonth}-31`);
   }
+  if (tenantId) salesQuery = salesQuery.eq("tenant_id", tenantId);
 
-  const rentalQuery = isAllTime
+  let rentalQuery = isAllTime
     ? null
     : supabase
         .from("sc_rental_records")
         .select("month, room_index, room_name, prev_meter, curr_meter, rent_amount, income_amount")
         .eq("month", targetMonthFilter)
         .order("room_index");
+  if (rentalQuery && tenantId) rentalQuery = rentalQuery.eq("tenant_id", tenantId);
 
   const stockBounds = isAllTime ? null : monthBounds(targetMonthFilter);
-  const stockQuery = stockBounds
+  let stockQuery = stockBounds
     ? supabase
         .from("inv_stock_transactions")
         .select("id, txn_type, status, corrects_txn_id, total_cost")
         .gte("transaction_date", stockBounds.gte)
         .lt("transaction_date", stockBounds.lt)
     : null;
+  if (stockQuery && tenantId) stockQuery = stockQuery.eq("tenant_id", tenantId);
+
+  let employeesQuery = supabase.from("sc_employees").select("*");
+  if (tenantId) employeesQuery = employeesQuery.eq("tenant_id", tenantId);
 
   const [opexRes, salesRes, employeeRes, rentalRes, stockRes] = await Promise.all([
     opexQuery,
     salesQuery,
-    supabase.from("sc_employees").select("*"),
+    employeesQuery,
     failSoft(rentalQuery, "อ่าน sc_rental_records"),
     failSoft(stockQuery, "เทียบกับ ledger คลังสินค้า"),
   ]);
@@ -291,6 +301,7 @@ export async function fetchAllExpensesData(timeRange: string = "this_month"): Pr
       const b = monthBounds(targetMonthFilter);
       if (b) entryQuery = entryQuery.gte("entry_date", b.gte).lt("entry_date", b.lt);
     }
+    if (tenantId) entryQuery = entryQuery.eq("tenant_id", tenantId);
     const { data: entryRows, error: entryError } = await entryQuery;
     if (entryError) {
       console.error("[expenses] อ่าน sc_expense_entries ไม่สำเร็จ ใช้ sc_opex แทน:", entryError.message);
@@ -698,6 +709,7 @@ export async function saveStaffProfileInfo(payload: {
   const profile = await requireProfile();
   requireModuleWrite(profile, "expenses");
   const supabase = createAdminClient();
+  const tenantId = requireTenantId(profile);
 
   let cleanKeyName = payload.employeeKeyName;
   if (cleanKeyName.includes("ธีรภัทร")) cleanKeyName = "นายธีรภัทร ทาแผ";
@@ -723,7 +735,8 @@ export async function saveStaffProfileInfo(payload: {
   // Delete existing profile entry
   await supabase.from("sc_opex")
     .delete()
-    .eq("key", key);
+    .eq("key", key)
+    .eq("tenant_id", tenantId);
 
   // Insert updated profile entry
   await supabase.from("sc_opex").insert({
@@ -735,12 +748,14 @@ export async function saveStaffProfileInfo(payload: {
     pay_method: "-",
     recorded_by: profile.display_name,
     last_updated: new Date().toISOString(),
+    tenant_id: tenantId,
   });
 
   // Also update or insert in sc_employees table
   const { data: existingEmp } = await supabase.from("sc_employees")
     .select("id")
     .ilike("name", `%${payload.nickname || cleanKeyName}%`)
+    .eq("tenant_id", tenantId)
     .maybeSingle();
 
   if (existingEmp) {
@@ -755,7 +770,8 @@ export async function saveStaffProfileInfo(payload: {
         sso_exempt: payload.employmentType === "probation_daily" || !!payload.ssoExempt,
         last_updated: new Date().toISOString(),
       })
-      .eq("id", existingEmp.id);
+      .eq("id", existingEmp.id)
+      .eq("tenant_id", tenantId);
   }
 
   await logAudit({
@@ -802,6 +818,7 @@ export async function createStaffMember(payload: {
   const profile = await requireProfile();
   requireModuleWrite(profile, "expenses");
   const supabase = createAdminClient();
+  const tenantId = requireTenantId(profile);
 
   if (!payload.fullName.trim()) {
     return { error: "กรุณาระบุชื่อพนักงาน" };
@@ -819,6 +836,7 @@ export async function createStaffMember(payload: {
     comm_rate: 0,
     sso_exempt: payload.employmentType === "probation_daily" || !!payload.ssoExempt,
     last_updated: new Date().toISOString(),
+    tenant_id: tenantId,
   });
 
   if (empError) {
@@ -849,6 +867,7 @@ export async function createStaffMember(payload: {
     pay_method: "-",
     recorded_by: profile.display_name,
     last_updated: new Date().toISOString(),
+    tenant_id: tenantId,
   });
 
   await logAudit({
@@ -895,6 +914,7 @@ export async function saveStaffPayrollAdjustment(payload: {
   const profile = await requireProfile();
   requireModuleWrite(profile, "expenses");
   const supabase = createAdminClient();
+  const tenantId = requireTenantId(profile);
 
   const m = payload.month;
   let cleanKeyName = payload.employeeName;
@@ -924,7 +944,8 @@ export async function saveStaffPayrollAdjustment(payload: {
     await supabase.from("sc_opex")
       .delete()
       .eq("month", m)
-      .eq("key", item.key);
+      .eq("key", item.key)
+      .eq("tenant_id", tenantId);
 
     await supabase.from("sc_opex").insert({
       month: m,
@@ -935,6 +956,7 @@ export async function saveStaffPayrollAdjustment(payload: {
       pay_method: payload.payMethod || "บัญชีร้าน",
       recorded_by: profile.display_name,
       last_updated: new Date().toISOString(),
+      tenant_id: tenantId,
     });
   }
 
@@ -981,6 +1003,7 @@ export async function saveStaffPayrollAdjustment(payload: {
     netPay: payload.netPay,
     deductions: deductItems,
     createdBy: profile.id,
+    tenantId,
   });
 
   revalidatePath("/", "layout");
@@ -994,6 +1017,7 @@ export async function addExpense(
   const profile = await requireProfile();
   requireModuleWrite(profile, "expenses");
   const supabase = createAdminClient();
+  const tenantId = requireTenantId(profile);
 
   const title = (formData.get("title") as string)?.trim();
   const category = (formData.get("category") as string)?.trim() || "ค่าดำเนินการ";
@@ -1018,6 +1042,7 @@ export async function addExpense(
       recorded_by: profile.display_name,
       key: expenseKey,
       last_updated: new Date().toISOString(),
+      tenant_id: tenantId,
     })
     .select("id")
     .maybeSingle();
@@ -1046,6 +1071,7 @@ export async function addExpense(
       title,
       payMethod,
       createdBy: profile.id,
+      tenantId,
     });
   }
 
@@ -1057,6 +1083,7 @@ export async function deleteExpense(id: string | number) {
   const profile = await requireProfile();
   requireModuleWrite(profile, "expenses");
   const supabase = createAdminClient();
+  const tenantId = requireTenantId(profile);
 
   // อ่านรายการเก็บไว้ก่อนลบ — ยอดค่าใช้จ่ายที่หายไปต้องตรวจย้อนหลังได้
   // sc_opex.id เป็น bigint — แปลงเป็นตัวเลขก่อนเสมอ (ฝั่งเรียกส่งมาเป็น string ได้)
@@ -1069,11 +1096,14 @@ export async function deleteExpense(id: string | number) {
   const { data: doomed } = await supabase.from("sc_opex")
     .select("month, category, key, name, amount, pay_method, recorded_by")
     .eq("id", numericId)
+    .eq("tenant_id", tenantId)
     .maybeSingle();
 
+  // ⚠️ .eq("tenant_id", ...) กัน id ของ tenant อื่นถูกลบข้ามฝั่ง
   const { error } = await supabase.from("sc_opex")
     .delete()
-    .eq("id", numericId);
+    .eq("id", numericId)
+    .eq("tenant_id", tenantId);
 
   if (error) {
     throw new Error(`ไม่สามารถลบรายการได้: ${error.message}`);
@@ -1113,11 +1143,13 @@ export async function deleteMiscExpenseItem(rowId: number, itemIndex: number) {
   const profile = await requireProfile();
   requireModuleWrite(profile, "expenses");
   const supabase = createAdminClient();
+  const tenantId = requireTenantId(profile);
 
   const { data: row, error: fetchError } = await supabase.from("sc_opex")
     .select("id, month, name")
     .eq("id", rowId)
     .eq("key", "misc_items_json")
+    .eq("tenant_id", tenantId)
     .maybeSingle();
 
   if (fetchError || !row) {
@@ -1143,7 +1175,8 @@ export async function deleteMiscExpenseItem(rowId: number, itemIndex: number) {
 
   const { error: updateItemsError } = await supabase.from("sc_opex")
     .update({ name: JSON.stringify(nextItems), last_updated: new Date().toISOString() })
-    .eq("id", rowId);
+    .eq("id", rowId)
+    .eq("tenant_id", tenantId);
 
   if (updateItemsError) {
     throw new Error(`ลบรายการไม่สำเร็จ: ${updateItemsError.message}`);
@@ -1153,7 +1186,8 @@ export async function deleteMiscExpenseItem(rowId: number, itemIndex: number) {
   await supabase.from("sc_opex")
     .update({ amount: nextTotal, last_updated: new Date().toISOString() })
     .eq("month", row.month)
-    .eq("key", "misc");
+    .eq("key", "misc")
+    .eq("tenant_id", tenantId);
 
   await logAudit({
     action: "DELETE",

@@ -1,11 +1,18 @@
 "use server";
 
+// ⚠️ [multi-tenant] เฉพาะจุดที่แตะ sc_settings (dbd_company_registry) ในไฟล์นี้ถูกกรอง
+// tenant_id แล้ว — แต่ตาราง ext_documents/ext_document_items/ext_contacts ที่เหลือ (โมดูล
+// SmartAcc บิล/ภาษี) **ยังไม่มีคอลัมน์ tenant_id เลย** อยู่ในกลุ่ม ext_* ที่ 0028 จงใจเลื่อนไว้
+// ⇒ fetchSmartAccDocuments/createSmartAccDocument/convertDocument/fetchTaxFilingData ฯลฯ
+// ยังไม่กรอง tenant ที่จุดอื่น **ห้ามเปิดหน้า /invoicing หรือ /tax-filing ให้ tenant ที่สองใช้
+// ก่อนจะกลับมาเพิ่ม tenant_id ให้ ext_* ทั้งชุดก่อน**
 import { revalidatePath } from "next/cache";
 import { requireProfile, requireModuleView, requireModuleWrite } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { generateDocumentNumber, type DocumentType } from "@/lib/smartacc/numbering";
 import { generatePromptPayPayload } from "@/lib/smartacc/promptpay";
 import { withId, text } from "@/lib/db-rows";
+import { requireTenantId, tenantFilter } from "@/lib/tenant";
 
 /** หนึ่งรายการในสมุดที่อยู่ลูกค้า (sc_settings.dbd_company_registry) */
 export type DbdRegistryEntry = {
@@ -189,11 +196,15 @@ export async function lookupDbdCompany(taxIdOrKeyword: string): Promise<DbdCompa
   ];
 
   // 3. Search in persistent sc_settings registry
+  // ⚠️ สมุดที่อยู่ลูกค้าเป็นข้อมูลต่อ tenant (ลูกค้าที่เคยออกเอกสารด้วยกัน) ต้องกรอง tenant_id
+  // เสมอ ไม่งั้น tenant อื่นจะเห็น/ค้นเจอรายชื่อลูกค้าของ tenant นี้ได้ผ่านช่องค้นหาเดียวกัน
+  const dbdTenantId = tenantFilter(profile);
   try {
-    const { data: regSetting } = await supabase.from("sc_settings")
+    let regQuery = supabase.from("sc_settings")
       .select("value")
-      .eq("key", "dbd_company_registry")
-      .maybeSingle();
+      .eq("key", "dbd_company_registry");
+    if (dbdTenantId) regQuery = regQuery.eq("tenant_id", dbdTenantId);
+    const { data: regSetting } = await regQuery.maybeSingle();
 
     if (regSetting?.value) {
       const dynamicList: Array<{
@@ -388,9 +399,12 @@ export async function createSmartAccDocument(payload: CreateDocumentPayload) {
   const contactId: string | null = null;
   if (payload.companyName) {
     try {
+      // ⚠️ ต้องกรอง/ระบุ tenant_id เสมอ — สมุดที่อยู่ลูกค้าเป็นข้อมูลต่อ tenant ไม่ใช่ของกลาง
+      const docTenantId = requireTenantId(profile);
       const { data: regSetting } = await supabase.from("sc_settings")
         .select("value")
         .eq("key", "dbd_company_registry")
+        .eq("tenant_id", docTenantId)
         .maybeSingle();
 
       // สมุดที่อยู่ลูกค้าที่เก็บเป็น JSON ก้อนเดียวใน sc_settings (ดูหัวข้อ SmartAcc ข้อ 4 ใน CLAUDE.md)
@@ -418,11 +432,15 @@ export async function createSmartAccDocument(payload: CreateDocumentPayload) {
         currentRegistry.unshift(newEntry);
       }
 
-      await supabase.from("sc_settings").upsert({
-        key: "dbd_company_registry",
-        value: JSON.stringify(currentRegistry.slice(0, 100)),
-        updated_at: new Date().toISOString(),
-      });
+      await supabase.from("sc_settings").upsert(
+        {
+          key: "dbd_company_registry",
+          value: JSON.stringify(currentRegistry.slice(0, 100)),
+          tenant_id: docTenantId,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "tenant_id,key" }
+      );
     } catch (err) {
       // เอกสารหลักสร้างสำเร็จไปแล้ว แค่การ "จำลูกค้าไว้ค้นครั้งถัดไป" ล้มเหลว — ไม่ทำให้ทั้ง
       // ฟังก์ชันพัง แต่ log ไว้ ไม่งั้นจะดูเหมือนฟีเจอร์จำลูกค้าใช้งานได้ทั้งที่จริงๆ เขียนไม่ลง

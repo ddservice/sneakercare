@@ -5,6 +5,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { requireProfile, requireModuleWrite } from "@/lib/auth";
 import { getSelectedBranchId } from "@/lib/branch";
 import { logAudit } from "@/lib/audit";
+import { requireTenantId } from "@/lib/tenant";
 
 export type InventoryItemInput = {
   id?: string;
@@ -33,10 +34,12 @@ export async function toggleItemAlertMute(itemId: string, muted: boolean) {
   requireModuleWrite(profile, "inventory");
   const branchId = await getSelectedBranchId(profile);
   const supabase = createAdminClient();
+  const tenantId = requireTenantId(profile);
 
   let q = supabase.from("item_stock")
     .update({ alert_muted: muted })
-    .eq("item_id", itemId);
+    .eq("item_id", itemId)
+    .eq("tenant_id", tenantId);
   if (branchId) q = q.eq("branch_id", branchId);
 
   const { error } = await q;
@@ -66,12 +69,14 @@ export async function updateInventoryItem(data: InventoryItemInput) {
   requireModuleWrite(profile, "inventory");
   const branchId = await getSelectedBranchId(profile);
   const supabase = createAdminClient();
+  const tenantId = requireTenantId(profile);
 
   if (!data.id) {
     return { success: false, error: "ไม่พบรหัสสินค้าที่ต้องการแก้ไข" };
   }
 
   // 1. Update items table
+  // ⚠️ .eq("tenant_id", ...) กัน id ของ tenant อื่นถูกแก้ข้ามฝั่ง (ใช้ service_role bypass RLS)
   const { error: itemError } = await supabase.from("items")
     .update({
       name: data.name.trim(),
@@ -80,7 +85,8 @@ export async function updateInventoryItem(data: InventoryItemInput) {
       purchase_unit: data.purchase_unit?.trim() || data.base_unit.trim() || "ชิ้น",
       default_min_stock_level: Number(data.min_stock_level || 0),
     })
-    .eq("id", data.id);
+    .eq("id", data.id)
+    .eq("tenant_id", tenantId);
 
   if (itemError) {
     return { success: false, error: "ไม่สามารถอัปเดตข้อมูลสินค้าได้: " + itemError.message };
@@ -89,7 +95,8 @@ export async function updateInventoryItem(data: InventoryItemInput) {
   // 2. Fetch old stock to calculate delta for audit
   let qStock = supabase.from("item_stock")
     .select("*")
-    .eq("item_id", data.id);
+    .eq("item_id", data.id)
+    .eq("tenant_id", tenantId);
   if (branchId) qStock = qStock.eq("branch_id", branchId);
   const { data: existingStock } = await qStock.maybeSingle();
 
@@ -110,7 +117,8 @@ export async function updateInventoryItem(data: InventoryItemInput) {
         // การใส่มาทำให้ update ล้มทั้ง statement = แก้จำนวนสต๊อกจากหน้าคลังไม่สำเร็จมาตลอด
         updated_at: new Date().toISOString(),
       })
-      .eq("id", existingStock.id);
+      .eq("id", existingStock.id)
+      .eq("tenant_id", tenantId);
   } else {
     // Insert new stock row
     await supabase.from("item_stock").insert({
@@ -120,6 +128,7 @@ export async function updateInventoryItem(data: InventoryItemInput) {
       avg_unit_cost: newCost,
       min_stock_level: newMin,
       updated_at: new Date().toISOString(),
+      tenant_id: tenantId,
     });
   }
 
@@ -139,6 +148,7 @@ export async function updateInventoryItem(data: InventoryItemInput) {
       reference_note: `แก้ไขโดย: ${profile.display_name || profile.username}`,
       status: "approved",
       performed_by: profile.id,
+      tenant_id: tenantId,
     });
   }
 
@@ -158,6 +168,7 @@ export async function createInventoryItem(data: InventoryItemInput) {
   requireModuleWrite(profile, "inventory");
   const branchId = await getSelectedBranchId(profile);
   const supabase = createAdminClient();
+  const tenantId = requireTenantId(profile);
 
   // 1. Insert item
   const { data: newItem, error: itemError } = await supabase.from("items")
@@ -169,6 +180,7 @@ export async function createInventoryItem(data: InventoryItemInput) {
       purchase_unit: data.purchase_unit?.trim() || data.base_unit.trim() || "ชิ้น",
       default_min_stock_level: Number(data.min_stock_level || 1),
       is_active: true,
+      tenant_id: tenantId,
     })
     .select()
     .single();
@@ -187,6 +199,7 @@ export async function createInventoryItem(data: InventoryItemInput) {
     current_qty: initialQty,
     avg_unit_cost: unitCost,
     min_stock_level: Number(data.min_stock_level || 1),
+    tenant_id: tenantId,
   });
 
   // 3. Record Initial Stock In transaction if initial qty > 0
@@ -203,6 +216,7 @@ export async function createInventoryItem(data: InventoryItemInput) {
       reference_note: `สร้างโดย: ${profile.display_name || profile.username}`,
       status: "approved",
       performed_by: profile.id,
+      tenant_id: tenantId,
     });
   }
 
@@ -221,17 +235,21 @@ export async function deleteInventoryItem(itemId: string) {
   const profile = await requireProfile();
   requireModuleWrite(profile, "inventory");
   const supabase = createAdminClient();
+  const tenantId = requireTenantId(profile);
 
   // Try delete if no foreign key constraints, else deactivate
+  // ⚠️ .eq("tenant_id", ...) กัน id ของ tenant อื่นถูกลบ/ปิดใช้งานข้ามฝั่ง
   const { error } = await supabase.from("items")
     .delete()
-    .eq("id", itemId);
+    .eq("id", itemId)
+    .eq("tenant_id", tenantId);
 
   if (error) {
     // If foreign key constraint exists, deactivate it
     await supabase.from("items")
       .update({ is_active: false })
-      .eq("id", itemId);
+      .eq("id", itemId)
+      .eq("tenant_id", tenantId);
   }
 
   revalidatePath("/inventory");

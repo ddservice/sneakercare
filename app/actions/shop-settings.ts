@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { requireProfile, requireAdmin } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { logAudit } from "@/lib/audit";
+import { requireTenantId, tenantFilter } from "@/lib/tenant";
 
 export type ShopProfile = {
   name: string;
@@ -18,10 +19,18 @@ export async function fetchShopProfile(): Promise<ShopProfile> {
   // ⚠️ Server Action = endpoint สาธารณะ ใครก็ยิงเข้ามาตรงๆ ได้ ไม่ได้ถูกกันด้วยการ์ดของหน้าเว็บ
   // ข้อมูลนี้ไปอยู่บนหัวเอกสารที่พิมพ์ให้ลูกค้าอยู่แล้วจึงไม่ใช่ความลับ แต่ก็ไม่มีเหตุผลให้คนนอก
   // ที่ไม่ได้ล็อกอินเรียกดูได้ · ทุกที่ที่เรียกฟังก์ชันนี้เป็นหน้าใน (app) ซึ่งล็อกอินแล้วทั้งหมด
-  await requireProfile();
+  const user = await requireProfile();
   const supabase = createAdminClient();
 
-  const { data } = await supabase.from("sc_settings").select("key, value");
+  // ⚠️ [แก้บั๊กจริง 2026-09-16] เดิม query ทั้งตารางไม่กรอง tenant_id เลย — ใช้ createAdminClient()
+  // (service_role) ซึ่ง bypass RLS ทั้งหมด ต่อให้ migration 0031 บังคับ RLS ถูกต้องแล้วก็ไม่มีผล
+  // ที่นี่ ⇒ ก่อนแก้ tenant อื่นจะอ่าน/เขียนทับชื่อร้าน/เลขผู้เสียภาษี/PromptPay ของ tenant นี้ได้
+  // ตรงๆ ผ่านหน้า /settings ปกติ (ต้องรอ migration 0032 ที่เปลี่ยน sc_settings ให้เป็น
+  // composite key (tenant_id, key) ก่อน ไม่งั้นสอง tenant ชนกันที่ key ชื่อเดียวกัน)
+  const tenantId = tenantFilter(user);
+  let query = supabase.from("sc_settings").select("key, value");
+  if (tenantId) query = query.eq("tenant_id", tenantId);
+  const { data } = await query;
 
   const settingsMap: Record<string, string> = {};
   (data || []).forEach((row) => {
@@ -29,18 +38,19 @@ export async function fetchShopProfile(): Promise<ShopProfile> {
   });
 
   return {
-    name: settingsMap["name"] || "บริษัท รวยรับทรัพย์168 จำกัด",
-    phone: settingsMap["phone"] || "052010120",
-    address: settingsMap["address"] || "552/4 ถ.เชียงใหม่-ลำพูน ต.หนองหอย อ.เมืองเชียงใหม่ จ.เชียงใหม่ 50000",
-    taxId: settingsMap["tax_id"] || "0505568021002",
-    logoUrl: settingsMap["logo_url"] || "https://mdlxogfkpwejnqpzhmoy.supabase.co/storage/v1/object/public/branding/LOGO.jpeg",
-    promptPayId: settingsMap["promptpay_id"] || settingsMap["tax_id"] || "0505568021002",
+    name: settingsMap["name"] || "ยังไม่ได้ตั้งค่าชื่อกิจการ — ไปที่ /settings",
+    phone: settingsMap["phone"] || "",
+    address: settingsMap["address"] || "-",
+    taxId: settingsMap["tax_id"] || "-",
+    logoUrl: settingsMap["logo_url"] || "",
+    promptPayId: settingsMap["promptpay_id"] || settingsMap["tax_id"] || "",
   };
 }
 
 export async function updateShopProfile(profile: Partial<ShopProfile>) {
   const user = await requireProfile();
   requireAdmin(user);
+  const tenantId = requireTenantId(user);
 
   const supabase = createAdminClient();
 
@@ -54,9 +64,11 @@ export async function updateShopProfile(profile: Partial<ShopProfile>) {
   if (profile.promptPayId !== undefined) updates.push({ key: "promptpay_id", value: profile.promptPayId });
 
   for (const item of updates) {
+    // onConflict ต้องระบุ (tenant_id, key) คู่กันเสมอหลัง 0032 — ไม่ใช่ key เดี่ยวเหมือนเดิม
+    // ไม่งั้น upsert จะชนกับแถวของ tenant อื่นที่ใช้ key ชื่อเดียวกัน หรือสร้างแถวซ้ำโดยไม่ตั้งใจ
     await supabase.from("sc_settings").upsert(
-      { key: item.key, value: item.value, updated_at: new Date().toISOString() },
-      { onConflict: "key" }
+      { key: item.key, value: item.value, tenant_id: tenantId, updated_at: new Date().toISOString() },
+      { onConflict: "tenant_id,key" }
     );
   }
 
@@ -86,6 +98,9 @@ export async function updateShopProfile(profile: Partial<ShopProfile>) {
 // ไม่ export ค่าคงที่: ไฟล์ "use server" export ได้เฉพาะ async function เท่านั้น
 const BACKUP_HEARTBEAT_KEY = "backup_success_notify";
 
+// ⚠️ ค่านี้ *ไม่* กรองด้วย tenant_id โดยตั้งใจ — เป็นสวิตช์ระดับแพลตฟอร์ม (แจ้งเตือน backup
+// รายวันของ VPS ทั้งเครื่อง ควบคุมโดยผู้ดูแลแพลตฟอร์ม ไม่ใช่ข้อมูลของร้านใดร้านหนึ่ง) migration
+// 0032 ย้ายแถวนี้เป็น tenant_id = null ไว้แล้วเพื่อสื่อความหมายนี้ตรงๆ ในฐานข้อมูล
 export async function fetchBackupHeartbeatEnabled(): Promise<boolean> {
   await requireProfile();
   const supabase = createAdminClient();
@@ -93,6 +108,7 @@ export async function fetchBackupHeartbeatEnabled(): Promise<boolean> {
     .from("sc_settings")
     .select("value")
     .eq("key", BACKUP_HEARTBEAT_KEY)
+    .is("tenant_id", null)
     .maybeSingle();
 
   // ไม่มีแถว = ยังไม่เคยตั้งค่า → ค่าเริ่มต้นคือ "เปิด" (พฤติกรรมเดิมก่อนมีสวิตช์นี้)
@@ -105,9 +121,11 @@ export async function setBackupHeartbeatEnabled(enabled: boolean) {
   requireAdmin(user);
 
   const supabase = createAdminClient();
+  // onConflict ต้องเป็น "tenant_id,key" คู่กันตั้งแต่ 0032 (key เดี่ยวไม่ใช่ unique constraint
+  // อีกต่อไป) และต้องส่ง tenant_id: null ตรงๆ ในนี้ด้วย เพราะเป็นคีย์ระดับแพลตฟอร์ม
   const { error } = await supabase.from("sc_settings").upsert(
-    { key: BACKUP_HEARTBEAT_KEY, value: enabled ? "true" : "false", updated_at: new Date().toISOString() },
-    { onConflict: "key" }
+    { key: BACKUP_HEARTBEAT_KEY, value: enabled ? "true" : "false", tenant_id: null, updated_at: new Date().toISOString() },
+    { onConflict: "tenant_id,key" }
   );
 
   if (error) return { error: `บันทึกไม่สำเร็จ: ${error.message}` };
