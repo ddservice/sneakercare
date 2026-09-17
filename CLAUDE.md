@@ -2,6 +2,72 @@
 
 คำแนะนำสำหรับ Claude Code เมื่อทำงานในโปรเจกต์นี้ — ระบบบริหารจัดการคลังสินค้าสำหรับร้านบริการทำความสะอาด/ซ่อมแซมรองเท้า
 
+## ✅ super_admin ใช้งานจริงได้ครบแล้ว — เลือกสาขาข้าม tenant ได้, จัดการผู้ใช้ข้าม tenant ได้ (2026-09-17)
+
+เจ้าของทดสอบบัญชี super_admin เองหลังสร้างเสร็จ (ดูหัวข้อ "/roster hardcode" ด้านล่างสำหรับที่มา)
+แล้วเจอ 2 อาการจริง: (1) เลือกสาขาของ LUXSU (tenant ที่สอง) ไม่ได้ (2) เข้าเมนูจัดการผู้ใช้แล้ว
+หา `waraphat.wpk@gmail.com` ไม่เจอ — พร้อมย้ำว่า **admin ปกติต้องยังจัดการได้แค่ tenant ตัวเองเท่านั้น
+เหมือนเดิม ห้ามเปลี่ยน**
+
+**สาเหตุ (1):** `lib/branch.ts` เช็คแค่ `role !== "admin"` ⇒ `super_admin` (ซึ่ง `branch_id`/
+`tenant_id` เป็น `null` เสมอโดยตั้งใจ เพราะไม่ผูกกับ tenant ไหนเลย) ตกไปอยู่กลุ่มเดียวกับ
+staff/co_admin ที่ "ต้องมี branch_id ตายตัว" ⇒ ได้ `null` กลับไปตลอด ไม่มีทางเลือกสาขาผ่านคุกกี้ได้
+แก้ `getSelectedBranchId()`/`assertWritableBranch()` ให้เช็ค `role !== "admin" && role !== "super_admin"`
+แทน และเปิด `BranchPicker` ให้ super_admin เห็นด้วย (`app/(app)/layout.tsx`) — สาขาที่แสดงต่อท้าย
+ด้วยชื่อ tenant เจ้าของ (`SneakerCare — LUXSU`) เพราะสองสาขาชื่อซ้ำกันได้ (ทั้ง tenant เดิมและ
+LUXSU ตั้งชื่อสาขาว่า "SneakerCare" เหมือนกัน)
+
+**พบเพิ่มระหว่างแก้ (ไม่ได้อยู่ในสิ่งที่เจ้าของรายงาน): badge แจ้งเตือนสต๊อกต่ำที่หัวเว็บไม่กรอง
+tenant เลย** ตอน "ดูทุกสาขา" (ค่าเริ่มต้น/สถานะที่พบบ่อยที่สุด) — ใช้ `createAdminClient()`
+(service_role, ข้าม RLS) ไม่มี WHERE tenant เลย ⇒ ถ้ามีมากกว่า 1 tenant ที่มีข้อมูลจริง badge จะ
+นับรวมของทุก tenant ปนกัน แก้ให้กรองด้วย tenant ของผู้เรียกเฉพาะ admin ปกติ (super_admin ยังเห็น
+ภาพรวมข้ามทุก tenant ต่อไปตามที่ควรเป็นสำหรับมุมมองระดับแพลตฟอร์ม)
+
+**🔴 พบบั๊กใหญ่กว่าที่คิดระหว่างพิสูจน์ว่าเลือกสาขาแล้วใช้งานได้จริง — ไม่ใช่แค่ UI ที่พังก่อนหน้า:**
+`/dashboard` (หน้าแรกที่ทุกคนเห็น) query `sc_sales`/`sc_opex`/`sc_payments`/`service_orders`/
+`items`/`sc_expense_entries`/`v_low_stock` ผ่าน session client **โดยไม่กรอง tenant/branch เอง
+เลย พึ่ง RLS อย่างเดียว** — ใช้ได้ปกติกับ admin ทั่วไป (RLS บังคับเห็นแค่ tenant ตัวเองอยู่แล้ว
+ไม่ว่าจะเลือกสาขาไหน) **แต่ RLS ของ super_admin อนุญาตให้เห็นทุก tenant เสมอโดยไม่สนใจ cookie
+สาขาที่เลือก** ⇒ เลือกสาขา LUXSU ในตัวเลือกหัวเว็บแล้ว หน้า dashboard ยังโชว์ตัวเลขของ tenant #1
+เหมือนเดิมทุกประการ (พิสูจน์กับ production จริง: `sc_sales` ของ LUXSU มี **0 แถว** แต่ dashboard
+ยังโชว์ ฿48,534.86 ของ tenant #1 อยู่ดีตอนเลือก LUXSU) แก้โดยเพิ่มเงื่อนไข **เฉพาะ super_admin
+ที่เลือกสาขาใดสาขาหนึ่งไว้ (ไม่ใช่ "ดูทุกสาขา")** ให้กรองทุก query ด้วย tenant_id ของสาขานั้น
+(`v_low_stock` ไม่มีคอลัมน์ tenant_id เพราะเป็น view join item_stock/items — กรองผ่าน branch_id
+ของทุกสาขาใน tenant นั้นแทน เหมือนวิธีที่ใช้กับ badge สต๊อกต่ำ) ไม่เลือกสาขา = ยังเห็นภาพรวม
+ข้ามทุก tenant เหมือนเดิม (ตรงกับหลักการเดียวกับ badge) **admin/co-admin/staff ปกติไม่กระทบเลย**
+
+**⚠️ ช่องโหว่ระดับเดียวกันน่าจะมีอยู่ในหน้าอื่นที่ใช้ pattern `tenantFilter(profile)`/
+`requireTenantId(profile)` ผ่าน service_role เหมือนกัน** (grep เจอ 9 ไฟล์: `roster.ts`,
+`users.ts`, `expenses.ts`, `smartacc-expenses.ts`, `smartacc-documents.ts`, `inventory.ts`,
+`import-export.ts`, `daily-sales.ts`, `analytics.ts`) — `tenantFilter()` คืน `null` (= ไม่กรอง)
+ให้ super_admin เสมอโดยไม่สนใจสาขาที่เลือกไว้ผ่านคุกกี้เลย เหมือนที่ `/dashboard` เคยเป็น
+**ยังไม่ได้แก้ทุกไฟล์** (`/dashboard` แก้แล้วเพราะเป็นหน้าแรกที่ทดสอบเจอจริง) — ก่อนจะใช้
+super_admin ดู `/pos`, `/statistics`, `/reports`, `/expenses`, `/inventory`, `/invoicing`,
+`/tax-filing` ของ tenant ที่สองจริงจัง ต้องไล่แก้ให้ครบก่อน (รูปแบบเดียวกับที่ `/dashboard` ใช้:
+ถ้า super_admin เลือกสาขาไว้ → หา tenant ของสาขานั้น → เติม `.eq("tenant_id", ...)` ในทุก query
+ที่พึ่ง `tenantFilter()`/RLS อย่างเดียว)
+
+**สาเหตุ (2) — ไม่ใช่บั๊กข้อมูล เป็นช่องว่างการแสดงผล:** `/admin/users` ไม่เคยแสดงคอลัมน์อีเมลเลย
+ตั้งแต่สร้างมา (`profiles` ไม่มีคอลัมน์ email — อีเมลอยู่ใน Supabase Auth แยกต่างหาก) บัญชีของ
+waraphat มีอยู่จริงในระบบ (เห็นได้ผ่าน RLS ปกติ ตรวจแล้ว) แค่แสดงเป็น "Admin LUXSU" / `luxsu_admin`
+ไม่มีอีเมลให้เทียบ แก้โดยเพิ่มคอลัมน์ "อีเมล" ใน `app/(app)/admin/users/page.tsx` — ดึงจาก
+`admin.auth.admin.listUsers()` (ต้อง service_role) แล้ว join ด้วย `id` เข้ากับแถว `profiles`
+ที่ RLS กรองมาให้แล้ว (ไม่รั่วอีเมลข้าม tenant เพราะ join กับ id ที่กรองมาแล้วเท่านั้น ไม่ได้
+เอา listUsers() ทั้งก้อนมาแสดง)
+
+**เพิ่มด้วย: `app/actions/users.ts`'s `sendPasswordReset()`/`deleteUser()` เรียก
+`requireTenantId(profile)` ซึ่ง throw ทันทีถ้าไม่มี tenant (กรณี super_admin)** — กดปุ่ม
+"ส่งลิงก์ตั้งรหัสใหม่"/"ลบ" บนแถวของผู้ใช้ tenant ไหนก็ตามจะพังทันทีถ้าทำในฐานะ super_admin
+แก้ให้ข้ามการเช็ค tenant-match เฉพาะ `role === "super_admin"` เท่านั้น (ยังคงบังคับ tenant-match
+เข้มงวดเหมือนเดิมทุกประการสำหรับ admin ปกติ ตามที่เจ้าของย้ำ) — `inviteUser()` ยังต้องมี tenant
+เสมอ (ยังไม่มี UI ให้ super_admin เลือกว่าจะเชิญเข้า tenant ไหน) จึงตอบ error สุภาพแทนที่จะ throw
+
+**ทดสอบจริงผ่าน browser กับ production หลัง deploy:** login ด้วยบัญชี super_admin จริง →
+เลือกสาขา LUXSU จาก dropdown ได้จริง (แสดงชื่อ tenant กำกับถูกต้อง) → `/dashboard` เปลี่ยนเป็น
+฿0.00 ตามจริง (LUXSU ยังไม่มียอดขาย) → สลับกลับไป tenant เดิม → ตัวเลขกลับมาถูกต้องเหมือนเดิม →
+`/admin/users` เห็นอีเมลครบทุกแถวรวม `waraphat.wpk@gmail.com` → กด "ส่งลิงก์ตั้งรหัสใหม่" บนแถว
+ของ LUXSU admin (คนละ tenant กับ super_admin) สำเร็จ ไม่มี error
+
 ## 🔴🔴 [แก้ช่องโหว่จริงแล้ว] /roster hardcode ชื่อพนักงาน + /expenses seed เลขบัตร/บัญชีข้าม tenant (2026-09-17)
 
 เจ้าของขอเปิด tenant ที่สอง (LUXSU — สาขา "SneakerCare" นิติบุคคลใหม่ ไม่ใช่ของเดิม) พร้อมฟีเจอร์
