@@ -272,46 +272,19 @@ export async function fetchCatalogItems(): Promise<CatalogItem[]> {
   const profile = await requireProfile();
   requireModuleView(profile, "invoicing");
   const supabase = createAdminClient();
+  const catalogTenantId = await tenantFilter(profile);
 
-  const [servicesRes, itemsRes] = await Promise.all([
-    supabase.from("services").select("id, name, category, base_price").eq("is_active", true),
-    supabase.from("items").select("id, name, category, base_unit"),
-  ]);
+  let servicesQuery = supabase.from("services").select("id, name, category, base_price").eq("is_active", true);
+  let itemsQuery = supabase.from("items").select("id, name, category, base_unit");
+  if (catalogTenantId) {
+    servicesQuery = servicesQuery.eq("tenant_id", catalogTenantId);
+    itemsQuery = itemsQuery.eq("tenant_id", catalogTenantId);
+  }
 
-  const catalog: CatalogItem[] = [
-    {
-      id: "pkg_s",
-      name: "Package S — ทำความสะอาดพื้นฐาน (Basic Clean)",
-      category: "package",
-      price: 200,
-      unit: "คู่",
-      source: "service",
-    },
-    {
-      id: "pkg_m",
-      name: "Package M — ทำความสะอาดมาตรฐาน (Standard Clean)",
-      category: "package",
-      price: 400,
-      unit: "คู่",
-      source: "service",
-    },
-    {
-      id: "pkg_l",
-      name: "Package L — สปาแบบพรีเมียม (Premium Spa)",
-      category: "package",
-      price: 600,
-      unit: "คู่",
-      source: "service",
-    },
-    {
-      id: "pkg_xl",
-      name: "Package XL — บูรณะฟูลเซ็ตครบวงจร (Full Restoration)",
-      category: "package",
-      price: 800,
-      unit: "คู่",
-      source: "service",
-    },
-  ];
+  const [servicesRes, itemsRes] = await Promise.all([servicesQuery, itemsQuery]);
+
+  // ไม่ใส่แพ็กเกจ S/M/L/XL ของสาขาแรกเป็นค่าเริ่มต้น — แต่ละกิจการใช้บริการที่ตั้งเองเท่านั้น
+  const catalog: CatalogItem[] = [];
 
   if (servicesRes.data) {
     servicesRes.data.forEach((s) => {
@@ -320,7 +293,7 @@ export async function fetchCatalogItems(): Promise<CatalogItem[]> {
         name: s.name,
         category: s.category || "treatment",
         price: Number(s.base_price || 0),
-        unit: "คู่/งาน",
+        unit: "งาน",
         source: "service",
       });
     });
@@ -406,8 +379,53 @@ export async function createSmartAccDocument(payload: CreateDocumentPayload) {
     promptpayPayload = generatePromptPayPayload(payload.promptPayTarget, grandTotal);
   }
 
-  // 4. Upsert Contact to Persistent Registry
-  const contactId: string | null = null;
+  const customerName = payload.companyName.trim();
+  if (!customerName) {
+    return { success: false as const, error: "กรุณาระบุชื่อลูกค้าบนเอกสาร" };
+  }
+
+  // 4. Upsert Contact — ต้องได้ contact_id จริงก่อนออกเอกสาร ไม่งั้นใบเสนอราคา/ใบแจ้งหนี้
+  // พิมพ์โดยไม่มีชื่อลูกค้า (เจอจริง: เดิมประกาศ contactId = null แล้วไม่เคย insert ext_contacts)
+  const taxDigits = (payload.taxId || "").replace(/\D/g, "");
+  let contactQuery = supabase
+    .schema("extension_layer")
+    .from("ext_contacts")
+    .select("id")
+    .eq("tenant_id", tenantId);
+  if (taxDigits.length === 13) {
+    contactQuery = contactQuery.eq("tax_id", taxDigits);
+  } else {
+    contactQuery = contactQuery.eq("company_name", customerName);
+  }
+  const { data: existingRows } = await contactQuery.limit(1);
+  const existingContact = existingRows?.[0] ?? null;
+
+  const contactFields = {
+    company_name: customerName,
+    tax_id: taxDigits || payload.taxId || null,
+    branch_code: payload.branchCode || "00000",
+    address: payload.address || null,
+    phone: payload.phone || null,
+    email: payload.email || null,
+    tenant_id: tenantId,
+  };
+
+  let contactId: string | null = existingContact?.id ?? null;
+  if (contactId) {
+    await supabase.schema("extension_layer").from("ext_contacts").update(contactFields).eq("id", contactId);
+  } else {
+    const { data: insertedContact, error: contactErr } = await supabase
+      .schema("extension_layer")
+      .from("ext_contacts")
+      .insert(contactFields)
+      .select("id")
+      .single();
+    if (contactErr || !insertedContact) {
+      return { success: false as const, error: `บันทึกชื่อลูกค้าไม่สำเร็จ: ${contactErr?.message ?? "ไม่ทราบสาเหตุ"}` };
+    }
+    contactId = insertedContact.id;
+  }
+
   if (payload.companyName) {
     try {
       // สมุดที่อยู่ลูกค้าเป็นข้อมูลต่อ tenant ไม่ใช่ของกลาง — ใช้ tenantId ที่ได้มาแล้วตอนต้นฟังก์ชัน

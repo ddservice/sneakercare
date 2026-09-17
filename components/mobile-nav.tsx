@@ -87,9 +87,10 @@ export function MobileNav({
             role="dialog"
             aria-modal="true"
             aria-label="เมนูหลัก"
-            className={`fixed inset-y-0 left-0 z-50 flex w-72 flex-col bg-white dark:bg-slate-900 shadow-2xl border-r border-slate-200 dark:border-slate-800 transition-transform duration-300 ease-in-out lg:hidden ${
+            className={`fixed inset-y-0 left-0 z-50 flex w-[min(18rem,100%)] max-w-full flex-col bg-white dark:bg-slate-900 shadow-2xl border-r border-slate-200 dark:border-slate-800 transition-transform duration-300 ease-in-out lg:hidden ${
               open ? "translate-x-0" : "-translate-x-full"
             }`}
+            style={{ paddingTop: "env(safe-area-inset-top)" }}
           >
             {/* Drawer header */}
             <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 px-4 py-3.5">

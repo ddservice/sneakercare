@@ -1,5 +1,6 @@
 import { requireProfile, requireModuleView } from "@/lib/auth";
-import { fetchRosterStaff } from "@/app/actions/roster";
+import { fetchRosterStaff, fetchSelectedShopHours } from "@/app/actions/roster";
+import { canWrite } from "@/lib/permissions";
 import { RosterClient } from "./roster-client";
 
 export const metadata = {
@@ -11,5 +12,12 @@ export default async function RosterPage() {
   const profile = await requireProfile();
   requireModuleView(profile, "roster");
   const staff = await fetchRosterStaff();
-  return <RosterClient initialStaff={staff} />;
+  const shopHours = await fetchSelectedShopHours();
+  return (
+    <RosterClient
+      initialStaff={staff}
+      shopHours={shopHours}
+      canGenerate={canWrite(profile.role, "roster")}
+    />
+  );
 }

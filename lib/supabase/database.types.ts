@@ -1001,6 +1001,8 @@ export type Database = {
           id: string
           is_active: boolean
           name: string
+          open_time: string
+          close_time: string
           phone: string | null
           telegram_chat_id: string | null
           tenant_id: string
@@ -1011,6 +1013,8 @@ export type Database = {
           id?: string
           is_active?: boolean
           name: string
+          open_time?: string
+          close_time?: string
           phone?: string | null
           telegram_chat_id?: string | null
           tenant_id?: string
@@ -1021,6 +1025,8 @@ export type Database = {
           id?: string
           is_active?: boolean
           name?: string
+          open_time?: string
+          close_time?: string
           phone?: string | null
           telegram_chat_id?: string | null
           tenant_id?: string
@@ -2776,6 +2782,8 @@ export type Database = {
           id: string | null
           is_active: boolean | null
           name: string | null
+          open_time: string | null
+          close_time: string | null
           phone: string | null
           telegram_chat_id: string | null
           tenant_id: string | null
@@ -2786,6 +2794,8 @@ export type Database = {
           id?: string | null
           is_active?: boolean | null
           name?: string | null
+          open_time?: string | null
+          close_time?: string | null
           phone?: string | null
           telegram_chat_id?: string | null
           tenant_id?: string | null
@@ -2796,6 +2806,8 @@ export type Database = {
           id?: string | null
           is_active?: boolean | null
           name?: string | null
+          open_time?: string | null
+          close_time?: string | null
           phone?: string | null
           telegram_chat_id?: string | null
           tenant_id?: string | null

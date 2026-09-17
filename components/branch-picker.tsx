@@ -70,8 +70,8 @@ export function BranchPicker({
         aria-label="สาขาที่กำลังดู"
         className={
           fullWidth
-            ? "h-10 w-full max-w-none gap-2 rounded-xl border-slate-200 bg-white px-2.5 shadow-sm hover:bg-slate-50 data-[size=default]:h-10 dark:border-slate-700 dark:bg-slate-800 dark:hover:bg-slate-800/80"
-            : "h-9 max-w-[10.5rem] gap-2 rounded-full border-slate-200 bg-white px-2.5 shadow-sm hover:bg-slate-50 data-[size=default]:h-9 sm:max-w-[16rem] dark:border-slate-700 dark:bg-slate-800 dark:hover:bg-slate-800/80"
+            ? "h-9 w-full max-w-none gap-2 rounded-xl border-slate-200 bg-white px-2.5 shadow-sm hover:bg-slate-50 data-[size=default]:h-9 dark:border-slate-700 dark:bg-slate-800 dark:hover:bg-slate-800/80"
+            : "h-9 max-w-[9.5rem] gap-2 rounded-full border-slate-200 bg-white px-2.5 shadow-sm hover:bg-slate-50 data-[size=default]:h-9 sm:max-w-[16rem] dark:border-slate-700 dark:bg-slate-800 dark:hover:bg-slate-800/80"
         }
       >
         <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
@@ -83,11 +83,17 @@ export function BranchPicker({
         </span>
         <span className="min-w-0 flex-1 text-left">
           <span className="block truncate text-xs font-semibold leading-tight text-slate-800 dark:text-slate-100">
-            {selected?.name ?? "ทุกสาขา"}
+            {selected
+              ? selected.tenantName && selected.tenantName !== selected.name
+                ? selected.tenantName
+                : selected.name
+              : "ทุกสาขา"}
           </span>
           <span className="block truncate text-[10px] leading-tight text-slate-500 dark:text-slate-400">
             {selected
-              ? (selected.tenantName ?? "กำลังทำงานที่สาขานี้")
+              ? selected.tenantName && selected.tenantName !== selected.name
+                ? `สาขา ${selected.name}`
+                : (selected.tenantName ?? "กำลังทำงานที่สาขานี้")
               : "ดูภาพรวม · อ่านอย่างเดียว"}
           </span>
         </span>

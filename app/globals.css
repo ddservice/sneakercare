@@ -4,6 +4,30 @@
 
 @custom-variant dark (&:where(.dark, .dark *));
 
+/* มือถือ (iPhone 15 Pro Max ~430px): กันเนื้อหาดันกว้างเกินจอจนต้อง pinch-zoom */
+html,
+body {
+  max-width: 100%;
+  overflow-x: clip;
+}
+
+#app-shell,
+main {
+  max-width: 100%;
+  min-width: 0;
+}
+
+img,
+svg,
+video,
+canvas {
+  max-width: 100%;
+}
+
+table {
+  max-width: 100%;
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);

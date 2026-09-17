@@ -231,8 +231,8 @@ export function InvoicingClient({
   }
 
   async function handleCreateDocument() {
-    if (!companyName) {
-      toast.error("กรุณากรอกชื่อลูกค้าหรือชื่อบริษัท");
+    if (!companyName.trim()) {
+      toast.error("กรุณากรอกชื่อลูกค้าหรือชื่อบริษัท — เอกสารบัญชีต้องระบุผู้รับเอกสาร");
       return;
     }
     if (items.length === 0 || subtotal <= 0) {
@@ -869,7 +869,7 @@ export function InvoicingClient({
                             </Badge>
                           </td>
                           <td className="px-4 py-3 font-medium text-slate-800">
-                            {doc.ext_contacts?.company_name || "-"}
+                            {doc.ext_contacts?.company_name || "ยังไม่มีชื่อลูกค้า"}
                           </td>
                           <td className="px-4 py-3 font-mono text-slate-500">
                             {doc.issue_date}
@@ -982,14 +982,19 @@ export function InvoicingClient({
                 </div>
               </div>
 
-              {/* Customer Box */}
+              {/* Customer Box — Bill To (มาตรฐานบัญชี: ต้องมีชื่อลูกค้าบนเอกสารทุกประเภท รวมใบเสนอราคา) */}
               <div className="border border-slate-300 rounded-lg p-3 text-xs bg-slate-50 space-y-1">
-                <div className="font-bold text-slate-800">ข้อมูลลูกค้า / ผู้รับบริการ:</div>
-                <div className="font-bold text-sm">{printingDoc.ext_contacts?.company_name || "ลูกค้าทั่วไป"}</div>
-                <div className="flex justify-between text-slate-600">
+                <div className="font-bold uppercase tracking-wide text-slate-500">ลูกค้า / Bill To</div>
+                <div className="font-bold text-sm text-slate-950">
+                  {printingDoc.ext_contacts?.company_name || "ยังไม่ได้ระบุชื่อลูกค้า"}
+                </div>
+                <div className="flex flex-wrap justify-between gap-2 text-slate-600">
                   <span>เลขประจำตัวผู้เสียภาษี: <strong className="font-mono text-slate-900">{printingDoc.ext_contacts?.tax_id || "-"}</strong></span>
                   <span>สาขา: {printingDoc.ext_contacts?.branch_code || "00000"}</span>
                 </div>
+                {printingDoc.ext_contacts?.phone ? (
+                  <div className="text-slate-600">โทร: {printingDoc.ext_contacts.phone}</div>
+                ) : null}
                 <div className="text-slate-600">ที่อยู่: {printingDoc.ext_contacts?.address || "-"}</div>
               </div>
 

@@ -1,5 +1,7 @@
 import { requireProfile, requireModuleView } from "@/lib/auth";
 import { countDailySales, fetchRecentDailySales } from "@/app/actions/daily-sales";
+import { fetchShopServices } from "@/app/actions/services";
+import { tenantFilter } from "@/lib/tenant";
 import { DailyEntryClient } from "./daily-entry-client";
 
 export const dynamic = "force-dynamic";
@@ -15,12 +17,15 @@ export default async function DailyEntryPage() {
   const profile = await requireProfile();
   requireModuleView(profile, "pos");
 
-  const [recentRecords, totalRecords] = await Promise.all([
+  const [recentRecords, totalRecords, services, tenantId] = await Promise.all([
     fetchRecentDailySales(LOAD_LIMIT),
     countDailySales(),
+    fetchShopServices(),
+    tenantFilter(profile),
   ]);
 
   const truncated = totalRecords > recentRecords.length;
+  const allowLegacyPackagePrices = tenantId === "00000000-0000-0000-0000-000000000001";
 
   return (
     <div className="space-y-3">
@@ -34,7 +39,11 @@ export default async function DailyEntryPage() {
           </a>
         </div>
       )}
-      <DailyEntryClient initialRecords={recentRecords} />
+      <DailyEntryClient
+        initialRecords={recentRecords}
+        services={services}
+        allowLegacyPackagePrices={allowLegacyPackagePrices}
+      />
     </div>
   );
 }

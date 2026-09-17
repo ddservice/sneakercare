@@ -12,6 +12,9 @@ import { rangeLabel, type PageInfo } from "@/lib/pagination";
 import { toast } from "sonner";
 import { errorMessage } from "@/lib/errors";
 import { localYmd } from "@/lib/local-date";
+import { ServiceCatalogManager } from "@/components/service-catalog-manager";
+import { PageHeader } from "@/components/page-header";
+import type { ShopService } from "@/app/actions/services";
 import {
   Sparkles,
   Plus,
@@ -44,26 +47,20 @@ export type OrderItem = {
   notes: string | null;
 };
 
-const DEFAULT_SERVICES = [
-  { id: "pkg_s", name: "Package S — ทำความสะอาดพื้นฐาน", price: 200, category: "package" },
-  { id: "pkg_m", name: "Package M — ทำความสะอาดมาตรฐาน", price: 400, category: "package" },
-  { id: "pkg_l", name: "Package L — สปาแบบพรีเมียม", price: 600, category: "package" },
-  { id: "pkg_xl", name: "Package XL — บูรณะฟูลเซ็ตครบวงจร", price: 800, category: "package" },
-  { id: "opt_express", name: "บริการเสริม: ซักด่วน (Express Clean)", price: 100, category: "addon" },
-  { id: "opt_unyellow", name: "บริการเสริม: แก้เหลือง (Unyellowing)", price: 150, category: "addon" },
-  { id: "opt_deepclean", name: "บริการเสริม: ซักละเอียด + ฆ่าเชื้อ", price: 100, category: "addon" },
-  { id: "opt_waterproof", name: "บริการเสริม: เคลือบสเปรย์กันน้ำนาโน", price: 100, category: "addon" },
-  { id: "opt_repair", name: "บริการเสริม: ซ่อมพื้น / ติดกาว", price: 200, category: "addon" },
-  { id: "opt_repaint", name: "บริการเสริม: ทำสี / Repaint", price: 350, category: "addon" },
+const LEGACY_T1_SERVICES: ShopService[] = [
+  { id: "pkg_s", name: "Package S — ทำความสะอาดพื้นฐาน", category: "package", code: "pkg_s", basePrice: 200, isActive: true },
+  { id: "pkg_m", name: "Package M — ทำความสะอาดมาตรฐาน", category: "package", code: "pkg_m", basePrice: 400, isActive: true },
+  { id: "pkg_l", name: "Package L — สปาแบบพรีเมียม", category: "package", code: "pkg_l", basePrice: 600, isActive: true },
+  { id: "pkg_xl", name: "Package XL — บูรณะฟูลเซ็ตครบวงจร", category: "package", code: "pkg_xl", basePrice: 800, isActive: true },
+  { id: "opt_express", name: "บริการเสริม: ซักด่วน", category: "addon", code: "opt_express", basePrice: 100, isActive: true },
+  { id: "opt_unyellow", name: "บริการเสริม: แก้เหลือง", category: "addon", code: "opt_unyellow", basePrice: 150, isActive: true },
+  { id: "opt_deepclean", name: "บริการเสริม: ซักละเอียด + ฆ่าเชื้อ", category: "addon", code: "opt_deepclean", basePrice: 100, isActive: true },
+  { id: "opt_waterproof", name: "บริการเสริม: เคลือบสเปรย์กันน้ำนาโน", category: "addon", code: "opt_waterproof", basePrice: 100, isActive: true },
+  { id: "opt_repair", name: "บริการเสริม: ซ่อมพื้น / ติดกาว", category: "addon", code: "opt_repair", basePrice: 200, isActive: true },
+  { id: "opt_repaint", name: "บริการเสริม: ทำสี / Repaint", category: "addon", code: "opt_repaint", basePrice: 350, isActive: true },
 ];
-
 const POPULAR_BRANDS = ["Nike", "Adidas", "Jordan", "New Balance", "Converse", "Vans", "On Cloud", "Asics"];
-const SIZES = [
-  { label: "Package S (200฿)", val: "S" },
-  { label: "Package M (400฿)", val: "M" },
-  { label: "Package L (600฿)", val: "L" },
-  { label: "Package XL (800฿)", val: "XL" },
-];
+const SIZES = ["6", "7", "8", "9", "10", "11", "12", "อื่นๆ"];
 
 const STATUS_CONFIG = {
   received: { label: "รับงานแล้ว", color: "bg-blue-100 text-blue-800 border-blue-300 dark:bg-blue-900/50 dark:text-blue-300" },
@@ -78,17 +75,30 @@ type PaymentMethod = "cash" | "transfer" | "credit" | "unpaid";
 export function PosClient({
   initialOrders,
   pageInfo,
+  services,
+  canManageServices,
+  allowLegacyCatalog = false,
 }: {
   initialOrders: OrderItem[];
-  /** ข้อมูลหน้าที่กำลังดู — ตัวกรอง/ค้นหาด้านล่างทำงานกับ "หน้านี้" เท่านั้น */
   pageInfo: PageInfo;
+  services: ShopService[];
+  canManageServices: boolean;
+  allowLegacyCatalog?: boolean;
 }) {
+  const catalogSource =
+    services.length > 0 ? services : allowLegacyCatalog ? LEGACY_T1_SERVICES : [];
+  const catalog = catalogSource.filter((s) => s.isActive).map((s) => ({
+    id: s.id,
+    name: s.name,
+    price: s.basePrice,
+    category: s.category,
+  }));
   const [orders, setOrders] = useState<OrderItem[]>(initialOrders);
-  const [selectedServices, setSelectedServices] = useState<{ id: string; name: string; price: number }[]>([
-    DEFAULT_SERVICES[0],
-  ]);
+  const [selectedServices, setSelectedServices] = useState<{ id: string; name: string; price: number }[]>(() =>
+    catalog.slice(0, 1)
+  );
   const [selectedBrand, setSelectedBrand] = useState("Nike");
-  const [selectedSize, setSelectedSize] = useState("M");
+  const [selectedSize, setSelectedSize] = useState("8");
   const [discount, setDiscount] = useState<number>(0);
   const [customServiceName, setCustomServiceName] = useState("");
   const [customServicePrice, setCustomServicePrice] = useState<number>(0);
@@ -154,7 +164,7 @@ export function PosClient({
       } else if (res?.success) {
         toast.success(`บันทึกรับงานสำเร็จ เลขที่: ${res.orderNo}`);
         // Reset form
-        setSelectedServices([DEFAULT_SERVICES[0]]);
+        setSelectedServices(catalog.slice(0, 1));
         setDiscount(0);
         // Refresh orders locally
         const newOrder: OrderItem = {
@@ -201,44 +211,29 @@ export function PosClient({
   });
 
   return (
-    <div className="space-y-8">
-      {/* ── Page Header Banner ── */}
-      <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl bg-gradient-to-r from-teal-700 via-teal-800 to-slate-900 p-6 text-white shadow-md">
-        <div className="space-y-1">
-          <div className="inline-flex items-center gap-2 rounded-full bg-teal-500/20 px-3 py-1 text-xs font-semibold text-teal-200 ring-1 ring-teal-400/30">
-            <Sparkles className="h-3.5 w-3.5" />
-            POS & Service Orders
-          </div>
-          <h2 className="text-2xl font-bold tracking-tight">งานบริการ / รับงานซักรองเท้า</h2>
-          <p className="text-sm text-teal-100/80">
-            บันทึกรับงานรองเท้า ออกใบรับฝาก คำนวณราคา และติดตามสถานะงานซัก-ซ่อมแบบเรียลไทม์
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-3">
+    <div className="space-y-5">
+      <PageHeader
+        title="งานบริการ / รับงาน"
+        description="บันทึกรับงาน คำนวณราคา และติดตามสถานะ — รายการบริการเป็นของกิจการที่เลือกอยู่ ไม่ดึงจากสาขาแรก"
+        actions={
           <Link href="/pos/daily-entry">
-            <Button className="bg-emerald-500 font-bold hover:bg-emerald-600 text-white text-xs gap-1.5 shadow-sm">
-              <Footprints className="h-4 w-4" /> 📝 สลับไปกรอกยอดสรุปรายวัน
+            <Button size="sm" className="bg-emerald-600 font-semibold hover:bg-emerald-700 text-white text-xs gap-1.5">
+              <Footprints className="h-4 w-4" /> ยอดสรุปรายวัน
             </Button>
           </Link>
-          <div className="rounded-xl bg-white/10 p-3 text-center backdrop-blur-sm">
-            <div className="text-xs text-teal-200">งานค้างวันนี้</div>
-            <div className="text-xl font-bold text-white">
-              {orders.filter((o) => o.status === "received" || o.status === "in_progress").length} คู่
-            </div>
-          </div>
-        </div>
-      </div>
+        }
+      />
 
       <div className="grid gap-8 lg:grid-cols-12">
         {/* ── LEFT COLUMN: POS RECEIVING FORM (7 COLS) ── */}
         <div className="lg:col-span-7">
           <Card className="border-slate-200 shadow-sm dark:border-slate-800">
             <CardHeader className="bg-slate-50/50 pb-4 border-b border-slate-100 dark:border-slate-800/60 dark:bg-slate-900/50">
-              <CardTitle className="text-lg font-bold text-slate-800 dark:text-slate-200 flex items-center gap-2">
+              <CardTitle className="text-lg font-semibold text-slate-800 dark:text-slate-200 flex items-center gap-2">
                 <Footprints className="h-5 w-5 text-teal-600 dark:text-teal-400" />
-                ฟอร์มรับงานซัก / ซ่อมรองเท้า
+                ฟอร์มรับงาน
               </CardTitle>
-              <CardDescription>กรอกข้อมูลลูกค้าและเลือกลักษณะบริการที่ต้องการ</CardDescription>
+              <CardDescription>กรอกข้อมูลลูกค้าแล้วเลือกบริการของกิจการนี้</CardDescription>
             </CardHeader>
 
             <CardContent className="p-6">
@@ -341,20 +336,20 @@ export function PosClient({
                       <Input id="shoe_color" name="shoe_color" placeholder="ขาวล้วน, ดำ-แดง ฯลฯ" />
                     </div>
                     <div className="space-y-1.5">
-                      <Label className="text-xs font-semibold">ขนาด (Size)</Label>
+                      <Label className="text-xs font-semibold">ขนาด</Label>
                       <div className="grid grid-cols-4 gap-1">
                         {SIZES.map((s) => (
                           <button
-                            key={s.val}
+                            key={s}
                             type="button"
-                            onClick={() => setSelectedSize(s.val)}
+                            onClick={() => setSelectedSize(s)}
                             className={`rounded-md py-1.5 text-center text-xs font-semibold transition-all ${
-                              selectedSize === s.val
+                              selectedSize === s
                                 ? "bg-teal-600 text-white shadow-xs"
                                 : "border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300"
                             }`}
                           >
-                            {s.val}
+                            {s}
                           </button>
                         ))}
                       </div>
@@ -369,8 +364,14 @@ export function PosClient({
                   <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
                     <Sparkles className="h-3.5 w-3.5 text-teal-600" /> เลือกบริการหลัก & บริการเสริม
                   </h4>
+                  <ServiceCatalogManager services={services} canManage={canManageServices} />
+                  {catalog.length === 0 ? (
+                    <p className="text-sm text-slate-500">
+                      ยังไม่มีบริการของกิจการนี้ — เพิ่มด้านบนได้เลย ไม่ใช้แพ็กเกจของสาขาแรก
+                    </p>
+                  ) : (
                   <div className="grid gap-2 sm:grid-cols-2">
-                    {DEFAULT_SERVICES.map((s) => {
+                    {catalog.map((s) => {
                       const isSelected = selectedServices.some((item) => item.id === s.id);
                       return (
                         <div
@@ -382,7 +383,7 @@ export function PosClient({
                               : "border-slate-200 bg-white hover:border-teal-300 dark:border-slate-800 dark:bg-slate-900"
                           }`}
                         >
-                          <div className="space-y-0.5">
+                          <div className="space-y-0.5 min-w-0">
                             <div className="text-xs font-semibold text-slate-800 dark:text-slate-200">{s.name}</div>
                             <div className="text-[11px] text-teal-700 font-bold dark:text-teal-400">
                               {s.price.toLocaleString()} ฿
@@ -399,6 +400,7 @@ export function PosClient({
                       );
                     })}
                   </div>
+                  )}
 
                   {/* Add Custom Service */}
                   <div className="flex gap-2 pt-2">

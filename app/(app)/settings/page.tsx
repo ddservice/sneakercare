@@ -16,19 +16,22 @@ import { TelegramTokenForm } from "../admin/settings/telegram-token-form";
 import { BranchChatIdForm } from "../admin/settings/branch-chat-id-form";
 import { PermissionMatrix } from "../admin/settings/permission-matrix";
 import { fetchShopProfile, fetchBackupHeartbeatEnabled } from "@/app/actions/shop-settings";
+import { fetchManagedBranches } from "@/app/actions/branch";
 import { ShopProfileForm } from "./shop-profile-form";
 import { BackupNotifyForm } from "./backup-notify-form";
+import { BranchManager } from "@/components/branch-manager";
 
 export default async function SettingsPage() {
   const profile = await requireProfile();
   requireAdmin(profile);
 
   const supabase = await createClient();
-  const [{ data: statusRows }, { data: branches }, shopProfile, backupNotifyEnabled] = await Promise.all([
+  const [{ data: statusRows }, { data: branches }, shopProfile, backupNotifyEnabled, managed] = await Promise.all([
     supabase.rpc("fn_integration_secret_status", { p_key: "telegram_bot_token" }),
     supabase.from("branches").select("id, name, telegram_chat_id").eq("is_active", true).order("name"),
     fetchShopProfile(),
     fetchBackupHeartbeatEnabled(),
+    fetchManagedBranches(),
   ]);
 
   const status = statusRows?.[0] ?? { is_set: false, value_suffix: null, updated_at: null };
@@ -51,6 +54,12 @@ export default async function SettingsPage() {
 
       {/* ── Shop Branding & Tax Profile Form ── */}
       <ShopProfileForm initialProfile={shopProfile} />
+
+      <BranchManager
+        branches={managed.branches}
+        tenants={managed.tenants}
+        isSuperAdmin={profile.role === "super_admin"}
+      />
 
       {/* ── Quick Admin Links ── */}
       <div className="grid gap-4 sm:grid-cols-3">

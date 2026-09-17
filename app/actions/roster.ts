@@ -7,6 +7,7 @@
 import { revalidatePath } from "next/cache";
 import { requireProfile, requireModuleView, requireModuleWrite } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { getSelectedBranchId } from "@/lib/branch";
 import { requireTenantId, tenantFilter } from "@/lib/tenant";
 
 export type RosterStaff = {
@@ -193,4 +194,53 @@ export async function fetchStaffMonthlyStatSummary(yearMonth: string) {
   }
 
   return summary;
+}
+
+export async function fetchSelectedShopHours(): Promise<{
+  openTime: string;
+  closeTime: string;
+  branchName: string | null;
+}> {
+  const profile = await requireProfile();
+  requireModuleView(profile, "roster");
+  const branchId = await getSelectedBranchId(profile);
+  if (!branchId) {
+    return { openTime: "09:00", closeTime: "20:00", branchName: null };
+  }
+  const supabase = createAdminClient();
+  const withHours = await supabase
+    .from("inv_branches")
+    .select("name, open_time, close_time")
+    .eq("id", branchId)
+    .maybeSingle();
+  if (!withHours.error && withHours.data) {
+    const row = withHours.data as { name: string; open_time?: string | null; close_time?: string | null };
+    return {
+      openTime: row.open_time || "09:00",
+      closeTime: row.close_time || "20:00",
+      branchName: row.name,
+    };
+  }
+  const fallback = await supabase.from("inv_branches").select("name").eq("id", branchId).maybeSingle();
+  return { openTime: "09:00", closeTime: "20:00", branchName: fallback.data?.name ?? null };
+}
+
+export async function applyGeneratedDayOffs(assignments: { employeeId: number; dayOff: number }[]) {
+  const profile = await requireProfile();
+  requireModuleWrite(profile, "roster");
+  const tenantId = await requireTenantId(profile);
+  const supabase = createAdminClient();
+
+  for (const row of assignments) {
+    if (row.dayOff < 0 || row.dayOff > 6) continue;
+    const { error } = await supabase
+      .from("sc_employees")
+      .update({ default_day_off: row.dayOff })
+      .eq("id", row.employeeId)
+      .eq("tenant_id", tenantId);
+    if (error) throw new Error(`จัดเวรไม่สำเร็จ: ${error.message}`);
+  }
+
+  revalidatePath("/roster");
+  return { success: true as const };
 }

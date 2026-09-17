@@ -3,6 +3,9 @@ import { text, num } from "@/lib/db-rows";
 import { getSelectedBranchId } from "@/lib/branch";
 import { createClient } from "@/lib/supabase/server";
 import { DEFAULT_PAGE_SIZE, pageInfo, parsePage, rangeFor } from "@/lib/pagination";
+import { canWrite } from "@/lib/permissions";
+import { tenantFilter } from "@/lib/tenant";
+import { fetchShopServices } from "@/app/actions/services";
 import { PosClient, type OrderItem } from "./pos-client";
 
 export default async function PosPage({
@@ -53,7 +56,18 @@ export default async function PosPage({
         }))
       : [];
 
+  const tenantId = await tenantFilter(profile);
+  const catalog = await fetchShopServices();
   const info = pageInfo(page, DEFAULT_PAGE_SIZE, count ?? null, formattedOrders.length);
+  const isFirstTenant = tenantId === "00000000-0000-0000-0000-000000000001";
 
-  return <PosClient initialOrders={formattedOrders} pageInfo={info} />;
+  return (
+    <PosClient
+      initialOrders={formattedOrders}
+      pageInfo={info}
+      services={catalog}
+      canManageServices={canWrite(profile.role, "pos")}
+      allowLegacyCatalog={isFirstTenant}
+    />
+  );
 }

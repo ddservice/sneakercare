@@ -44,25 +44,29 @@ import {
   BarChart3,
 } from "lucide-react";
 import Link from "next/link";
+import type { ShopService } from "@/app/actions/services";
 import { ModalBackdrop } from "@/components/modal-shell";
 
-// Size price presets based on official SneakerCare package standards
-export const SIZE_PRICES = {
-  s: 200,
-  m: 400,
-  l: 600,
-  xl: 800,
-};
-
-// Standard preset add-on options
-export const PRESET_OPTIONS = [
-  { id: "opt_express", name: "ซักด่วน", price: 100, icon: "⚡", tag: "+100฿" },
-  { id: "opt_unyellow", name: "แก้เหลือง", price: 150, icon: "✨", tag: "+150฿" },
-  { id: "opt_deepclean", name: "ซักละเอียด+ฆ่าเชื้อ", price: 100, icon: "🧼", tag: "+100฿" },
-  { id: "opt_waterproof", name: "เคลือบกันน้ำนาโน", price: 100, icon: "🛡️", tag: "+100฿" },
-  { id: "opt_sole_repair", name: "ซ่อมพื้น/ติดกาว", price: 200, icon: "🩹", tag: "+200฿" },
-  { id: "opt_repaint", name: "ทำสี/Repaint", price: 350, icon: "🎨", tag: "+350฿" },
-];
+function sizePricesFromServices(services: ShopService[], allowLegacy: boolean) {
+  const pick = (...codes: string[]) => {
+    const found = services.find(
+      (s) => s.isActive && codes.includes(s.code.toLowerCase())
+    );
+    return found ? found.basePrice : null;
+  };
+  const s = pick("s", "pkg_s");
+  const m = pick("m", "pkg_m");
+  const l = pick("l", "pkg_l");
+  const xl = pick("xl", "pkg_xl");
+  const hasOwn = s != null || m != null || l != null || xl != null;
+  if (hasOwn) {
+    return { hasOwn: true, s: s ?? 0, m: m ?? 0, l: l ?? 0, xl: xl ?? 0 };
+  }
+  if (allowLegacy) {
+    return { hasOwn: true, s: 200, m: 400, l: 600, xl: 800 };
+  }
+  return { hasOwn: false, s: 0, m: 0, l: 0, xl: 0 };
+}
 
 type ExtraLine = {
   id: string;
@@ -75,7 +79,25 @@ type ViewPeriod = "all" | "day" | "week" | "month" | "custom";
 
 type CollectMethod = "โอน" | "เงินสด" | "อื่นๆ";
 
-export function DailyEntryClient({ initialRecords }: { initialRecords: DailySaleWithPayments[] }) {
+export function DailyEntryClient({
+  initialRecords,
+  services,
+  allowLegacyPackagePrices = false,
+}: {
+  initialRecords: DailySaleWithPayments[];
+  services: ShopService[];
+  allowLegacyPackagePrices?: boolean;
+}) {
+  const SIZE_PRICES = sizePricesFromServices(services, allowLegacyPackagePrices);
+  const PRESET_OPTIONS = services
+    .filter((s) => s.isActive && s.category === "addon")
+    .map((s) => ({
+      id: s.id,
+      name: s.name,
+      price: s.basePrice,
+      icon: "✦",
+      tag: `+${s.basePrice}฿`,
+    }));
   const [records, setRecords] = useState<DailySaleWithPayments[]>(initialRecords);
   const [isPending, startTransition] = useTransition();
 
@@ -805,16 +827,20 @@ export function DailyEntryClient({ initialRecords }: { initialRecords: DailySale
                   />
                 </div>
 
-                {/* 2. Shoe Package Grid (Package S: 200, Package M: 400, Package L: 600, Package XL: 800) */}
                 <div className="space-y-2.5 rounded-xl border border-slate-200 bg-slate-50/70 p-4">
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
                     <Label className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
-                      <Footprints className="h-3.5 w-3.5 text-teal-700" /> จำนวนคู่แยกตามแพ็กเกจบริการ (Service Package)
+                      <Footprints className="h-3.5 w-3.5 text-teal-700" /> จำนวนคู่แยกตามแพ็กเกจ
                     </Label>
-                    <span className="rounded-full bg-teal-100 px-2.5 py-0.5 text-xs font-black text-teal-900">
+                    <span className="rounded-full bg-teal-100 px-2.5 py-0.5 text-xs font-semibold text-teal-900">
                       รวม {totalPairs} คู่ ({sizeGross.toLocaleString()} ฿)
                     </span>
                   </div>
+                  {!SIZE_PRICES.hasOwn && (
+                    <p className="text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-2 py-1.5">
+                      กิจการนี้ยังไม่ได้ตั้งรหัสแพ็กเกจ pkg_s / pkg_m / pkg_l / pkg_xl ที่หน้างานบริการ — ยังไม่ดึงราคาจากสาขาแรก จึงคิดเป็น 0 จนกว่าจะตั้งเอง
+                    </p>
+                  )}
 
                   <div className="grid grid-cols-2 gap-3 pt-1">
                     {/* Package S (200฿) */}
@@ -822,7 +848,7 @@ export function DailyEntryClient({ initialRecords }: { initialRecords: DailySale
                       <div className="flex items-center justify-between">
                         <span className="font-extrabold text-xs text-blue-900">Package S</span>
                         <span className="rounded-full bg-blue-600 px-2 py-0.5 text-[10px] font-bold text-white">
-                          200 ฿/คู่
+                          {SIZE_PRICES.s.toLocaleString()} ฿/คู่
                         </span>
                       </div>
                       <div className="flex items-center gap-1.5">
@@ -862,7 +888,7 @@ export function DailyEntryClient({ initialRecords }: { initialRecords: DailySale
                       <div className="flex items-center justify-between">
                         <span className="font-extrabold text-xs text-emerald-900">Package M</span>
                         <span className="rounded-full bg-emerald-600 px-2 py-0.5 text-[10px] font-bold text-white">
-                          400 ฿/คู่
+                          {SIZE_PRICES.m.toLocaleString()} ฿/คู่
                         </span>
                       </div>
                       <div className="flex items-center gap-1.5">
@@ -902,7 +928,7 @@ export function DailyEntryClient({ initialRecords }: { initialRecords: DailySale
                       <div className="flex items-center justify-between">
                         <span className="font-extrabold text-xs text-purple-900">Package L</span>
                         <span className="rounded-full bg-purple-600 px-2 py-0.5 text-[10px] font-bold text-white">
-                          600 ฿/คู่
+                          {SIZE_PRICES.l.toLocaleString()} ฿/คู่
                         </span>
                       </div>
                       <div className="flex items-center gap-1.5">
@@ -942,7 +968,7 @@ export function DailyEntryClient({ initialRecords }: { initialRecords: DailySale
                       <div className="flex items-center justify-between">
                         <span className="font-extrabold text-xs text-pink-900">Package XL</span>
                         <span className="rounded-full bg-pink-600 px-2 py-0.5 text-[10px] font-bold text-white">
-                          800 ฿/คู่
+                          {SIZE_PRICES.xl.toLocaleString()} ฿/คู่
                         </span>
                       </div>
                       <div className="flex items-center gap-1.5">

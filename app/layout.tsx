@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { IBM_Plex_Sans_Thai, Prompt } from "next/font/google";
 import { ThemeProvider } from "@/components/theme-provider";
 import "./globals.css";
@@ -43,6 +43,13 @@ export const metadata: Metadata = {
   },
 };
 
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 5,
+  viewportFit: "cover",
+};
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -52,9 +59,9 @@ export default function RootLayout({
     <html
       lang="th"
       suppressHydrationWarning
-      className={`${prompt.variable} ${ibmPlexSansThai.variable} h-full antialiased`}
+      className={`${prompt.variable} ${ibmPlexSansThai.variable} h-full max-w-full overflow-x-clip antialiased`}
     >
-      <body className="min-h-full flex flex-col font-sans bg-slate-50 text-slate-900 antialiased selection:bg-teal-600 selection:text-white dark:bg-slate-950 dark:text-slate-100">
+      <body className="min-h-full max-w-full overflow-x-clip flex flex-col font-sans bg-slate-50 text-slate-900 antialiased selection:bg-teal-600 selection:text-white dark:bg-slate-950 dark:text-slate-100">
         <ThemeProvider attribute="class" defaultTheme="light" enableSystem={false}>
           {children}
         </ThemeProvider>

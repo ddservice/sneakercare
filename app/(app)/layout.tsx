@@ -49,7 +49,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const alerts = { inventory: lowStockCount };
 
   return (
-    <div id="app-shell" className="flex min-h-svh flex-col bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 antialiased">
+    <div id="app-shell" className="flex min-h-svh max-w-full flex-col overflow-x-clip bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 antialiased">
 
       {/* ══════════════════════════════════════════════
           Top Header (sticky, glassmorphism)
@@ -57,7 +57,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       <header className="sticky top-0 z-40 border-b border-slate-200 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 backdrop-blur-sm shadow-sm">
 
         {/* ── Brand row ── */}
-        <div className="mx-auto flex max-w-7xl items-center gap-3 px-4 py-2.5 sm:px-6">
+        <div className="mx-auto flex max-w-7xl min-w-0 items-center gap-2 px-3 py-2 sm:gap-3 sm:px-6 sm:py-2.5">
 
           {/* Left: Mobile hamburger + Logo */}
           <div className="flex items-center gap-3 min-w-0">
@@ -149,8 +149,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       </header>
 
       {/* ── Main Content ── */}
-      <main className="flex-1 px-4 py-5 sm:px-6">
-        <div className="mx-auto max-w-7xl">{children}</div>
+      <main className="min-w-0 flex-1 overflow-x-clip px-3 py-4 sm:px-6 sm:py-5">
+        <div className="mx-auto min-w-0 max-w-7xl">{children}</div>
       </main>
 
       <Toaster />
