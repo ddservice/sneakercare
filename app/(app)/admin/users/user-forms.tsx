@@ -24,6 +24,7 @@ export type UserRow = {
   role: UserRole;
   branch_id: string | null;
   is_active: boolean;
+  email: string | null;
 };
 
 function BranchFields({

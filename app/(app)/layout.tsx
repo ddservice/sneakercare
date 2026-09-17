@@ -12,6 +12,7 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { Footprints, LogOut, ShieldCheck, UserCircle } from "lucide-react";
 import Link from "next/link";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { tenantFilter } from "@/lib/tenant";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const profile = await requireProfile();
@@ -25,6 +26,20 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   const mainNav = mainNavItemsFor(profile.role);
 
+  // ✅ [multi-tenant 2026-09-17] super_admin เห็นสาขาข้าม tenant ได้แล้ว แต่คนละ tenant อาจตั้ง
+  // ชื่อสาขาซ้ำกันได้ (เช่น "SneakerCare" ทั้งคู่) — ต่อท้ายชื่อ tenant ให้เฉพาะ super_admin เพื่อ
+  // ไม่ให้เลือกผิดสาขาโดยไม่รู้ตัว (admin ของ tenant ตัวเองเห็นแค่สาขาตัวเองอยู่แล้ว ไม่ต้องต่อท้าย)
+  let branchOptions = withId(branches).map((b) => ({ id: b.id, name: text(b.name) }));
+  if (profile.role === "super_admin" && branches.length > 0) {
+    const adminDbForNames = createAdminClient();
+    const { data: tenantRows } = await adminDbForNames.from("tenants").select("id, name");
+    const tenantNameById = new Map((tenantRows ?? []).map((t) => [t.id, t.name]));
+    branchOptions = withId(branches).map((b) => ({
+      id: b.id,
+      name: `${text(b.name)} — ${(b.tenant_id ? tenantNameById.get(b.tenant_id) : undefined) ?? "?"}`,
+    }));
+  }
+
   // ── Low stock alert count for nav badge ──
   let lowStockCount = 0;
   try {
@@ -32,7 +47,20 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     let q = adminDb.from("item_stock").select(
       "id, current_qty, min_stock_level, alert_muted"
     );
-    if (selectedBranchId) q = q.eq("branch_id", selectedBranchId);
+    if (selectedBranchId) {
+      q = q.eq("branch_id", selectedBranchId);
+    } else if (profile.role !== "super_admin") {
+      // 🔴 [แก้ช่องโหว่จริง 2026-09-17] เดิมไม่มีการกรอง tenant เลยตรงนี้ — admin ของ tenant
+      // ไหนก็ตามที่ "ดูทุกสาขา" (ไม่ได้เลือกสาขาเจาะจง) จะเห็น badge แจ้งเตือนสต๊อกต่ำที่นับรวม
+      // ของทุก tenant ปนกันหมด ไม่ใช่แค่ tenant ของตัวเอง — super_admin ตั้งใจให้เห็นรวมทุก tenant
+      // ได้ต่อไป (เป็นมุมมองระดับแพลตฟอร์ม) แต่ admin ปกติต้องกรองเฉพาะ tenant ตัวเองเท่านั้น
+      const ownTenantId = tenantFilter(profile);
+      if (ownTenantId) {
+        const { data: ownBranches } = await adminDb.from("inv_branches").select("id").eq("tenant_id", ownTenantId);
+        const ownBranchIds = (ownBranches ?? []).map((b) => b.id);
+        q = q.in("branch_id", ownBranchIds.length > 0 ? ownBranchIds : ["00000000-0000-0000-0000-000000000000"]);
+      }
+    }
     const { data: stockRows } = await q;
     // ไม่นับรายการที่ปิดแจ้งเตือนไว้ — ไม่งั้น badge จะขึ้นตัวเลขค้างที่พนักงานไม่มีทางเคลียร์ได้
     // (เพราะ Telegram ก็ไม่ส่งแจ้งรายการนั้นอยู่แล้วเช่นกัน ดู supabase/functions ที่ deploy จริง)
@@ -90,8 +118,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
           {/* Right: actions */}
           <div className="ml-auto flex items-center gap-2 shrink-0">
-            {profile.role === "admin" && (
-              <BranchPicker branches={withId(branches).map((b) => ({ id: b.id, name: text(b.name) }))} selectedBranchId={selectedBranchId} />
+            {(profile.role === "admin" || profile.role === "super_admin") && (
+              <BranchPicker branches={branchOptions} selectedBranchId={selectedBranchId} />
             )}
 
             {/* User badge — hidden on mobile (shown in drawer instead) */}

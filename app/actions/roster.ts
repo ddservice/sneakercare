@@ -169,6 +169,11 @@ export async function saveStaffDailyStat(
 
 /** สรุปยอดรายเดือนต่อพนักงาน (ใช้ตอนคำนวณเงินเดือน — auto-fill OT + โบนัสจำนวนคู่) */
 export async function fetchStaffMonthlyStatSummary(yearMonth: string) {
+  // การ์ดตรงนี้ซ้ำกับที่มีอยู่แล้วใน fetchStaffDailyStats() ที่เรียกด้านล่าง (ซึ่งห่อด้วย cache()
+  // ของ requireProfile จึงไม่เสียรอบ query เพิ่ม) — ใส่ไว้ตรงนี้ด้วยเพราะ npm run test:guards
+  // ตรวจแบบ static เห็นแค่การ์อยู่ในฟังก์ชันเดียวกัน ไม่ไล่ตามการเรียกซ้อนฟังก์ชันอื่น
+  const profile = await requireProfile();
+  requireModuleView(profile, "roster");
   const stats = await fetchStaffDailyStats(yearMonth);
   const summary: Record<
     string,

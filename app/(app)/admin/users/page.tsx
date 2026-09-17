@@ -1,5 +1,6 @@
 import { requireProfile, requireAdmin } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { getActiveBranches } from "@/lib/branch";
 import { ROLE_LABEL, type Role } from "@/lib/permissions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -24,6 +25,24 @@ export default async function AdminUsersPage() {
         .order("display_name"),
       getActiveBranches().catch(() => []),
     ]);
+
+    // `profiles` ไม่มีคอลัมน์ email เลย (ระบบ auth เก็บแยกไว้) — ต้องดึงจาก
+    // auth.admin.listUsers() (service_role เท่านั้น) แล้ว join ด้วย id เอง
+    // ⚠️ [แก้บั๊กจริง 2026-09-17] ตารางนี้ไม่เคยแสดง email เลย ทำให้เจ้าของ/super_admin
+    // หาผู้ใช้ด้วยอีเมลที่เชิญไปไม่เจอ (บัญชีมีอยู่จริง แค่ตารางไม่แสดงอีเมลเทียบให้)
+    // listUsers ไม่กรอง tenant เอง — แต่แค่ใช้ทำ lookup ตาม id ที่ RLS กรองมาแล้วจาก userRows
+    // เท่านั้น จึงไม่รั่วอีเมลข้าม tenant
+    const emailById = new Map<string, string>();
+    try {
+      const admin = createAdminClient();
+      const { data: authList } = await admin.auth.admin.listUsers({ perPage: 1000 });
+      for (const u of authList?.users ?? []) {
+        if (u.email) emailById.set(u.id, u.email);
+      }
+    } catch {
+      // non-fatal — ตารางยังแสดงได้ปกติแค่ไม่มีคอลัมน์อีเมล
+    }
+
     // `profiles` เป็นตารางจริงก็จริง แต่ generate types มาเป็น nullable หลายคอลัมน์
     // จึงต้อง normalize ตรงนี้ครั้งเดียว แทนที่จะปล่อย null ไหลเข้า UI แล้วขึ้น "undefined"
     users = (userRows ?? []).map((u) => ({
@@ -33,6 +52,7 @@ export default async function AdminUsersPage() {
       role: (u.role ?? "staff") as UserRow["role"],
       branch_id: u.branch_id,
       is_active: bool(u.is_active, true),
+      email: emailById.get(u.id) ?? null,
     }));
     branches = withId(branchRows).map((b) => ({ id: b.id, name: text(b.name) }));
   } catch {
@@ -54,6 +74,7 @@ export default async function AdminUsersPage() {
             <TableRow>
               <TableHead>ชื่อ</TableHead>
               <TableHead>ชื่อผู้ใช้</TableHead>
+              <TableHead>อีเมล</TableHead>
               <TableHead>บทบาท</TableHead>
               <TableHead>สาขา</TableHead>
               <TableHead>สถานะ</TableHead>
@@ -65,6 +86,7 @@ export default async function AdminUsersPage() {
               <TableRow key={user.id}>
                 <TableCell>{user.display_name}</TableCell>
                 <TableCell>{user.username}</TableCell>
+                <TableCell className="text-muted-foreground">{user.email ?? "—"}</TableCell>
                 <TableCell>{ROLE_LABEL[user.role as Role] ?? user.role}</TableCell>
                 <TableCell>{user.branch_id ? branchName.get(user.branch_id) ?? "—" : "ทุกสาขา"}</TableCell>
                 <TableCell>
@@ -82,7 +104,7 @@ export default async function AdminUsersPage() {
             ))}
             {users.length === 0 && (
               <TableRow>
-                <TableCell colSpan={6} className="text-center text-muted-foreground">
+                <TableCell colSpan={7} className="text-center text-muted-foreground">
                   ยังไม่มีผู้ใช้
                 </TableCell>
               </TableRow>
