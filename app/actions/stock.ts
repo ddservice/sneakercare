@@ -87,6 +87,16 @@ export async function createStockIn(_prev: StockActionState, formData: FormData)
       return { error: "กรุณาระบุชื่อสินค้าใหม่" };
     }
 
+    // 🔴 [แก้บั๊กจริง 2026-09-17] เดิม insert ไม่ระบุ tenant_id เลย — migration 0028 ตั้ง DEFAULT
+    // เป็น tenant #1 ตายตัว ⇒ รับของเข้าคลังแล้วเพิ่มสินค้าใหม่ (โหมด "+ เพิ่มสินค้าใหม่" ที่
+    // /stock-in) ของ tenant ไหนก็ตาม (เช่น LUXSU) จะได้แถวไปโผล่ที่แคตตาล็อกของ tenant #1 เสมอ —
+    // หา tenant จาก branchId ที่กำลังรับของเข้าจริงตรงๆ (ผ่านการเช็ค assertWritableBranch แล้ว)
+    // แทนที่จะพึ่ง cookie สาขาที่เลือกไว้แยกต่างหาก ซึ่งอาจไม่ตรงกับ branchId ของฟอร์มนี้เป๊ะ
+    const { data: branchRow } = await supabase.from("branches").select("tenant_id").eq("id", branchId).single();
+    if (!branchRow?.tenant_id) {
+      return { error: "ไม่พบ tenant ของสาขานี้ — ติดต่อผู้ดูแลระบบ" };
+    }
+
     const { data: createdItem, error: createErr } = await supabase
       .from("items")
       .insert({
@@ -98,6 +108,7 @@ export async function createStockIn(_prev: StockActionState, formData: FormData)
         default_min_stock_level: newMinStock,
         item_type: "inventory",
         is_active: true,
+        tenant_id: branchRow.tenant_id,
       })
       .select("id, purchase_unit_qty")
       .single();
@@ -174,7 +185,10 @@ export async function createAdjustment(_prev: StockActionState, formData: FormDa
     item_id: itemId,
     branch_id: branchId,
     txn_type: direction === "increase" ? "adjustment_increase" : "adjustment_decrease",
-    status: profile.role === "admin" ? "approved" : "pending_approval",
+    // ✅ [2026-09-17] super_admin เท่ากับ admin สำหรับการอนุมัติ adjustment เอง — เดิมเช็คแค่
+    // "admin" ทำให้ super_admin ถูกปฏิบัติเหมือน co-admin/staff (ต้องรออนุมัติ) ทั้งที่ควรอนุมัติ
+    // ได้เองเหมือน admin (ดู CLAUDE.md หัวข้อ super_admin — จุดที่ยังไม่ได้แก้)
+    status: profile.role === "admin" || profile.role === "super_admin" ? "approved" : "pending_approval",
     quantity_delta: direction === "increase" ? Math.abs(qty) : -Math.abs(qty),
     reason,
     performed_by: profile.id,

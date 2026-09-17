@@ -1,6 +1,7 @@
 import { requireProfile, requireModuleView } from "@/lib/auth";
 import { text, bool } from "@/lib/db-rows";
 import { createClient } from "@/lib/supabase/server";
+import { tenantFilter } from "@/lib/tenant";
 import { canWrite } from "@/lib/permissions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -15,12 +16,17 @@ export default async function AdminItemsPage() {
   const canEdit = canWrite(profile.role, "items");
 
   const supabase = await createClient();
-  const { data: items } = await supabase
+  // ⚠️ [แก้บั๊กจริง 2026-09-17] เดิมไม่กรอง tenant เลย — super_admin เห็นแคตตาล็อกของทุก tenant
+  // ปนกันไม่ว่าจะเลือกสาขาไหน (ดูเหตุผลเดียวกับ /inventory)
+  const tenantId = await tenantFilter(profile);
+  let itemsQuery = supabase
     .from("items")
     .select(
       "id, sku, name, item_type, category, base_unit, purchase_unit, purchase_unit_qty, default_min_stock_level, is_active"
     )
     .order("name");
+  if (tenantId) itemsQuery = itemsQuery.eq("tenant_id", tenantId);
+  const { data: items } = await itemsQuery;
 
   return (
     <Card>

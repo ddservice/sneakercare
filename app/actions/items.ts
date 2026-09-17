@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { requireProfile, requireAdmin } from "@/lib/auth";
+import { requireTenantId } from "@/lib/tenant";
 import type { ItemType } from "@/lib/supabase/database.types";
 
 export type ItemActionState = { error?: string; success?: boolean } | undefined;
@@ -34,8 +35,12 @@ export async function createItem(_prev: ItemActionState, formData: FormData): Pr
     return { error: "จำนวนหน่วยฐานต่อหน่วยซื้อต้องมากกว่า 0" };
   }
 
+  // 🔴 [แก้บั๊กจริง 2026-09-17] เดิม insert ไม่ระบุ tenant_id เลย — migration 0028 ตั้ง DEFAULT
+  // เป็น tenant #1 ตายตัว ⇒ admin ของ tenant ไหนก็ตาม (เช่น LUXSU) เพิ่มสินค้าใหม่จะได้แถวไปโผล่
+  // ที่แคตตาล็อกของ tenant #1 เสมอ ไม่ใช่ tenant ของตัวเอง (บั๊กเดียวกับที่เคยเจอกับ inviteUser())
+  const tenantId = await requireTenantId(profile);
   const supabase = await createClient();
-  const { error } = await supabase.from("items").insert(fields);
+  const { error } = await supabase.from("items").insert({ ...fields, tenant_id: tenantId });
 
   if (error) {
     return { error: `บันทึกไม่สำเร็จ: ${error.message}` };

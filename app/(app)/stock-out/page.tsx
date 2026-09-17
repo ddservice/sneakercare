@@ -2,6 +2,7 @@ import { requireProfile, requireModuleView } from "@/lib/auth";
 import { withId, text, num } from "@/lib/db-rows";
 import { createClient } from "@/lib/supabase/server";
 import { getSelectedBranchId } from "@/lib/branch";
+import { tenantFilter } from "@/lib/tenant";
 import { canRecordWaste, canWrite } from "@/lib/permissions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -29,8 +30,14 @@ export default async function StockOutPage() {
     );
   }
 
+  // ⚠️ [แก้บั๊กจริง 2026-09-17] `items` query เดิมไม่กรอง tenant เลย — super_admin จะเห็นตัวเลือก
+  // สินค้าของทุก tenant ปนกันตอนกรอกฟอร์มเบิกใช้งาน/ของเสีย (ดูเหตุผลเดียวกับ /inventory)
+  const tenantId = await tenantFilter(profile);
+  let itemsQuery = supabase.from("items").select("id, name, base_unit").eq("is_active", true).order("name");
+  if (tenantId) itemsQuery = itemsQuery.eq("tenant_id", tenantId);
+
   const [{ data: items }, { data: stockRows }] = await Promise.all([
-    supabase.from("items").select("id, name, base_unit").eq("is_active", true).order("name"),
+    itemsQuery,
     supabase.from("v_item_stock").select("item_id, current_qty").eq("branch_id", branchId),
   ]);
 

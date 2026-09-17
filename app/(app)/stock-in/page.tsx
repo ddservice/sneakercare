@@ -2,6 +2,7 @@ import { requireProfile, requireModuleView } from "@/lib/auth";
 import { withId, text } from "@/lib/db-rows";
 import { createClient } from "@/lib/supabase/server";
 import { getSelectedBranchId } from "@/lib/branch";
+import { tenantFilter } from "@/lib/tenant";
 import { canWrite } from "@/lib/permissions";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { StockInForm } from "./stock-in-form";
@@ -15,17 +16,37 @@ export default async function StockInPage() {
   const canEdit = canWrite(profile.role, "stock-in");
   const supabase = await createClient();
 
-  let branchId = await getSelectedBranchId(profile);
+  const branchId = await getSelectedBranchId(profile);
+
+  // 🔴 [แก้บั๊กจริง 2026-09-17] เดิมถ้าไม่ได้เลือกสาขา (เกิดได้กับ admin/super_admin ที่ยังไม่ได้
+  // เลือกจาก dropdown) จะ fallback ไปหยิบสาขาแรกที่เจอแบบไม่กรอง tenant เลย (`limit(1).single()`
+  // อาจได้สาขาของ tenant อื่น) หรือ hardcode UUID ของสาขา tenant #1 ตรงๆ ⇒ รับของเข้าคลังไปลง
+  // ผิดสาขา/ผิด tenant แบบเงียบๆ โดยผู้ใช้ไม่รู้ตัว — เปลี่ยนเป็นบล็อกแล้วขอให้เลือกสาขาก่อนเสมอ
+  // (ตรงกับกฎข้อ 12 ใน CLAUDE.md อยู่แล้วว่า "การเบิก-รับ-ปรับ-ของเสียต้องเลือกสาขาให้ชัดก่อน"
+  // และเป็นรูปแบบเดียวกับที่ /stock-out ทำอยู่แล้วถูกต้อง)
   if (!branchId) {
-    const { data: mainBranch } = await supabase.from("branches").select("id").limit(1).single();
-    branchId = mainBranch?.id ?? profile.branch_id ?? "cb8dcf5d-7e5e-4671-be42-aca79469a19b";
+    return (
+      <Card className="max-w-md">
+        <CardHeader>
+          <CardTitle>รับของเข้าคลัง</CardTitle>
+        </CardHeader>
+        <CardContent className="text-muted-foreground">
+          เลือกสาขาจากแถบด้านบนเพื่อทำรายการรับของเข้าคลัง
+        </CardContent>
+      </Card>
+    );
   }
 
-  const { data: items } = await supabase
+  // ⚠️ เดิม `items` query ก็ไม่กรอง tenant เลยเช่นกัน — super_admin จะเห็นตัวเลือกสินค้าของทุก
+  // tenant ปนกันตอนกรอกฟอร์มรับของเข้า (ดูเหตุผลเดียวกับ /inventory)
+  const tenantId = await tenantFilter(profile);
+  let itemsQuery = supabase
     .from("items")
     .select("id, name, purchase_unit")
     .eq("is_active", true)
     .order("name");
+  if (tenantId) itemsQuery = itemsQuery.eq("tenant_id", tenantId);
+  const { data: items } = await itemsQuery;
 
   return (
     <div className="space-y-6 max-w-2xl mx-auto">

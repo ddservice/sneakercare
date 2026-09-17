@@ -2,6 +2,7 @@ import { requireProfile, requireModuleView } from "@/lib/auth";
 import { withId, text, num } from "@/lib/db-rows";
 import { createClient } from "@/lib/supabase/server";
 import { getSelectedBranchId } from "@/lib/branch";
+import { tenantFilter } from "@/lib/tenant";
 import { canSeeCost, canWrite } from "@/lib/permissions";
 import { InventoryClient, type InventoryRow } from "./inventory-client";
 
@@ -14,6 +15,11 @@ export default async function InventoryHubPage() {
   const supabase = await createClient();
   const isCostVisible = canSeeCost(profile.role);
   const canEdit = canWrite(profile.role, "inventory");
+  // ⚠️ [แก้บั๊กจริง 2026-09-17] `items` (แคตตาล็อกกลาง) query ด้านล่างเดิมไม่กรอง tenant เลย
+  // พึ่ง RLS อย่างเดียว — super_admin RLS เห็นทุก tenant เสมอไม่สนใจสาขาที่เลือกไว้ จึงเห็น
+  // แคตตาล็อกของทุก tenant ปนกันตอนเลือกสาขาของ tenant ใดก็ตาม (สินค้าของ tenant อื่นจะโชว์
+  // จำนวนคงเหลือ 0 หลอกๆ เพราะ v_item_stock กรอง branch_id ถูกแล้วแต่ items ไม่ได้กรองตาม)
+  const tenantId = await tenantFilter(profile);
 
   // ── ตัวกรองสาขา (กฎข้อ 12) ────────────────────────────────────────────────
   // staff/co-admin ถูก view `v_item_stock` กรองสาขาให้ในตัวอยู่แล้ว (inv_fn_current_branch())
@@ -35,8 +41,11 @@ export default async function InventoryHubPage() {
   let costQuery = supabase.from("item_stock").select("item_id, avg_unit_cost");
   if (selectedBranchId) costQuery = costQuery.eq("branch_id", selectedBranchId);
 
+  let itemsQuery = supabase.from("items").select("*").order("name");
+  if (tenantId) itemsQuery = itemsQuery.eq("tenant_id", tenantId);
+
   const [{ data: rawItems }, { data: stockRows }, { data: costRows }] = await Promise.all([
-    supabase.from("items").select("*").order("name"),
+    itemsQuery,
     stockQuery,
     isCostVisible
       ? costQuery

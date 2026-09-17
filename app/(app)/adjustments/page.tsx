@@ -2,6 +2,7 @@ import { requireProfile, requireModuleView } from "@/lib/auth";
 import { withId, text, num } from "@/lib/db-rows";
 import { createClient } from "@/lib/supabase/server";
 import { getSelectedBranchId } from "@/lib/branch";
+import { tenantFilter } from "@/lib/tenant";
 import { canWrite } from "@/lib/permissions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { AdjustmentForm } from "./adjustment-form";
@@ -13,18 +14,25 @@ export default async function AdjustmentsPage() {
   const canEdit = canWrite(profile.role, "adjustments");
   const branchId = await getSelectedBranchId(profile);
   const supabase = await createClient();
-
-  const { data: items } = await supabase
+  // ⚠️ [แก้บั๊กจริง 2026-09-17] เดิมไม่กรอง tenant เลย — super_admin เห็นตัวเลือกสินค้าของทุก
+  // tenant ปนกันตอนกรอกฟอร์มปรับปรุงสต๊อก (ดูเหตุผลเดียวกับ /inventory)
+  const tenantId = await tenantFilter(profile);
+  let itemsQuery = supabase
     .from("items")
     .select("id, name, base_unit")
     .eq("is_active", true)
     .order("name");
+  if (tenantId) itemsQuery = itemsQuery.eq("tenant_id", tenantId);
+  const { data: items } = await itemsQuery;
 
     // view alias คืนทุกคอลัมน์เป็น nullable — เติมค่าสำรองแทนการ cast ทับ (ดู lib/db-rows.ts)
   const itemOptions = withId(items).map((i) => ({ id: i.id, name: text(i.name), base_unit: text(i.base_unit) }));
 
+  // ✅ [2026-09-17] super_admin เห็น/อนุมัติรายการรออนุมัติได้เหมือน admin แล้ว (คู่กับ migration
+  // 0038 ที่แก้ inv_fn_approve_adjustment() ให้รู้จัก super_admin) — เดิมเช็คแค่ "admin" เท่านั้น
+  const isApprover = profile.role === "admin" || profile.role === "super_admin";
   let pendingRows: Parameters<typeof PendingAdjustmentsList>[0]["rows"] = [];
-  if (profile.role === "admin") {
+  if (isApprover) {
     let pendingQuery = supabase
       .from("v_stock_transactions")
       .select("id, quantity_delta, reason, created_at, txn_type, item_name, branch_name, performed_by_name")
@@ -54,7 +62,7 @@ export default async function AdjustmentsPage() {
         </CardHeader>
         <CardContent>
           {canEdit && branchId ? (
-            <AdjustmentForm items={itemOptions} branchId={branchId} requiresApproval={profile.role !== "admin"} />
+            <AdjustmentForm items={itemOptions} branchId={branchId} requiresApproval={!isApprover} />
           ) : canEdit ? (
             <p className="text-muted-foreground">เลือกสาขาจากแถบด้านบนเพื่อทำรายการปรับปรุงสต๊อก</p>
           ) : (
@@ -63,7 +71,7 @@ export default async function AdjustmentsPage() {
         </CardContent>
       </Card>
 
-      {profile.role === "admin" && (
+      {isApprover && (
         <Card>
           <CardHeader>
             <CardTitle>รายการรออนุมัติ</CardTitle>
