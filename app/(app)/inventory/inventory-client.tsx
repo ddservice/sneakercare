@@ -7,21 +7,14 @@ import {
   deleteInventoryItem,
   toggleItemAlertMute,
 } from "@/app/actions/inventory";
-import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import * as XLSX from "xlsx";
 import {
-  Boxes,
-  ArrowDownToLine,
-  ArrowUpFromLine,
-  History,
   PackagePlus,
   AlertTriangle,
-  TrendingDown,
   Search,
   Edit2,
   Trash2,
@@ -31,8 +24,9 @@ import {
   Bell,
   BellOff,
 } from "lucide-react";
-import Link from "next/link";
 import { ModalBackdrop } from "@/components/modal-shell";
+import { InventoryShell } from "@/components/inventory-shell";
+import type { Role } from "@/lib/permissions";
 
 export type InventoryRow = {
   id: string;
@@ -57,10 +51,12 @@ export function InventoryClient({
   initialItems,
   isCostVisible,
   canEdit,
+  role,
 }: {
   initialItems: InventoryRow[];
   isCostVisible: boolean;
   canEdit: boolean;
+  role: Role;
 }) {
   const [items, setItems] = useState<InventoryRow[]>(initialItems);
   const [isPending, startTransition] = useTransition();
@@ -170,7 +166,7 @@ export function InventoryClient({
         category: editCategory.trim(),
         base_unit: editUnit.trim(),
         current_qty: editQty,
-        avg_unit_cost: editCost,
+        ...(isCostVisible ? { avg_unit_cost: editCost } : {}),
         min_stock_level: editMin,
       });
 
@@ -197,9 +193,9 @@ export function InventoryClient({
                   category: editCategory.trim(),
                   base_unit: editUnit.trim(),
                   current_qty: editQty,
-                  avg_unit_cost: editCost,
+                  avg_unit_cost: isCostVisible ? editCost : i.avg_unit_cost,
                   min_stock_level: editMin,
-                  total_value: editQty * editCost,
+                  total_value: editQty * (isCostVisible ? editCost : i.avg_unit_cost),
                   is_low_stock: editQty <= editMin,
                   alert_muted: editMuted,
                 }
@@ -228,7 +224,7 @@ export function InventoryClient({
         category: newCategory.trim(),
         base_unit: newUnit.trim(),
         current_qty: newQty,
-        avg_unit_cost: newCost,
+        ...(isCostVisible ? { avg_unit_cost: newCost } : {}),
         min_stock_level: newMin,
       });
 
@@ -283,17 +279,22 @@ export function InventoryClient({
 
   // Export to Excel
   function exportToExcel() {
-    const data = items.map((i, idx) => ({
-      ลำดับ: idx + 1,
-      รายการสินค้า: i.name,
-      หมวดหมู่: i.category || "ทั่วไป",
-      หน่วยนับ: i.base_unit,
-      จำนวนคงเหลือ: i.current_qty,
-      จุดสั่งซื้อขั้นต่ำ: i.min_stock_level,
-      ราคาต้นทุนต่อหน่วย: i.avg_unit_cost,
-      มูลค่าสต๊อกรวม: i.total_value,
-      สถานะ: i.is_low_stock ? "ใกล้หมด (Low Stock)" : "ปกติ",
-    }));
+    const data = items.map((i, idx) => {
+      const row: Record<string, string | number> = {
+        ลำดับ: idx + 1,
+        รายการสินค้า: i.name,
+        หมวดหมู่: i.category || "ทั่วไป",
+        หน่วยนับ: i.base_unit,
+        จำนวนคงเหลือ: i.current_qty,
+        จุดสั่งซื้อขั้นต่ำ: i.min_stock_level,
+        สถานะ: i.is_low_stock ? "ใกล้หมด" : "ปกติ",
+      };
+      if (isCostVisible) {
+        row["ราคาต้นทุนต่อหน่วย"] = i.avg_unit_cost;
+        row["มูลค่าสต๊อกรวม"] = i.total_value;
+      }
+      return row;
+    });
 
     const ws = XLSX.utils.json_to_sheet(data);
     const wb = XLSX.utils.book_new();
@@ -303,78 +304,51 @@ export function InventoryClient({
   }
 
   return (
-    <div className="space-y-8">
-      {/* ── Header Banner ── */}
-      <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl bg-gradient-to-r from-teal-800 via-teal-900 to-slate-900 p-6 text-white shadow-md">
-        <div className="space-y-1">
-          <div className="inline-flex items-center gap-2 rounded-full bg-teal-500/20 px-3 py-1 text-xs font-semibold text-teal-200 ring-1 ring-teal-400/30">
-            <Boxes className="h-3.5 w-3.5" />
-            Inventory & Stock Management
-          </div>
-          <h2 className="text-2xl font-bold tracking-tight">ระบบบริหารจัดการคลังสินค้า & สต๊อกน้ำยา</h2>
-          <p className="text-xs sm:text-sm text-teal-100/80">
-            แก้ไขรายการวัสดุ ปรับยอดคงเหลือ ตรวจสอบจุดสั่งซื้อขั้นต่ำ และควบคุมต้นทุนถัวเฉลี่ย
-          </p>
-        </div>
-
-        {/* Action Buttons */}
-        <div className="flex flex-wrap items-center gap-2">
+    <InventoryShell
+      title="คลังสินค้า"
+      description={
+        isCostVisible
+          ? "ดูยอดคงเหลือ จุดสั่งซื้อขั้นต่ำ และต้นทุนถัวเฉลี่ยของสาขาที่เลือก"
+          : "ดูยอดคงเหลือและจุดสั่งซื้อขั้นต่ำของสาขาที่เลือก"
+      }
+      role={role}
+      actions={
+        <>
           {canEdit && (
-            <Button
-              onClick={() => setIsCreateOpen(true)}
-              className="bg-emerald-600 font-bold hover:bg-emerald-500 text-white gap-2 shadow-xs text-xs h-9"
-            >
-              <PackagePlus className="h-4 w-4" /> เพิ่มสินค้าใหม่
+            <Button onClick={() => setIsCreateOpen(true)} className="h-9 gap-1.5 text-sm">
+              <PackagePlus className="h-4 w-4" /> เพิ่มสินค้า
             </Button>
           )}
-          <Button
-            variant="outline"
-            onClick={exportToExcel}
-            className="bg-white/10 text-white hover:bg-white/20 border-white/20 text-xs gap-1.5 h-9"
-          >
-            <Download className="h-4 w-4" /> Export Excel
+          <Button variant="outline" onClick={exportToExcel} className="h-9 gap-1.5 text-sm">
+            <Download className="h-4 w-4" /> ส่งออก Excel
           </Button>
-          <Link href="/stock-out">
-            <Button className="bg-teal-600 font-bold hover:bg-teal-500 text-white gap-2 shadow-xs text-xs h-9">
-              <ArrowUpFromLine className="h-4 w-4" /> เบิกใช้งาน
-            </Button>
-          </Link>
-          <Link href="/stock-in">
-            <Button variant="outline" className="bg-white/10 text-white hover:bg-white/20 border-white/20 text-xs gap-1.5 h-9">
-              <ArrowDownToLine className="h-4 w-4" /> รับของเข้า
-            </Button>
-          </Link>
-        </div>
-      </div>
+        </>
+      }
+    >
+      <div className="space-y-5">
 
-      {/* ── KPI Summary Cards ── */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        <Card
+      <div className="grid gap-3 sm:grid-cols-3">
+        <button
+          type="button"
           onClick={() => {
             setFilterLowStockOnly(false);
             setCategoryFilter("all");
             setSearchTerm("");
           }}
-          className={`border-slate-200 shadow-xs cursor-pointer transition-all ${
+          className={`rounded-2xl border bg-white p-4 text-left transition-colors dark:bg-slate-900 ${
             !filterLowStockOnly && categoryFilter === "all" && !searchTerm
-              ? "ring-2 ring-teal-500 bg-teal-50/40 border-teal-300 shadow-md"
-              : "hover:border-teal-300 hover:shadow-xs"
+              ? "border-emerald-300 ring-1 ring-emerald-200 dark:border-emerald-700"
+              : "border-slate-200 hover:border-slate-300 dark:border-slate-800"
           }`}
-          title="คลิกเพื่อแสดงสินค้าทั้งหมด"
         >
-          <CardContent className="p-5 flex items-center justify-between">
-            <div className="space-y-1">
-              <span className="text-xs font-semibold text-slate-500">จำนวนรายการสินค้าทั้งหมด</span>
-              <div className="text-2xl font-bold text-slate-900">{items.length} รายการ</div>
-              <div className="text-[11px] text-slate-400">ครอบคลุมน้ำยาและอะไหล่ทั้งหมด</div>
-            </div>
-            <div className="rounded-xl bg-slate-50 p-3 text-slate-700">
-              <Boxes className="h-6 w-6" />
-            </div>
-          </CardContent>
-        </Card>
+          <p className="text-xs text-slate-500">รายการทั้งหมด</p>
+          <p className="mt-1 text-2xl font-semibold tabular-nums text-slate-900 dark:text-white">
+            {items.length}
+          </p>
+        </button>
 
-        <Card
+        <button
+          type="button"
           onClick={() => {
             const nextState = !filterLowStockOnly;
             setFilterLowStockOnly(nextState);
@@ -383,243 +357,160 @@ export function InventoryClient({
               setSearchTerm("");
             }
           }}
-          className={`border-slate-200 shadow-xs cursor-pointer transition-all ${
+          className={`rounded-2xl border bg-white p-4 text-left transition-colors dark:bg-slate-900 ${
             filterLowStockOnly
-              ? "ring-2 ring-rose-500 bg-rose-50/50 border-rose-300 shadow-md"
-              : "hover:border-rose-300 hover:shadow-xs"
+              ? "border-rose-300 ring-1 ring-rose-200 dark:border-rose-800"
+              : "border-slate-200 hover:border-slate-300 dark:border-slate-800"
           }`}
-          title={filterLowStockOnly ? "คลิกเพื่อยกเลิกการกรอง" : "คลิกเพื่อดูเฉพาะรายการใกล้หมด"}
         >
-          <CardContent className="p-5 flex items-center justify-between">
-            <div className="space-y-1">
-              <span className="text-xs font-semibold text-slate-500 flex items-center gap-1.5">
-                สินค้าใกล้หมด (ต่ำกว่า Min Alert)
-                {filterLowStockOnly && (
-                  <Badge variant="outline" className="text-[10px] bg-rose-600 text-white font-bold px-1.5 py-0 border-rose-700">
-                    กำลังแสดงผล
-                  </Badge>
-                )}
-              </span>
-              <div className="text-2xl font-bold">
-                {lowStockCount > 0 ? (
-                  <span className="text-rose-600">{lowStockCount} รายการ</span>
-                ) : (
-                  <span className="text-emerald-600">พร้อมใช้งานทุกรายการ</span>
-                )}
-              </div>
-              <div className="text-[11px] text-slate-400">
-                {filterLowStockOnly ? "คลิกเพื่อยกเลิกการกรอง" : "คลิกเพื่อดูเฉพาะรายการใกล้หมด"}
-              </div>
-            </div>
-            <div
-              className={`rounded-xl p-3 ${
-                lowStockCount > 0 ? "bg-rose-50 text-rose-600" : "bg-emerald-50 text-emerald-600"
-              }`}
-            >
-              <AlertTriangle className="h-6 w-6" />
-            </div>
-          </CardContent>
-        </Card>
+          <p className="text-xs text-slate-500">ใกล้หมด</p>
+          <p className={`mt-1 text-2xl font-semibold tabular-nums ${lowStockCount > 0 ? "text-rose-600" : "text-emerald-600"}`}>
+            {lowStockCount}
+          </p>
+        </button>
 
-        {isCostVisible && (
-          <Card className="border-slate-200 shadow-xs sm:col-span-2 lg:col-span-1">
-            <CardContent className="p-5 flex items-center justify-between">
-              <div className="space-y-1">
-                <span className="text-xs font-semibold text-slate-500">มูลค่าคลังสินค้าคงเหลือ (ต้นทุน)</span>
-                <div className="text-2xl font-black text-teal-800 font-mono">
-                  ฿{totalValuation.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
-                </div>
-                <div className="text-[11px] text-slate-400">คำนวณตามต้นทุนถัวเฉลี่ยจริง</div>
-              </div>
-              <div className="rounded-xl bg-emerald-50 dark:bg-emerald-900/20 p-3 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-700">
-                <TrendingDown className="h-6 w-6" />
-              </div>
-            </CardContent>
-          </Card>
+        {isCostVisible ? (
+          <div className="rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+            <p className="text-xs text-slate-500">มูลค่าคลัง (ต้นทุน)</p>
+            <p className="mt-1 text-2xl font-semibold tabular-nums text-slate-900 dark:text-white">
+              ฿{totalValuation.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+            </p>
+          </div>
+        ) : (
+          <div className="hidden sm:block" />
         )}
       </div>
 
-      {/* ── Search & Filter Toolbar ── */}
-      <Card className="border-slate-200 dark:border-slate-700 shadow-sm">
-        <CardContent className="p-4 flex flex-wrap items-center justify-between gap-3">
-          <div className="flex flex-wrap items-center gap-2 flex-1">
-            <div className="relative w-64">
-              <Search className="h-3.5 w-3.5 absolute left-3 top-2.5 text-slate-400" />
-              <Input
-                type="text"
-                placeholder="ค้นหาชื่อสินค้า / หมวดหมู่..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-8 text-xs h-8.5 bg-white"
-              />
-            </div>
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="relative min-w-[12rem] flex-1">
+          <Search className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-slate-400" />
+          <Input
+            type="text"
+            placeholder="ค้นหาชื่อหรือหมวดหมู่"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="h-10 bg-white pl-9 dark:bg-slate-900"
+          />
+        </div>
+        <select
+          value={categoryFilter}
+          onChange={(e) => setCategoryFilter(e.target.value)}
+          className="h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
+        >
+          <option value="all">ทุกหมวดหมู่</option>
+          {categories.map((c) => (
+            <option key={c} value={c}>
+              {c}
+            </option>
+          ))}
+        </select>
+        <Button
+          type="button"
+          variant={filterLowStockOnly ? "default" : "outline"}
+          onClick={() => {
+            const nextState = !filterLowStockOnly;
+            setFilterLowStockOnly(nextState);
+            if (nextState) {
+              setCategoryFilter("all");
+              setSearchTerm("");
+            }
+          }}
+          className={`h-10 gap-1.5 text-sm ${filterLowStockOnly ? "bg-rose-600 hover:bg-rose-500" : ""}`}
+        >
+          <AlertTriangle className="h-4 w-4" />
+          ใกล้หมด
+        </Button>
+      </div>
 
-            <select
-              value={categoryFilter}
-              onChange={(e) => setCategoryFilter(e.target.value)}
-              className="h-8.5 rounded-md border border-slate-300 bg-white px-2.5 text-xs text-slate-700 focus:outline-none"
-            >
-              <option value="all">ทุกหมวดหมู่ ({items.length})</option>
-              {categories.map((c) => (
-                <option key={c} value={c}>
-                  {c}
-                </option>
-              ))}
-            </select>
-
-            <Button
-              type="button"
-              variant={filterLowStockOnly ? "default" : "outline"}
-              size="sm"
-              onClick={() => {
-                const nextState = !filterLowStockOnly;
-                setFilterLowStockOnly(nextState);
-                if (nextState) {
-                  setCategoryFilter("all");
-                  setSearchTerm("");
-                }
-              }}
-              className={`h-8.5 text-xs font-bold gap-1.5 ${
-                filterLowStockOnly ? "bg-rose-600 text-white shadow-xs" : "bg-white text-rose-800 border-rose-200 hover:bg-rose-50"
-              }`}
-            >
-              <AlertTriangle className="h-3.5 w-3.5" /> เฉพาะใกล้หมด ({lowStockCount})
-            </Button>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <Link href="/history">
-              <Button variant="outline" size="sm" className="h-8.5 text-xs gap-1">
-                <History className="h-3.5 w-3.5" /> ดูประวัติเบิก-รับ
-              </Button>
-            </Link>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* ── Active Low Stock Filter Banner ── */}
       {filterLowStockOnly && (
-        <div className="flex flex-wrap items-center justify-between gap-2 bg-rose-50 border border-rose-200 rounded-xl p-3 text-xs text-rose-900 font-medium shadow-2xs">
-          <div className="flex items-center gap-2">
-            <AlertTriangle className="h-4 w-4 text-rose-600 shrink-0" />
-            <span>
-              กำลังแสดงเฉพาะสินค้าที่สต๊อกต่ำกว่าหรือเท่ากับเกณฑ์ Min Alert (พบ <strong>{filteredItems.length}</strong> รายการ)
-            </span>
-          </div>
-          <Button
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-200">
+          <span>แสดงเฉพาะรายการใกล้หมด · {filteredItems.length} รายการ</span>
+          <button
             type="button"
-            variant="outline"
-            size="sm"
             onClick={() => {
               setFilterLowStockOnly(false);
               setCategoryFilter("all");
               setSearchTerm("");
             }}
-            className="h-7 text-xs bg-white text-rose-800 border-rose-300 hover:bg-rose-100 font-bold"
+            className="font-medium underline-offset-2 hover:underline"
           >
-            ✕ ล้างตัวกรอง (แสดงทั้งหมด {items.length} รายการ)
-          </Button>
+            แสดงทั้งหมด
+          </button>
         </div>
       )}
 
-      {/* ── Inventory Items Table with Edit Actions ── */}
-      <Card className="border-slate-200 shadow-sm overflow-hidden">
+      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
         <div className="overflow-x-auto">
-          <table className="w-full text-xs">
-            <thead className="bg-slate-100/80 text-slate-700 font-bold border-b border-slate-200">
-              <tr>
-                <th className="px-4 py-3 text-left">รายการสินค้า / วัสดุ</th>
-                <th className="px-3 py-3 text-left">หมวดหมู่</th>
-                <th className="px-3 py-3 text-right">คงเหลือจริง</th>
-                <th className="px-3 py-3 text-right">เกณฑ์ขั้นต่ำ (Min)</th>
-                {isCostVisible && <th className="px-3 py-3 text-right">ต้นทุน/หน่วย (฿)</th>}
-                {isCostVisible && <th className="px-3 py-3 text-right">มูลค่ารวม (฿)</th>}
-                <th className="px-3 py-3 text-center">สถานะ</th>
-                <th className="px-4 py-3 text-center">จัดการ</th>
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-slate-100 text-left text-[11px] font-medium tracking-wide text-slate-500 uppercase dark:border-slate-800">
+                <th className="px-4 py-3 font-medium">สินค้า</th>
+                <th className="px-3 py-3 font-medium">หมวดหมู่</th>
+                <th className="px-3 py-3 text-right font-medium">คงเหลือ</th>
+                <th className="px-3 py-3 text-right font-medium">ขั้นต่ำ</th>
+                {isCostVisible && <th className="px-3 py-3 text-right font-medium">ต้นทุน/หน่วย</th>}
+                {isCostVisible && <th className="px-3 py-3 text-right font-medium">มูลค่ารวม</th>}
+                <th className="px-3 py-3 text-center font-medium">สถานะ</th>
+                <th className="px-4 py-3 text-right font-medium"> </th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-200">
+            <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
               {filteredItems.map((item) => (
                 <tr
                   key={item.id}
-                  className={`hover:bg-slate-50/80 transition-colors ${
-                    item.is_low_stock ? "bg-rose-50/20" : ""
+                  className={`hover:bg-slate-50/80 dark:hover:bg-slate-800/40 ${
+                    item.is_low_stock && !item.alert_muted ? "bg-rose-50/40 dark:bg-rose-950/20" : ""
                   }`}
                 >
-                  <td className="px-4 py-3 font-bold text-slate-900">
-                    <div>{item.name}</div>
-                    <div className="text-[10px] text-slate-400 font-normal">
-                      หน่วยนับ: {item.base_unit}
-                    </div>
+                  <td className="px-4 py-3">
+                    <div className="font-medium text-slate-900 dark:text-slate-100">{item.name}</div>
+                    <div className="text-xs text-slate-400">{item.base_unit}</div>
                   </td>
-                  <td className="px-3 py-3 text-slate-600">
-                    <span className="rounded-md bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-700">
-                      {item.category || "ทั่วไป"}
-                    </span>
+                  <td className="px-3 py-3 text-slate-600 dark:text-slate-400">{item.category || "ทั่วไป"}</td>
+                  <td
+                    className={`px-3 py-3 text-right tabular-nums ${
+                      item.is_low_stock ? "font-semibold text-rose-600" : "text-slate-900 dark:text-slate-100"
+                    }`}
+                  >
+                    {item.current_qty.toLocaleString()}
                   </td>
-                  <td className="px-3 py-3 text-right font-mono font-bold text-sm">
-                    <span
-                      className={
-                        item.is_low_stock
-                          ? "text-rose-600 font-black"
-                          : "text-slate-900"
-                      }
-                    >
-                      {item.current_qty.toLocaleString()} {item.base_unit}
-                    </span>
-                  </td>
-                  <td className="px-3 py-3 text-right font-mono text-slate-500">
-                    {item.min_stock_level} {item.base_unit}
-                  </td>
+                  <td className="px-3 py-3 text-right tabular-nums text-slate-500">{item.min_stock_level}</td>
                   {isCostVisible && (
-                    <td className="px-3 py-3 text-right font-mono text-slate-700">
-                      ฿{item.avg_unit_cost.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+                    <td className="px-3 py-3 text-right tabular-nums text-slate-600">
+                      {item.avg_unit_cost.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
                     </td>
                   )}
                   {isCostVisible && (
-                    <td className="px-3 py-3 text-right font-mono font-bold text-teal-800">
-                      ฿{item.total_value.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+                    <td className="px-3 py-3 text-right tabular-nums font-medium text-slate-900 dark:text-slate-100">
+                      {item.total_value.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
                     </td>
                   )}
                   <td className="px-3 py-3 text-center">
-                    <div className="flex flex-col items-center gap-1">
-                      {item.is_low_stock ? (
-                        <Badge
-                          className={
-                            item.alert_muted
-                              ? "bg-slate-100 text-slate-500 border-slate-200 text-[10px] font-bold"
-                              : "bg-rose-100 text-rose-700 border-rose-200 text-[10px] font-bold"
-                          }
-                        >
-                          ⚠️ ใกล้หมด
-                        </Badge>
-                      ) : (
-                        <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200 text-[10px] font-bold">
-                          ✓ ปกติ
-                        </Badge>
-                      )}
-                      {item.alert_muted && (
-                        <span
-                          className="inline-flex items-center gap-0.5 text-[10px] font-medium text-slate-400"
-                          title="ปิดแจ้งเตือนสต๊อกต่ำสำหรับรายการนี้ — จะไม่มีข้อความ Telegram ส่งแม้ต่ำกว่าขั้นต่ำ"
-                        >
-                          <BellOff className="h-2.5 w-2.5" /> ปิดแจ้งเตือน
-                        </span>
-                      )}
-                    </div>
+                    {item.is_low_stock ? (
+                      <span className="inline-flex items-center rounded-full bg-rose-50 px-2 py-0.5 text-xs font-medium text-rose-700 dark:bg-rose-950 dark:text-rose-300">
+                        ใกล้หมด
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
+                        ปกติ
+                      </span>
+                    )}
+                    {item.alert_muted && (
+                      <span className="mt-1 flex items-center justify-center gap-0.5 text-[11px] text-slate-400">
+                        <BellOff className="h-3 w-3" /> ปิดแจ้ง
+                      </span>
+                    )}
                   </td>
-                  <td className="px-4 py-3 text-center whitespace-nowrap">
-                    <div className="flex items-center justify-center gap-1.5">
+                  <td className="px-4 py-3 text-right whitespace-nowrap">
+                    <div className="inline-flex items-center gap-1">
                       {canEdit && (
                         <Button
                           type="button"
                           variant="ghost"
                           size="sm"
                           onClick={() => handleToggleMute(item)}
-                          className={`h-7 w-7 p-0 ${
-                            item.alert_muted
-                              ? "text-amber-500 hover:text-amber-600 hover:bg-amber-50"
-                              : "text-slate-400 hover:text-slate-600"
+                          className={`h-8 w-8 p-0 ${
+                            item.alert_muted ? "text-amber-500 hover:bg-amber-50" : "text-slate-400"
                           }`}
                           title={
                             item.alert_muted
@@ -627,28 +518,30 @@ export function InventoryClient({
                               : "ปิดแจ้งเตือนสต๊อกต่ำ (เช่น ของใช้ในร้าน หรือของที่ตั้งใจสั่งทีละน้อย)"
                           }
                         >
-                          {item.alert_muted ? <BellOff className="h-3.5 w-3.5" /> : <Bell className="h-3.5 w-3.5" />}
+                          {item.alert_muted ? <BellOff className="h-4 w-4" /> : <Bell className="h-4 w-4" />}
                         </Button>
                       )}
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleOpenEdit(item)}
-                        className="h-7 text-xs px-2.5 text-teal-800 hover:bg-teal-50 border-teal-200 font-bold gap-1"
-                      >
-                        <Edit2 className="h-3 w-3" /> แก้ไข
-                      </Button>
+                      {canEdit && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleOpenEdit(item)}
+                          className="h-8 gap-1 px-2 text-slate-600"
+                        >
+                          <Edit2 className="h-3.5 w-3.5" /> แก้ไข
+                        </Button>
+                      )}
                       {canEdit && (
                         <Button
                           type="button"
                           variant="ghost"
                           size="sm"
                           onClick={() => handleDeleteItem(item)}
-                          className="h-7 w-7 p-0 text-slate-400 hover:text-rose-600"
+                          className="h-8 w-8 p-0 text-slate-400 hover:text-rose-600"
                           title="ลบรายการ"
                         >
-                          <Trash2 className="h-3.5 w-3.5" />
+                          <Trash2 className="h-4 w-4" />
                         </Button>
                       )}
                     </div>
@@ -658,121 +551,121 @@ export function InventoryClient({
 
               {filteredItems.length === 0 && (
                 <tr>
-                  <td colSpan={isCostVisible ? 8 : 6} className="px-4 py-8 text-center text-slate-400">
-                    ไม่พบรายการสินค้าที่ตรงกับคำค้นหา
+                  <td colSpan={isCostVisible ? 8 : 6} className="px-4 py-12 text-center text-slate-400">
+                    ไม่พบรายการที่ตรงกับคำค้นหา
                   </td>
                 </tr>
               )}
             </tbody>
           </table>
         </div>
-      </Card>
+      </div>
+      </div>
 
-      {/* ── Edit Item Modal ── */}
       {editingItem && (
         <ModalBackdrop
           onClose={() => handleCloseEdit()}
           dismissOnBackdrop={false}
           className="bg-black/50 backdrop-blur-xs"
         >
-          <div className="my-auto w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-150">
-            <div className="flex items-center justify-between border-b border-slate-200 pb-3">
-              <div className="flex items-center gap-2">
-                <div className="h-8 w-8 rounded-full bg-teal-100 text-teal-800 flex items-center justify-center font-bold">
-                  <Edit2 className="h-4 w-4" />
-                </div>
-                <div>
-                  <h3 className="text-base font-bold text-slate-900">แก้ไขข้อมูลสินค้า / แก้ไขข้อมูลผิด</h3>
-                  <p className="text-xs text-slate-500">รหัสอ้างอิง: {editingItem.id}</p>
-                </div>
+          <div className="my-auto w-full max-w-lg space-y-5 rounded-2xl border border-slate-200 bg-white p-6 shadow-xl dark:border-slate-800 dark:bg-slate-900">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h3 className="text-base font-semibold text-slate-900 dark:text-white">แก้ไขสินค้า</h3>
+                <p className="mt-0.5 text-sm text-slate-500">{editingItem.name}</p>
               </div>
               <button
                 type="button"
                 onClick={handleCloseEdit}
-                className="rounded-full p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+                className="rounded-full p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800"
               >
                 <X className="h-4 w-4" />
               </button>
             </div>
 
             <form onSubmit={handleSaveEdit} className="space-y-4">
-              <div className="space-y-1">
-                <Label className="text-xs font-bold text-slate-700">ชื่อสินค้า / วัสดุ *</Label>
+              <div className="space-y-1.5">
+                <Label className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                  ชื่อสินค้า <span className="text-rose-500">*</span>
+                </Label>
                 <Input
                   type="text"
                   value={editName}
                   onChange={(e) => setEditName(e.target.value)}
-                  className="h-9 text-xs font-medium"
+                  className="h-10 text-sm"
                   required
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <Label className="text-xs font-bold text-slate-700">หมวดหมู่</Label>
+                <div className="space-y-1.5">
+                  <Label className="text-sm font-medium text-slate-700 dark:text-slate-300">หมวดหมู่</Label>
                   <Input
                     type="text"
                     value={editCategory}
                     onChange={(e) => setEditCategory(e.target.value)}
-                    className="h-9 text-xs"
-                    placeholder="เช่น น้ำยาซัก, สี, อะไหล่"
+                    className="h-10 text-sm"
+                    placeholder="เช่น น้ำยาซัก, อะไหล่"
                   />
                 </div>
-
-                <div className="space-y-1">
-                  <Label className="text-xs font-bold text-slate-700">หน่วยนับ *</Label>
+                <div className="space-y-1.5">
+                  <Label className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                    หน่วยนับ <span className="text-rose-500">*</span>
+                  </Label>
                   <Input
                     type="text"
                     value={editUnit}
                     onChange={(e) => setEditUnit(e.target.value)}
-                    className="h-9 text-xs"
-                    placeholder="เช่น ขวด, ml, คู่, ชิ้น"
+                    className="h-10 text-sm"
+                    placeholder="ขวด, มล., ชิ้น"
                     required
                   />
                 </div>
               </div>
 
-              <div className="grid grid-cols-3 gap-3">
-                <div className="space-y-1">
-                  <Label className="text-xs font-bold text-teal-900">จำนวนคงเหลือจริง *</Label>
+              <div className={`grid gap-3 ${isCostVisible ? "grid-cols-3" : "grid-cols-2"}`}>
+                <div className="space-y-1.5">
+                  <Label className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                    จำนวนคงเหลือ <span className="text-rose-500">*</span>
+                  </Label>
                   <Input
                     type="number"
                     step="any"
                     value={editQty}
                     onChange={(e) => setEditQty(parseFloat(e.target.value) || 0)}
-                    className="h-9 text-xs font-mono font-bold text-teal-950 bg-teal-50/50 border-teal-300"
+                    className="h-10 text-sm tabular-nums"
                     required
                   />
                 </div>
-
-                <div className="space-y-1">
-                  <Label className="text-xs font-bold text-slate-700">เกณฑ์ขั้นต่ำ (Min Alert)</Label>
+                <div className="space-y-1.5">
+                  <Label className="text-sm font-medium text-slate-700 dark:text-slate-300">จุดสั่งซื้อขั้นต่ำ</Label>
                   <Input
                     type="number"
                     step="any"
                     value={editMin}
                     onChange={(e) => setEditMin(parseFloat(e.target.value) || 0)}
-                    className="h-9 text-xs font-mono"
+                    className="h-10 text-sm tabular-nums"
                   />
                 </div>
-
-                <div className="space-y-1">
-                  <Label className="text-xs font-bold text-slate-700">ต้นทุน/หน่วย (฿)</Label>
-                  <Input
-                    type="number"
-                    step="any"
-                    value={editCost}
-                    onChange={(e) => setEditCost(parseFloat(e.target.value) || 0)}
-                    className="h-9 text-xs font-mono"
-                  />
-                </div>
+                {isCostVisible && (
+                  <div className="space-y-1.5">
+                    <Label className="text-sm font-medium text-slate-700 dark:text-slate-300">ต้นทุน/หน่วย (฿)</Label>
+                    <Input
+                      type="number"
+                      step="any"
+                      value={editCost}
+                      onChange={(e) => setEditCost(parseFloat(e.target.value) || 0)}
+                      className="h-10 text-sm tabular-nums"
+                    />
+                  </div>
+                )}
               </div>
 
               <label
-                className={`flex items-start gap-2.5 rounded-xl border p-3 text-xs cursor-pointer transition-colors ${
+                className={`flex cursor-pointer items-start gap-2.5 rounded-xl border p-3 text-sm transition-colors ${
                   editMuted
-                    ? "border-amber-300 bg-amber-50/70 text-amber-900"
-                    : "border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100"
+                    ? "border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200"
+                    : "border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800/50 dark:text-slate-300"
                 }`}
               >
                 <input
@@ -782,38 +675,27 @@ export function InventoryClient({
                   className="mt-0.5 h-3.5 w-3.5 rounded border-slate-300 accent-amber-500"
                 />
                 <span>
-                  <span className="font-bold flex items-center gap-1">
+                  <span className="flex items-center gap-1 font-medium">
                     {editMuted ? <BellOff className="h-3.5 w-3.5" /> : <Bell className="h-3.5 w-3.5" />}
                     ปิดแจ้งเตือนสต๊อกต่ำสำหรับรายการนี้
                   </span>
-                  <span className="block mt-0.5 text-[11px] opacity-80">
-                    ใช้เมื่อสินค้านี้ใช้ภายในร้านเอง ไม่ใช่ของขาย หรือตั้งใจสั่งซื้อทีละน้อยจนติดขั้นต่ำเป็นปกติอยู่แล้ว —
-                    ระบบจะไม่ส่งข้อความ Telegram แจ้งเตือนสต๊อกต่ำของรายการนี้ แต่ยังนับสต๊อกและแสดงสถานะ &ldquo;ใกล้หมด&rdquo; ในตารางตามปกติ
+                  <span className="mt-0.5 block text-xs opacity-80">
+                    ใช้เมื่อของชิ้นนี้ตั้งใจสั่งทีละน้อย หรือใช้ในร้านเอง — จะไม่ส่ง Telegram
+                    แต่ตารางยังแสดงสถานะใกล้หมดตามปกติ
                   </span>
                 </span>
               </label>
 
-              <div className="rounded-xl bg-slate-50 p-3 text-xs text-slate-600 border border-slate-200">
-                💡 การแก้ไขยอดคงเหลือจะถูกบันทึกลงในสมุดบัญชีสต๊อก (Stock Ledger Adjustment) โดยอัตโนมัติ เพื่อให้ยอดตัวเลขสอดคล้องกับการตรวจนับจริง
-              </div>
+              <p className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-xs text-slate-600 dark:border-slate-700 dark:bg-slate-800/40 dark:text-slate-300">
+                ถ้าแก้จำนวนคงเหลือ ระบบจะบันทึกเป็นรายการตรวจนับในประวัติคลังให้อัตโนมัติ
+              </p>
 
-              <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-200">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={handleCloseEdit}
-                  className="text-xs h-9"
-                >
+              <div className="flex items-center justify-end gap-2 border-t border-slate-100 pt-3 dark:border-slate-800">
+                <Button type="button" variant="outline" onClick={handleCloseEdit} className="h-10">
                   ยกเลิก
                 </Button>
-                <Button
-                  type="submit"
-                  disabled={isPending}
-                  size="sm"
-                  className="bg-teal-700 hover:bg-emerald-600 text-white font-bold text-xs h-9 px-4 gap-1.5"
-                >
-                  {isPending ? "กำลังบันทึก..." : <><Check className="h-4 w-4" /> บันทึกการแก้ไข</>}
+                <Button type="submit" disabled={isPending} className="h-10 gap-1.5">
+                  {isPending ? "กำลังบันทึก..." : <><Check className="h-4 w-4" /> บันทึก</>}
                 </Button>
               </div>
             </form>
@@ -821,129 +703,115 @@ export function InventoryClient({
         </ModalBackdrop>
       )}
 
-      {/* ── Create New Item Modal ── */}
       {isCreateOpen && (
         <ModalBackdrop
           onClose={() => setIsCreateOpen(false)}
           dismissOnBackdrop={false}
           className="bg-black/50 backdrop-blur-xs"
         >
-          <div className="my-auto w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-150">
-            <div className="flex items-center justify-between border-b border-slate-200 pb-3">
-              <div className="flex items-center gap-2">
-                <div className="h-8 w-8 rounded-full bg-emerald-100 text-emerald-800 flex items-center justify-center font-bold">
-                  <PackagePlus className="h-4 w-4" />
-                </div>
-                <div>
-                  <h3 className="text-base font-bold text-slate-900">เพิ่มรายการสินค้า / วัสดุใหม่</h3>
-                  <p className="text-xs text-slate-500">บันทึกสินค้าใหม่เข้าสู่ระบบคลังสินค้า</p>
-                </div>
+          <div className="my-auto w-full max-w-lg space-y-5 rounded-2xl border border-slate-200 bg-white p-6 shadow-xl dark:border-slate-800 dark:bg-slate-900">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h3 className="text-base font-semibold text-slate-900 dark:text-white">เพิ่มสินค้า</h3>
+                <p className="mt-0.5 text-sm text-slate-500">บันทึกเข้าแคตตาล็อกของสาขาที่เลือก</p>
               </div>
               <button
                 type="button"
                 onClick={() => setIsCreateOpen(false)}
-                className="rounded-full p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+                className="rounded-full p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800"
               >
                 <X className="h-4 w-4" />
               </button>
             </div>
 
             <form onSubmit={handleSaveCreate} className="space-y-4">
-              <div className="space-y-1">
-                <Label className="text-xs font-bold text-slate-700">ชื่อสินค้า / วัสดุ *</Label>
+              <div className="space-y-1.5">
+                <Label className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                  ชื่อสินค้า <span className="text-rose-500">*</span>
+                </Label>
                 <Input
                   type="text"
-                  placeholder="เช่น น้ำยาซักแห้งพรีเมียม 500ml"
+                  placeholder="เช่น น้ำยาขจัดคราบ 500 มล."
                   value={newName}
                   onChange={(e) => setNewName(e.target.value)}
-                  className="h-9 text-xs font-medium"
+                  className="h-10 text-sm"
                   required
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <Label className="text-xs font-bold text-slate-700">หมวดหมู่</Label>
+                <div className="space-y-1.5">
+                  <Label className="text-sm font-medium text-slate-700 dark:text-slate-300">หมวดหมู่</Label>
                   <Input
                     type="text"
                     value={newCategory}
                     onChange={(e) => setNewCategory(e.target.value)}
-                    className="h-9 text-xs"
-                    placeholder="เช่น น้ำยา, อะไหล่, บรรจุภัณฑ์"
+                    className="h-10 text-sm"
+                    placeholder="น้ำยา, อะไหล่, บรรจุภัณฑ์"
                   />
                 </div>
-
-                <div className="space-y-1">
-                  <Label className="text-xs font-bold text-slate-700">หน่วยนับ *</Label>
+                <div className="space-y-1.5">
+                  <Label className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                    หน่วยนับ <span className="text-rose-500">*</span>
+                  </Label>
                   <Input
                     type="text"
                     value={newUnit}
                     onChange={(e) => setNewUnit(e.target.value)}
-                    className="h-9 text-xs"
-                    placeholder="เช่น ขวด, ml, คู่, ชิ้น"
+                    className="h-10 text-sm"
+                    placeholder="ขวด, มล., ชิ้น"
                     required
                   />
                 </div>
               </div>
 
-              <div className="grid grid-cols-3 gap-3">
-                <div className="space-y-1">
-                  <Label className="text-xs font-bold text-slate-700">จำนวนยอดยกมาเริ่มต้น</Label>
+              <div className={`grid gap-3 ${isCostVisible ? "grid-cols-3" : "grid-cols-2"}`}>
+                <div className="space-y-1.5">
+                  <Label className="text-sm font-medium text-slate-700 dark:text-slate-300">ยอดยกมาเริ่มต้น</Label>
                   <Input
                     type="number"
                     step="any"
                     value={newQty}
                     onChange={(e) => setNewQty(parseFloat(e.target.value) || 0)}
-                    className="h-9 text-xs font-mono font-bold"
+                    className="h-10 text-sm tabular-nums"
                   />
                 </div>
-
-                <div className="space-y-1">
-                  <Label className="text-xs font-bold text-slate-700">จุดสั่งซื้อขั้นต่ำ (Min)</Label>
+                <div className="space-y-1.5">
+                  <Label className="text-sm font-medium text-slate-700 dark:text-slate-300">จุดสั่งซื้อขั้นต่ำ</Label>
                   <Input
                     type="number"
                     step="any"
                     value={newMin}
                     onChange={(e) => setNewMin(parseFloat(e.target.value) || 0)}
-                    className="h-9 text-xs font-mono"
+                    className="h-10 text-sm tabular-nums"
                   />
                 </div>
-
-                <div className="space-y-1">
-                  <Label className="text-xs font-bold text-slate-700">ต้นทุนต่อหน่วย (฿)</Label>
-                  <Input
-                    type="number"
-                    step="any"
-                    value={newCost}
-                    onChange={(e) => setNewCost(parseFloat(e.target.value) || 0)}
-                    className="h-9 text-xs font-mono"
-                  />
-                </div>
+                {isCostVisible && (
+                  <div className="space-y-1.5">
+                    <Label className="text-sm font-medium text-slate-700 dark:text-slate-300">ต้นทุน/หน่วย (฿)</Label>
+                    <Input
+                      type="number"
+                      step="any"
+                      value={newCost}
+                      onChange={(e) => setNewCost(parseFloat(e.target.value) || 0)}
+                      className="h-10 text-sm tabular-nums"
+                    />
+                  </div>
+                )}
               </div>
 
-              <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-200">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setIsCreateOpen(false)}
-                  className="text-xs h-9"
-                >
+              <div className="flex items-center justify-end gap-2 border-t border-slate-100 pt-3 dark:border-slate-800">
+                <Button type="button" variant="outline" onClick={() => setIsCreateOpen(false)} className="h-10">
                   ยกเลิก
                 </Button>
-                <Button
-                  type="submit"
-                  disabled={isPending}
-                  size="sm"
-                  className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs h-9 px-4 gap-1.5"
-                >
-                  {isPending ? "กำลังบันทึก..." : <><Check className="h-4 w-4" /> สร้างรายการสินค้า</>}
+                <Button type="submit" disabled={isPending} className="h-10 gap-1.5">
+                  {isPending ? "กำลังบันทึก..." : <><Check className="h-4 w-4" /> เพิ่มสินค้า</>}
                 </Button>
               </div>
             </form>
           </div>
         </ModalBackdrop>
       )}
-    </div>
+    </InventoryShell>
   );
 }

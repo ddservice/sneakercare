@@ -29,7 +29,7 @@ export function PendingAdjustmentsList({ rows }: { rows: PendingRow[] }) {
   }
 
   if (rows.length === 0) {
-    return <p className="text-sm text-muted-foreground">ไม่มีรายการรออนุมัติ</p>;
+    return <p className="px-1 py-6 text-center text-sm text-slate-400">ไม่มีรายการรออนุมัติ</p>;
   }
 
   return (
@@ -56,22 +56,26 @@ export function PendingAdjustmentsList({ rows }: { rows: PendingRow[] }) {
               {row.reason}
             </TableCell>
             <TableCell>{row.performed_by_name}</TableCell>
-            <TableCell className="flex justify-end gap-2">
-              <Button
-                size="sm"
-                disabled={isPending}
-                onClick={() => handleApprove(row.id, true)}
-              >
-                อนุมัติ
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                disabled={isPending}
-                onClick={() => handleApprove(row.id, false)}
-              >
-                ปฏิเสธ
-              </Button>
+            <TableCell className="text-right">
+              <div className="inline-flex justify-end gap-1.5">
+                <Button
+                  size="sm"
+                  disabled={isPending}
+                  onClick={() => handleApprove(row.id, true)}
+                  className="h-8"
+                >
+                  อนุมัติ
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={isPending}
+                  onClick={() => handleApprove(row.id, false)}
+                  className="h-8 text-rose-700 hover:bg-rose-50 hover:text-rose-800"
+                >
+                  ปฏิเสธ
+                </Button>
+              </div>
             </TableCell>
           </TableRow>
         ))}

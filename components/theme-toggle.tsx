@@ -9,7 +9,7 @@ export function ThemeToggle() {
   const mounted = useIsMounted();
 
   if (!mounted) {
-    return <div className="h-8 w-8 rounded-lg border border-slate-200 bg-white" />;
+    return <div className="h-8 w-8 rounded-full border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800" />;
   }
 
   const isDark = theme === "dark";
@@ -18,7 +18,7 @@ export function ThemeToggle() {
     <button
       type="button"
       onClick={() => setTheme(isDark ? "light" : "dark")}
-      className="relative flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-100 dark:border-slate-800 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700 transition-all cursor-pointer shadow-2xs"
+      className="relative flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700 transition-colors cursor-pointer"
       title={isDark ? "สลับเป็นโหมดสว่าง (Light Mode)" : "สลับเป็นโหมดมืด (Dark Mode)"}
     >
       {isDark ? (

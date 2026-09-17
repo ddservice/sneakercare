@@ -4,21 +4,14 @@ import { getSelectedBranchId } from "@/lib/branch";
 import { canSeeCost } from "@/lib/permissions";
 import { TXN_TYPE_LABEL } from "@/lib/txn-labels";
 import type { StockTxnType } from "@/lib/supabase/database.types";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Pagination } from "@/components/pagination";
 import { DEFAULT_PAGE_SIZE, pageInfo, parsePage, rangeFor } from "@/lib/pagination";
-import {
-  History,
-  Boxes,
-  ArrowDownToLine,
-  ArrowUpFromLine,
-  CalendarRange,
-} from "lucide-react";
+import { CalendarRange } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { withId, text, num } from "@/lib/db-rows";
+import { InventoryShell } from "@/components/inventory-shell";
 
 type HistoryRow = {
   id: string;
@@ -158,223 +151,175 @@ export default async function HistoryPage({
   const summaryTruncated = summary.length >= SUMMARY_CAP;
 
   return (
-    <div className="space-y-6">
-      {/* ── Header ── */}
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <h2 className="text-xl font-bold text-slate-900 flex items-center gap-2">
-            <History className="h-5 w-5 text-teal-700" />
-            ประวัติการเบิก-รับ-ปรับสต๊อก (Inventory Ledger)
-          </h2>
-          <p className="text-xs text-slate-500">
-            บันทึกประวัติการเปลี่ยนแปลงสต๊อกสินค้าทั้งหมด {count ?? 0} รายการ (เลือกดูย้อนหลังได้ทุกช่วงเวลา)
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Link href="/stock-out">
-            <Button size="sm" className="bg-teal-700 hover:bg-emerald-600 text-white text-xs gap-1.5 h-8.5">
-              <ArrowUpFromLine className="h-3.5 w-3.5" /> เบิกใช้งาน
-            </Button>
-          </Link>
-          <Link href="/stock-in">
-            <Button size="sm" variant="outline" className="text-xs gap-1.5 h-8.5">
-              <ArrowDownToLine className="h-3.5 w-3.5" /> รับของเข้า
-            </Button>
-          </Link>
-          <Link href="/inventory">
-            <Button variant="outline" size="sm" className="text-xs gap-1.5 h-8.5">
-              <Boxes className="h-3.5 w-3.5" /> หน้าคลังสินค้า
-            </Button>
-          </Link>
-        </div>
-      </div>
-
-      {/* ── Period View Selector Toolbar ── */}
-      <Card className="border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50 shadow-xs">
-        <CardContent className="p-4 space-y-3">
-          <div className="flex flex-wrap items-center justify-between gap-3">
+    <InventoryShell
+      title="ประวัติคลัง"
+      description={`ความเคลื่อนไหวสต๊อก ${count ?? 0} รายการ ในช่วงที่เลือก`}
+      role={profile.role}
+    >
+      <div className="space-y-5">
+      <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+        <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex flex-wrap items-center gap-1.5">
-              <span className="text-xs font-bold text-teal-950 flex items-center gap-1 mr-1">
-                <CalendarRange className="h-3.5 w-3.5 text-teal-700" /> ช่วงเวลา:
+              <span className="mr-1 inline-flex items-center gap-1 text-xs font-medium text-slate-500">
+                <CalendarRange className="h-3.5 w-3.5" /> ช่วงเวลา
               </span>
               <Link href="/history?period=today">
                 <Button
                   size="sm"
                   variant={period === "today" ? "default" : "outline"}
-                  className={`h-8 text-xs font-bold ${
-                    period === "today" ? "bg-emerald-500 text-white" : "bg-white text-slate-700"
-                  }`}
+                  className="h-8 text-xs"
                 >
-                  🗓️ วันนี้
+                  วันนี้
                 </Button>
               </Link>
               <Link href="/history?period=week">
                 <Button
                   size="sm"
                   variant={period === "week" ? "default" : "outline"}
-                  className={`h-8 text-xs font-bold ${
-                    period === "week" ? "bg-emerald-500 text-white" : "bg-white text-slate-700"
-                  }`}
+                  className="h-8 text-xs"
                 >
-                  📅 สัปดาห์นี้
+                  สัปดาห์นี้
                 </Button>
               </Link>
               <Link href="/history?period=month">
                 <Button
                   size="sm"
                   variant={period === "month" ? "default" : "outline"}
-                  className={`h-8 text-xs font-bold ${
-                    period === "month" ? "bg-emerald-500 text-white" : "bg-white text-slate-700"
-                  }`}
+                  className="h-8 text-xs"
                 >
-                  📆 เดือนนี้
+                  เดือนนี้
                 </Button>
               </Link>
               <Link href="/history?period=all">
                 <Button
                   size="sm"
                   variant={period === "all" ? "default" : "outline"}
-                  className={`h-8 text-xs font-bold ${
-                    period === "all" ? "bg-emerald-500 text-white" : "bg-white text-slate-700"
-                  }`}
+                  className="h-8 text-xs"
                 >
-                  🌐 ภาพรวมทั้งหมด
+                  ทั้งหมด
                 </Button>
               </Link>
             </div>
 
-            {/* Quick Summary Pills */}
             <div className="flex flex-wrap items-center gap-2 text-xs">
-              <div className="rounded-md bg-white px-2.5 py-1 border border-teal-200 shadow-2xs">
-                <span className="text-slate-500">รับเข้า: </span>
-                <span className="font-bold text-emerald-700 font-mono">+{totalStockIn} หน่วย</span>
-              </div>
-              <div className="rounded-md bg-white px-2.5 py-1 border border-teal-200 shadow-2xs">
-                <span className="text-slate-500">เบิกใช้: </span>
-                <span className="font-bold text-amber-700 font-mono">-{totalStockOut} หน่วย</span>
-              </div>
+              <span className="rounded-full bg-slate-50 px-2.5 py-1 text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                รับเข้า <span className="font-semibold tabular-nums text-emerald-700">+{totalStockIn}</span>
+              </span>
+              <span className="rounded-full bg-slate-50 px-2.5 py-1 text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                เบิกใช้ <span className="font-semibold tabular-nums text-amber-700">−{totalStockOut}</span>
+              </span>
               {showCost && (
-                <div className="rounded-md bg-emerald-500 text-white px-2.5 py-1 shadow-2xs">
-                  <span className="text-teal-100">มูลค่าต้นทุน: </span>
-                  <span className="font-bold font-mono">
-                    {totalCostPeriod.toLocaleString("th-TH", { minimumFractionDigits: 2 })} ฿
+                <span className="rounded-full bg-slate-50 px-2.5 py-1 text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                  ต้นทุน{" "}
+                  <span className="font-semibold tabular-nums">
+                    ฿{totalCostPeriod.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
                   </span>
-                </div>
+                </span>
               )}
               {summaryTruncated && (
-                <div className="rounded-md bg-amber-50 border border-amber-300 text-amber-800 px-2.5 py-1">
-                  ⚠️ ยอดรวมนับจาก {SUMMARY_CAP.toLocaleString("th-TH")} รายการล่าสุดเท่านั้น — ช่วงเวลานี้ใหญ่เกินไป
-                  ให้แคบช่วงลงเพื่อดูยอดที่ครบถ้วน
-                </div>
+                <span className="rounded-full bg-amber-50 px-2.5 py-1 text-amber-800 dark:bg-amber-950 dark:text-amber-200">
+                  ยอดรวมนับจาก {SUMMARY_CAP.toLocaleString("th-TH")} รายการล่าสุดเท่านั้น
+                </span>
               )}
             </div>
           </div>
-        </CardContent>
-      </Card>
+      </div>
 
       {/* ── Table ── */}
-      <Card className="border-slate-200 shadow-sm">
-        <CardHeader className="border-b border-slate-100 pb-3">
-          <CardTitle className="text-sm font-bold text-slate-800">
-            รายการความเคลื่อนไหวสต๊อกสินค้า
-          </CardTitle>
-          <CardDescription className="text-xs">
-            ประวัติบัญชีคลังสินค้า Ledger ที่มีหลักฐานเชื่อมโยง
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader className="bg-slate-50 border-b border-slate-200">
-              <TableRow>
-                <TableHead className="text-xs">เวลา</TableHead>
-                <TableHead className="text-xs">ประเภท</TableHead>
-                <TableHead className="text-xs">สินค้า</TableHead>
-                <TableHead className="text-xs text-right">จำนวน</TableHead>
-                {showCost && <TableHead className="text-xs text-right">ต้นทุนรวม (฿)</TableHead>}
-                <TableHead className="text-xs">เหตุผล / อ้างอิง</TableHead>
-                <TableHead className="text-xs">สถานะ</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody className="text-xs divide-y divide-slate-100">
+      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-slate-100 text-left text-[11px] font-medium tracking-wide text-slate-500 uppercase dark:border-slate-800">
+                <th className="px-4 py-3 font-medium">เวลา</th>
+                <th className="px-3 py-3 font-medium">ประเภท</th>
+                <th className="px-3 py-3 font-medium">สินค้า</th>
+                <th className="px-3 py-3 text-right font-medium">จำนวน</th>
+                {showCost && <th className="px-3 py-3 text-right font-medium">ต้นทุนรวม</th>}
+                <th className="px-3 py-3 font-medium">เหตุผล / อ้างอิง</th>
+                <th className="px-4 py-3 font-medium">สถานะ</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
               {rows.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={showCost ? 7 : 6} className="text-center py-8 text-slate-400">
-                    ไม่พบข้อมูลความเคลื่อนไหวในช่วงเวลานี้
-                  </TableCell>
-                </TableRow>
+                <tr>
+                  <td colSpan={showCost ? 7 : 6} className="px-4 py-12 text-center text-slate-400">
+                    ไม่พบความเคลื่อนไหวในช่วงเวลานี้
+                  </td>
+                </tr>
               ) : (
                 rows.map((r) => {
                   const isPositive = r.quantity_delta > 0;
                   const isNegative = r.quantity_delta < 0;
                   return (
-                    <TableRow key={r.id} className="hover:bg-slate-50/80">
-                      <TableCell className="font-mono text-slate-600 whitespace-nowrap">
+                    <tr key={r.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40">
+                      <td className="px-4 py-3 whitespace-nowrap tabular-nums text-slate-600 dark:text-slate-400">
                         {new Date(r.created_at).toLocaleString("th-TH", {
                           dateStyle: "short",
                           timeStyle: "short",
                         })}
-                      </TableCell>
-                      <TableCell>
+                      </td>
+                      <td className="px-3 py-3">
                         <Badge
                           variant="outline"
-                          className={`text-[10px] ${
+                          className={
                             isPositive
-                              ? "bg-emerald-50 text-emerald-700 border-emerald-300"
+                              ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950 dark:text-emerald-300"
                               : isNegative
-                              ? "bg-amber-50 text-amber-700 border-amber-300"
-                              : "bg-slate-50 text-slate-700 border-slate-300"
-                          }`}
+                                ? "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-300"
+                                : "border-slate-200 bg-slate-50 text-slate-600"
+                          }
                         >
                           {TXN_TYPE_LABEL[r.txn_type as keyof typeof TXN_TYPE_LABEL] ?? r.txn_type}
                         </Badge>
-                      </TableCell>
-                      <TableCell className="font-medium text-slate-900">{r.item_name}</TableCell>
-                      <TableCell
-                        className={`text-right font-mono font-bold whitespace-nowrap ${
+                      </td>
+                      <td className="px-3 py-3 font-medium text-slate-900 dark:text-slate-100">{r.item_name}</td>
+                      <td
+                        className={`px-3 py-3 text-right tabular-nums whitespace-nowrap ${
                           isPositive
-                            ? "text-emerald-600"
+                            ? "font-medium text-emerald-600"
                             : isNegative
-                            ? "text-rose-600"
-                            : "text-slate-600"
+                              ? "font-medium text-rose-600"
+                              : "text-slate-600"
                         }`}
                       >
                         {isPositive ? `+${r.quantity_delta}` : r.quantity_delta} {r.base_unit}
-                      </TableCell>
+                      </td>
                       {showCost && (
-                        <TableCell className="text-right font-mono font-semibold text-slate-800">
+                        <td className="px-3 py-3 text-right tabular-nums text-slate-700 dark:text-slate-300">
                           {r.total_cost > 0
                             ? r.total_cost.toLocaleString("th-TH", { minimumFractionDigits: 2 })
                             : "—"}
-                        </TableCell>
+                        </td>
                       )}
-                      <TableCell className="text-slate-600">
+                      <td className="px-3 py-3 text-slate-600 dark:text-slate-400">
                         <div>{r.reason || r.reference_note || "—"}</div>
                         {r.reference_note && r.reason && (
-                          <div className="text-[10px] text-slate-400">อ้างอิง: {r.reference_note}</div>
+                          <div className="text-xs text-slate-400">อ้างอิง: {r.reference_note}</div>
                         )}
-                      </TableCell>
-                      <TableCell>
+                      </td>
+                      <td className="px-4 py-3">
                         <Badge
                           variant="outline"
                           className={
                             r.status === "pending_approval"
-                              ? "bg-amber-100 text-amber-800 border-amber-300"
+                              ? "border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200"
                               : r.status === "rejected"
-                              ? "bg-rose-100 text-rose-800 border-rose-300"
-                              : "bg-emerald-50 text-emerald-700 border-emerald-200"
+                                ? "border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-900 dark:bg-rose-950 dark:text-rose-300"
+                                : "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950 dark:text-emerald-300"
                           }
                         >
                           {statusLabel(r.status)}
                         </Badge>
-                      </TableCell>
-                    </TableRow>
+                      </td>
+                    </tr>
                   );
                 })
               )}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+            </tbody>
+          </table>
+        </div>
+      </div>
 
       {/* ส่ง params ไปด้วย ไม่งั้นกด "ถัดไป" แล้วช่วงเวลา/ประเภทที่เลือกไว้หลุดกลับเป็นค่า default */}
       <Pagination
@@ -387,6 +332,7 @@ export default async function HistoryPage({
           endDate: resolvedParams.endDate,
         }}
       />
-    </div>
+      </div>
+    </InventoryShell>
   );
 }

@@ -4,7 +4,8 @@ import { createClient } from "@/lib/supabase/server";
 import { getSelectedBranchId } from "@/lib/branch";
 import { tenantFilter } from "@/lib/tenant";
 import { canWrite } from "@/lib/permissions";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { NeedBranchEmpty } from "@/components/need-branch-empty";
+import { InventoryFormPanel, InventoryShell } from "@/components/inventory-shell";
 import { AdjustmentForm } from "./adjustment-form";
 import { PendingAdjustmentsList } from "./pending-list";
 
@@ -14,8 +15,6 @@ export default async function AdjustmentsPage() {
   const canEdit = canWrite(profile.role, "adjustments");
   const branchId = await getSelectedBranchId(profile);
   const supabase = await createClient();
-  // ⚠️ [แก้บั๊กจริง 2026-09-17] เดิมไม่กรอง tenant เลย — super_admin เห็นตัวเลือกสินค้าของทุก
-  // tenant ปนกันตอนกรอกฟอร์มปรับปรุงสต๊อก (ดูเหตุผลเดียวกับ /inventory)
   const tenantId = await tenantFilter(profile);
   let itemsQuery = supabase
     .from("items")
@@ -25,11 +24,8 @@ export default async function AdjustmentsPage() {
   if (tenantId) itemsQuery = itemsQuery.eq("tenant_id", tenantId);
   const { data: items } = await itemsQuery;
 
-    // view alias คืนทุกคอลัมน์เป็น nullable — เติมค่าสำรองแทนการ cast ทับ (ดู lib/db-rows.ts)
   const itemOptions = withId(items).map((i) => ({ id: i.id, name: text(i.name), base_unit: text(i.base_unit) }));
 
-  // ✅ [2026-09-17] super_admin เห็น/อนุมัติรายการรออนุมัติได้เหมือน admin แล้ว (คู่กับ migration
-  // 0038 ที่แก้ inv_fn_approve_adjustment() ให้รู้จัก super_admin) — เดิมเช็คแค่ "admin" เท่านั้น
   const isApprover = profile.role === "admin" || profile.role === "super_admin";
   let pendingRows: Parameters<typeof PendingAdjustmentsList>[0]["rows"] = [];
   if (isApprover) {
@@ -41,7 +37,6 @@ export default async function AdjustmentsPage() {
     if (branchId) pendingQuery = pendingQuery.eq("branch_id", branchId);
     const { data: pending } = await pendingQuery;
 
-    // view คืนทุกคอลัมน์เป็น nullable — จัดการ null ตรงนี้แทนการ cast ทับ (ดู lib/db-rows.ts)
     pendingRows = withId(pending).map((row) => ({
       id: row.id,
       item_name: text(row.item_name, "(ไม่ทราบชื่อสินค้า)"),
@@ -55,32 +50,35 @@ export default async function AdjustmentsPage() {
   }
 
   return (
-    <div className="flex flex-col gap-4">
-      <Card className="max-w-md">
-        <CardHeader>
-          <CardTitle>ปรับปรุงสต๊อกจากตรวจนับ</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {canEdit && branchId ? (
+    <InventoryShell title="ตรวจนับสต๊อก" description="ปรับยอดให้ตรงกับการนับจริง — Co-Admin ต้องรอ Admin อนุมัติ" role={profile.role}>
+      <div className="space-y-6">
+        {canEdit && branchId ? (
+          <InventoryFormPanel>
             <AdjustmentForm items={itemOptions} branchId={branchId} requiresApproval={!isApprover} />
-          ) : canEdit ? (
-            <p className="text-muted-foreground">เลือกสาขาจากแถบด้านบนเพื่อทำรายการปรับปรุงสต๊อก</p>
-          ) : (
-            <p className="text-muted-foreground">บัญชีนี้ดูหน้านี้ได้ แต่ไม่มีสิทธิ์กรอกปรับปรุงสต๊อก</p>
-          )}
-        </CardContent>
-      </Card>
+          </InventoryFormPanel>
+        ) : canEdit ? (
+          <NeedBranchEmpty
+            title="เลือกสาขาก่อนปรับปรุงสต๊อก"
+            description="ต้องระบุสาขาให้ชัดก่อนบันทึกผลตรวจนับ เพื่อไม่ให้ยอดคงเหลือถูกปรับผิดร้าน"
+          />
+        ) : (
+          <InventoryFormPanel>
+            <p className="text-sm text-slate-500">บัญชีนี้ดูหน้านี้ได้ แต่ไม่มีสิทธิ์กรอกปรับปรุงสต๊อก</p>
+          </InventoryFormPanel>
+        )}
 
-      {isApprover && (
-        <Card>
-          <CardHeader>
-            <CardTitle>รายการรออนุมัติ</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <PendingAdjustmentsList rows={pendingRows} />
-          </CardContent>
-        </Card>
-      )}
-    </div>
+        {isApprover && (
+          <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
+            <div className="border-b border-slate-100 px-5 py-4 dark:border-slate-800">
+              <h2 className="text-sm font-semibold text-slate-900 dark:text-white">รายการรออนุมัติ</h2>
+              <p className="mt-0.5 text-xs text-slate-500">อนุมัติแล้วถึงจะมีผลกับยอดคงเหลือ</p>
+            </div>
+            <div className="p-4">
+              <PendingAdjustmentsList rows={pendingRows} />
+            </div>
+          </div>
+        )}
+      </div>
+    </InventoryShell>
   );
 }

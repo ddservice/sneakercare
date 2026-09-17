@@ -85,6 +85,7 @@ export default async function InventoryHubPage() {
       initialItems={stockItems}
       isCostVisible={isCostVisible}
       canEdit={canEdit}
+      role={profile.role}
     />
   );
 }

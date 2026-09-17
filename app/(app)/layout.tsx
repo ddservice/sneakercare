@@ -5,40 +5,39 @@ import { mainNavItemsFor, ROLE_LABEL } from "@/lib/permissions";
 import { Button } from "@/components/ui/button";
 import { logout } from "@/app/actions/auth";
 import { Toaster } from "@/components/ui/sonner";
-import { BranchPicker } from "@/components/branch-picker";
+import { BranchPicker, type BranchOption } from "@/components/branch-picker";
 import { MainNav } from "@/components/main-nav";
 import { MobileNav } from "@/components/mobile-nav";
 import { ThemeToggle } from "@/components/theme-toggle";
-import { Footprints, LogOut, ShieldCheck, UserCircle } from "lucide-react";
+import { Footprints, LogOut, UserCircle } from "lucide-react";
 import Link from "next/link";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { tenantFilter } from "@/lib/tenant";
 
+export const dynamic = "force-dynamic";
+
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const profile = await requireProfile();
   const selectedBranchId = await getSelectedBranchId(profile);
-
-  let branchName = "ทุกสาขา";
   const branches = await getActiveBranches();
-  if (selectedBranchId) {
-    branchName = branches?.find((b) => b.id === selectedBranchId)?.name ?? branchName;
-  }
-
   const mainNav = mainNavItemsFor(profile.role);
 
   // ✅ [multi-tenant 2026-09-17] super_admin เห็นสาขาข้าม tenant ได้แล้ว แต่คนละ tenant อาจตั้ง
-  // ชื่อสาขาซ้ำกันได้ (เช่น "SneakerCare" ทั้งคู่) — ต่อท้ายชื่อ tenant ให้เฉพาะ super_admin เพื่อ
-  // ไม่ให้เลือกผิดสาขาโดยไม่รู้ตัว (admin ของ tenant ตัวเองเห็นแค่สาขาตัวเองอยู่แล้ว ไม่ต้องต่อท้าย)
-  let branchOptions = withId(branches).map((b) => ({ id: b.id, name: text(b.name) }));
+  // ชื่อสาขาซ้ำกันได้ (เช่น "SneakerCare" ทั้งคู่) — ส่งชื่อ tenant แยกจากชื่อสาขา ให้ตัวเลือก
+  // แสดงเป็นสองบรรทัดแทนการต่อสตริงยาวๆ ในช่องเดียว
+  let branchOptions: BranchOption[] = withId(branches).map((b) => ({ id: b.id, name: text(b.name) }));
   if (profile.role === "super_admin" && branches.length > 0) {
     const adminDbForNames = createAdminClient();
     const { data: tenantRows } = await adminDbForNames.from("tenants").select("id, name");
     const tenantNameById = new Map((tenantRows ?? []).map((t) => [t.id, t.name]));
     branchOptions = withId(branches).map((b) => ({
       id: b.id,
-      name: `${text(b.name)} — ${(b.tenant_id ? tenantNameById.get(b.tenant_id) : undefined) ?? "?"}`,
+      name: text(b.name),
+      tenantName: (b.tenant_id ? tenantNameById.get(b.tenant_id) : undefined) ?? "?",
     }));
   }
+
+  const avatarLetter = profile.display_name.trim().slice(0, 1) || "?";
 
   // ── Low stock alert count for nav badge ──
   let lowStockCount = 0;
@@ -102,14 +101,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
             {/* Brand text */}
             <div className="min-w-0">
-              <div className="flex items-center gap-2">
-                <span className="text-base font-bold tracking-tight text-slate-900 dark:text-white truncate">
-                  DD-Management
-                </span>
-                <span className="hidden sm:inline-flex items-center rounded-md bg-emerald-50 dark:bg-emerald-900/30 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/40 shrink-0">
-                  {branchName}
-                </span>
-              </div>
+              <span className="block truncate text-base font-bold tracking-tight text-slate-900 dark:text-white">
+                DD-Management
+              </span>
               <p className="hidden sm:block text-[11px] text-slate-400 dark:text-slate-500 leading-none mt-0.5">
                 ระบบบริหารจัดการร้าน
               </p>
@@ -117,20 +111,23 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           </div>
 
           {/* Right: actions */}
-          <div className="ml-auto flex items-center gap-2 shrink-0">
+          <div className="ml-auto flex items-center gap-1.5 sm:gap-2 shrink-0">
             {(profile.role === "admin" || profile.role === "super_admin") && (
               <BranchPicker branches={branchOptions} selectedBranchId={selectedBranchId} />
             )}
 
-            {/* User badge — hidden on mobile (shown in drawer instead) */}
-            <div className="hidden md:flex items-center gap-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-2.5 py-1.5 text-xs">
-              <ShieldCheck className="h-3.5 w-3.5 shrink-0 text-emerald-500 dark:text-emerald-400" />
-              <span className="font-semibold text-emerald-700 dark:text-emerald-300">
-                {ROLE_LABEL[profile.role]}
+            {/* User chip — hidden on mobile (shown in drawer instead) */}
+            <div className="hidden md:flex items-center gap-2 rounded-full border border-slate-200 bg-white py-1 pr-3 pl-1 dark:border-slate-700 dark:bg-slate-800">
+              <span className="flex h-7 w-7 items-center justify-center rounded-full bg-emerald-600 text-[11px] font-bold text-white">
+                {avatarLetter}
               </span>
-              <span className="text-slate-300 dark:text-slate-600">·</span>
-              <span className="font-medium text-slate-600 dark:text-slate-300 max-w-24 truncate">
-                {profile.display_name}
+              <span className="min-w-0 text-left">
+                <span className="block max-w-28 truncate text-xs font-semibold leading-tight text-slate-800 dark:text-slate-100">
+                  {profile.display_name}
+                </span>
+                <span className="block text-[10px] leading-tight text-slate-500 dark:text-slate-400">
+                  {ROLE_LABEL[profile.role]}
+                </span>
               </span>
             </div>
 
@@ -139,7 +136,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             <Link
               href="/account"
               title="บัญชีของฉัน (เปลี่ยนรหัสผ่าน)"
-              className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-teal-50 hover:text-teal-700 dark:text-slate-500 dark:hover:bg-teal-900/20 dark:hover:text-teal-300"
+              className="flex h-8 w-8 items-center justify-center rounded-full text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700 dark:text-slate-500 dark:hover:bg-slate-800 dark:hover:text-slate-200"
             >
               <UserCircle className="h-4 w-4" />
             </Link>
@@ -151,7 +148,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
                 type="submit"
                 variant="ghost"
                 size="sm"
-                className="h-8 w-8 p-0 rounded-lg text-slate-400 dark:text-slate-500 hover:bg-rose-50 dark:hover:bg-rose-900/20 hover:text-rose-500 dark:hover:text-rose-400 transition-colors"
+                className="h-8 w-8 p-0 rounded-full text-slate-400 dark:text-slate-500 hover:bg-rose-50 dark:hover:bg-rose-900/20 hover:text-rose-500 dark:hover:text-rose-400 transition-colors"
                 title="ออกจากระบบ"
               >
                 <LogOut className="h-4 w-4" />

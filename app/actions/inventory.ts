@@ -6,6 +6,7 @@ import { requireProfile, requireModuleWrite } from "@/lib/auth";
 import { getSelectedBranchId } from "@/lib/branch";
 import { logAudit } from "@/lib/audit";
 import { requireTenantId } from "@/lib/tenant";
+import { canSeeCost } from "@/lib/permissions";
 
 export type InventoryItemInput = {
   id?: string;
@@ -15,7 +16,7 @@ export type InventoryItemInput = {
   base_unit: string;
   purchase_unit?: string;
   current_qty: number;
-  avg_unit_cost: number;
+  avg_unit_cost?: number;
   min_stock_level: number;
 };
 
@@ -102,7 +103,10 @@ export async function updateInventoryItem(data: InventoryItemInput) {
 
   const oldQty = Number(existingStock?.current_qty ?? 0);
   const newQty = Number(data.current_qty ?? 0);
-  const newCost = Number(data.avg_unit_cost ?? 0);
+  // Staff ไม่เห็นต้นทุน (กฎข้อ 5) — ห้ามรับค่าจากฟอร์มเพราะหน้าคลังส่ง 0 มาทับของจริง
+  const newCost = canSeeCost(profile.role)
+    ? Number(data.avg_unit_cost ?? existingStock?.avg_unit_cost ?? 0)
+    : Number(existingStock?.avg_unit_cost ?? 0);
   const newMin = Number(data.min_stock_level ?? 1);
 
   // id ของ item_stock มาจาก view alias จึงเป็น nullable — เช็คก่อนใช้เป็นเงื่อนไข .eq()
@@ -191,7 +195,7 @@ export async function createInventoryItem(data: InventoryItemInput) {
 
   // 2. Insert item_stock
   const initialQty = Number(data.current_qty || 0);
-  const unitCost = Number(data.avg_unit_cost || 0);
+  const unitCost = canSeeCost(profile.role) ? Number(data.avg_unit_cost || 0) : 0;
 
   await supabase.from("item_stock").insert({
     item_id: newItem.id,

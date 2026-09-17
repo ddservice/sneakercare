@@ -4,8 +4,9 @@ import { createClient } from "@/lib/supabase/server";
 import { getSelectedBranchId } from "@/lib/branch";
 import { tenantFilter } from "@/lib/tenant";
 import { canRecordWaste, canWrite } from "@/lib/permissions";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { NeedBranchEmpty } from "@/components/need-branch-empty";
+import { InventoryFormPanel, InventoryShell } from "@/components/inventory-shell";
 import { StockOutForm } from "./stock-out-form";
 import { WasteForm } from "./waste-form";
 
@@ -19,19 +20,15 @@ export default async function StockOutPage() {
 
   if (!branchId) {
     return (
-      <Card className="max-w-md">
-        <CardHeader>
-          <CardTitle>เบิกใช้งาน</CardTitle>
-        </CardHeader>
-        <CardContent className="text-muted-foreground">
-          เลือกสาขาจากแถบด้านบนเพื่อทำรายการเบิกหรือตัดของเสีย
-        </CardContent>
-      </Card>
+      <InventoryShell title="เบิกใช้งาน" description="ตัดสต๊อกเมื่อเบิกใช้หน้าร้าน หรือตัดของเสีย" role={profile.role}>
+        <NeedBranchEmpty
+          title="เลือกสาขาก่อนเบิกหรือตัดของเสีย"
+          description="ต้องระบุสาขาให้ชัดก่อนบันทึก เพื่อไม่ให้ตัดสต๊อกผิดร้าน"
+        />
+      </InventoryShell>
     );
   }
 
-  // ⚠️ [แก้บั๊กจริง 2026-09-17] `items` query เดิมไม่กรอง tenant เลย — super_admin จะเห็นตัวเลือก
-  // สินค้าของทุก tenant ปนกันตอนกรอกฟอร์มเบิกใช้งาน/ของเสีย (ดูเหตุผลเดียวกับ /inventory)
   const tenantId = await tenantFilter(profile);
   let itemsQuery = supabase.from("items").select("id, name, base_unit").eq("is_active", true).order("name");
   if (tenantId) itemsQuery = itemsQuery.eq("tenant_id", tenantId);
@@ -42,7 +39,6 @@ export default async function StockOutPage() {
   ]);
 
   const stockByItem = new Map((stockRows ?? []).map((row) => [row.item_id, row.current_qty]));
-    // view alias คืนทุกคอลัมน์เป็น nullable — เติมค่าสำรองแทนการ cast ทับ (ดู lib/db-rows.ts)
   const options = withId(items).map((item) => ({
     id: item.id,
     name: text(item.name),
@@ -51,30 +47,31 @@ export default async function StockOutPage() {
   }));
 
   return (
-    <Card className="max-w-md">
-      <CardHeader>
-        <CardTitle>เบิกใช้งาน</CardTitle>
-      </CardHeader>
-      <CardContent>
+    <InventoryShell title="เบิกใช้งาน" description="ตัดสต๊อกเมื่อเบิกใช้หน้าร้าน หรือตัดของเสีย" role={profile.role}>
+      <InventoryFormPanel>
         {!canEdit ? (
-          <p className="text-muted-foreground">บัญชีนี้ดูหน้านี้ได้ แต่ไม่มีสิทธิ์บันทึกการเบิกใช้งาน</p>
+          <p className="text-sm text-slate-500">บัญชีนี้ดูหน้านี้ได้ แต่ไม่มีสิทธิ์บันทึกการเบิกใช้งาน</p>
         ) : showWaste ? (
-          <Tabs defaultValue="out">
-            <TabsList>
-              <TabsTrigger value="out">เบิกใช้งาน</TabsTrigger>
-              <TabsTrigger value="waste">ของเสีย</TabsTrigger>
+          <Tabs defaultValue="out" className="gap-5">
+            <TabsList className="h-10 w-full rounded-xl bg-slate-100 p-1 dark:bg-slate-800">
+              <TabsTrigger value="out" className="rounded-lg text-sm">
+                เบิกใช้งาน
+              </TabsTrigger>
+              <TabsTrigger value="waste" className="rounded-lg text-sm">
+                ของเสีย
+              </TabsTrigger>
             </TabsList>
-            <TabsContent value="out" className="pt-4">
+            <TabsContent value="out">
               <StockOutForm items={options} branchId={branchId} />
             </TabsContent>
-            <TabsContent value="waste" className="pt-4">
+            <TabsContent value="waste">
               <WasteForm items={options} branchId={branchId} />
             </TabsContent>
           </Tabs>
         ) : (
           <StockOutForm items={options} branchId={branchId} />
         )}
-      </CardContent>
-    </Card>
+      </InventoryFormPanel>
+    </InventoryShell>
   );
 }
