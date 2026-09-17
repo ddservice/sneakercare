@@ -34,6 +34,36 @@ tenant filtering หรือก่อนเชิญนิติบุคคล
 `smartacc-expenses.ts`) และ Telegram bot token (`integration_secrets`) ยังเป็นค่าเดียวใช้ร่วมกัน
 ทุก tenant — ทั้งสองจุดนี้ **ห้ามเปิดให้ tenant ที่สองใช้** จนกว่าจะเพิ่ม `tenant_id` ให้ครบก่อน
 
+## 🔴🔴🔴 [ปิดฉุกเฉินแล้ว] เปิด Exposed schemas ให้ extension_layer แล้วเจอช่องโหว่ทันที (2026-09-17)
+
+**เจ้าของกด Save เพิ่ม `extension_layer` เข้า Exposed schemas ตามที่แนะนำในหัวข้อถัดไปแล้ว** —
+พอเช็คซ้ำทันทีพบว่า GRANT เดิมของ `0009_smartacc_extension_layer.sql`
+(`GRANT SELECT ... TO anon` + `GRANT ALL ... TO authenticated` ทั้ง 17 ตาราง) **ที่ไม่เคยมีผล
+อะไรเลยมาตลอดเพราะ REST เข้า schema นี้ไม่ถึง** กลับมามีผลจริงทันทีที่ schema ถูก expose — และ
+**ไม่มี RLS มากันเลยสักตาราง** (`relrowsecurity = false` ทุกตาราง ตรวจกับ production จริง)
+
+**ผลกระทบจริง:** ตารางว่างทั้งหมด (0 แถวทุกตัว) ฝั่งอ่านจึงยังไม่รั่วข้อมูลจริง แต่
+**พนักงานคนไหนก็ได้ที่ล็อกอินอยู่ (`authenticated` ไม่แยก role) ยิง REST ตรงไปที่ตารางกลุ่มนี้แล้ว
+INSERT/UPDATE/DELETE/TRUNCATE ได้เลย ข้าม `requireModuleWrite()` ของแอปทั้งหมด** — เจอและปิด
+ภายในไม่กี่นาทีหลังเปิด ไม่มีหลักฐานว่าถูกใช้ก่อนที่จะปิด
+
+**ปิดด้วย `0035_extension_layer_lockdown.sql`** — เปิด RLS ทุกตารางแบบ **0 policy = deny-all**
+สำหรับ `authenticated` (รูปแบบเดียวกับ `inv_integration_secrets` ที่ 0033 พิสูจน์แล้วว่าใช้ได้จริง
+เพราะแอปเข้าตารางกลุ่มนี้ผ่าน `createAdminClient()`/service_role เท่านั้น ไม่มีจุดไหนใช้ session
+ผู้ใช้ตรงๆ เลย — grep ยืนยันแล้ว) + `revoke all ... from anon` ทุกตาราง (เหมือน 0016)
+
+**ยืนยันด้วยการยิง REST จริง 3 แบบ:** `anon` SELECT → 401 permission denied ·
+`authenticated` (login จริง มี session จริง) SELECT แถวที่มีอยู่จริง → เห็น 0 แถว (RLS บล็อกจริง
+ไม่ใช่ตารางว่างจริง) · `authenticated` INSERT → 403 row-level security policy · `service_role`
+ยังอ่าน/เขียนได้ปกติ (แอปไม่พัง)
+
+**⚠️ บทเรียนสำคัญที่สุดของช่วงนี้:** GRANT ที่ดูเหมือน "ไม่มีผลเพราะเข้าไม่ถึงอยู่แล้ว" ไม่ใช่
+GRANT ที่ปลอดภัย — มันแค่รอทางเข้าใหม่โผล่มาเท่านั้น ตรงกับสิ่งที่ 0016 เคยสอนไว้กับ SECURITY
+DEFINER View ในฝั่ง public schema ทุกประการ **ทุกครั้งที่เปิด schema ใหม่ให้ PostgREST เข้าถึงได้
+(Exposed schemas) ต้องเช็ค RLS + GRANT ของทุกตารางในนั้นทันทีก่อนอื่นใด ไม่ใช่แค่เช็คว่าแอปใช้
+งานได้** — เฟสถัดไป (เพิ่ม `tenant_id` ให้ตารางที่แอปใช้จริง) ยังต้องทำต่อ แต่ตอนนี้ปลอดภัยจาก
+การเข้าถึงจากภายนอกแล้วระหว่างที่ยังทำไม่เสร็จ
+
 ## 🔴🔴 โมดูล SmartAcc (`ext_*`) ใช้งานกับ production จริงไม่ได้เลย ตั้งแต่สร้างขึ้นมา (พบ 2026-09-17)
 
 **ไม่เกี่ยวกับ multi-tenant — เป็นบั๊กพื้นฐานที่ทำให้ `/invoicing`, `/tax-filing`, `/billing-notes`,
