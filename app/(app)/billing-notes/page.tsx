@@ -6,6 +6,8 @@ import { PrintButton } from "@/components/print-button";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Layers, Plus } from "lucide-react";
 import Link from "next/link";
+import { tenantFilter } from "@/lib/tenant";
+import type { Profile } from "@/lib/auth";
 
 /**
  * ดึงใบวางบิลพร้อมลูกค้าและรายการย่อย
@@ -13,13 +15,15 @@ import Link from "next/link";
  * แยกออกมาเป็นฟังก์ชันเพื่อให้ TypeScript อนุมานชนิดของแถวที่ join มาได้เอง
  * (เดิมประกาศเป็น `any[]` ซึ่งปิดตา type check ทั้งหน้า — ดูกฎ "ห้ามเพิ่ม as any" ใน CLAUDE.md)
  */
-async function loadBillingNotes(supabase: ReturnType<typeof createAdminClient>) {
-  const { data } = await supabase
+async function loadBillingNotes(supabase: ReturnType<typeof createAdminClient>, profile: Profile) {
+  let query = supabase
     .schema("extension_layer")
     .from("ext_documents")
     .select("*, ext_contacts(*), ext_document_items(*)")
-    .eq("doc_type", "BILLING_NOTE")
-    .order("created_at", { ascending: false });
+    .eq("doc_type", "BILLING_NOTE");
+  const billingTenantId = tenantFilter(profile);
+  if (billingTenantId) query = query.eq("tenant_id", billingTenantId);
+  const { data } = await query.order("created_at", { ascending: false });
   return data ?? [];
 }
 
@@ -47,7 +51,7 @@ export default async function BillingNotesPage() {
 
   try {
     const [docs, loadedProfile] = await Promise.all([
-      loadBillingNotes(supabase),
+      loadBillingNotes(supabase, profile),
       fetchShopProfile().catch(() => shopProfile),
     ]);
     documents = docs;

@@ -63,8 +63,9 @@ const testUsers = []; // uid ของบัญชีทดสอบ — ไว�
 
 async function cleanup() {
   console.log("\nล้างข้อมูลทดสอบ…");
-  for (const { table, match } of testRows.reverse()) {
-    const { error } = await admin.from(table).delete().match(match);
+  for (const { table, match, schema } of testRows.reverse()) {
+    const client = schema ? admin.schema(schema) : admin;
+    const { error } = await client.from(table).delete().match(match);
     if (error) console.error(`  ลบ ${table} (${JSON.stringify(match)}) ล้มเหลว: ${error.message}`);
   }
   for (const uid of testUsers) {
@@ -258,6 +259,75 @@ try {
       statusT1.data?.[0]?.is_set === true && statusT1.data?.[0]?.value_suffix !== expectedSuffix,
       "T1 (tenant จริง) ยังอ่านสถานะ token จริงของตัวเองได้ปกติ ไม่ปนกับ fixture",
       `T1 อ่านสถานะผิดปกติหลังแก้ migration 0033: ${JSON.stringify(statusT1.data)} / ${statusT1.error?.message}`
+    );
+  }
+
+  console.log("\n[8] ext_documents (โมดูล invoicing, migration 0036) — เทสต์เขียนจริงครั้งแรกในประวัติศาสตร์ตาราง");
+  {
+    // ตาราง ext_documents ไม่มี trigger เขียน audit log เลย (ตรวจแล้วกับ production จริง) —
+    // บัญชี T1/T2 ที่ใช้ในส่วนนี้จึงลบทิ้งได้สะอาดปกติเหมือนส่วน [1]-[6] ไม่ติด FK แบบ
+    // section [7] (ไม่ต้องใช้บัญชี fixture ตายตัว)
+    const numT1 = await asT1.schema("extension_layer").rpc("fn_generate_document_number", {
+      p_doc_type: "QUOTATION",
+      p_prefix: "QA",
+      p_date_str: "20260917",
+      p_tenant_id: T1,
+    });
+    check(!numT1.error, `T1 ขอเลขที่เอกสารผ่าน RPC จริงสำเร็จ (${numT1.data})`, `ล้มเหลว: ${numT1.error?.message}`);
+
+    const numT2 = await asT2.schema("extension_layer").rpc("fn_generate_document_number", {
+      p_doc_type: "QUOTATION",
+      p_prefix: "QA",
+      p_date_str: "20260917",
+      p_tenant_id: T2,
+    });
+    check(
+      numT2.data === numT1.data,
+      `T2 ได้เลขที่เอกสารเดียวกับ T1 (${numT2.data}) — พิสูจน์ว่าตัวนับแยกต่อ tenant จริง ไม่สานต่อกัน`,
+      `ควรได้เลขเดียวกันแต่ได้ ${numT1.data} vs ${numT2.data}`
+    );
+    testRows.push({
+      table: "ext_numbering_sequences",
+      match: { tenant_id: T1, doc_type: "QUOTATION", prefix: "QA", year_month: "20260917" },
+      schema: "extension_layer",
+    });
+    testRows.push({
+      table: "ext_numbering_sequences",
+      match: { tenant_id: T2, doc_type: "QUOTATION", prefix: "QA", year_month: "20260917" },
+      schema: "extension_layer",
+    });
+
+    const insT1 = await asT1
+      .schema("extension_layer")
+      .from("ext_documents")
+      .insert({ doc_type: "QUOTATION", doc_number: numT1.data, tenant_id: T1, subtotal_amount: 100, grand_total: 100 })
+      .select("id")
+      .single();
+    check(!insT1.error, "T1 insert ext_documents ผ่าน session จริงสำเร็จ", `ล้มเหลว: ${insT1.error?.message}`);
+    if (insT1.data?.id) testRows.push({ table: "ext_documents", match: { id: insT1.data.id }, schema: "extension_layer" });
+
+    const insT2 = await asT2
+      .schema("extension_layer")
+      .from("ext_documents")
+      .insert({ doc_type: "QUOTATION", doc_number: numT2.data, tenant_id: T2, subtotal_amount: 200, grand_total: 200 })
+      .select("id")
+      .single();
+    check(!insT2.error, "T2 insert ext_documents (doc_number ซ้ำกับ T1 แต่คนละ tenant) ผ่าน session จริงสำเร็จ", `ล้มเหลว: ${insT2.error?.message}`);
+    if (insT2.data?.id) testRows.push({ table: "ext_documents", match: { id: insT2.data.id }, schema: "extension_layer" });
+
+    const seeT1 = await asT1.schema("extension_layer").from("ext_documents").select("tenant_id");
+    const t1Tenants = new Set((seeT1.data ?? []).map((r) => r.tenant_id));
+    check(t1Tenants.size === 1 && t1Tenants.has(T1), "T1 มองเห็นแค่เอกสารของตัวเอง", `เห็น ${JSON.stringify([...t1Tenants])}`);
+
+    const crossRead = await asT2
+      .schema("extension_layer")
+      .from("ext_documents")
+      .select("id")
+      .eq("id", insT1.data?.id ?? "");
+    check(
+      !crossRead.error && (crossRead.data ?? []).length === 0,
+      "T2 อ่านเอกสารของ T1 โดยรู้ id ตรงๆ ไม่ได้เลย",
+      `T2 เห็นเอกสารของ T1! ${JSON.stringify(crossRead.data)}`
     );
   }
 } catch (err) {

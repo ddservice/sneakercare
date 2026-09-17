@@ -82,6 +82,7 @@ export type Database = {
           ref_doc_id: string | null
           ref_doc_number: string
           ref_doc_type: string
+          tenant_id: string
           total_amount: number
         }
         Insert: {
@@ -94,6 +95,7 @@ export type Database = {
           ref_doc_id?: string | null
           ref_doc_number: string
           ref_doc_type: string
+          tenant_id?: string
           total_amount: number
         }
         Update: {
@@ -106,6 +108,7 @@ export type Database = {
           ref_doc_id?: string | null
           ref_doc_number?: string
           ref_doc_type?: string
+          tenant_id?: string
           total_amount?: number
         }
         Relationships: [
@@ -220,6 +223,7 @@ export type Database = {
           legacy_contact_id: string | null
           phone: string | null
           tax_id: string | null
+          tenant_id: string
         }
         Insert: {
           address?: string | null
@@ -231,6 +235,7 @@ export type Database = {
           legacy_contact_id?: string | null
           phone?: string | null
           tax_id?: string | null
+          tenant_id?: string
         }
         Update: {
           address?: string | null
@@ -242,6 +247,7 @@ export type Database = {
           legacy_contact_id?: string | null
           phone?: string | null
           tax_id?: string | null
+          tenant_id?: string
         }
         Relationships: []
       }
@@ -254,6 +260,7 @@ export type Database = {
           item_name: string
           quantity: number
           sort_order: number | null
+          tenant_id: string
           total_line_amount: number
           unit_price: number
         }
@@ -265,6 +272,7 @@ export type Database = {
           item_name: string
           quantity?: number
           sort_order?: number | null
+          tenant_id?: string
           total_line_amount: number
           unit_price?: number
         }
@@ -276,6 +284,7 @@ export type Database = {
           item_name?: string
           quantity?: number
           sort_order?: number | null
+          tenant_id?: string
           total_line_amount?: number
           unit_price?: number
         }
@@ -317,6 +326,7 @@ export type Database = {
           share_token: string | null
           status: string
           subtotal_amount: number
+          tenant_id: string
           vat_amount: number | null
           vat_rate: number | null
           wht_amount: number | null
@@ -342,6 +352,7 @@ export type Database = {
           share_token?: string | null
           status?: string
           subtotal_amount?: number
+          tenant_id?: string
           vat_amount?: number | null
           vat_rate?: number | null
           wht_amount?: number | null
@@ -367,6 +378,7 @@ export type Database = {
           share_token?: string | null
           status?: string
           subtotal_amount?: number
+          tenant_id?: string
           vat_amount?: number | null
           vat_rate?: number | null
           wht_amount?: number | null
@@ -576,6 +588,7 @@ export type Database = {
           doc_type: string
           id: string
           prefix: string
+          tenant_id: string
           year_month: string
         }
         Insert: {
@@ -583,6 +596,7 @@ export type Database = {
           doc_type: string
           id?: string
           prefix: string
+          tenant_id?: string
           year_month: string
         }
         Update: {
@@ -590,6 +604,7 @@ export type Database = {
           doc_type?: string
           id?: string
           prefix?: string
+          tenant_id?: string
           year_month?: string
         }
         Relationships: []
@@ -656,6 +671,7 @@ export type Database = {
           receipt_image_url: string
           subtotal: number | null
           suggested_account_code: string | null
+          tenant_id: string
           total_amount: number
           vat_amount: number | null
           wht_amount: number | null
@@ -671,6 +687,7 @@ export type Database = {
           receipt_image_url: string
           subtotal?: number | null
           suggested_account_code?: string | null
+          tenant_id?: string
           total_amount: number
           vat_amount?: number | null
           wht_amount?: number | null
@@ -686,6 +703,7 @@ export type Database = {
           receipt_image_url?: string
           subtotal?: number | null
           suggested_account_code?: string | null
+          tenant_id?: string
           total_amount?: number
           vat_amount?: number | null
           wht_amount?: number | null
@@ -822,7 +840,12 @@ export type Database = {
     }
     Functions: {
       fn_generate_document_number: {
-        Args: { p_date_str: string; p_doc_type: string; p_prefix: string }
+        Args: {
+          p_date_str: string
+          p_doc_type: string
+          p_prefix: string
+          p_tenant_id: string
+        }
         Returns: string
       }
     }

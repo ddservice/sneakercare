@@ -64,7 +64,7 @@ DEFINER View ในฝั่ง public schema ทุกประการ **ท�
 งานได้** — เฟสถัดไป (เพิ่ม `tenant_id` ให้ตารางที่แอปใช้จริง) ยังต้องทำต่อ แต่ตอนนี้ปลอดภัยจาก
 การเข้าถึงจากภายนอกแล้วระหว่างที่ยังทำไม่เสร็จ
 
-## 🔴🔴 โมดูล SmartAcc (`ext_*`) ใช้งานกับ production จริงไม่ได้เลย ตั้งแต่สร้างขึ้นมา (พบ 2026-09-17)
+## ✅🔴🔴 [แก้ครบแล้ว] โมดูล SmartAcc (`ext_*`) ใช้งานกับ production จริงไม่ได้เลย ตั้งแต่สร้างขึ้นมา (พบ+ปิด 2026-09-17)
 
 **ไม่เกี่ยวกับ multi-tenant — เป็นบั๊กพื้นฐานที่ทำให้ `/invoicing`, `/tax-filing`, `/billing-notes`,
 `/expenses-ocr` ใช้งานไม่ได้เลยสักครั้งเดียว ไม่ว่า tenant ไหนก็ตาม:**
@@ -84,10 +84,60 @@ PostgREST (ชั้น REST API ของ Supabase) ตั้งค่า **Exp
 ของ platform ล้วนๆ):** Dashboard → Settings → API → **Data API Settings** → ช่อง
 **"Exposed schemas"** → เพิ่ม `extension_layer` เข้าไปในรายการที่มี `public, graphql_public` อยู่แล้ว
 
-**⬜ ยังไม่ได้ทำ ณ 2026-09-17** — แจ้งเจ้าของแล้ว รอกดที่ Dashboard ก่อนถึงจะเริ่มงานเพิ่ม
-`tenant_id` ให้ `ext_*` ได้ (ใส่ tenant filtering ให้โมดูลที่บันทึกข้อมูลไม่ได้เลยไปก่อนไม่มีประโยชน์)
-เช็คสถานะซ้ำได้ด้วย `supabase.schema("extension_layer").from("ext_documents").select("id").limit(1)`
-— ถ้ายังได้ `PGRST106` แปลว่ายังไม่ได้กด
+**✅ [2026-09-17] เจ้าของกด Save เพิ่ม `extension_layer` เข้า Exposed schemas แล้ว** — ดูหัวข้อ
+"ปิดฉุกเฉินแล้ว" ด้านล่างสำหรับช่องโหว่ที่เจอทันทีหลังเปิด (RLS ไม่มีเลยสักตาราง) และหัวข้อ
+"เพิ่ม tenant_id ให้ ext_*" สำหรับงานที่ทำต่อจนจบ — `/invoicing`, `/tax-filing`,
+`/billing-notes`, `/expenses-ocr` ใช้งานได้จริงแล้ว (พิสูจน์ด้วยการเขียนจริงผ่าน
+`npm run test:multi-tenant` ส่วน [8] — insert เข้า `ext_documents` สำเร็จเป็นครั้งแรกในประวัติ
+ของตารางนี้)
+
+## ✅ เพิ่ม tenant_id ให้ ext_* ที่แอปใช้จริงแล้ว + แก้บั๊กเลขที่เอกสารชนกันข้าม tenant (2026-09-17)
+
+**`0036_ext_tenant_id.sql`** — เพิ่ม `tenant_id` ให้ 6 ตารางที่แอปใช้งานจริง (ตรวจด้วย grep
+`.from("ext_` ทั่ว `app/` ก่อนเขียน — อีก 11 ตารางใน `extension_layer` ยังไม่มีโค้ดแอปแตะเลย
+สักจุด จึงยังไม่ใส่ tenant_id ให้ตามหลัก "ไม่เพิ่ม abstraction เกินกว่าที่ต้องใช้จริง"):
+`ext_contacts`, `ext_documents`, `ext_document_items`, `ext_billing_references`,
+`ext_staged_expenses`, `ext_numbering_sequences`
+
+**🔴 เจอบั๊กจริงระหว่างตรวจ constraint ก่อนเขียน migration:** `ext_documents.doc_number` และ
+`ext_numbering_sequences (doc_type, prefix, year_month)` เป็น **UNIQUE เดี่ยวทั้งระบบ** — ถ้าไม่
+แก้ สอง tenant จะ**ชนเลขที่เอกสารกันจริง** (ตัวนับใช้รูปแบบวันที่+เลขรันจึงมีโอกาสชนสูงมาก ไม่ใช่
+edge case หายาก) และตัวนับจะสานต่อกันข้าม tenant (tenant 2 ออกใบแรกได้เลข 0048 ต่อจาก tenant 1
+แทนที่จะเป็น 0001) แก้เป็น `UNIQUE (tenant_id, doc_number)` และ
+`UNIQUE (tenant_id, doc_type, prefix, year_month)` ตามลำดับ — เหมือนบั๊กเดียวกับที่ 0032 เจอกับ
+`sc_settings.key`
+
+**`fn_generate_document_number()` เปลี่ยน signature เป็น 4 พารามิเตอร์** (เพิ่ม `p_tenant_id`)
+— ฟังก์ชันนี้เรียกผ่าน `service_role` (ไม่มี session ผู้ใช้ให้ derive tenant จาก `auth.uid()`
+ได้) จึงต้องรับ tenant_id ตรงๆ เหมือนที่ `lib/tenant.ts` ทำกับไฟล์ server action อื่นทั้ง 10 ไฟล์
+ที่แก้ไปก่อนหน้านี้ในเซสชันนี้ — `lib/smartacc/numbering.ts`
+(`generateDocumentNumber(docType, tenantId, date)`) และจุดเรียกเดียวใน
+`smartacc-documents.ts` แก้ตามแล้ว
+
+**RLS แทนที่ deny-all ฉุกเฉินของ 0035 ด้วย policy ที่กรอง tenant จริง** — นิยาม role ตรงกับ
+`lib/permissions.ts`: `ext_contacts`/`ext_documents`/`ext_document_items`/
+`ext_billing_references`/`ext_numbering_sequences` (โมดูล `invoicing`) = admin/co-admin เท่านั้น
+· `ext_staged_expenses` (โมดูล `expenses`) = staff อ่านได้ แต่เขียนได้แค่ admin/co-admin ·
+`super_admin` ข้ามได้ทุกจุด (ผ่าน `inv_fn_current_role()`/`fn_current_tenant()` ตัวเดียวกับที่
+0031/0033 ใช้ทั้งระบบแล้ว ไม่สร้างฟังก์ชันซ้ำ)
+
+**ทดสอบผ่าน PGlite ครบ (`test-migration-0036.mjs`)** ครอบคลุม: tenant_id ครบ 6 ตาราง,
+doc_number ไม่ชนข้าม tenant, ตัวนับแยกต่อ tenant จริง (สอง tenant ได้เลข 0001 เหมือนกันไม่สานต่อ),
+RLS กรอง tenant ถูกต้องทั้ง admin/staff/super_admin, rollback สะอาด
+
+**ยืนยันกับ production จริงด้วย `npm run test:multi-tenant` ส่วน [8]** — เรียก
+`fn_generate_document_number()` จริงผ่าน session ของ admin คนละ tenant (ยืนยันเลขไม่สานต่อกัน),
+insert เข้า `ext_documents` จริงเป็นครั้งแรกในประวัติของตารางนี้ (0 แถวมาตลอดตามที่บันทึกไว้ข้างบน),
+พิสูจน์ว่า T2 อ่านเอกสารของ T1 โดยรู้ `id` ตรงๆ ไม่ได้เลย — รันซ้ำ 2 รอบติดกันพิสูจน์ idempotent
++ cleanup สะอาด (ตาราง `ext_documents`/`ext_document_items`/`ext_billing_references`/
+`ext_numbering_sequences` ไม่มี trigger เขียน audit log เลย ตรวจกับ production แล้ว — บัญชี
+ทดสอบที่ใช้ในส่วนนี้จึงลบทิ้งได้สะอาดปกติ ไม่ติด FK แบบบัญชี fixture ของส่วน [7] Telegram)
+
+**app code ที่แก้ครบ:** `smartacc-documents.ts` (`lookupDbdCompany`, `fetchSmartAccDocuments`,
+`createSmartAccDocument`, `convertDocument`, `fetchPendingDeliveryOrders`, `fetchTaxFilingData` —
+รวมตาราง `expenses` ที่ query คู่กันใน `fetchTaxFilingData` ด้วย), `smartacc-expenses.ts`
+(`parseAndStageReceiptOcr`, `approveStagedExpense`, `fetchStagedExpenses`),
+`lib/smartacc/numbering.ts`, `app/(app)/billing-notes/page.tsx`
 
 ## ✅ Telegram bot token ต่อ tenant แล้ว + เจอ/ปิดช่องโหว่ FK เดิมที่กว้างกว่าที่คิด (2026-09-17)
 

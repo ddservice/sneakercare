@@ -1,13 +1,12 @@
 "use server";
 
-// ⚠️ [multi-tenant] ตาราง ext_staged_expenses (โมดูล SmartAcc OCR ใบเสร็จ) ยังไม่มีคอลัมน์
-// tenant_id เลย — อยู่ในกลุ่ม ext_* ที่ 0028 จงใจเลื่อนไว้ (ยังไม่จำเป็นสำหรับ MVP ของ tenant
-// ที่สอง) ⇒ ทุก query ในไฟล์นี้ยังไม่กรอง tenant และใช้ createAdminClient() (bypass RLS ด้วย)
-// **ห้ามเปิดฟีเจอร์นี้ให้ tenant ที่สองใช้ก่อนจะกลับมาเพิ่ม tenant_id ให้ ext_* ทั้งชุดก่อน**
+// ✅ [multi-tenant 2026-09-17] ext_staged_expenses มี tenant_id แล้ว (migration 0036) —
+// ทุก query ในไฟล์นี้กรอง/ระบุ tenant_id ตามด้วย tenantFilter()/requireTenantId()
 import { revalidatePath } from "next/cache";
 import { requireProfile, requireModuleView, requireModuleWrite } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { verifyBankSlip, type SlipVerificationResult } from "@/lib/smartacc/slip-verifier";
+import { requireTenantId, tenantFilter } from "@/lib/tenant";
 
 export async function verifyBankSlipAction(
   qrPayload: string,
@@ -39,6 +38,7 @@ export async function parseAndStageReceiptOcr(imageBase64OrUrl: string) {
   const profile = await requireProfile();
   requireModuleWrite(profile, "expenses");
   const supabase = createAdminClient();
+  const tenantId = requireTenantId(profile);
 
   const mockVendorNames = [
     "บจก. สยาม คลีนนิ่ง ซัพพลาย",
@@ -73,6 +73,7 @@ export async function parseAndStageReceiptOcr(imageBase64OrUrl: string) {
       suggested_account_code: accountCode,
       approval_status: "PENDING_APPROVAL",
       raw_ocr_payload: { confidence: 0.96, parserVersion: "v2.1" },
+      tenant_id: tenantId,
     })
     .select("*")
     .single();
@@ -89,6 +90,7 @@ export async function approveStagedExpense(expenseId: string, accountCode?: stri
   const profile = await requireProfile();
   requireModuleWrite(profile, "expenses");
   const supabase = createAdminClient();
+  const tenantId = requireTenantId(profile);
 
   const { error } = await supabase
     .schema("extension_layer")
@@ -97,7 +99,8 @@ export async function approveStagedExpense(expenseId: string, accountCode?: stri
       approval_status: "APPROVED",
       suggested_account_code: accountCode || undefined,
     })
-    .eq("id", expenseId);
+    .eq("id", expenseId)
+    .eq("tenant_id", tenantId);
 
   if (error) throw new Error(`อนุมัติไม่สำเร็จ: ${error.message}`);
 
@@ -110,11 +113,14 @@ export async function fetchStagedExpenses() {
   requireModuleView(profile, "expenses");
   const supabase = createAdminClient();
 
-  const { data } = await supabase
+  let query = supabase
     .schema("extension_layer")
     .from("ext_staged_expenses")
-    .select("*, ext_chart_of_accounts(account_name_th)")
-    .order("created_at", { ascending: false });
+    .select("*, ext_chart_of_accounts(account_name_th)");
+  const stagedTenantId = tenantFilter(profile);
+  if (stagedTenantId) query = query.eq("tenant_id", stagedTenantId);
+
+  const { data } = await query.order("created_at", { ascending: false });
 
   return data ?? [];
 }

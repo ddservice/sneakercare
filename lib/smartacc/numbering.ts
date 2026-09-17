@@ -6,6 +6,7 @@ export { DOC_TYPE_CONFIG, type DocumentType };
 
 export async function generateDocumentNumber(
   docType: DocumentType,
+  tenantId: string,
   date: Date = new Date()
 ): Promise<string> {
   const config = DOC_TYPE_CONFIG[docType];
@@ -15,11 +16,14 @@ export async function generateDocumentNumber(
   const dateStr = `${year}${month}${day}`; // YYYYMMDD
 
   const supabase = createAdminClient();
-  // RPC ตัวนี้อยู่ใน schema extension_layer — types ครอบทั้งสอง schema แล้วตั้งแต่ 2026-09-07
+  // RPC ตัวนี้อยู่ใน schema extension_layer — ตัวนับแยกต่อ tenant แล้ว (migration 0036)
+  // ต้องส่ง p_tenant_id เสมอ ไม่งั้นฟังก์ชันปฏิเสธ (ไม่มี session ให้ derive tenant เองได้
+  // เพราะเรียกผ่าน service_role)
   const { data, error } = await supabase.schema("extension_layer").rpc("fn_generate_document_number", {
     p_doc_type: docType,
     p_prefix: config.prefix,
     p_date_str: dateStr,
+    p_tenant_id: tenantId,
   });
 
   if (error || !data) {

@@ -1,11 +1,8 @@
 "use server";
 
-// ⚠️ [multi-tenant] เฉพาะจุดที่แตะ sc_settings (dbd_company_registry) ในไฟล์นี้ถูกกรอง
-// tenant_id แล้ว — แต่ตาราง ext_documents/ext_document_items/ext_contacts ที่เหลือ (โมดูล
-// SmartAcc บิล/ภาษี) **ยังไม่มีคอลัมน์ tenant_id เลย** อยู่ในกลุ่ม ext_* ที่ 0028 จงใจเลื่อนไว้
-// ⇒ fetchSmartAccDocuments/createSmartAccDocument/convertDocument/fetchTaxFilingData ฯลฯ
-// ยังไม่กรอง tenant ที่จุดอื่น **ห้ามเปิดหน้า /invoicing หรือ /tax-filing ให้ tenant ที่สองใช้
-// ก่อนจะกลับมาเพิ่ม tenant_id ให้ ext_* ทั้งชุดก่อน**
+// ✅ [multi-tenant 2026-09-17] ext_contacts/ext_documents/ext_document_items/
+// ext_billing_references มี tenant_id แล้ว (migration 0036) — ทุก query ในไฟล์นี้กรอง/ระบุ
+// tenant_id ตามด้วย tenantFilter()/requireTenantId() แล้วครบทุกจุด
 import { revalidatePath } from "next/cache";
 import { requireProfile, requireModuleView, requireModuleWrite } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -83,11 +80,14 @@ export async function lookupDbdCompany(taxIdOrKeyword: string): Promise<DbdCompa
 
   // 1. Search in local contacts first
   try {
-    const { data: existingContact } = await supabase
+    let contactQuery = supabase
       .schema("extension_layer")
       .from("ext_contacts")
       .select("*")
-      .or(`tax_id.eq.${cleaned || "NONE"},company_name.ilike.%${raw}%`)
+      .or(`tax_id.eq.${cleaned || "NONE"},company_name.ilike.%${raw}%`);
+    const contactTenantId = tenantFilter(profile);
+    if (contactTenantId) contactQuery = contactQuery.eq("tenant_id", contactTenantId);
+    const { data: existingContact } = await contactQuery
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle();
@@ -361,6 +361,8 @@ export async function fetchSmartAccDocuments(filterType?: DocumentType) {
     .select("*, ext_contacts(*), ext_document_items(*)")
     .order("created_at", { ascending: false });
 
+  const docsTenantId = tenantFilter(profile);
+  if (docsTenantId) query = query.eq("tenant_id", docsTenantId);
   if (filterType) {
     query = query.eq("doc_type", filterType);
   }
@@ -377,6 +379,7 @@ export async function createSmartAccDocument(payload: CreateDocumentPayload) {
   const profile = await requireProfile();
   requireModuleWrite(profile, "invoicing");
   const supabase = createAdminClient();
+  const tenantId = requireTenantId(profile);
 
   // 1. Calculate Totals
   const subtotal = payload.items.reduce((sum, item) => sum + item.totalLineAmount, 0);
@@ -385,8 +388,8 @@ export async function createSmartAccDocument(payload: CreateDocumentPayload) {
   const vatAmount = subtotal * (vatRate / 100);
   const grandTotal = subtotal + vatAmount;
 
-  // 2. Generate Standard Numbering: PREFIX-YYYYMMDD-XXXX
-  const docNumber = await generateDocumentNumber(payload.docType, new Date(payload.issueDate));
+  // 2. Generate Standard Numbering: PREFIX-YYYYMMDD-XXXX (ตัวนับแยกต่อ tenant — migration 0036)
+  const docNumber = await generateDocumentNumber(payload.docType, tenantId, new Date(payload.issueDate));
   const shareToken = "doc_" + Math.random().toString(36).substring(2, 10) + Date.now().toString(36);
 
   // 3. Generate Dynamic PromptPay QR Payload
@@ -399,12 +402,11 @@ export async function createSmartAccDocument(payload: CreateDocumentPayload) {
   const contactId: string | null = null;
   if (payload.companyName) {
     try {
-      // ⚠️ ต้องกรอง/ระบุ tenant_id เสมอ — สมุดที่อยู่ลูกค้าเป็นข้อมูลต่อ tenant ไม่ใช่ของกลาง
-      const docTenantId = requireTenantId(profile);
+      // สมุดที่อยู่ลูกค้าเป็นข้อมูลต่อ tenant ไม่ใช่ของกลาง — ใช้ tenantId ที่ได้มาแล้วตอนต้นฟังก์ชัน
       const { data: regSetting } = await supabase.from("sc_settings")
         .select("value")
         .eq("key", "dbd_company_registry")
-        .eq("tenant_id", docTenantId)
+        .eq("tenant_id", tenantId)
         .maybeSingle();
 
       // สมุดที่อยู่ลูกค้าที่เก็บเป็น JSON ก้อนเดียวใน sc_settings (ดูหัวข้อ SmartAcc ข้อ 4 ใน CLAUDE.md)
@@ -436,7 +438,7 @@ export async function createSmartAccDocument(payload: CreateDocumentPayload) {
         {
           key: "dbd_company_registry",
           value: JSON.stringify(currentRegistry.slice(0, 100)),
-          tenant_id: docTenantId,
+          tenant_id: tenantId,
           updated_at: new Date().toISOString(),
         },
         { onConflict: "tenant_id,key" }
@@ -457,6 +459,7 @@ export async function createSmartAccDocument(payload: CreateDocumentPayload) {
       doc_number: docNumber,
       contact_id: contactId,
       branch_id: profile.branch_id,
+      tenant_id: tenantId,
       issue_date: payload.issueDate,
       due_date: payload.dueDate || null,
       credit_term_days: payload.creditTermDays || 0,
@@ -489,6 +492,7 @@ export async function createSmartAccDocument(payload: CreateDocumentPayload) {
       discount: item.discount,
       total_line_amount: item.totalLineAmount,
       sort_order: idx,
+      tenant_id: tenantId,
     }));
 
     await supabase
@@ -511,6 +515,7 @@ export async function createSmartAccDocument(payload: CreateDocumentPayload) {
           ref_date: payload.issueDate,
           total_amount: grandTotal,
           balance_due: grandTotal,
+          tenant_id: tenantId,
         });
     }
   }
@@ -527,13 +532,16 @@ export async function convertDocument(sourceDocId: string, targetDocType: Docume
   const profile = await requireProfile();
   requireModuleWrite(profile, "invoicing");
   const supabase = createAdminClient();
+  const tenantId = requireTenantId(profile);
 
-  // 1. Fetch Source Document
+  // 1. Fetch Source Document (ต้องเป็นของ tenant ตัวเองเท่านั้น — กัน super_admin/แอดมิน
+  // ของ tenant อื่นแปลงเอกสารของ tenant นี้โดยรู้/เดา id)
   const { data: sourceDoc, error } = await supabase
     .schema("extension_layer")
     .from("ext_documents")
     .select("*, ext_contacts(*), ext_document_items(*)")
     .eq("id", sourceDocId)
+    .eq("tenant_id", tenantId)
     .single();
 
   if (error || !sourceDoc) {
@@ -572,7 +580,8 @@ export async function convertDocument(sourceDocId: string, targetDocType: Docume
     .schema("extension_layer")
     .from("ext_documents")
     .update({ status: "CONVERTED" })
-    .eq("id", sourceDocId);
+    .eq("id", sourceDocId)
+    .eq("tenant_id", tenantId);
 
   revalidatePath("/invoicing");
   return res;
@@ -586,13 +595,16 @@ export async function fetchPendingDeliveryOrders() {
   requireModuleView(profile, "invoicing");
   const supabase = createAdminClient();
 
-  const { data, error } = await supabase
+  let query = supabase
     .schema("extension_layer")
     .from("ext_documents")
     .select("id, doc_number, doc_type, issue_date, grand_total, status, ext_contacts(company_name)")
     .in("doc_type", ["DO", "INVOICE"])
-    .neq("status", "PAID")
-    .order("issue_date", { ascending: false });
+    .neq("status", "PAID");
+  const pendingTenantId = tenantFilter(profile);
+  if (pendingTenantId) query = query.eq("tenant_id", pendingTenantId);
+
+  const { data, error } = await query.order("issue_date", { ascending: false });
 
   if (error) return [];
   return data ?? [];
@@ -616,6 +628,12 @@ export async function fetchTaxFilingData(yearMonth?: string) {
     .in("doc_type", ["INVOICE", "TAX_INVOICE", "RECEIPT"])
     .order("issue_date", { ascending: false });
   let expensesQuery = supabase.from("expenses").select("*").order("expense_date", { ascending: false });
+
+  const taxFilingTenantId = tenantFilter(profile);
+  if (taxFilingTenantId) {
+    docsQuery = docsQuery.eq("tenant_id", taxFilingTenantId);
+    expensesQuery = expensesQuery.eq("tenant_id", taxFilingTenantId);
+  }
 
   if (yearMonth && /^\d{4}-\d{2}$/.test(yearMonth)) {
     docsQuery = docsQuery.like("issue_date", `${yearMonth}%`);
