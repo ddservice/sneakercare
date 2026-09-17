@@ -2028,6 +2028,15 @@ export function ExpensesClient({
                           </span>
                         </div>
                       )}
+
+                      {!!selectedPayslip.pairBonus && selectedPayslip.pairBonus > 0 && (
+                        <div className="flex justify-between text-slate-800">
+                          <span>โบนัสจำนวนคู่ ({selectedPayslip.pairsHandled ?? 0} คู่)</span>
+                          <span className="font-mono font-semibold">
+                            ฿{selectedPayslip.pairBonus.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+                          </span>
+                        </div>
+                      )}
                     </td>
 
                     {/* Right: Deductions */}
@@ -2087,7 +2096,7 @@ export function ExpensesClient({
                       <div className="flex justify-between">
                         <span>รวมเงินได้ (Total Earnings):</span>
                         <span className="font-mono text-emerald-800 font-bold">
-                          ฿{(selectedPayslip.baseSalary + selectedPayslip.diligence + selectedPayslip.ot + selectedPayslip.commission).toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+                          ฿{(selectedPayslip.baseSalary + selectedPayslip.diligence + selectedPayslip.ot + selectedPayslip.commission + (selectedPayslip.pairBonus ?? 0)).toLocaleString("th-TH", { minimumFractionDigits: 2 })}
                         </span>
                       </div>
                     </td>

@@ -1,4 +1,5 @@
 import { requireProfile, requireModuleView } from "@/lib/auth";
+import { fetchRosterStaff } from "@/app/actions/roster";
 import { RosterClient } from "./roster-client";
 
 export const metadata = {
@@ -9,5 +10,6 @@ export const metadata = {
 export default async function RosterPage() {
   const profile = await requireProfile();
   requireModuleView(profile, "roster");
-  return <RosterClient />;
+  const staff = await fetchRosterStaff();
+  return <RosterClient initialStaff={staff} />;
 }

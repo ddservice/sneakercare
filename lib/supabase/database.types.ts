@@ -1636,7 +1636,10 @@ export type Database = {
         Row: {
           account: string | null
           bank: string | null
+          bonus_per_pair: number
           comm_rate: number | null
+          default_day_off: number | null
+          default_shift: string
           id: number
           last_updated: string | null
           name: string
@@ -1651,7 +1654,10 @@ export type Database = {
         Insert: {
           account?: string | null
           bank?: string | null
+          bonus_per_pair?: number
           comm_rate?: number | null
+          default_day_off?: number | null
+          default_shift?: string
           id?: number
           last_updated?: string | null
           name: string
@@ -1666,7 +1672,10 @@ export type Database = {
         Update: {
           account?: string | null
           bank?: string | null
+          bonus_per_pair?: number
           comm_rate?: number | null
+          default_day_off?: number | null
+          default_shift?: string
           id?: number
           last_updated?: string | null
           name?: string
@@ -2317,6 +2326,66 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "sc_settings_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sc_staff_daily_stats: {
+        Row: {
+          attendance_status: string
+          created_at: string
+          created_by: string | null
+          employee_name: string
+          id: number
+          late_minutes: number | null
+          note: string | null
+          ot_hours: number | null
+          pairs_handled: number | null
+          stat_date: string
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          attendance_status?: string
+          created_at?: string
+          created_by?: string | null
+          employee_name: string
+          id?: number
+          late_minutes?: number | null
+          note?: string | null
+          ot_hours?: number | null
+          pairs_handled?: number | null
+          stat_date: string
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          attendance_status?: string
+          created_at?: string
+          created_by?: string | null
+          employee_name?: string
+          id?: number
+          late_minutes?: number | null
+          note?: string | null
+          ot_hours?: number | null
+          pairs_handled?: number | null
+          stat_date?: string
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sc_staff_daily_stats_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sc_staff_daily_stats_tenant_id_fkey"
             columns: ["tenant_id"]
             isOneToOne: false
             referencedRelation: "tenants"

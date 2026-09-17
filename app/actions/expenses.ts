@@ -8,6 +8,7 @@ import { calculateExpenseBreakdown, applyEntriesToBreakdown } from "@/lib/expens
 import { SUPPLY_CATEGORIES, sumStockPurchases, monthBounds } from "@/lib/stock-purchases";
 import { mirrorExpenseEntry, unmirrorExpenseEntry, mirrorPayslip } from "@/lib/expense-mirror";
 import { requireTenantId, tenantFilter } from "@/lib/tenant";
+import { fetchStaffMonthlyStatSummary } from "@/app/actions/roster";
 
 /** เดือนปัจจุบันในรูปแบบ "MM/YYYY" ที่ตาราง sc_opex ใช้ทั้งไฟล์ */
 function currentMonthMY(): string {
@@ -36,6 +37,11 @@ export type StaffPayslip = {
    * ไม่หัก ปกส. แม้จะเป็นพนักงานประจำ (employmentType === "monthly") ก็ตาม */
   ssoExempt?: boolean;
   otherDeductions: number;
+  /** โบนัสจากจำนวนคู่รองเท้าที่ทำ (pairsHandled จาก sc_staff_daily_stats × bonus_per_pair ของ
+   * พนักงานคนนั้น) — เพิ่มเข้า netPay เป็นรายการแยกต่างหาก ไม่ปนกับ commission (% ยอดขายรวม)
+   * เดิม — ตั้งใจแยกกันเพราะเป็นคนละฐานคำนวณ (จำนวนคู่ vs. ยอดขายบาท) ดู CLAUDE.md 2026-09-17 */
+  pairBonus?: number;
+  pairsHandled?: number;
   netPay: number;
   payMethod: string;
   employeeRole?: string;
@@ -220,12 +226,20 @@ export async function fetchAllExpensesData(timeRange: string = "this_month"): Pr
   let employeesQuery = supabase.from("sc_employees").select("*");
   if (tenantId) employeesQuery = employeesQuery.eq("tenant_id", tenantId);
 
-  const [opexRes, salesRes, employeeRes, rentalRes, stockRes] = await Promise.all([
+  // ✅ [LUXSU 2026-09-17] สรุปขาด/ลา/มาสาย/OT/จำนวนคู่ของเดือนนี้ต่อพนักงาน (sc_staff_daily_stats
+  // — migration 0037) ใช้ auto-fill OT และคำนวณโบนัสจำนวนคู่ตอนปิดเงินเดือนด้านล่าง ไม่มีผลอะไร
+  // กับยอดเดิมถ้าไม่มีใครบันทึกข้อมูลไว้เลย (ได้ object ว่าง)
+  const statsSummaryPromise = isAllTime
+    ? Promise.resolve({} as Record<string, { absentDays: number; leaveDays: number; lateDays: number; totalOtHours: number; totalPairs: number }>)
+    : fetchStaffMonthlyStatSummary(targetSalesMonth);
+
+  const [opexRes, salesRes, employeeRes, rentalRes, stockRes, staffStatsSummary] = await Promise.all([
     opexQuery,
     salesQuery,
     employeesQuery,
     failSoft(rentalQuery, "อ่าน sc_rental_records"),
     failSoft(stockQuery, "เทียบกับ ledger คลังสินค้า"),
+    statsSummaryPromise,
   ]);
 
   const allRows = opexRes.data || [];
@@ -318,6 +332,17 @@ export async function fetchAllExpensesData(timeRange: string = "this_month"): Pr
   // 2. Process Staff Payslips
   const staffMap: Record<string, StaffPayslip> = {};
 
+  // 🔴 [แก้ช่องโหว่จริง 2026-09-17] เดิม seed ค่า hardcode ของพนักงาน 3 คนนี้ (เลขบัตรประชาชน +
+  // เลขบัญชีธนาคาร) เข้า staffMap แบบไม่มีเงื่อนไขเลย ⇒ ก่อนเชิญ tenant ที่สอง (LUXSU) เข้าระบบ
+  // จะทำให้แอดมินของ LUXSU เปิด /expenses แล้วเห็น "พนักงาน" 3 คนนี้พร้อมเลขบัตร/เลขบัญชีของ
+  // tenant #1 ปนอยู่ในรายชื่อพนักงานของตัวเองทันที — เป็นทั้งบั๊กและข้อมูลรั่วไหลข้าม tenant จริง
+  // ทุกคนใน 3 คนนี้ตอนนี้มีแถวใน sc_employees แล้วครบ (เพิ่ม "เจ" ให้ผ่าน migration 0037) จึงตัด
+  // seed แบบ hardcode นี้ทิ้งได้เลยสำหรับ tenant อื่น — เหลือไว้เฉพาะ tenant #1 เดิม (ผ่าน
+  // super_admin ที่ tenantId เป็น null ด้วย เพื่อไม่ให้ตัวเลขที่กระทบยอดกับ Excel ไว้แล้วเปลี่ยน
+  // สำหรับเดือนเก่าที่ยังไม่มีบันทึกจริงใน sc_opex) — ยังไม่ได้ลบทิ้งถาวรเพราะไม่กล้าเสี่ยงเปลี่ยน
+  // ตัวเลขของเดือนเก่าที่เคยกระทบยอดไว้แล้วโดยไม่ได้ตรวจทุกเดือนก่อน
+  const T1_ID = "00000000-0000-0000-0000-000000000001";
+  if (!tenantId || tenantId === T1_ID) {
   // 1. นายธีรภัทร ทาแผ (เชียง): พนักงานประจำ
   staffMap["นายธีรภัทร ทาแผ (เชียง)"] = {
     employeeName: "นายธีรภัทร ทาแผ (เชียง)",
@@ -385,6 +410,7 @@ export async function fetchAllExpensesData(timeRange: string = "this_month"): Pr
     payMethod: "บัญชีร้าน (โอน)",
     employeeRole: "ช่างสปารองเท้า (ทดลองงาน)",
   };
+  } // ปิด if (!tenantId || tenantId === T1_ID) — จบ seed hardcode ของ tenant #1 เดิม
 
   // Fetch registered staff from sc_employees to include 4th, 5th, etc. (ยิงไปพร้อมก้อนบนแล้ว)
   const dbEmployees = employeeRes.data;
@@ -547,6 +573,17 @@ export async function fetchAllExpensesData(timeRange: string = "this_month"): Pr
     }
   });
 
+  // ✅ [LUXSU 2026-09-17] อัตราโบนัสต่อคู่ ต่อพนักงาน — lookup ทั้งจากชื่อเต็มและชื่อเล่น
+  // เพื่อให้ match กับ key ของ staffMap ได้ไม่ว่าจะมาจาก seed เดิมหรือ sc_employees จริง
+  const bonusRateByKey = new Map<string, number>();
+  for (const emp of dbEmployees || []) {
+    const rate = Number(emp.bonus_per_pair ?? 0);
+    if (rate > 0) {
+      bonusRateByKey.set(emp.name, rate);
+      if (emp.nickname) bonusRateByKey.set(emp.nickname, rate);
+    }
+  }
+
   // Calculate Net Pay for all staff
   const payslips = Object.values(staffMap).map((p) => {
     if (p.commPct && p.commPct > 0) {
@@ -562,11 +599,26 @@ export async function fetchAllExpensesData(timeRange: string = "this_month"): Pr
       p.ssoDeduction = 0;
     }
 
+    // ✅ [LUXSU 2026-09-17] บันทึกขาด/ลา/มาสาย/OT/จำนวนคู่รายวัน (sc_staff_daily_stats — migration
+    // 0037) — match ด้วยชื่อเล่นก่อน (ตรงกับที่ /roster บันทึกไว้) แล้วค่อยลองชื่อเต็ม
+    const dailyStat = (p.nickname && staffStatsSummary[p.nickname]) || staffStatsSummary[p.employeeName];
+    if (dailyStat) {
+      // เติม OT อัตโนมัติจากบันทึกรายวัน **เฉพาะตอนที่ยังไม่มีใครกรอก OT ด้วยมือ** (p.ot === 0)
+      // กัน override ค่าที่แอดมินเคยกรอกเองไว้แล้วในเดือนก่อนๆ ที่ยังไม่ได้ใช้ฟีเจอร์บันทึกรายวัน
+      if (p.ot === 0 && dailyStat.totalOtHours > 0) {
+        p.ot = dailyStat.totalOtHours;
+      }
+      p.pairsHandled = dailyStat.totalPairs;
+      const rate = bonusRateByKey.get(p.employeeName) ?? (p.nickname ? bonusRateByKey.get(p.nickname) : undefined) ?? 0;
+      p.pairBonus = Math.round(dailyStat.totalPairs * rate);
+    }
+
     p.netPay =
       p.baseSalary +
       p.diligence +
       p.ot +
-      p.commission -
+      p.commission +
+      (p.pairBonus ?? 0) -
       p.ssoDeduction -
       p.wht -
       p.otherDeductions;
