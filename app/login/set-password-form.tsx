@@ -19,6 +19,7 @@ export function SetPasswordForm({ mode }: { mode: "invite" | "recovery" }) {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  const [done, setDone] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -36,16 +37,40 @@ export function SetPasswordForm({ mode }: { mode: "invite" | "recovery" }) {
     setPending(true);
     const supabase = createClient();
     const { error: updateError } = await supabase.auth.updateUser({ password: newPassword });
-    setPending(false);
 
     if (updateError) {
+      setPending(false);
       setError(`ตั้งรหัสผ่านไม่สำเร็จ: ${updateError.message}`);
       return;
     }
 
-    // เต็มรอบ navigation (ไม่ใช่ router.push) เพื่อให้ middleware อ่าน session cookie ที่เพิ่ง
-    // persist ไปสดๆ แล้วพาเข้าแอปตามสิทธิ์จริง ไม่ใช้ session ค้างจาก client state
+    // ⚠️ [แก้บั๊กจริง 2026-09-17 — พบตอนทดสอบด้วยลิงก์จริง] ยิง window.location.href ทันทีหลัง
+    // updateUser() สำเร็จ เจอ middleware เด้งกลับมา /login เฉยๆ (ไม่มี error ให้เห็นเลย) —
+    // ยืนยันด้วย scripts/test-login.mjs แยกว่ารหัสผ่านเปลี่ยนสำเร็จจริง แปลว่าปัญหาคือ cookie
+    // session ที่ @supabase/ssr เขียนให้ยังไม่ flush ทันเวลาที่ browser ยิง request ถัดไป
+    // (ทั้งสองอย่างเป็น async แข่งกัน) แก้โดยรอ getSession() (บังคับให้ client sync เสร็จก่อน)
+    // แล้วหน่วงอีกเล็กน้อยกันเหนียว — ถ้ายัง auto-redirect ไม่ทันด้วยเหตุผลใดก็ตาม เปลี่ยนไป
+    // แสดงข้อความสำเร็จ + ปุ่มกดเองแทน ไม่ปล่อยให้ผู้ใช้เจอหน้าเปล่าๆ ไม่รู้ว่าเกิดอะไรขึ้น
+    await supabase.auth.getSession();
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    setPending(false);
+    setDone(true);
     window.location.href = "/dashboard";
+  }
+
+  if (done) {
+    return (
+      <div className="flex flex-col items-center gap-3 py-4 text-center">
+        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-emerald-100 text-emerald-700">
+          <KeyRound className="h-5 w-5" />
+        </div>
+        <p className="text-sm font-semibold text-slate-800">ตั้งรหัสผ่านสำเร็จแล้ว</p>
+        <p className="text-xs text-slate-500">กำลังพาไปหน้าแดชบอร์ด...</p>
+        <a href="/dashboard" className="text-xs font-medium text-teal-700 underline underline-offset-2">
+          ถ้าไม่ไปเองภายในไม่กี่วินาที กดที่นี่
+        </a>
+      </div>
+    );
   }
 
   return (
