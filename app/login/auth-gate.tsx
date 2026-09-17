@@ -14,36 +14,42 @@ type GateState =
 /**
  * ตรวจ URL ตอนโหลดหน้า /login ว่ามาจากลิงก์เชิญ (invite) หรือลิงก์ตั้งรหัสผ่านใหม่ (recovery)
  * ของ Supabase หรือไม่ (ทั้ง `inviteUser()` และ `sendPasswordReset()` ใน app/actions/users.ts
- * ตั้ง redirectTo มาที่ /login เดิมทั้งคู่) ถ้าใช่ → ให้ Supabase สร้าง session ชั่วคราวจาก token
- * ใน URL แล้วสลับไปแสดงฟอร์มตั้งรหัสผ่านใหม่แทนฟอร์มล็อกอินปกติ
+ * ตั้ง redirectTo มาที่ /login เดิมทั้งคู่) ถ้าใช่ → สร้าง session ชั่วคราวจาก token ใน URL เอง
+ * ตรงๆ แล้วสลับไปแสดงฟอร์มตั้งรหัสผ่านใหม่แทนฟอร์มล็อกอินปกติ
  *
  * ⚠️ [แก้บั๊กจริง 2026-09-17] ก่อนหน้านี้ /login ไม่มี logic จุดนี้เลยสักบรรทัด — คลิกลิงก์เชิญ/
  * รีเซ็ตรหัสผ่านแล้วเจอแค่ฟอร์มล็อกอินธรรมดา ไม่มีทางตั้งรหัสผ่านได้เลย (พบตอนเชิญแอดมิน LUXSU
  * ครั้งแรก) ต้องแก้ไขปัญหาเฉพาะหน้าด้วยการตั้งรหัสผ่านให้ตรงๆ แทนทุกครั้งที่ผ่านมา
  *
- * รองรับ 2 รูปแบบ URL ที่ Supabase อาจส่งมา (ขึ้นกับ email template settings) ไม่ต้องรู้ล่วงหน้า
- * ว่าโปรเจกต์นี้ตั้งค่าแบบไหน:
- *   1. hash fragment แบบ implicit flow: #access_token=...&type=recovery|invite
- *      (detectSessionInUrl ของ supabase-js อ่านให้อัตโนมัติตอนสร้าง client)
- *   2. query string แบบ OTP: ?token_hash=...&type=recovery|invite
- *      (ต้องเรียก verifyOtp() เองตรงๆ ก่อน ไม่ auto-detect)
+ * ⚠️ [แก้รอบสอง — เจอจากการทดสอบจริงด้วยลิงก์ recovery จริงที่ generateLink() ออกให้]
+ * รอบแรกพึ่ง `detectSessionInUrl` (ค่าเริ่มต้นของ supabase-js) ให้จัดการ hash fragment เอง
+ * อัตโนมัติ แล้วรอผลผ่าน `getSession()` — ทดสอบจริงแล้วพบว่า **ไม่ทำงาน** กับ
+ * `createBrowserClient()` ของ `@supabase/ssr` (พฤติกรรม auto-detect ไม่แน่นอนเมื่อรวมกับ
+ * client ที่ sync session ผ่านคุกกี้แบบนี้) `getSession()` คืน session ว่างเปล่าตลอดทั้งที่ URL
+ * มี access_token/refresh_token ที่ยังไม่หมดอายุอยู่จริง ⇒ ผู้ใช้เจอ "ลิงก์หมดอายุ" ทั้งที่ลิงก์ดีอยู่
+ * **แก้โดยแกะ access_token/refresh_token จาก hash fragment เองตรงๆ แล้วเรียก
+ * `setSession()` ตรงๆ** แทนการพึ่ง auto-detect — deterministic กว่าและพิสูจน์แล้วว่าทำงานจริง
+ * (ทดสอบด้วยลิงก์ recovery จริงจาก `admin.auth.generateLink()` ไม่ใช่แค่เดาจากเอกสาร)
+ *
+ * รองรับ 2 รูปแบบ URL ที่ Supabase อาจส่งมา (ขึ้นกับ email template settings) — ยืนยันจริงแล้วว่า
+ * โปรเจกต์นี้ใช้แบบที่ 1 (hash fragment) แต่เผื่อไว้ทั้งสองแบบไม่ต้องพึ่งการเดา:
+ *   1. hash fragment แบบ implicit flow: #access_token=...&refresh_token=...&type=recovery|invite
+ *   2. query string แบบ OTP: ?token_hash=...&type=recovery|invite (ต้องเรียก verifyOtp() เอง)
  */
 export function AuthGate() {
   const [gate, setGate] = useState<GateState>({ status: "checking" });
 
   useEffect(() => {
-    const hash = window.location.hash;
-    const params = new URLSearchParams(window.location.search);
-    const tokenHash = params.get("token_hash");
-    const queryType = params.get("type");
-    const hashHasRecoveryOrInvite =
-      hash.includes("type=recovery") || hash.includes("type=invite");
-    const looksLikeAuthLink =
-      hashHasRecoveryOrInvite ||
-      queryType === "recovery" ||
-      queryType === "invite" ||
-      !!tokenHash ||
-      params.has("code");
+    const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+    const searchParams = new URLSearchParams(window.location.search);
+
+    const accessToken = hashParams.get("access_token");
+    const refreshToken = hashParams.get("refresh_token");
+    const hashType = hashParams.get("type");
+    const tokenHash = searchParams.get("token_hash");
+    const queryType = searchParams.get("type");
+
+    const looksLikeAuthLink = !!(accessToken && refreshToken) || !!tokenHash;
 
     if (!looksLikeAuthLink) {
       setGate({ status: "login" });
@@ -51,30 +57,28 @@ export function AuthGate() {
     }
 
     const resolvedMode: "invite" | "recovery" =
-      queryType === "invite" || hash.includes("type=invite") ? "invite" : "recovery";
+      hashType === "invite" || queryType === "invite" ? "invite" : "recovery";
 
     (async () => {
       const supabase = createClient();
 
-      // รูปแบบ OTP query string ต้อง verifyOtp() เองตรงๆ — detectSessionInUrl ไม่จับให้
-      if (tokenHash && (queryType === "recovery" || queryType === "invite")) {
+      if (accessToken && refreshToken) {
+        // hash fragment — เซ็ต session เองตรงๆ จาก token ที่แกะมาแล้ว (พิสูจน์แล้วว่าทำงานจริง)
+        const { error } = await supabase.auth.setSession({
+          access_token: accessToken,
+          refresh_token: refreshToken,
+        });
+        setGate(error ? { status: "link-expired" } : { status: "set-password", mode: resolvedMode });
+        return;
+      }
+
+      if (tokenHash) {
+        // query string แบบ OTP — ไม่มี access_token/refresh_token ให้แกะเอง ต้อง verifyOtp()
         const { error } = await supabase.auth.verifyOtp({
           token_hash: tokenHash,
           type: queryType === "invite" ? "invite" : "recovery",
         });
-        if (error) {
-          setGate({ status: "link-expired" });
-          return;
-        }
-      }
-
-      // รูปแบบ hash fragment (implicit) หรือ PKCE code — supabase-js จัดการให้อัตโนมัติแล้ว
-      // ตอนสร้าง client ด้านบน (detectSessionInUrl: true เป็นค่าเริ่มต้น) แค่รอผลผ่าน getSession()
-      const { data } = await supabase.auth.getSession();
-      if (data.session) {
-        setGate({ status: "set-password", mode: resolvedMode });
-      } else {
-        setGate({ status: "link-expired" });
+        setGate(error ? { status: "link-expired" } : { status: "set-password", mode: resolvedMode });
       }
     })();
   }, []);
