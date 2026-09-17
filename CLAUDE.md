@@ -2,6 +2,63 @@
 
 คำแนะนำสำหรับ Claude Code เมื่อทำงานในโปรเจกต์นี้ — ระบบบริหารจัดการคลังสินค้าสำหรับร้านบริการทำความสะอาด/ซ่อมแซมรองเท้า
 
+## ✅ /login รองรับลิงก์เชิญ/ตั้งรหัสผ่านใหม่แล้วจริง — เทสต์ด้วยลิงก์จริงจบครบวงจร (2026-09-17)
+
+ตั้งแต่สร้างระบบมา `/login` ไม่มี logic รองรับลิงก์เชิญ (invite) หรือลิงก์ตั้งรหัสผ่านใหม่
+(recovery) ของ Supabase เลยสักบรรทัด — `inviteUser()`/`sendPasswordReset()` ใน
+`app/actions/users.ts` ส่ง `redirectTo: ${siteUrl}/login` เหมือนกันทั้งคู่ แต่คลิกลิงก์แล้วเจอแค่
+ฟอร์มล็อกอินธรรมดา ไม่มีทางตั้งรหัสผ่านได้เลย (เจอครั้งแรกตอนเชิญแอดมิน LUXSU) ที่ผ่านมาทุกบัญชีที่
+เชิญเข้าระบบสำเร็จได้เพราะตั้งรหัสผ่านให้ตรงๆ ผ่าน `admin.auth.admin.updateUserById()` แทนเสมอ
+ไม่เคยผ่านอีเมลจริงเลยสักครั้ง
+
+**สร้าง `AuthGate` (`app/login/auth-gate.tsx`)** — client component ตรวจ URL ตอนโหลด `/login`
+ว่ามี token ของ Supabase ปนมาไหม (ทั้งแบบ hash fragment `#access_token=...&type=recovery|invite`
+และแบบ query string OTP `?token_hash=...&type=...` — ไม่ต้องรู้ล่วงหน้าว่าโปรเจกต์ตั้งค่าแบบไหน)
+ถ้าใช่ → สลับไปแสดง `SetPasswordForm` (`app/login/set-password-form.tsx`) แทนฟอร์มล็อกอินปกติ
+ไม่ถามรหัสผ่านเดิมเพราะการมีลิงก์ที่ยังไม่หมดอายุคือการยืนยันตัวตนอยู่แล้วในตัว (ต่างจาก `/account`
+ที่ต้องกรอกรหัสผ่านเดิมเพราะเป็น session ปกติ)
+
+**⚠️ ทำไมต้อง redirectTo ไปที่ `/login` เดิม ห้ามสร้าง route ใหม่แยก:** `middleware.ts` (ดู
+`lib/supabase/middleware.ts`) จะ redirect ไปที่ `/login` ทันทีถ้าไม่มี session cookie ที่ถูกต้อง
+**ยกเว้นกรณีเดียวคือ pathname ตรงกับ `/login` เป๊ะๆ อยู่แล้ว** ซึ่ง token ที่มากับ hash fragment
+ไม่เคยถูกส่งไปที่ server เลย (fragment เป็นแค่ฝั่ง browser) ถ้า redirectTo ไปที่ path อื่น จะโดน
+middleware เด้งกลับมา `/login` ก่อน ซึ่งความเสี่ยงคือ fragment อาจหายไปตอน redirect ข้าม path —
+คงไว้ที่ `/login` เดิมจึงปลอดภัยที่สุด (ไม่มี redirect เกิดขึ้นเลยตั้งแต่ต้น)
+
+**🔴 เจอบั๊กจริง 2 ชั้นระหว่างทดสอบด้วยลิงก์จริง (ไม่ใช่แค่เดาจากเอกสาร Supabase):**
+
+1. **รอบแรกพึ่ง `detectSessionInUrl` (auto-detect ของ supabase-js) แล้วรอผลผ่าน `getSession()`
+   — ทดสอบจริงแล้ว "ไม่ทำงาน" กับ `createBrowserClient()` ของ `@supabase/ssr`** (พฤติกรรม
+   auto-detect ไม่แน่นอนเมื่อรวมกับ client ที่ sync session ผ่านคุกกี้แบบนี้) `getSession()`
+   คืนค่าว่างตลอดทั้งที่ token ในลิงก์ยังไม่หมดอายุจริง ผู้ใช้เจอ "ลิงก์หมดอายุ" ทั้งที่ลิงก์ดีอยู่
+   **แก้โดยแกะ `access_token`/`refresh_token` จาก hash fragment เองตรงๆ แล้วเรียก
+   `setSession()` ตรงๆ** — deterministic กว่าและพิสูจน์แล้วว่าทำงานจริง
+2. **หลังแก้ข้อ 1 แล้ว `updateUser({password})` สำเร็จจริง (ยืนยันแยกด้วย
+   `scripts/test-login.mjs`) แต่ `window.location.href = "/dashboard"` ที่ยิงทันทีหลังจากนั้น
+   โดน middleware เด้งกลับมา `/login` เฉยๆ ไม่มี error ให้เห็นเลย** — สาเหตุคือ cookie session
+   ที่ `@supabase/ssr` เขียนให้ยังไม่ flush ทันเวลาที่ browser ยิง request ถัดไป (race ระหว่าง
+   cookie write กับ navigation) แก้โดยรอ `getSession()` อีกรอบ (บังคับ sync) + หน่วงสั้นๆ ก่อน
+   navigate และเพิ่มหน้าจอ "สำเร็จแล้ว + ปุ่มกดเอง" ไว้เป็น fallback กันผู้ใช้ค้างเจอหน้าเปล่า
+
+**เครื่องมือทดสอบใหม่ที่ทำให้จับบั๊กทั้งสองข้อนี้ได้จริง — ไม่ต้องมีสิทธิ์เข้าอีเมล:**
+`scripts/gen-test-recovery-link.mjs` — สร้างบัญชีทดสอบชั่วคราว + เรียก
+`admin.auth.admin.generateLink({ type: "recovery", ... })` ตรงๆ ซึ่ง Supabase คืน `action_link`
+จริงกลับมาในผลลัพธ์ API ทันที (ไม่ต้องส่งอีเมลเลย) เอาลิงก์นั้นไปเปิดในเบราว์เซอร์จริงผ่าน
+claude-in-chrome ได้ทันที **นี่คือวิธีเดียวที่ยืนยันได้จริงว่าฟีเจอร์นี้ทำงาน** เพราะไม่มีทางเข้าถึง
+inbox ของอีเมลจริงได้ — รันเองทุกครั้งที่แก้ auth flow อะไรที่เกี่ยวกับลิงก์อีเมล
+(`node --env-file=.env.local scripts/gen-test-recovery-link.mjs` แล้วลบทิ้งด้วย
+`--cleanup <uid>` เสมอหลังทดสอบเสร็จ)
+
+**ยืนยันจบครบวงจรจริงบน production:** สร้างบัญชีทดสอบ + profile → ขอลิงก์ recovery จริง → เปิด
+ลิงก์ในเบราว์เซอร์ (ล็อกเอาต์ก่อนเสมอ — ถ้ามี session ค้างอยู่ middleware จะเด้งไป `/dashboard`
+ก่อนถึง AuthGate เพราะเช็ค "ล็อกอินอยู่แล้วเปิด /login" ก่อน ไม่ใช่บั๊กของ AuthGate) → เห็นฟอร์ม
+"ตั้งรหัสผ่านใหม่สำหรับบัญชีของคุณ" → กรอกรหัสผ่านใหม่ → เข้า `/dashboard` สำเร็จในฐานะผู้ใช้จริง
+(เห็น badge "Staff · AuthGate Test" ที่หัวเว็บ) → ลบบัญชีทดสอบทิ้งหมดแล้ว
+
+**นี่คือการใช้ `lib/supabase/client.ts` (browser client) ครั้งแรกในระบบ** — ทุก query อื่นในแอป
+ผ่านเซิร์ฟเวอร์หรือ service_role ทั้งหมด แต่การอ่าน URL fragment ทำได้แค่ฝั่ง browser เท่านั้น
+(fragment ไม่เคยถูกส่งไปที่ server เลยตามสเปก HTTP) จึงไม่มีทางทำผ่าน Server Component ได้
+
 ## ✅ ไล่ปิดช่องโหว่ tenantFilter()/RLS ทั้งระบบแล้ว + เจอบั๊กเขียนข้อมูลผิด tenant จริง 2 จุด (2026-09-17)
 
 ต่อจากหัวข้อ "super_admin ใช้งานจริงได้ครบแล้ว" ด้านล่าง — ตอนนั้นแก้แค่ `/dashboard` เป็นเคสแรก
