@@ -27,7 +27,7 @@ export async function fetchShopProfile(): Promise<ShopProfile> {
   // ที่นี่ ⇒ ก่อนแก้ tenant อื่นจะอ่าน/เขียนทับชื่อร้าน/เลขผู้เสียภาษี/PromptPay ของ tenant นี้ได้
   // ตรงๆ ผ่านหน้า /settings ปกติ (ต้องรอ migration 0032 ที่เปลี่ยน sc_settings ให้เป็น
   // composite key (tenant_id, key) ก่อน ไม่งั้นสอง tenant ชนกันที่ key ชื่อเดียวกัน)
-  const tenantId = tenantFilter(user);
+  const tenantId = await tenantFilter(user);
   let query = supabase.from("sc_settings").select("key, value");
   if (tenantId) query = query.eq("tenant_id", tenantId);
   const { data } = await query;
@@ -50,7 +50,7 @@ export async function fetchShopProfile(): Promise<ShopProfile> {
 export async function updateShopProfile(profile: Partial<ShopProfile>) {
   const user = await requireProfile();
   requireAdmin(user);
-  const tenantId = requireTenantId(user);
+  const tenantId = await requireTenantId(user);
 
   const supabase = createAdminClient();
 

@@ -22,12 +22,10 @@ export async function inviteUser(_prev: UserActionState, formData: FormData): Pr
   // ⚠️ [แก้บั๊กจริง 2026-09-16] ต้องเป็น tenant เดียวกับ admin ที่เชิญเสมอ — ถ้าไม่ระบุตรงนี้
   // จะตกไปใช้ DEFAULT ของ 0028 (tenant #1 ตายตัว) ⇒ admin ของ tenant ไหนก็ตามเชิญคน จะได้
   // สมาชิกใหม่ไปโผล่ที่ tenant #1 เสมอ ไม่ใช่ tenant ของ admin คนนั้นเอง
-  // ⚠️ [แก้บั๊กจริง 2026-09-17] super_admin ไม่มี tenant ของตัวเอง (requireTenantId จะ throw)
-  // — เชิญผู้ใช้เข้า tenant ที่เจาะจงยังไม่มี UI ให้เลือก จึงตอบ error สุภาพแทนที่จะพัง 500
-  if (profile.role === "super_admin") {
-    return { error: "super_admin เชิญผู้ใช้เข้าระบบเองไม่ได้ (ไม่มี tenant ของตัวเอง) ให้ล็อกอินเป็น admin ของ tenant นั้นแล้วเชิญจากหน้านี้แทน" };
-  }
-  const tenantId = requireTenantId(profile);
+  // ✅ [2026-09-17] super_admin เชิญได้แล้วเช่นกัน — ใช้ tenant ของสาขาที่เลือกไว้ที่หัวเว็บ
+  // (`tenantFilter()`/`requireTenantId()` แก้ให้ resolve จากสาขาที่เลือกแล้ว) ถ้า super_admin
+  // ยังไม่ได้เลือกสาขา จะได้ error ข้อความสุภาพจาก requireTenantId() เองแทนที่จะพัง 500
+  const tenantId = await requireTenantId(profile);
 
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
   const displayName = String(formData.get("display_name") ?? "").trim();
@@ -198,7 +196,7 @@ export async function sendPasswordReset(_prev: UserActionState, formData: FormDa
   if (!targetProfile) {
     return { error: "ไม่พบผู้ใช้นี้ในระบบ" };
   }
-  if (profile.role !== "super_admin" && targetProfile.tenant_id !== requireTenantId(profile)) {
+  if (profile.role !== "super_admin" && targetProfile.tenant_id !== (await requireTenantId(profile))) {
     return { error: "ไม่พบผู้ใช้นี้ในระบบของคุณ" };
   }
 
@@ -255,7 +253,7 @@ export async function deleteUser(_prev: UserActionState, formData: FormData): Pr
   if (!targetCheck) {
     return { error: "ไม่พบผู้ใช้นี้ในระบบ" };
   }
-  const tenantId = profile.role === "super_admin" ? targetCheck.tenant_id : requireTenantId(profile);
+  const tenantId = profile.role === "super_admin" ? targetCheck.tenant_id : await requireTenantId(profile);
   if (profile.role !== "super_admin" && targetCheck.tenant_id !== tenantId) {
     return { error: "ไม่พบผู้ใช้นี้ในระบบของคุณ" };
   }

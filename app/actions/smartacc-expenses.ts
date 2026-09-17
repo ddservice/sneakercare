@@ -38,7 +38,7 @@ export async function parseAndStageReceiptOcr(imageBase64OrUrl: string) {
   const profile = await requireProfile();
   requireModuleWrite(profile, "expenses");
   const supabase = createAdminClient();
-  const tenantId = requireTenantId(profile);
+  const tenantId = await requireTenantId(profile);
 
   const mockVendorNames = [
     "บจก. สยาม คลีนนิ่ง ซัพพลาย",
@@ -90,7 +90,7 @@ export async function approveStagedExpense(expenseId: string, accountCode?: stri
   const profile = await requireProfile();
   requireModuleWrite(profile, "expenses");
   const supabase = createAdminClient();
-  const tenantId = requireTenantId(profile);
+  const tenantId = await requireTenantId(profile);
 
   const { error } = await supabase
     .schema("extension_layer")
@@ -117,7 +117,7 @@ export async function fetchStagedExpenses() {
     .schema("extension_layer")
     .from("ext_staged_expenses")
     .select("*, ext_chart_of_accounts(account_name_th)");
-  const stagedTenantId = tenantFilter(profile);
+  const stagedTenantId = await tenantFilter(profile);
   if (stagedTenantId) query = query.eq("tenant_id", stagedTenantId);
 
   const { data } = await query.order("created_at", { ascending: false });

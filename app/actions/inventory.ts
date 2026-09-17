@@ -34,7 +34,7 @@ export async function toggleItemAlertMute(itemId: string, muted: boolean) {
   requireModuleWrite(profile, "inventory");
   const branchId = await getSelectedBranchId(profile);
   const supabase = createAdminClient();
-  const tenantId = requireTenantId(profile);
+  const tenantId = await requireTenantId(profile);
 
   let q = supabase.from("item_stock")
     .update({ alert_muted: muted })
@@ -69,7 +69,7 @@ export async function updateInventoryItem(data: InventoryItemInput) {
   requireModuleWrite(profile, "inventory");
   const branchId = await getSelectedBranchId(profile);
   const supabase = createAdminClient();
-  const tenantId = requireTenantId(profile);
+  const tenantId = await requireTenantId(profile);
 
   if (!data.id) {
     return { success: false, error: "ไม่พบรหัสสินค้าที่ต้องการแก้ไข" };
@@ -168,7 +168,7 @@ export async function createInventoryItem(data: InventoryItemInput) {
   requireModuleWrite(profile, "inventory");
   const branchId = await getSelectedBranchId(profile);
   const supabase = createAdminClient();
-  const tenantId = requireTenantId(profile);
+  const tenantId = await requireTenantId(profile);
 
   // 1. Insert item
   const { data: newItem, error: itemError } = await supabase.from("items")
@@ -235,7 +235,7 @@ export async function deleteInventoryItem(itemId: string) {
   const profile = await requireProfile();
   requireModuleWrite(profile, "inventory");
   const supabase = createAdminClient();
-  const tenantId = requireTenantId(profile);
+  const tenantId = await requireTenantId(profile);
 
   // Try delete if no foreign key constraints, else deactivate
   // ⚠️ .eq("tenant_id", ...) กัน id ของ tenant อื่นถูกลบ/ปิดใช้งานข้ามฝั่ง

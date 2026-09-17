@@ -54,7 +54,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       // ไหนก็ตามที่ "ดูทุกสาขา" (ไม่ได้เลือกสาขาเจาะจง) จะเห็น badge แจ้งเตือนสต๊อกต่ำที่นับรวม
       // ของทุก tenant ปนกันหมด ไม่ใช่แค่ tenant ของตัวเอง — super_admin ตั้งใจให้เห็นรวมทุก tenant
       // ได้ต่อไป (เป็นมุมมองระดับแพลตฟอร์ม) แต่ admin ปกติต้องกรองเฉพาะ tenant ตัวเองเท่านั้น
-      const ownTenantId = tenantFilter(profile);
+      const ownTenantId = await tenantFilter(profile);
       if (ownTenantId) {
         const { data: ownBranches } = await adminDb.from("inv_branches").select("id").eq("tenant_id", ownTenantId);
         const ownBranchIds = (ownBranches ?? []).map((b) => b.id);

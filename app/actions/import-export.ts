@@ -23,7 +23,7 @@ export async function bulkImportSales(rows: Record<string, unknown>[]): Promise<
   const profile = await requireProfile();
   requireModuleView(profile, "reports");
   const supabase = createAdminClient();
-  const tenantId = requireTenantId(profile);
+  const tenantId = await requireTenantId(profile);
 
   if (!rows || rows.length === 0) {
     return { success: false, total: 0, imported: 0, failed: 0, errors: ["ไม่พบข้อมูลสำหรับนำเข้า"] };
@@ -116,7 +116,7 @@ export async function bulkImportStock(rows: Record<string, unknown>[]): Promise<
   requireModuleView(profile, "reports");
   const branchId = await getSelectedBranchId(profile);
   const supabase = createAdminClient();
-  const tenantId = requireTenantId(profile);
+  const tenantId = await requireTenantId(profile);
 
   if (!rows || rows.length === 0) {
     return { success: false, total: 0, imported: 0, failed: 0, errors: ["ไม่พบข้อมูลสำหรับนำเข้า"] };
@@ -230,7 +230,7 @@ export async function bulkImportExpenses(rows: Record<string, unknown>[]): Promi
   const profile = await requireProfile();
   requireModuleView(profile, "reports");
   const supabase = createAdminClient();
-  const tenantId = requireTenantId(profile);
+  const tenantId = await requireTenantId(profile);
 
   if (!rows || rows.length === 0) {
     return { success: false, total: 0, imported: 0, failed: 0, errors: ["ไม่พบข้อมูลสำหรับนำเข้า"] };

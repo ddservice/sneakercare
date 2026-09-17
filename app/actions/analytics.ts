@@ -104,7 +104,7 @@ export async function fetchAnalyticsData(targetMonth: string = "all"): Promise<A
   const supabase = createAdminClient();
   // ⚠️ ใช้ createAdminClient() (service_role) — bypass RLS ของ migration 0031 ทั้งหมด ต้องกรอง
   // tenant_id เองตรงนี้เสมอ ไม่งั้นสถิติของ tenant นี้จะรวมยอดขาย/สต๊อกของ tenant อื่นปนเข้ามา
-  const tenantId = tenantFilter(profile);
+  const tenantId = await tenantFilter(profile);
 
   // 1. Fetch sales from sc_sales — only needed columns, with date range limit
   // "all" mode: rolling 13-month window (12 months history + current month)

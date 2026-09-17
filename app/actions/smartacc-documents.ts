@@ -85,7 +85,7 @@ export async function lookupDbdCompany(taxIdOrKeyword: string): Promise<DbdCompa
       .from("ext_contacts")
       .select("*")
       .or(`tax_id.eq.${cleaned || "NONE"},company_name.ilike.%${raw}%`);
-    const contactTenantId = tenantFilter(profile);
+    const contactTenantId = await tenantFilter(profile);
     if (contactTenantId) contactQuery = contactQuery.eq("tenant_id", contactTenantId);
     const { data: existingContact } = await contactQuery
       .order("created_at", { ascending: false })
@@ -198,7 +198,7 @@ export async function lookupDbdCompany(taxIdOrKeyword: string): Promise<DbdCompa
   // 3. Search in persistent sc_settings registry
   // ⚠️ สมุดที่อยู่ลูกค้าเป็นข้อมูลต่อ tenant (ลูกค้าที่เคยออกเอกสารด้วยกัน) ต้องกรอง tenant_id
   // เสมอ ไม่งั้น tenant อื่นจะเห็น/ค้นเจอรายชื่อลูกค้าของ tenant นี้ได้ผ่านช่องค้นหาเดียวกัน
-  const dbdTenantId = tenantFilter(profile);
+  const dbdTenantId = await tenantFilter(profile);
   try {
     let regQuery = supabase.from("sc_settings")
       .select("value")
@@ -361,7 +361,7 @@ export async function fetchSmartAccDocuments(filterType?: DocumentType) {
     .select("*, ext_contacts(*), ext_document_items(*)")
     .order("created_at", { ascending: false });
 
-  const docsTenantId = tenantFilter(profile);
+  const docsTenantId = await tenantFilter(profile);
   if (docsTenantId) query = query.eq("tenant_id", docsTenantId);
   if (filterType) {
     query = query.eq("doc_type", filterType);
@@ -379,7 +379,7 @@ export async function createSmartAccDocument(payload: CreateDocumentPayload) {
   const profile = await requireProfile();
   requireModuleWrite(profile, "invoicing");
   const supabase = createAdminClient();
-  const tenantId = requireTenantId(profile);
+  const tenantId = await requireTenantId(profile);
 
   // 1. Calculate Totals
   const subtotal = payload.items.reduce((sum, item) => sum + item.totalLineAmount, 0);
@@ -532,7 +532,7 @@ export async function convertDocument(sourceDocId: string, targetDocType: Docume
   const profile = await requireProfile();
   requireModuleWrite(profile, "invoicing");
   const supabase = createAdminClient();
-  const tenantId = requireTenantId(profile);
+  const tenantId = await requireTenantId(profile);
 
   // 1. Fetch Source Document (ต้องเป็นของ tenant ตัวเองเท่านั้น — กัน super_admin/แอดมิน
   // ของ tenant อื่นแปลงเอกสารของ tenant นี้โดยรู้/เดา id)
@@ -601,7 +601,7 @@ export async function fetchPendingDeliveryOrders() {
     .select("id, doc_number, doc_type, issue_date, grand_total, status, ext_contacts(company_name)")
     .in("doc_type", ["DO", "INVOICE"])
     .neq("status", "PAID");
-  const pendingTenantId = tenantFilter(profile);
+  const pendingTenantId = await tenantFilter(profile);
   if (pendingTenantId) query = query.eq("tenant_id", pendingTenantId);
 
   const { data, error } = await query.order("issue_date", { ascending: false });
@@ -629,7 +629,7 @@ export async function fetchTaxFilingData(yearMonth?: string) {
     .order("issue_date", { ascending: false });
   let expensesQuery = supabase.from("expenses").select("*").order("expense_date", { ascending: false });
 
-  const taxFilingTenantId = tenantFilter(profile);
+  const taxFilingTenantId = await tenantFilter(profile);
   if (taxFilingTenantId) {
     docsQuery = docsQuery.eq("tenant_id", taxFilingTenantId);
     expensesQuery = expensesQuery.eq("tenant_id", taxFilingTenantId);

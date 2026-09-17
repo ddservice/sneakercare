@@ -63,7 +63,7 @@ export async function saveDailySale(data: DailySaleInput) {
   requireModuleWrite(profile, "pos");
   const supabase = createAdminClient();
   // ⚠️ ใช้ service_role — bypass RLS ทั้งหมด ต้องกรอง/ระบุ tenant_id เองทุกจุดในไฟล์นี้
-  const tenantId = requireTenantId(profile);
+  const tenantId = await requireTenantId(profile);
 
   const cash = Number(data.cash_amount || 0);
   const transfer = Number(data.transfer_amount || 0);
@@ -185,7 +185,7 @@ export async function deleteDailySale(id: number) {
   const profile = await requireProfile();
   requireModuleWrite(profile, "pos");
   const supabase = createAdminClient();
-  const tenantId = requireTenantId(profile);
+  const tenantId = await requireTenantId(profile);
 
   // อ่านแถวเก็บไว้ก่อน เพราะพอลบแล้วไม่มีทางรู้ย้อนหลังว่ายอดที่หายไปคือเท่าไหร่
   const { data: doomed } = await supabase.from("sc_sales")
@@ -225,7 +225,7 @@ export async function countDailySales(): Promise<number> {
   const profile = await requireProfile();
   requireModuleView(profile, "pos");
   const supabase = createAdminClient();
-  const tenantId = tenantFilter(profile);
+  const tenantId = await tenantFilter(profile);
   let query = supabase.from("sc_sales").select("id", {
     count: "exact",
     head: true,
@@ -239,7 +239,7 @@ export async function fetchRecentDailySales(limit: number = 300): Promise<DailyS
   const profile = await requireProfile();
   requireModuleView(profile, "pos");
   const supabase = createAdminClient();
-  const tenantId = tenantFilter(profile);
+  const tenantId = await tenantFilter(profile);
 
   let salesQuery = supabase.from("sc_sales")
     .select("*")
@@ -341,7 +341,7 @@ export async function recordArPayment(data: {
   const profile = await requireProfile();
   requireModuleWrite(profile, "pos");
   const supabase = createAdminClient();
-  const tenantId = requireTenantId(profile);
+  const tenantId = await requireTenantId(profile);
 
   if (!data.sale_date || !data.received_date || Number(data.amount) <= 0) {
     return { success: false, error: "กรุณาระบุข้อมูลวันที่และจำนวนเงินให้ถูกต้อง" };
@@ -425,7 +425,7 @@ export async function deleteArPayment(paymentId: number, saleDate: string) {
   const profile = await requireProfile();
   requireModuleWrite(profile, "pos");
   const supabase = createAdminClient();
-  const tenantId = requireTenantId(profile);
+  const tenantId = await requireTenantId(profile);
 
   // อ่านใบรับชำระเก็บไว้ก่อนลบ — ยอดเงินที่หายต้องตรวจย้อนหลังได้
   const { data: doomed } = await supabase.from("sc_payments")

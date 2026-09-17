@@ -126,7 +126,7 @@ export async function fetchAllExpensesData(timeRange: string = "this_month"): Pr
   requireModuleView(profile, "expenses");
   const supabase = createAdminClient();
   // ⚠️ ใช้ service_role — bypass RLS ทั้งหมด ต้องกรอง tenant_id เองทุก query ในไฟล์นี้
-  const tenantId = tenantFilter(profile);
+  const tenantId = await tenantFilter(profile);
 
   // Fetch all records from sc_opex
   // (ยังไม่ await ตรงนี้ — รวมไปยิงพร้อมกับ query อื่นด้านล่าง ดูคอมเมนต์ "ยิง query พร้อมกัน")
@@ -761,7 +761,7 @@ export async function saveStaffProfileInfo(payload: {
   const profile = await requireProfile();
   requireModuleWrite(profile, "expenses");
   const supabase = createAdminClient();
-  const tenantId = requireTenantId(profile);
+  const tenantId = await requireTenantId(profile);
 
   let cleanKeyName = payload.employeeKeyName;
   if (cleanKeyName.includes("ธีรภัทร")) cleanKeyName = "นายธีรภัทร ทาแผ";
@@ -870,7 +870,7 @@ export async function createStaffMember(payload: {
   const profile = await requireProfile();
   requireModuleWrite(profile, "expenses");
   const supabase = createAdminClient();
-  const tenantId = requireTenantId(profile);
+  const tenantId = await requireTenantId(profile);
 
   if (!payload.fullName.trim()) {
     return { error: "กรุณาระบุชื่อพนักงาน" };
@@ -966,7 +966,7 @@ export async function saveStaffPayrollAdjustment(payload: {
   const profile = await requireProfile();
   requireModuleWrite(profile, "expenses");
   const supabase = createAdminClient();
-  const tenantId = requireTenantId(profile);
+  const tenantId = await requireTenantId(profile);
 
   const m = payload.month;
   let cleanKeyName = payload.employeeName;
@@ -1069,7 +1069,7 @@ export async function addExpense(
   const profile = await requireProfile();
   requireModuleWrite(profile, "expenses");
   const supabase = createAdminClient();
-  const tenantId = requireTenantId(profile);
+  const tenantId = await requireTenantId(profile);
 
   const title = (formData.get("title") as string)?.trim();
   const category = (formData.get("category") as string)?.trim() || "ค่าดำเนินการ";
@@ -1135,7 +1135,7 @@ export async function deleteExpense(id: string | number) {
   const profile = await requireProfile();
   requireModuleWrite(profile, "expenses");
   const supabase = createAdminClient();
-  const tenantId = requireTenantId(profile);
+  const tenantId = await requireTenantId(profile);
 
   // อ่านรายการเก็บไว้ก่อนลบ — ยอดค่าใช้จ่ายที่หายไปต้องตรวจย้อนหลังได้
   // sc_opex.id เป็น bigint — แปลงเป็นตัวเลขก่อนเสมอ (ฝั่งเรียกส่งมาเป็น string ได้)
@@ -1195,7 +1195,7 @@ export async function deleteMiscExpenseItem(rowId: number, itemIndex: number) {
   const profile = await requireProfile();
   requireModuleWrite(profile, "expenses");
   const supabase = createAdminClient();
-  const tenantId = requireTenantId(profile);
+  const tenantId = await requireTenantId(profile);
 
   const { data: row, error: fetchError } = await supabase.from("sc_opex")
     .select("id, month, name")

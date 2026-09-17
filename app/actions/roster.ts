@@ -32,7 +32,7 @@ export async function fetchRosterStaff(): Promise<RosterStaff[]> {
   let query = supabase
     .from("sc_employees")
     .select("id, name, nickname, position, salary, default_shift, default_day_off, bonus_per_pair, status");
-  const tenantId = tenantFilter(profile);
+  const tenantId = await tenantFilter(profile);
   if (tenantId) query = query.eq("tenant_id", tenantId);
 
   const { data, error } = await query.order("id", { ascending: true });
@@ -65,7 +65,7 @@ export async function updateEmployeeRosterDefaults(
   const profile = await requireProfile();
   requireModuleWrite(profile, "roster");
   const supabase = createAdminClient();
-  const tenantId = requireTenantId(profile);
+  const tenantId = await requireTenantId(profile);
 
   const { error, data: updated } = await supabase
     .from("sc_employees")
@@ -109,7 +109,7 @@ export async function fetchStaffDailyStats(yearMonth: string): Promise<StaffDail
     .select("id, employee_name, stat_date, attendance_status, late_minutes, ot_hours, pairs_handled, note")
     .gte("stat_date", `${yearMonth}-01`)
     .lte("stat_date", `${yearMonth}-31`);
-  const tenantId = tenantFilter(profile);
+  const tenantId = await tenantFilter(profile);
   if (tenantId) query = query.eq("tenant_id", tenantId);
 
   const { data, error } = await query;
@@ -142,7 +142,7 @@ export async function saveStaffDailyStat(
   const profile = await requireProfile();
   requireModuleWrite(profile, "roster");
   const supabase = createAdminClient();
-  const tenantId = requireTenantId(profile);
+  const tenantId = await requireTenantId(profile);
 
   const { error } = await supabase.from("sc_staff_daily_stats").upsert(
     {

@@ -21,7 +21,7 @@ async function loadBillingNotes(supabase: ReturnType<typeof createAdminClient>, 
     .from("ext_documents")
     .select("*, ext_contacts(*), ext_document_items(*)")
     .eq("doc_type", "BILLING_NOTE");
-  const billingTenantId = tenantFilter(profile);
+  const billingTenantId = await tenantFilter(profile);
   if (billingTenantId) query = query.eq("tenant_id", billingTenantId);
   const { data } = await query.order("created_at", { ascending: false });
   return data ?? [];
