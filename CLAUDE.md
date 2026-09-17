@@ -2,6 +2,66 @@
 
 คำแนะนำสำหรับ Claude Code เมื่อทำงานในโปรเจกต์นี้ — ระบบบริหารจัดการคลังสินค้าสำหรับร้านบริการทำความสะอาด/ซ่อมแซมรองเท้า
 
+## ✅ ไล่ปิดช่องโหว่ tenantFilter()/RLS ทั้งระบบแล้ว + เจอบั๊กเขียนข้อมูลผิด tenant จริง 2 จุด (2026-09-17)
+
+ต่อจากหัวข้อ "super_admin ใช้งานจริงได้ครบแล้ว" ด้านล่าง — ตอนนั้นแก้แค่ `/dashboard` เป็นเคสแรก
+ที่เจอ เจ้าของสั่งให้ "ไล่แก้ให้ครบ พร้อมเทสระบบ" จึงไล่ตรวจทุกจุดที่เข้าข่ายเดียวกัน แบ่งเป็น
+2 กลุ่มตามสถาปัตยกรรม:
+
+**กลุ่ม 1 — `lib/tenant.ts`'s `tenantFilter()`/`requireTenantId()` (service_role):** เปลี่ยนจาก
+sync เป็น **async** — เดิมคืน `null` (= ไม่กรอง) ให้ super_admin เสมอไม่สนใจสาขาที่เลือกไว้เลย
+ตอนนี้ resolve จากสาขาที่เลือกไว้ (ผ่าน `getSelectedBranchId()`) แล้วหา tenant ของสาขานั้นให้
+อัตโนมัติ — ไม่เลือกสาขา = ยังเห็นภาพรวมข้ามทุก tenant เหมือนเดิม (ตรงกับหลักการเดียวกับ badge
+สต๊อกต่ำ) แก้ call site ทุกจุดให้ `await` (11 ไฟล์: `analytics.ts`, `daily-sales.ts`,
+`expenses.ts`, `import-export.ts`, `inventory.ts`, `roster.ts`, `shop-settings.ts`,
+`smartacc-documents.ts`, `smartacc-expenses.ts`, `users.ts`, `billing-notes/page.tsx`,
+`(app)/layout.tsx`) — `admin/co-admin/staff` พฤติกรรมไม่เปลี่ยนเลยเพราะยังคืน `profile.tenant_id`
+ตรงๆ เหมือนเดิม **ผลข้างเคียงที่ดี:** เอาบล็อก `inviteUser()` สำหรับ super_admin ที่เพิ่งใส่ไปก่อน
+หน้านี้ออกได้เลย เพราะตอนนี้ resolve tenant จากสาขาที่เลือกได้เองแล้ว
+
+**กลุ่ม 2 — หน้าที่ query ผ่าน session client (RLS) โดยไม่กรอง tenant เองเลย:** RLS ปกป้อง admin
+ทั่วไปถูกต้องอยู่แล้ว (เห็นแค่ tenant ตัวเองเสมอ) แต่ super_admin's RLS อนุญาตทุก tenant เสมอไม่
+สนใจสาขาที่เลือก — พิสูจน์จริงที่ `/reports`: เลือกสาขา LUXSU (0 แถวในทุกตาราง) แล้วหน้ายังโชว์
+"306 รายการ" ของ tenant #1 อยู่ดี แก้ด้วย `tenantFilter()` (ตัวเดียวกับกลุ่ม 1) เติม
+`.eq("tenant_id", ...)` เอง: `/reports` (sc_sales, items, sc_expenses), `/inventory`,
+`/admin/items`, `/adjustments`, `/stock-in`, `/stock-out` (ทุกที่ที่ query `items` แคตตาล็อกกลาง)
+— `/pos` และ `/history` ไม่ต้องแก้เพราะกรองด้วย `branch_id` อยู่แล้วซึ่งผูกกับ tenant เดียวเสมอ
+
+**🔴 เจอบั๊กร้ายแรงกว่าที่คิดระหว่างไล่ — ไม่ใช่แค่ super_admin edge case แต่กระทบ LUXSU จริงตอนนี้:**
+`items.ts`'s `createItem()` และ `stock.ts`'s `createStockIn()` (โหมด "+ เพิ่มสินค้าใหม่") **insert
+เข้า `items` โดยไม่ระบุ `tenant_id` เลย** — migration 0028 ตั้ง DEFAULT เป็น tenant #1 ตายตัว ⇒
+**แอดมิน LUXSU (หรือ tenant ไหนก็ตามที่ไม่ใช่ #1) เพิ่มสินค้าใหม่ตอนนี้ จะได้แถวไปโผล่ที่แคตตาล็อก
+ของ tenant #1 แบบเงียบๆ ทุกครั้ง ไม่ใช่ของ tenant ตัวเอง** — แก้ `items.ts` ให้ใช้
+`requireTenantId(profile)`, แก้ `stock.ts` ให้หา tenant จาก `branchId` ที่กำลังรับของเข้าจริงตรงๆ
+(กันกรณี cookie สาขาที่เลือกไว้ไม่ตรงกับ branchId ของฟอร์ม) **ทดสอบจริงบน production:** สร้าง
+"TEST LUXSU ITEM" ขณะเลือกสาขา LUXSU → โผล่ถูกต้องในแคตตาล็อก LUXSU → สลับไป tenant #1 →
+**ไม่โผล่ในแคตตาล็อก tenant #1 เลย** (ยืนยันว่าบั๊กปิดจริง) → ปิดใช้งานทิ้งหลังทดสอบเสร็จ
+
+**พบเพิ่ม: `/stock-in`'s fallback ตอนไม่ได้เลือกสาขา เสี่ยงเขียนผิดสาขา/ผิด tenant แบบเงียบๆ**
+เดิม `if (!branchId) { หยิบสาขาแรกแบบไม่กรอง tenant (.limit(1).single()) หรือ hardcode UUID
+ของสาขา tenant #1 }` — แก้เป็นบล็อกแล้วขอให้เลือกสาขาก่อนเสมอ (รูปแบบเดียวกับ `/stock-out` ที่ถูก
+อยู่แล้ว และตรงกับกฎข้อ 12 ที่มีอยู่แล้วว่า "การเบิก-รับ-ปรับ-ของเสียต้องเลือกสาขาให้ชัดก่อน")
+
+**ปิดช่องว่างที่ CLAUDE.md เองเคยบันทึกไว้ว่ายังไม่ได้แก้: `inv_fn_approve_adjustment()` ไม่รู้จัก
+super_admin** — DB function เช็ค `inv_fn_current_role() not in ('admin', 'co-admin')` เขียนไว้
+ก่อน super_admin จะมีอยู่จริง (ตรวจ prosrc บน production ตรงๆ ก่อนแก้) ⇒ super_admin กดอนุมัติ
+adjustment ไม่ได้เลย ได้ exception ทันที ปิดด้วย **`0038_approve_adjustment_super_admin.sql`**
+(เพิ่ม `'super_admin'` เข้า IN list — เงื่อนไขกันข้ามสาขาของ co-admin ไม่แตะ) คู่กับแก้
+`stock.ts`'s `createAdjustment()` ให้ super_admin สร้างแล้วอนุมัติอัตโนมัติเหมือน admin (ไม่ใช่รอ
+อนุมัติเหมือน co-admin/staff) และ `adjustments/page.tsx` ให้แสดงการ์ด "รายการรออนุมัติ" ให้
+super_admin ด้วย **ทดสอบผ่าน PGlite ครบ (`test-migration-0038.mjs`)** จำลองพฤติกรรมก่อน/หลังแก้
++ admin/co-admin/staff เดิมไม่เปลี่ยน + rollback — apply ขึ้น production แล้วผ่าน SSH+psql
+
+**ทดสอบทั้งชุดผ่าน browser จริงกับ production หลัง deploy:** `/reports`, `/inventory`,
+`/admin/items`, `/stock-in`, `/stock-out`, `/adjustments` ทุกตัวโชว์ "0"/ว่างถูกต้องตอนเลือก
+LUXSU และกลับมาถูกต้องเหมือนเดิมตอนสลับกลับ tenant #1 — `npm run typecheck`/`lint`/
+`test:guards`/`test:migration` ผ่านครบทุกจุดก่อน deploy ทุกรอบ
+
+**เก็บระหว่างทาง (ไม่ใช่บั๊กจริง แค่ label หลอก):** `stock-in-form.tsx` มี placeholder
+"เลือกสินค้าจากรายการ 46 รายการ..." เขียนเป็น string ตายตัว ไม่ใช่ค่าจริง — แก้เป็น
+`${items.length}` ให้ตรงของจริงเสมอ ส่วน `reports-client.tsx`'s badge "3 พนักงาน" ยังเป็น label
+ตายตัวเหมือนกัน แต่ไม่ใช่ช่องโหว่ (ไม่มีข้อมูลจริงไหลออกมา) ยังไม่ได้แก้ เพราะอยู่นอกขอบเขตของรอบนี้
+
 ## ✅ super_admin ใช้งานจริงได้ครบแล้ว — เลือกสาขาข้าม tenant ได้, จัดการผู้ใช้ข้าม tenant ได้ (2026-09-17)
 
 เจ้าของทดสอบบัญชี super_admin เองหลังสร้างเสร็จ (ดูหัวข้อ "/roster hardcode" ด้านล่างสำหรับที่มา)

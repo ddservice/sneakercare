@@ -54,7 +54,7 @@ export function StockInForm({ items, branchId }: { items: ItemOption[]; branchId
           </Label>
           <Select name="item_id" required={!isNewItem}>
             <SelectTrigger id="item_id" className="w-full text-xs h-9">
-              <SelectValue placeholder="เลือกสินค้าจากรายการ 46 รายการ..." />
+              <SelectValue placeholder={`เลือกสินค้าจากรายการ ${items.length} รายการ...`} />
             </SelectTrigger>
             <SelectContent className="max-h-64">
               {items.map((item) => (
