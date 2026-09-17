@@ -193,16 +193,14 @@ export async function updateBranch(input: {
     return { success: false as const, error: "ไม่มีสิทธิ์แก้สาขาของกิจการอื่น" };
   }
 
-  const patch: Record<string, string | boolean | null> = {
+  const { error } = await supabase.from("inv_branches").update({
     name,
     address: input.address?.trim() || null,
     phone: input.phone?.trim() || null,
     is_active: input.isActive ?? true,
     open_time: normalizeHm(input.openTime || "", "09:00"),
     close_time: normalizeHm(input.closeTime || "", "20:00"),
-  };
-
-  const { error } = await supabase.from("inv_branches").update(patch).eq("id", input.id);
+  }).eq("id", input.id);
   if (error) return { success: false as const, error: error.message };
 
   await logAudit({
