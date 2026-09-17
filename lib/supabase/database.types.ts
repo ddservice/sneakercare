@@ -956,11 +956,11 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "inv_audit_logs_performed_by_fkey"
+            foreignKeyName: "inv_audit_logs_performed_by_profiles_fkey"
             columns: ["performed_by"]
             isOneToOne: false
-            referencedRelation: "sc_users"
-            referencedColumns: ["user_id"]
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
           },
           {
             foreignKeyName: "inv_audit_logs_tenant_id_fkey"
@@ -1043,11 +1043,11 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "inv_integration_secrets_updated_by_fkey"
+            foreignKeyName: "inv_integration_secrets_updated_by_profiles_fkey"
             columns: ["updated_by"]
             isOneToOne: false
-            referencedRelation: "sc_users"
-            referencedColumns: ["user_id"]
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -1364,11 +1364,11 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "inv_stock_transactions_approved_by_fkey"
+            foreignKeyName: "inv_stock_transactions_approved_by_profiles_fkey"
             columns: ["approved_by"]
             isOneToOne: false
-            referencedRelation: "sc_users"
-            referencedColumns: ["user_id"]
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
           },
           {
             foreignKeyName: "inv_stock_transactions_branch_id_fkey"
@@ -1448,11 +1448,11 @@ export type Database = {
             referencedColumns: ["item_id"]
           },
           {
-            foreignKeyName: "inv_stock_transactions_performed_by_fkey"
+            foreignKeyName: "inv_stock_transactions_performed_by_profiles_fkey"
             columns: ["performed_by"]
             isOneToOne: false
-            referencedRelation: "sc_users"
-            referencedColumns: ["user_id"]
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
           },
           {
             foreignKeyName: "inv_stock_transactions_supplier_id_fkey"
@@ -2613,11 +2613,11 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "ui_permissions_updated_by_fkey"
+            foreignKeyName: "ui_permissions_updated_by_profiles_fkey"
             columns: ["updated_by"]
             isOneToOne: false
-            referencedRelation: "sc_users"
-            referencedColumns: ["user_id"]
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -2662,11 +2662,11 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "inv_audit_logs_performed_by_fkey"
+            foreignKeyName: "inv_audit_logs_performed_by_profiles_fkey"
             columns: ["performed_by"]
             isOneToOne: false
-            referencedRelation: "sc_users"
-            referencedColumns: ["user_id"]
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
           },
           {
             foreignKeyName: "inv_audit_logs_tenant_id_fkey"
@@ -2749,11 +2749,11 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "inv_integration_secrets_updated_by_fkey"
+            foreignKeyName: "inv_integration_secrets_updated_by_profiles_fkey"
             columns: ["updated_by"]
             isOneToOne: false
-            referencedRelation: "sc_users"
-            referencedColumns: ["user_id"]
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -3165,11 +3165,11 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "inv_stock_transactions_approved_by_fkey"
+            foreignKeyName: "inv_stock_transactions_approved_by_profiles_fkey"
             columns: ["approved_by"]
             isOneToOne: false
-            referencedRelation: "sc_users"
-            referencedColumns: ["user_id"]
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
           },
           {
             foreignKeyName: "inv_stock_transactions_branch_id_fkey"
@@ -3249,11 +3249,11 @@ export type Database = {
             referencedColumns: ["item_id"]
           },
           {
-            foreignKeyName: "inv_stock_transactions_performed_by_fkey"
+            foreignKeyName: "inv_stock_transactions_performed_by_profiles_fkey"
             columns: ["performed_by"]
             isOneToOne: false
-            referencedRelation: "sc_users"
-            referencedColumns: ["user_id"]
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
           },
           {
             foreignKeyName: "inv_stock_transactions_supplier_id_fkey"
@@ -3478,11 +3478,11 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "inv_stock_transactions_approved_by_fkey"
+            foreignKeyName: "inv_stock_transactions_approved_by_profiles_fkey"
             columns: ["approved_by"]
             isOneToOne: false
-            referencedRelation: "sc_users"
-            referencedColumns: ["user_id"]
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
           },
           {
             foreignKeyName: "inv_stock_transactions_branch_id_fkey"
@@ -3562,11 +3562,11 @@ export type Database = {
             referencedColumns: ["item_id"]
           },
           {
-            foreignKeyName: "inv_stock_transactions_performed_by_fkey"
+            foreignKeyName: "inv_stock_transactions_performed_by_profiles_fkey"
             columns: ["performed_by"]
             isOneToOne: false
-            referencedRelation: "sc_users"
-            referencedColumns: ["user_id"]
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
           },
         ]
       }

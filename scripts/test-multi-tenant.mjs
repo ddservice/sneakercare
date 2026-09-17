@@ -18,6 +18,16 @@
  * trigger เขียน audit log ผูก performed_by กับบัญชีทดสอบ (auth.uid() เป็น null ตอนใช้
  * service_role) ไม่งั้นจะลบบัญชีทดสอบไม่ได้ติด FK เหมือนที่เคยเกิดกับบัญชี rlsverify35 มาก่อน
  * (ดู CLAUDE.md) — บัญชีทดสอบใช้แค่อ่าน (SELECT) ผ่าน session จริงเท่านั้น
+ *
+ * ⚠️ ข้อยกเว้นเดียว: ส่วน [7] (Telegram bot token) ต้องทดสอบ RPC ที่ "เขียน" จริง
+ * (inv_fn_set_integration_secret) ผ่าน session ของบัญชีทดสอบเอง — RPC นี้ trigger เขียน
+ * audit log ผูกกับ auth.uid() ของผู้เรียกเสมอ (migration 0034 แก้ให้ FK ของ audit log ชี้
+ * profiles(id) แล้ว แปลว่าบัญชีที่เคยเรียก RPC นี้ **ลบไม่ได้อีกเลย** — เจอจริงตอนเขียนเทสต์นี้
+ * ครั้งแรก บัญชีทดสอบตัวหนึ่งลบไม่ออกติด FK เดียวกับ rlsverify35 ทันที) แทนที่จะสร้างบัญชีใหม่
+ * ทุกครั้งแล้วเป็นขยะค้างเพิ่มขึ้นเรื่อยๆ ทุกรอบที่รัน เทสต์นี้จึง **ใช้ tenant/บัญชีตายตัว
+ * ซ้ำทุกครั้ง** (BOT_TEST_TENANT/BOT_TEST_USER ด้านล่าง — คือบัญชีที่ค้างจริงจากรันครั้งแรก
+ * 2026-09-17) รีเซ็ตรหัสผ่านใหม่ทุกรอบแล้วล็อกอินซ้ำ ไม่สร้างบัญชีใหม่เพิ่มอีก — ขยะจึงมีแค่
+ * ก้อนเดียวถาวร ไม่โตขึ้นเรื่อยๆ ตามจำนวนครั้งที่รันเทสต์นี้
  */
 import { createClient } from "@supabase/supabase-js";
 import { randomBytes, randomUUID } from "crypto";
@@ -33,7 +43,12 @@ if (!url || !serviceKey || !anonKey) {
 const admin = createClient(url, serviceKey);
 const stamp = Date.now();
 const T1 = "00000000-0000-0000-0000-000000000001"; // tenant จริงที่มีอยู่แล้ว (SneakerCare)
-const T2 = randomUUID(); // tenant ปลอมสำหรับเทสต์นี้เท่านั้น
+const T2 = randomUUID(); // tenant ปลอมสำหรับเทสต์นี้เท่านั้น — ลบทิ้งได้สะอาดทุกรอบ (ไม่แตะ RPC ที่เขียน audit)
+
+// tenant/บัญชีตายตัว ใช้ซ้ำทุกรอบเฉพาะเทสต์ RPC เขียน (ดูคำอธิบายยาวด้านบนหัวไฟล์)
+const BOT_TEST_TENANT = "6ab0c7ac-6d67-4129-bff2-3fdbfb309b54";
+const BOT_TEST_USER = "2d998127-2eb6-4849-8899-4a65a7d0836c";
+const BOT_TEST_EMAIL = "tenanttest.botfixture@local.test";
 
 let failures = 0;
 const ok = (m) => console.log(`  ✓ ${m}`);
@@ -85,6 +100,42 @@ async function createLoginUser(tenantId, role, label) {
   const client = createClient(url, anonKey, { auth: { persistSession: false } });
   const { error: loginErr } = await client.auth.signInWithPassword({ email, password });
   if (loginErr) throw new Error(`ล็อกอิน ${label} ไม่สำเร็จ: ${loginErr.message}`);
+  return client;
+}
+
+/** สร้าง/reuse tenant+บัญชีตายตัวสำหรับเทสต์ RPC ที่เขียน audit log (ดูคำอธิบายหัวไฟล์) —
+ * upsert ทั้ง tenant/profiles แล้วรีเซ็ตรหัสผ่านใหม่ทุกรอบ (ไม่รู้รหัสผ่านเดิมจากรันครั้งก่อน)
+ * แทนที่จะสร้างบัญชีใหม่ซึ่งจะเป็นขยะเพิ่มขึ้นเรื่อยๆ ทุกครั้งที่รันเทสต์นี้ */
+async function ensureBotTestFixture() {
+  const { error: tErr } = await admin
+    .from("tenants")
+    .upsert({ id: BOT_TEST_TENANT, name: "TEST-TENANT-bot-fixture" });
+  if (tErr) throw new Error(`upsert BOT_TEST_TENANT ไม่สำเร็จ: ${tErr.message}`);
+
+  const password = randomBytes(18).toString("base64url");
+  // ตั้ง email ให้ตรงกับ BOT_TEST_EMAIL ทุกรอบด้วย (บัญชีจริงที่มีอยู่ตอนนี้ยังใช้ email แบบ
+  // timestamp เดิมจากรันครั้งแรก 2026-09-17 — ปรับให้ตรงกับค่าคงที่ใหม่ในรอบนี้)
+  const { error: pwErr } = await admin.auth.admin.updateUserById(BOT_TEST_USER, {
+    password,
+    email: BOT_TEST_EMAIL,
+    email_confirm: true,
+  });
+  if (pwErr) throw new Error(`รีเซ็ตรหัสผ่าน/email บัญชี fixture ไม่สำเร็จ: ${pwErr.message}`);
+
+  const { error: profErr } = await admin.from("profiles").upsert({
+    id: BOT_TEST_USER,
+    username: "tenanttest_bot_fixture",
+    display_name: "Tenant Test Bot Fixture",
+    role: "admin",
+    branch_id: null,
+    tenant_id: BOT_TEST_TENANT,
+    is_active: true,
+  });
+  if (profErr) throw new Error(`upsert profiles ของ fixture ไม่สำเร็จ: ${profErr.message}`);
+
+  const client = createClient(url, anonKey, { auth: { persistSession: false } });
+  const { error: loginErr } = await client.auth.signInWithPassword({ email: BOT_TEST_EMAIL, password });
+  if (loginErr) throw new Error(`ล็อกอินบัญชี fixture ไม่สำเร็จ: ${loginErr.message}`);
   return client;
 }
 
@@ -172,6 +223,42 @@ try {
   {
     const r = await asT2.from("items").insert({ name: "HACK-ATTEMPT", base_unit: "x", tenant_id: T1 });
     check(!!r.error, `T2 พยายาม insert ลง tenant T1 ถูกปฏิเสธจริง → ${r.error?.message?.slice(0, 60)}`, "T2 insert ลง T1 สำเร็จ! ช่องโหว่จริง");
+  }
+
+  console.log("\n[7] Telegram bot token ต่อ tenant (migration 0033) — เทสต์ผ่าน RPC จริงกับ production");
+  {
+    // ⚠️ ห้ามเรียก inv_fn_set_integration_secret ในฐานะ T1 เด็ดขาด — T1 คือ tenant จริงของธุรกิจ
+    // ที่ใช้งานอยู่ และมี bot token จริงตั้งไว้แล้ว การ "set" ทับจะไปทำลาย token จริงที่ใช้ส่ง
+    // แจ้งเตือนสต๊อกต่ำเข้ากลุ่มพนักงานทุกวัน — ทดสอบฝั่งเขียนกับบัญชี fixture ตายตัวเท่านั้น
+    // (ดูคำอธิบายหัวไฟล์ว่าทำไมต้องเป็นบัญชีตายตัว ไม่ใช่ T2 ที่สร้างใหม่ทุกรอบ)
+    // ฝั่ง T1 ทดสอบแค่ "อ่าน" เพื่อพิสูจน์ว่ายังอ่านค่าจริงของตัวเองได้ปกติ (ไม่ได้ถูกงานนี้ทำพัง)
+    const asBotFixture = await ensureBotTestFixture();
+    ok("เตรียม/ล็อกอินบัญชี fixture ตายตัวสำหรับเทสต์ RPC เขียนสำเร็จ");
+
+    const setR = await asBotFixture.rpc("inv_fn_set_integration_secret", {
+      p_key: "telegram_bot_token",
+      p_value: `TEST_TOKEN_${stamp}`,
+    });
+    check(!setR.error, "บัญชี fixture ตั้งค่า telegram_bot_token ของตัวเองผ่าน RPC จริงสำเร็จ", `ตั้งค่าไม่สำเร็จ: ${setR.error?.message}`);
+    // DELETE ไม่ trigger audit log (ตรวจแล้วว่า trigger ผูกแค่ AFTER INSERT OR UPDATE) ⇒ ลบแถวนี้
+    // ทิ้งได้สะอาดทุกรอบ โดยไม่เพิ่มขยะใน audit log ซ้อนขึ้นไปอีก (มีแค่ 1 แถว audit จาก insert/
+    // update ครั้งแรกเท่านั้นที่ผูกกับบัญชีนี้ถาวร)
+    testRows.push({ table: "inv_integration_secrets", match: { tenant_id: BOT_TEST_TENANT, key: "telegram_bot_token" } });
+
+    const statusFixture = await asBotFixture.rpc("inv_fn_integration_secret_status", { p_key: "telegram_bot_token" });
+    const expectedSuffix = `TEST_TOKEN_${stamp}`.slice(-4);
+    check(
+      statusFixture.data?.[0]?.is_set === true && statusFixture.data?.[0]?.value_suffix === expectedSuffix,
+      `บัญชี fixture อ่านสถานะ token ของตัวเองถูกต้อง (4 ตัวท้าย '${expectedSuffix}')`,
+      `ได้ ${JSON.stringify(statusFixture.data)} / ${statusFixture.error?.message}`
+    );
+
+    const statusT1 = await asT1.rpc("fn_integration_secret_status", { p_key: "telegram_bot_token" });
+    check(
+      statusT1.data?.[0]?.is_set === true && statusT1.data?.[0]?.value_suffix !== expectedSuffix,
+      "T1 (tenant จริง) ยังอ่านสถานะ token จริงของตัวเองได้ปกติ ไม่ปนกับ fixture",
+      `T1 อ่านสถานะผิดปกติหลังแก้ migration 0033: ${JSON.stringify(statusT1.data)} / ${statusT1.error?.message}`
+    );
   }
 } catch (err) {
   console.error("\nข้อผิดพลาดระหว่างเทสต์:", err.message);

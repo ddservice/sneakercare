@@ -34,6 +34,101 @@ tenant filtering หรือก่อนเชิญนิติบุคคล
 `smartacc-expenses.ts`) และ Telegram bot token (`integration_secrets`) ยังเป็นค่าเดียวใช้ร่วมกัน
 ทุก tenant — ทั้งสองจุดนี้ **ห้ามเปิดให้ tenant ที่สองใช้** จนกว่าจะเพิ่ม `tenant_id` ให้ครบก่อน
 
+## 🔴🔴 โมดูล SmartAcc (`ext_*`) ใช้งานกับ production จริงไม่ได้เลย ตั้งแต่สร้างขึ้นมา (พบ 2026-09-17)
+
+**ไม่เกี่ยวกับ multi-tenant — เป็นบั๊กพื้นฐานที่ทำให้ `/invoicing`, `/tax-filing`, `/billing-notes`,
+`/expenses-ocr` ใช้งานไม่ได้เลยสักครั้งเดียว ไม่ว่า tenant ไหนก็ตาม:**
+
+PostgREST (ชั้น REST API ของ Supabase) ตั้งค่า **Exposed schemas** ไว้แค่ `public, graphql_public`
+— schema `extension_layer` (ที่เก็บตาราง `ext_*` ทั้ง 13 ตัวจาก `0009_smartacc_extension_layer.sql`)
+ไม่เคยถูกเพิ่มเข้ารายการนี้เลย ⇒ ทุกครั้งที่แอปเรียก `.schema("extension_layer")` (ทั้งใน
+`smartacc-documents.ts`, `smartacc-expenses.ts`, `billing-notes/page.tsx`) จะพังด้วย
+`PGRST106: Invalid schema` **ไม่ว่าจะใช้ credential ไหนก็ตาม รวมถึง service_role**
+
+**ยืนยันด้วยการ query production จริงแบบอ่านอย่างเดียว (ไม่ใช่แค่เดาจากโค้ด):** `ext_documents`,
+`ext_contacts`, `ext_staged_expenses`, `ext_wht_records` มี **0 แถวทุกตัว ตั้งแต่สร้างมา** — ไม่เคยมี
+ใบแจ้งหนี้/เอกสารภาษี/ใบเสร็จ OCR ถูกบันทึกสำเร็จแม้แต่ครั้งเดียว
+
+**วิธีแก้ต้องกดที่ Supabase Dashboard เท่านั้น (ทำผ่าน SQL/API ไม่ได้ — ไม่ใช่ค่าระดับ role/GUC
+ของฐานข้อมูล ตรวจแล้วว่า `authenticator` role ไม่มี `pgrst.db_schemas` ตั้งไว้เลย เป็น config
+ของ platform ล้วนๆ):** Dashboard → Settings → API → **Data API Settings** → ช่อง
+**"Exposed schemas"** → เพิ่ม `extension_layer` เข้าไปในรายการที่มี `public, graphql_public` อยู่แล้ว
+
+**⬜ ยังไม่ได้ทำ ณ 2026-09-17** — แจ้งเจ้าของแล้ว รอกดที่ Dashboard ก่อนถึงจะเริ่มงานเพิ่ม
+`tenant_id` ให้ `ext_*` ได้ (ใส่ tenant filtering ให้โมดูลที่บันทึกข้อมูลไม่ได้เลยไปก่อนไม่มีประโยชน์)
+เช็คสถานะซ้ำได้ด้วย `supabase.schema("extension_layer").from("ext_documents").select("id").limit(1)`
+— ถ้ายังได้ `PGRST106` แปลว่ายังไม่ได้กด
+
+## ✅ Telegram bot token ต่อ tenant แล้ว + เจอ/ปิดช่องโหว่ FK เดิมที่กว้างกว่าที่คิด (2026-09-17)
+
+**สิ่งที่ตั้งใจทำ:** `0033_integration_secrets_per_tenant.sql` — เปลี่ยน `inv_integration_secrets`
+จาก PK `(key)` เดี่ยว (token เดียวใช้ร่วมกันทุก tenant) เป็น PK `(tenant_id, key)` composite
+(เหมือน 0032 ที่ทำกับ `sc_settings` ไปแล้ว) พร้อมแก้ `inv_fn_set_integration_secret()`/
+`inv_fn_integration_secret_status()`/`fn_integration_secret_status()` ให้กรอง/เขียนตาม
+`fn_current_tenant()` ของผู้เรียกเสมอ **เจอบั๊กจริงเพิ่มระหว่างแก้ (ไม่เคยมีการเช็คสิทธิ์เลย):**
+`fn_integration_secret_status` (alias ไร้ prefix ที่หน้า `/settings`/`/admin/settings` เรียกจริง)
+**ไม่เช็ค role อะไรเลย** ⇒ staff คนไหนก็เรียก RPC นี้ตรงๆ แล้วเห็น 4 ตัวท้ายของ bot token ได้มาตลอด
+(ไม่ใช่ค่าเต็ม แต่ก็ไม่ควรเห็นเลยตามกฎข้อ 9) — เพิ่มเช็คสิทธิ์ให้ตรงกับ `inv_fn_` เวอร์ชันแล้ว
+
+**🔴 เจอปัญหาใหญ่กว่าตอนทดสอบเขียนจริงกับ production (`npm run test:multi-tenant` ส่วน [7]):**
+สร้างบัญชี admin ทดสอบใหม่ (จำลอง "แอดมินคนแรกของ tenant ที่สอง") แล้วเรียก
+`inv_fn_set_integration_secret()` ชนทันที — **ไม่ใช่บั๊กของ 0033 เอง** แต่เป็นเพราะ
+`inv_integration_secrets.updated_by` ยังมี FK เก่าชี้ไป **`sc_users(user_id)`** (ตาราง deprecated
+ตามกฎ "profiles คือตารางเดียวที่ใช้ตัดสินสิทธิ์" — ดูหัวข้อ `npm run test:staff` ด้านล่าง) บัญชี
+ทดสอบใหม่ไม่มีแถวใน `sc_users` เลย (เหมือนทุกบัญชีที่เชิญเข้าระบบตั้งแต่ `0023` เป็นต้นมา — ไม่มีใคร
+เขียน `sc_users` อีกแล้ว) ⇒ insert ชน FK ทันที
+
+**ไล่ตรวจต่อพบว่า FK แบบเดียวกันกว้างกว่าที่คิดมาก — มีอีก 3 จุดชี้ไป `sc_users` เหมือนกัน:**
+`inv_audit_logs.performed_by`, `inv_stock_transactions.performed_by`/`approved_by`,
+`ui_permissions.updated_by` **⇒ บัญชีใดก็ตามที่ไม่มีแถวใน `sc_users` (คือทุกบัญชีเชิญใหม่ตั้งแต่
+`0023`) รับ-เบิก-ปรับสต๊อกไม่ได้เลยสักครั้ง ทันทีที่ DB trigger (`inv_fn_write_audit_log`) พยายาม
+เขียน audit log แล้วชน FK นี้** — ยังไม่เคยมีใครเจอเพราะปัจจุบันมีแค่ 2 บัญชีจริง (`admin`, `milo`)
+และทั้งคู่เป็นบัญชีเก่าที่มีแถวใน `sc_users` อยู่แล้ว **แต่จะระเบิดทันทีที่เชิญพนักงาน/แอดมินคนใหม่
+คนแรก ไม่ว่าจะเป็นของ tenant 1 เพิ่มคน หรือ tenant 2 ทั้งหมด** — เจอเพราะทดสอบด้วยบัญชีทดสอบใหม่
+จริงๆ เท่านั้น ไม่มีทางเจอถ้าทดสอบด้วยบัญชี `admin`/`milo` เดิม (ตรงกับบทเรียนเดิมของ
+`npm run test:staff` ที่เจอบั๊กคลาสเดียวกันมาก่อน)
+
+**แก้ด้วย `0034_retire_sc_users_fk_dependency.sql`** — ย้าย FK ทั้ง 4 จุดไปชี้ `profiles(id)` แทน
+`inv_stock_transactions`/`ui_permissions` ใช้ FK แบบ validate เต็ม (ตรวจแล้ว 0 แถวหลุด) ส่วน
+`inv_audit_logs` ต้องใช้ **`NOT VALID`** เพราะมีแถวเก่าจริง 2 แถว (id 354/355 — บัญชีทดสอบ
+`rlsverify35...` ที่ไม่เคยมี `profiles` row เลย) ที่ `performed_by` ไม่มีใน `profiles` — ตามกฎข้อ 1
+(audit log ห้าม UPDATE/DELETE แม้แต่แถวเก่า) จึงใช้ `NOT VALID` เพื่อไม่ต้องแตะแถวเก่าเลย แต่ยังบังคับ
+กับแถวใหม่ที่จะ insert ต่อจากนี้ครบทุกแถว (พิสูจน์แล้วด้วยเทสต์: insert ใหม่ด้วยบัญชี "ผี" ที่ไม่มีทั้งใน
+`sc_users` และ `profiles` ยังถูกปฏิเสธอยู่)
+
+**ทดสอบผ่าน PGlite ครบทั้ง 0033 (`test-migration-0033.mjs`) และ 0034 (`test-migration-0034.mjs`)**
+รวมเข้า `npm run test:migration` แล้ว — จำลองรูปร่างตารางจริงจาก production ก่อนเขียนไฟล์เสมอ
+(`inv_integration_secrets` ไม่เคย track ใน migrations เลยเหมือน `sc_*` ก่อน 0012)
+
+**apply ขึ้น production แล้วผ่าน SSH+psql โดยตรง (ไม่ผ่าน SQL Editor)** — ระหว่างเซสชันนี้ค้นพบว่า
+VPS มี `psql` + `SUPABASE_DB_URL` (ตัวเดียวกับที่ `backup-db-to-r2.sh`/`gen-types-via-vps.mjs` ใช้)
+เข้าถึงฐานข้อมูล production ได้โดยตรง ⇒ **ตั้งแต่นี้ไป migration SQL ใหม่ apply ผ่าน
+`cat migration.sql | ssh ... psql "$SUPABASE_DB_URL"` ได้เลย ไม่ต้องให้เจ้าของ paste ทีละไฟล์ใน
+SQL Editor เหมือนที่ 0028–0032 เคยทำ** (ยังคง `npm run gen:types`/verify หลัง apply ทุกครั้งเหมือนเดิม)
+
+**ยืนยันด้วย `npm run test:multi-tenant` ส่วน [7] ผ่านครบกับ production จริง** (รันซ้ำ 2 รอบติดกัน
+พิสูจน์ idempotent) — บัญชี admin คนละ tenant ตั้ง/อ่านสถานะ Telegram bot token แยกกันได้จริง,
+staff เรียกไม่ได้, super_admin ตั้งเองไม่ได้ (ไม่มี tenant ของตัวเอง)
+
+**⚠️ ข้อจำกัดที่ค้นพบระหว่างเขียนเทสต์ (สำคัญกับเทสต์ที่เขียน RPC มีผลข้างเคียงเป็น audit log
+ในอนาคตทุกตัว):** RPC ที่ trigger เขียน audit log (`inv_fn_set_integration_secret` เขียนผ่าน
+`inv_trg_audit_integration_secrets`) จะทำให้บัญชีที่เรียก **ลบไม่ได้อีกเลยถาวร** (ติด FK เดียวกับ
+`rlsverify35`) — สร้างบัญชีทดสอบใหม่ทุกรอบจึงเป็นขยะสะสมเพิ่มเรื่อยๆ `test-multi-tenant.mjs` จึงใช้
+**บัญชี fixture ตายตัวซ้ำทุกรอบ** (`BOT_TEST_TENANT`/`BOT_TEST_USER` ในไฟล์ — รีเซ็ตรหัสผ่านใหม่
+ทุกครั้งที่รันแทนสร้างบัญชีใหม่) เฉพาะส่วนที่ต้องเรียก RPC เขียนเท่านั้น ส่วนอื่นของเทสต์ (sections
+[1]-[6]) ยังใช้ tenant/บัญชีสุ่มใหม่ทุกรอบแล้วลบทิ้งสะอาดตามเดิมได้ (ไม่ผ่าน RPC ที่เขียน audit)
+
+**Edge Function `inv-low-stock-alert` แก้ให้รู้จัก tenant แล้วเช่นกัน** — ซอร์สไม่เคยอยู่ใน repo นี้
+มาก่อน (deploy จากที่อื่นมาก่อน repo จะมี) ดึงเข้ามาครั้งแรกผ่าน `supabase functions download`
+(ใช้ Personal Access Token ที่เจ้าของสร้างให้ชั่วคราว) เก็บไว้ที่
+`supabase/functions/inv-low-stock-alert/index.ts` แล้ว **แก้จาก "อ่าน bot token ตัวเดียวใช้ร่วมกัน
+ทุกสาขา/ทุก tenant" เป็น "โหลด token ของทุก tenant เป็น map แล้วเลือกใช้ตาม tenant_id ของแต่ละ
+สาขา"** deploy ขึ้นจริงแล้วผ่าน CLI เดียวกัน **ยืนยันด้วยการยิงเรียกจริง 1 ครั้ง** (ปลอดภัยเพราะ
+รายการที่ต่ำกว่าขั้นต่ำอยู่ตอนนี้ถูก mute ไว้หมด — ไม่มีข้อความหลุดเข้ากลุ่มพนักงานจากการทดสอบ):
+`{"status":"ok","results":[{"branch":"SneakerCare","sent":0}]}` ตรงกับพฤติกรรมเดิมทุกประการ
+**⚠️ ห้ามแก้ `supabase/functions/low-stock-alert/` (ไม่มี prefix `inv-`) แล้วคิดว่ามีผลกับ cron จริง
+— คนละไฟล์กัน ตัวนั้นไม่ได้ deploy อยู่ (ดูหัวข้อ "cron สองตัว" ด้านล่าง)**
+
 ## ภาพรวมโปรเจกต์
 
 ระบบนี้กำลังทยอยแทนที่ระบบเดิมที่เขียนด้วย Google Apps Script + Google Sheets + HTML ไฟล์เดียว (อยู่ที่ `legacy/`)
