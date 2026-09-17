@@ -2,12 +2,17 @@
 
 import { useState } from "react";
 import {
-  generatePndEFilingText,
+  generatePndEFilingFile,
   generatePp30VatText,
+  classifyPayeeKind,
+  extractThaiTaxId,
+  digitsOnly,
   type WhtRecord,
   type VatTransaction,
 } from "@/lib/smartacc/tax-reports";
 import { generateETaxXML } from "@/lib/smartacc/etax-generator";
+import { downloadTextFile } from "@/lib/download-file";
+import { logTaxFilingExport } from "@/app/actions/smartacc-documents";
 import { Button } from "@/components/ui/button";
 import { PrintModalPortal } from "@/components/print-modal-portal";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -73,35 +78,60 @@ export function TaxFilingClient({
       const base = Number(e.amount || 0);
       const rate = 3.0;
       const tax = base * (rate / 100);
+      const taxId = extractThaiTaxId(e.note || "") || extractThaiTaxId(e.title || "");
       return {
         sequence: index + 1,
-        taxId: "0105558000000",
+        taxId,
         name: e.title || "ผู้รับเงิน",
-        address: "เชียงใหม่",
+        address: shopProfile?.address || "",
         date: e.expense_date,
         incomeType: e.category || "ค่าบริการ",
         whtRate: rate,
         baseAmount: base,
         taxAmount: tax,
+        payeeKind: taxId ? classifyPayeeKind(taxId) : "juristic",
       };
     });
 
-  const totalWhtBase = whtRecords.reduce((sum, r) => sum + r.baseAmount, 0);
-  const totalWhtTax = whtRecords.reduce((sum, r) => sum + r.taxAmount, 0);
+  const pnd53Records = whtRecords.filter((r) => r.payeeKind !== "person");
+  const pnd3Records = whtRecords.filter((r) => r.payeeKind === "person");
+  const pnd3Base = pnd3Records.reduce((sum, r) => sum + r.baseAmount, 0);
+  const pnd3Tax = pnd3Records.reduce((sum, r) => sum + r.taxAmount, 0);
+  const pnd53Base = pnd53Records.reduce((sum, r) => sum + r.baseAmount, 0);
+  const pnd53Tax = pnd53Records.reduce((sum, r) => sum + r.taxAmount, 0);
+
+  const payerTaxId = digitsOnly(shopProfile?.taxId || "");
 
   function handleDownloadPndText(formType: "PND3" | "PND53") {
-    if (whtRecords.length === 0) {
-      toast.error("ไม่มีรายการหัก ณ ที่จ่ายในงวดเดือนนี้");
+    const rows = formType === "PND3" ? pnd3Records : pnd53Records;
+    if (rows.length === 0) {
+      toast.error(
+        formType === "PND3"
+          ? "ไม่มีรายการบุคคลธรรมดาในงวดนี้ (ภ.ง.ด.3)"
+          : "ไม่มีรายการนิติบุคคลในงวดนี้ (ภ.ง.ด.53)"
+      );
       return;
     }
-    const text = generatePndEFilingText(whtRecords, formType);
-    const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${formType}_${selectedMonth}.txt`;
-    a.click();
-    toast.success(`ดาวน์โหลดไฟล์ ${formType} e-Filing (.txt) เรียบร้อย`);
+    if (payerTaxId.length !== 13) {
+      toast.error("ตั้งเลขผู้เสียภาษี 13 หลักที่ /settings ก่อน จึงจะยื่น e-Filing ได้");
+      return;
+    }
+    const file = generatePndEFilingFile(rows, {
+      formType,
+      payerTaxId,
+      payerBranch: "000000",
+      payerDeptName: shopProfile?.name || "สำนักงานใหญ่",
+      periodYm: selectedMonth,
+    });
+    downloadTextFile(file.text, file.filename);
+    for (const w of file.warnings) toast.warning(w);
+    toast.success(`ดาวน์โหลด ${file.filename} แล้ว — อัปโหลดที่ efiling.rd.go.th (แบ่งข้อมูลด้วย |)`);
+    void logTaxFilingExport({
+      formType,
+      filename: file.filename,
+      periodYm: selectedMonth,
+      recordCount: file.recordCount,
+    });
   }
 
   function handleDownloadPp30Text() {
@@ -110,13 +140,15 @@ export function TaxFilingClient({
       return;
     }
     const text = generatePp30VatText(vatRecords);
-    const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `PP30_${selectedMonth}.txt`;
-    a.click();
-    toast.success("ดาวน์โหลดไฟล์ ภ.พ.30 e-Filing (.txt) เรียบร้อย");
+    const filename = `PP30_VAT_SALES_${selectedMonth}.txt`;
+    downloadTextFile(text, filename);
+    toast.success("ดาวน์โหลดรายงานภาษีขายแล้ว — ภ.พ.30 บน e-Filing กรอกในเว็บ ไม่ใช่ไฟล์แนบแบบ ภ.ง.ด.");
+    void logTaxFilingExport({
+      formType: "PP30",
+      filename,
+      periodYm: selectedMonth,
+      recordCount: vatRecords.length,
+    });
   }
 
   const sampleETaxXml = generateETaxXML({
@@ -213,6 +245,34 @@ export function TaxFilingClient({
 
       {/* ── TAB 1: E-FILING EXPORTS ── */}
       {activeTab === "efiling" && (
+        <div className="space-y-4">
+          <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-600 space-y-1">
+            <p>
+              ไฟล์ ภ.ง.ด.3 / ภ.ง.ด.53 สร้างตาม FORMAT กลาง กรมสรรพากร V2 (UTF-8, คั่นด้วย |, มีแถว Header H + Detail D)
+              สำหรับอัปโหลดที่{" "}
+              <a
+                href="https://efiling.rd.go.th/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-semibold text-teal-800 underline"
+              >
+                efiling.rd.go.th
+              </a>{" "}
+              — เลือกแบบ ภ.ง.ด. แล้วอัปโหลดไฟล์ โดยเลือกรูปแบบแบ่งข้อมูลด้วยสัญลักษณ์ |
+            </p>
+            <p>
+              เลขผู้เสียภาษีผู้มีหน้าที่หัก:{" "}
+              <span className="font-mono font-semibold text-slate-800">
+                {payerTaxId.length === 13 ? payerTaxId : "ยังไม่ได้ตั้ง 13 หลักที่ /settings"}
+              </span>
+              {whtRecords.some((r) => digitsOnly(r.taxId).length !== 13) && (
+                <span className="block text-amber-800 mt-1">
+                  บางรายการยังไม่มีเลขผู้เสียภาษี 13 หลักของผู้รับเงินในชื่อหรือหมายเหตุ — e-Filing จะปฏิเสธแถวนั้น
+                  ให้ใส่เลข 13 หลักในหมายเหตุรายจ่าย
+                </span>
+              )}
+            </p>
+          </div>
         <div className="grid gap-6 sm:grid-cols-3">
           <Card className="border-slate-200 dark:border-slate-700 shadow-sm">
             <CardHeader className="pb-3">
@@ -221,7 +281,7 @@ export function TaxFilingClient({
                 <Badge variant="outline" className="text-teal-800 bg-teal-50 border-teal-200">PP.30</Badge>
               </CardTitle>
               <CardDescription className="text-xs">
-                รายงานภาษีขาย ประจำงวดเดือน {selectedMonth} ({filteredSales.length} รายการ)
+                รายงานภาษีขายสำหรับอ้างอิง — ภ.พ.30 ยื่นโดยกรอกในเว็บ e-Filing ไม่ใช่ไฟล์แนบ | แบบ ภ.ง.ด.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4 pt-1">
@@ -237,10 +297,9 @@ export function TaxFilingClient({
               </div>
               <Button
                 onClick={handleDownloadPp30Text}
-                disabled={vatRecords.length === 0}
                 className="w-full bg-teal-700 hover:bg-emerald-600 text-white text-xs font-semibold h-9 gap-1.5"
               >
-                <Download className="h-3.5 w-3.5" /> ดาวน์โหลดไฟล์ ภ.พ.30 (.txt)
+                <Download className="h-3.5 w-3.5" /> ดาวน์โหลดรายงานภาษีขาย (.txt)
               </Button>
             </CardContent>
           </Card>
@@ -252,23 +311,22 @@ export function TaxFilingClient({
                 <Badge variant="outline" className="text-teal-800 bg-teal-50 border-teal-200">PND53</Badge>
               </CardTitle>
               <CardDescription className="text-xs">
-                รายการหักภาษี ณ ที่จ่าย {whtRecords.length} รายการ
+                รายการหักภาษี ณ ที่จ่ายนิติบุคคล {pnd53Records.length} รายการ
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4 pt-1">
               <div className="text-xs space-y-1 text-slate-600">
                 <div className="flex justify-between">
                   <span>ยอดจ่ายค่าบริการรวม:</span>
-                  <span className="font-mono font-bold">฿{totalWhtBase.toLocaleString("th-TH", { minimumFractionDigits: 2 })}</span>
+                  <span className="font-mono font-bold">฿{pnd53Base.toLocaleString("th-TH", { minimumFractionDigits: 2 })}</span>
                 </div>
                 <div className="flex justify-between">
                   <span>ภาษีหักนำส่งรวม:</span>
-                  <span className="font-mono font-bold text-teal-700">฿{totalWhtTax.toLocaleString("th-TH", { minimumFractionDigits: 2 })}</span>
+                  <span className="font-mono font-bold text-teal-700">฿{pnd53Tax.toLocaleString("th-TH", { minimumFractionDigits: 2 })}</span>
                 </div>
               </div>
               <Button
                 onClick={() => handleDownloadPndText("PND53")}
-                disabled={whtRecords.length === 0}
                 className="w-full bg-teal-700 hover:bg-emerald-600 text-white text-xs font-semibold h-9 gap-1.5"
               >
                 <Download className="h-3.5 w-3.5" /> ดาวน์โหลดไฟล์ ภ.ง.ด.53 (.txt)
@@ -283,30 +341,30 @@ export function TaxFilingClient({
                 <Badge variant="outline" className="text-teal-800 bg-teal-50 border-teal-200">PND3</Badge>
               </CardTitle>
               <CardDescription className="text-xs">
-                รายการหักภาษี ณ ที่จ่าย บุคคลธรรมดา
+                รายการหักภาษี ณ ที่จ่ายบุคคลธรรมดา {pnd3Records.length} รายการ
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4 pt-1">
               <div className="text-xs space-y-1 text-slate-600">
                 <div className="flex justify-between">
                   <span>ยอดจ่ายบุคคลรวม:</span>
-                  <span className="font-mono font-bold">฿0.00</span>
+                  <span className="font-mono font-bold">฿{pnd3Base.toLocaleString("th-TH", { minimumFractionDigits: 2 })}</span>
                 </div>
                 <div className="flex justify-between">
                   <span>ภาษีหักนำส่งรวม:</span>
-                  <span className="font-mono font-bold text-teal-700">฿0.00</span>
+                  <span className="font-mono font-bold text-teal-700">฿{pnd3Tax.toLocaleString("th-TH", { minimumFractionDigits: 2 })}</span>
                 </div>
               </div>
               <Button
                 onClick={() => handleDownloadPndText("PND3")}
                 variant="outline"
-                disabled
                 className="w-full text-xs font-semibold h-9 gap-1.5"
               >
                 <Download className="h-3.5 w-3.5" /> ดาวน์โหลดไฟล์ ภ.ง.ด.3 (.txt)
               </Button>
             </CardContent>
           </Card>
+        </div>
         </div>
       )}
 
@@ -396,13 +454,15 @@ export function TaxFilingClient({
             <Button
               size="sm"
               onClick={() => {
-                const blob = new Blob([sampleETaxXml], { type: "application/xml" });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement("a");
-                a.href = url;
-                a.download = `etax_${selectedMonth}.xml`;
-                a.click();
+                const filename = `etax_${selectedMonth}.xml`;
+                downloadTextFile(sampleETaxXml, filename, "application/xml");
                 toast.success("ดาวน์โหลดไฟล์ ETDA XML เรียบร้อย");
+                void logTaxFilingExport({
+                  formType: "ETAX_XML",
+                  filename,
+                  periodYm: selectedMonth,
+                  recordCount: filteredSales.length,
+                });
               }}
               className="bg-teal-700 hover:bg-emerald-600 text-white text-xs h-8 gap-1.5"
             >

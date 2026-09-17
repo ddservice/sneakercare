@@ -1,5 +1,6 @@
 import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { getRequestAuditContext } from "@/lib/request-context";
 
 /**
  * ตารางที่เก็บ audit trail ระดับแอป (ฝั่งการเงิน/ยอดขาย/เงินเดือน)
@@ -29,7 +30,8 @@ export type AuditEntity =
   | "user"
   | "document"
   | "roster_employee"
-  | "settings";
+  | "settings"
+  | "service_order";
 
 export interface AuditLogEntry {
   action: AuditAction;
@@ -37,36 +39,75 @@ export interface AuditLogEntry {
   entity_id?: string | number;
   actor_id?: string;
   actor_name: string;
+  tenant_id?: string | null;
   detail?: Record<string, unknown>;
 }
 
+function isMissingColumnError(message: string): boolean {
+  return /Could not find the .* column|schema cache|PGRST204/i.test(message);
+}
+
 /**
- * เขียน audit log หนึ่งแถว
+ * เขียน audit log หนึ่งแถว พร้อมบริบทมาตรฐานของ request (IP / browser / อุปกรณ์ / หน้า)
  *
  * จงใจไม่ throw: การบันทึก log ล้มเหลวต้องไม่ทำให้การลบ/แก้ข้อมูลของผู้ใช้พังตาม
- * แต่ต้อง "ดัง" พอในล็อกเซิร์ฟเวอร์ — ของเดิมกลืน error เงียบจนระบบ audit ไม่เคยทำงาน
- * เลยตั้งแต่ commit e3f025d โดยไม่มีใครรู้ (insert ลงคอลัมน์ที่ไม่มีอยู่จริง)
  */
 export async function logAudit(entry: AuditLogEntry): Promise<void> {
   try {
+    const ctx = await getRequestAuditContext();
     const supabase = createAdminClient();
-    // cast เพราะ sc_audit_logs ยังไม่ถูก generate ลง database.types.ts (สร้างใน migration 0011)
     const table = supabase.from(SC_AUDIT_TABLE as never) as unknown as {
       insert: (row: Record<string, unknown>) => PromiseLike<{
         error: { message: string; code?: string } | null;
       }>;
     };
-    const { error } = await table.insert({
+
+    const detail = {
+      ...(entry.detail ?? {}),
+      ip: ctx.ip_address || undefined,
+      browser: ctx.browser || undefined,
+      device: ctx.device || undefined,
+      page: ctx.page_path || undefined,
+      user_agent: ctx.user_agent || undefined,
+    };
+
+    const row: Record<string, unknown> = {
       action: entry.action,
       entity: entry.entity,
       entity_id: entry.entity_id !== undefined ? String(entry.entity_id) : null,
       actor_id: entry.actor_id ?? null,
       actor_name: entry.actor_name || "ระบบ",
-      detail: entry.detail ?? null,
-    });
+      detail,
+      ip_address: ctx.ip_address || null,
+      user_agent: ctx.user_agent || null,
+      browser: ctx.browser || null,
+      device: ctx.device || null,
+      page_path: ctx.page_path || null,
+    };
+    if (entry.tenant_id) row.tenant_id = entry.tenant_id;
+
+    const { error } = await table.insert(row);
+
+    if (error && isMissingColumnError(error.message ?? "")) {
+      const fallback: Record<string, unknown> = {
+        action: row.action,
+        entity: row.entity,
+        entity_id: row.entity_id,
+        actor_id: row.actor_id,
+        actor_name: row.actor_name,
+        detail,
+      };
+      if (entry.tenant_id) fallback.tenant_id = entry.tenant_id;
+      const retry = await table.insert(fallback);
+      if (retry.error) {
+        console.error(
+          `[audit] เขียน ${SC_AUDIT_TABLE} ไม่สำเร็จ (${entry.action} ${entry.entity} ${entry.entity_id ?? "-"}): ${retry.error.message}`
+        );
+      }
+      return;
+    }
 
     if (error) {
-      // PGRST205 = ยังไม่ได้รัน migration 0011 — บอกให้ชัดแทนที่จะเงียบ
       const hint =
         error.code === "PGRST205" || /does not exist|schema cache/i.test(error.message ?? "")
           ? ` — ยังไม่ได้รัน supabase/migrations/0011_sc_audit_logs_and_indexes.sql บนฐานข้อมูลนี้`
@@ -76,7 +117,6 @@ export async function logAudit(entry: AuditLogEntry): Promise<void> {
       );
     }
   } catch (err) {
-    // Audit failure must never crash the main operation
     console.error("[audit] failed to write log:", err);
   }
 }

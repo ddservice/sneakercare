@@ -1,6 +1,26 @@
-# CLAUDE.md
+## ✅ วันที่รับงาน + audit มาตรฐาน + ไฟล์ยื่น e-Filing (2026-09-17)
 
-คำแนะนำสำหรับ Claude Code เมื่อทำงานในโปรเจกต์นี้ — ระบบบริหารจัดการคลังสินค้าสำหรับร้านบริการทำความสะอาด/ซ่อมแซมรองเท้า
+- **`/pos`** มีช่องวันที่รับงาน/กรอกข้อมูล (ค่าเริ่มต้นวันนี้ตามปฏิทินเครื่อง ไม่ใช้ UTC) เลขที่เอกสารและ `received_at` อิงวันที่นี้
+- **`logAudit()`** เก็บบริบทมาตรฐานทุกแถว: ใคร · ทำอะไร · วันเวลา · IP · User-Agent · เบราว์เซอร์ · อุปกรณ์ · หน้า — คอลัมน์ใหม่ใน `sc_audit_logs` (`0040`) และสำเนาใน `detail` ถ้ายังไม่ apply migration
+- **apply production แล้ว (2026-09-17):** `0039` + `0040` ผ่าน SSH+psql — ยืนยัน FK `ext_documents.branch_id` ชี้ `inv_branches` และ `sc_audit_logs` มี 5 คอลัมน์บริบทครบ (รันซ้ำ idempotent)
+- บันทึกเพิ่ม: สร้าง/เปลี่ยนสถานะงานบริการ, ล็อกอิน/ออกจากระบบ, ส่งออกไฟล์ภาษี — ดูที่ `/admin/audit`
+- **`/tax-filing`** กดดาวน์โหลดแล้วได้ไฟล์จริง (แปะ `<a>` ใน DOM) · ภ.ง.ด.3 ไม่ disable อีกต่อไป
+- ไฟล์ ภ.ง.ด.3/53 เป็น FORMAT กลางกรมสรรพากร V2 (UTF-8, `|`, CR/LF, Header `H` + Detail `D`, ชื่อไฟล์ `PND53_NID_สาขา_ปีพศ_เดือน_00_00.txt`) สำหรับอัปโหลดที่ https://efiling.rd.go.th/ — ต้องมีเลขผู้เสียภาษีผู้หัก 13 หลักที่ `/settings` และเลขผู้รับเงิน 13 หลักในชื่อหรือหมายเหตุรายจ่าย
+- **ภ.พ.30** บน e-Filing กรอกในเว็บ ไม่ใช่ไฟล์แนบแบบ ภ.ง.ด. — ปุ่มนั้นเป็นรายงานภาษีขายสำหรับอ้างอิง
+- เทสต์: `npm run test:tax` · `scripts/test-migration-0040.mjs`
+
+## ✅ /invoicing ออกเอกสารไม่ได้เพราะ FK สาขาคนละตาราง (2026-09-17)
+
+กด "ออกเอกสาร" แล้วขึ้น overlay "An error occurred in the Server Components render"
+(digest ใน PM2: `ext_documents_branch_id_fkey`) — `createSmartAccDocument()` ใส่
+`profiles.branch_id` ซึ่งเป็น UUID ของ `inv_branches` แต่คอลัมน์ชี้ไป `ext_branches`
+(ตารางว่างที่แอปไม่เคยใช้) จึง insert ไม่ได้ทุกครั้ง แล้ว `throw` ทำให้ Next โชว์ overlay
+แทนข้อความไทย
+
+แก้ด้วย migration `0039` ย้าย FK ไปสาขาจริงของแอป + ใส่สาขาจากคุกกี้หัวเว็บ
+(`getSelectedBranchId`) และคืน `{ success: false, error }` แทน throw
+
+**apply production แล้ว 2026-09-17** ผ่าน SSH+psql — `ext_documents_branch_id_fkey` ชี้ `inv_branches`
 
 ## ✅ รีดีไซน์โมดูลคลังให้เป็นชุดเดียวกัน (2026-09-17)
 

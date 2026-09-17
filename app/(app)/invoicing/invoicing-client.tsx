@@ -269,6 +269,8 @@ export function InvoicingClient({
           setBranchCode("00000");
           setAddress("");
           setDbdSearchInput("");
+        } else {
+          toast.error(res.error);
         }
       } catch (err) {
         toast.error(errorMessage(err, "เกิดข้อผิดพลาดในการสร้างเอกสาร"));
@@ -282,6 +284,8 @@ export function InvoicingClient({
         const res = await convertDocument(docId, targetType);
         if (res.success) {
           toast.success(`แปลงเอกสารเป็น ${res.docNumber} (${DOC_TYPE_CONFIG[targetType].labelTh}) เรียบร้อย`);
+        } else {
+          toast.error(res.error);
         }
       } catch (err) {
         toast.error(errorMessage(err, "เกิดข้อผิดพลาดในการแปลงเอกสาร"));

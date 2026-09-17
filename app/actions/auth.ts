@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { logAudit } from "@/lib/audit";
 
 export type LoginState = { error?: string } | undefined;
 
@@ -126,11 +127,58 @@ export async function login(_prevState: LoginState, formData: FormData): Promise
 
   // ── Login success — clear rate limit counter ──
   clearAttempts(rlKey);
+
+  try {
+    const { data: authData } = await supabase.auth.getUser();
+    const uid = authData.user?.id;
+    if (uid) {
+      const admin = createAdminClient();
+      const { data: p } = await admin
+        .from("profiles")
+        .select("id, display_name, username, tenant_id")
+        .eq("id", uid)
+        .maybeSingle();
+      await logAudit({
+        action: "LOGIN",
+        entity: "user",
+        entity_id: uid,
+        actor_id: uid,
+        actor_name: p?.display_name || p?.username || email,
+        tenant_id: p?.tenant_id,
+        detail: { method: "password" },
+      });
+    }
+  } catch (err) {
+    console.error("[login] เขียน audit ไม่สำเร็จ:", err);
+  }
+
   redirect("/dashboard");
 }
 
 export async function logout() {
   const supabase = await createClient();
+  try {
+    const { data: authData } = await supabase.auth.getUser();
+    const uid = authData.user?.id;
+    if (uid) {
+      const admin = createAdminClient();
+      const { data: p } = await admin
+        .from("profiles")
+        .select("id, display_name, username, tenant_id")
+        .eq("id", uid)
+        .maybeSingle();
+      await logAudit({
+        action: "LOGOUT",
+        entity: "user",
+        entity_id: uid,
+        actor_id: uid,
+        actor_name: p?.display_name || p?.username || "ผู้ใช้",
+        tenant_id: p?.tenant_id,
+      });
+    }
+  } catch (err) {
+    console.error("[logout] เขียน audit ไม่สำเร็จ:", err);
+  }
   await supabase.auth.signOut();
   redirect("/login");
 }

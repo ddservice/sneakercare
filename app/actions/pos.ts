@@ -4,6 +4,10 @@ import { revalidatePath } from "next/cache";
 import { requireProfile, requireModuleWrite } from "@/lib/auth";
 import { getSelectedBranchId } from "@/lib/branch";
 import { createClient } from "@/lib/supabase/server";
+import { logAudit } from "@/lib/audit";
+import { requireTenantId } from "@/lib/tenant";
+import { errorMessage } from "@/lib/errors";
+import { isYmd, receivedAtFromYmd, ymdToOrderDateCode } from "@/lib/local-date";
 
 export type PosActionState = {
   error?: string;
@@ -19,6 +23,13 @@ export async function createServiceOrder(
   requireModuleWrite(profile, "pos");
   const selectedBranchId = await getSelectedBranchId(profile);
 
+  let tenantId: string;
+  try {
+    tenantId = await requireTenantId(profile);
+  } catch (err) {
+    return { error: errorMessage(err, "กรุณาเลือกสาขาของกิจการก่อนรับงาน") };
+  }
+
   const customerName = String(formData.get("customer_name") ?? "").trim();
   const customerPhone = String(formData.get("customer_phone") ?? "").trim();
   const shoeBrand = String(formData.get("shoe_brand") ?? "").trim();
@@ -33,9 +44,14 @@ export async function createServiceOrder(
   const transferAmount = Number(formData.get("transfer_amount") ?? 0);
   const paymentMethod = String(formData.get("payment_method") ?? "cash") as "cash" | "transfer" | "credit" | "unpaid";
   const notes = String(formData.get("notes") ?? "").trim();
+  const receivedDate = String(formData.get("received_date") ?? "").trim();
 
   if (!customerName || !customerPhone) {
     return { error: "กรุณากรอกชื่อและเบอร์โทรศัพท์ของลูกค้า" };
+  }
+
+  if (!isYmd(receivedDate)) {
+    return { error: "กรุณาเลือกวันที่รับงาน" };
   }
 
   if (netAmount < 0) {
@@ -43,6 +59,7 @@ export async function createServiceOrder(
   }
 
   const supabase = await createClient();
+  const receivedAt = receivedAtFromYmd(receivedDate);
 
   // 1. Create or update customer record
   let customerId: string | null = null;
@@ -50,6 +67,7 @@ export async function createServiceOrder(
     .from("customers")
     .select("id")
     .eq("phone", customerPhone)
+    .eq("tenant_id", tenantId)
     .maybeSingle();
 
   if (existingCustomer) {
@@ -57,25 +75,23 @@ export async function createServiceOrder(
     await supabase
       .from("customers")
       .update({ name: customerName, updated_at: new Date().toISOString() })
-      .eq("id", customerId);
+      .eq("id", customerId)
+      .eq("tenant_id", tenantId);
   } else {
     const { data: newCustomer } = await supabase
       .from("customers")
       .insert({
-        // ⚠️ (แก้บั๊ก 2026-09-06) ตาราง customers ไม่มีคอลัมน์ branch_id (มีแค่ id/name/phone/
-        // created_at/updated_at) การใส่มาด้วยทำให้ insert error ทุกครั้ง = สร้างลูกค้าใหม่ไม่ได้เลย
-        // ทะเบียนลูกค้าเป็นของร้านทั้งร้าน ไม่ได้แยกตามสาขา — ถ้าวันหลังต้องแยกจริงค่อยเพิ่มคอลัมน์
         name: customerName,
         phone: customerPhone,
+        tenant_id: tenantId,
       })
       .select("id")
       .single();
     if (newCustomer) customerId = newCustomer.id;
   }
 
-  // 2. Generate Order No (e.g. SC-260828-001)
-  const now = new Date();
-  const dateStr = now.toISOString().slice(2, 10).replace(/-/g, "");
+  // 2. Generate Order No จากวันที่ที่กรอก ไม่ใช่ UTC ของเซิร์ฟเวอร์
+  const dateStr = ymdToOrderDateCode(receivedDate);
   const randomSuffix = Math.floor(100 + Math.random() * 900);
   const orderNo = `SC-${dateStr}-${randomSuffix}`;
 
@@ -85,6 +101,7 @@ export async function createServiceOrder(
     .insert({
       order_no: orderNo,
       branch_id: selectedBranchId,
+      tenant_id: tenantId,
       customer_id: customerId,
       customer_name: customerName,
       customer_phone: customerPhone,
@@ -94,11 +111,6 @@ export async function createServiceOrder(
       shoe_size: shoeSize || "M",
       status: "received",
       payment_method: paymentMethod,
-      // ⚠️ (แก้บั๊ก 2026-09-06) ชื่อคอลัมน์ 4 ตัวนี้เคยเขียนผิดจากของจริงในตาราง ทำให้ insert
-      // error ทุกครั้ง = ฟีเจอร์รับงานบริการไม่เคยบันทึกได้เลย (ตารางมี 0 แถวมาตลอด)
-      // gross_amount→total_amount · notes→note · received_by→created_by · is_paid→payment_status
-      // ส่วน cash_amount/transfer_amount เป็นข้อมูลที่ฟอร์มเก็บจริงแต่ตารางไม่มีที่เก็บ
-      // จึงเพิ่มคอลัมน์ให้ใน migration 0018 แทนการตัดทิ้ง
       total_amount: grossAmount,
       discount_amount: discountAmount,
       net_amount: netAmount,
@@ -107,7 +119,7 @@ export async function createServiceOrder(
       payment_status: paymentMethod !== "unpaid" ? "paid" : "unpaid",
       note: notes || null,
       created_by: profile.id,
-      received_at: now.toISOString(),
+      received_at: receivedAt,
     })
     .select("id")
     .single();
@@ -141,16 +153,40 @@ export async function createServiceOrder(
     await supabase.from("service_order_items").insert(itemsToInsert);
   }
 
+  await logAudit({
+    action: "CREATE",
+    entity: "service_order",
+    entity_id: order.id,
+    actor_id: profile.id,
+    actor_name: profile.display_name,
+    tenant_id: tenantId,
+    detail: {
+      order_no: orderNo,
+      received_date: receivedDate,
+      received_at: receivedAt,
+      customer_name: customerName,
+      customer_phone: customerPhone,
+      net_amount: netAmount,
+      payment_method: paymentMethod,
+      services: serviceIdsRaw.length,
+    },
+  });
+
   revalidatePath("/pos");
   revalidatePath("/dashboard");
   return { success: true, orderNo };
 }
 
 export async function updateOrderStatus(orderId: string, status: "received" | "in_progress" | "ready" | "delivered" | "cancelled") {
-  // เรียกเพื่อบังคับให้ต้องล็อกอิน — ไม่ได้ใช้ค่าที่คืนมา แต่ห้ามตัดบรรทัดนี้ทิ้ง
   const profile = await requireProfile();
   requireModuleWrite(profile, "pos");
   const supabase = await createClient();
+
+  const { data: before } = await supabase
+    .from("service_orders")
+    .select("id, order_no, status, customer_name")
+    .eq("id", orderId)
+    .maybeSingle();
 
   const updatePayload: {
     status: "received" | "in_progress" | "ready" | "delivered" | "cancelled";
@@ -176,6 +212,21 @@ export async function updateOrderStatus(orderId: string, status: "received" | "i
   if (error) {
     throw new Error(`ไม่สามารถอัปเดตสถานะได้: ${error.message}`);
   }
+
+  await logAudit({
+    action: "UPDATE",
+    entity: "service_order",
+    entity_id: orderId,
+    actor_id: profile.id,
+    actor_name: profile.display_name,
+    tenant_id: profile.tenant_id,
+    detail: {
+      order_no: before?.order_no,
+      from_status: before?.status,
+      to_status: status,
+      customer_name: before?.customer_name,
+    },
+  });
 
   revalidatePath("/pos");
   revalidatePath("/dashboard");

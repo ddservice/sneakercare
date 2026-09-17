@@ -44,6 +44,9 @@ jobs:
       - name: Reports & pagination logic
         run: npm run test:reports
 
+      - name: RD e-Filing PND format (ภ.ง.ด.3/53)
+        run: npm run test:tax
+
       # Server Action ของ Next คือ endpoint สาธารณะ — การ์ดที่หน้าเว็บกันไม่ถึงมัน
       # เคยมี 27 action ที่ใช้ service_role (ข้าม RLS) แต่การ์ดมีแค่ requireProfile()
       # = พนักงานคนไหนก็อ่านเงินเดือน/เลขบัตร/เลขบัญชีของทุกคนได้ถ้ารู้ชื่อ action

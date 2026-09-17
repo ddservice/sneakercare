@@ -10,6 +10,9 @@ import { generateDocumentNumber, type DocumentType } from "@/lib/smartacc/number
 import { generatePromptPayPayload } from "@/lib/smartacc/promptpay";
 import { withId, text } from "@/lib/db-rows";
 import { requireTenantId, tenantFilter } from "@/lib/tenant";
+import { getSelectedBranchId } from "@/lib/branch";
+import { errorMessage } from "@/lib/errors";
+import { logAudit } from "@/lib/audit";
 
 /** หนึ่งรายการในสมุดที่อยู่ลูกค้า (sc_settings.dbd_company_registry) */
 export type DbdRegistryEntry = {
@@ -379,7 +382,12 @@ export async function createSmartAccDocument(payload: CreateDocumentPayload) {
   const profile = await requireProfile();
   requireModuleWrite(profile, "invoicing");
   const supabase = createAdminClient();
-  const tenantId = await requireTenantId(profile);
+  let tenantId: string;
+  try {
+    tenantId = await requireTenantId(profile);
+  } catch (err) {
+    return { success: false as const, error: errorMessage(err, "ไม่สามารถระบุกิจการที่จะออกเอกสารได้") };
+  }
 
   // 1. Calculate Totals
   const subtotal = payload.items.reduce((sum, item) => sum + item.totalLineAmount, 0);
@@ -451,35 +459,49 @@ export async function createSmartAccDocument(payload: CreateDocumentPayload) {
   }
 
   // 5. Insert Document
-  const { data: doc, error: docErr } = await supabase
-    .schema("extension_layer")
-    .from("ext_documents")
-    .insert({
-      doc_type: payload.docType,
-      doc_number: docNumber,
-      contact_id: contactId,
-      branch_id: profile.branch_id,
-      tenant_id: tenantId,
-      issue_date: payload.issueDate,
-      due_date: payload.dueDate || null,
-      credit_term_days: payload.creditTermDays || 0,
-      status: "DRAFT",
-      subtotal_amount: subtotal,
-      discount_amount: 0.0,
-      vat_rate: vatRate,
-      vat_amount: vatAmount,
-      grand_total: grandTotal,
-      promptpay_payload: promptpayPayload,
-      share_token: shareToken,
-      notes: payload.notes || null,
-      ref_parent_doc_id: payload.refParentDocId || null,
-      ref_parent_doc_number: payload.refParentDocNumber || null,
-    })
-    .select("id, doc_number")
-    .single();
+  //
+  // ⚠️ [แก้บั๊กจริง 2026-09-17] เดิมใส่ `profile.branch_id` ตรงๆ แต่คอลัมน์นี้ FK ไป
+  // `extension_layer.ext_branches` (ตารางว่างที่แอปไม่เคยใช้) ในขณะที่ UUID ของโปรไฟล์ชี้
+  // `inv_branches` ⇒ insert โดนปฏิเสธทุกครั้ง แล้ว `throw` ทำให้ Next โชว์ overlay
+  // "Server Components render" แทนข้อความไทย ตอนนี้ใช้สาขาที่เลือกที่หัวเว็บ (คุกกี้) และถ้า
+  // FK เก่ายังไม่ย้าย (ก่อน apply 0039) ลองใส่ null อีกรอบ — เอกสารผูก tenant อยู่แล้ว
+  const selectedBranchId = await getSelectedBranchId(profile);
+  const docRow = {
+    doc_type: payload.docType,
+    doc_number: docNumber,
+    contact_id: contactId,
+    tenant_id: tenantId,
+    issue_date: payload.issueDate,
+    due_date: payload.dueDate || null,
+    credit_term_days: payload.creditTermDays || 0,
+    status: "DRAFT" as const,
+    subtotal_amount: subtotal,
+    discount_amount: 0.0,
+    vat_rate: vatRate,
+    vat_amount: vatAmount,
+    grand_total: grandTotal,
+    promptpay_payload: promptpayPayload,
+    share_token: shareToken,
+    notes: payload.notes || null,
+    ref_parent_doc_id: payload.refParentDocId || null,
+    ref_parent_doc_number: payload.refParentDocNumber || null,
+  };
+
+  const insertDoc = (branchId: string | null) =>
+    supabase
+      .schema("extension_layer")
+      .from("ext_documents")
+      .insert({ ...docRow, branch_id: branchId })
+      .select("id, doc_number")
+      .single();
+
+  let { data: doc, error: docErr } = await insertDoc(selectedBranchId);
+  if (docErr && selectedBranchId && /ext_documents_branch_id_fkey/.test(docErr.message)) {
+    ({ data: doc, error: docErr } = await insertDoc(null));
+  }
 
   if (docErr || !doc) {
-    throw new Error(`สร้างเอกสารไม่สำเร็จ: ${docErr?.message}`);
+    return { success: false as const, error: `สร้างเอกสารไม่สำเร็จ: ${docErr?.message ?? "ไม่ทราบสาเหตุ"}` };
   }
 
   // 6. Insert Line Items
@@ -532,7 +554,12 @@ export async function convertDocument(sourceDocId: string, targetDocType: Docume
   const profile = await requireProfile();
   requireModuleWrite(profile, "invoicing");
   const supabase = createAdminClient();
-  const tenantId = await requireTenantId(profile);
+  let tenantId: string;
+  try {
+    tenantId = await requireTenantId(profile);
+  } catch (err) {
+    return { success: false as const, error: errorMessage(err, "ไม่สามารถระบุกิจการที่จะแปลงเอกสารได้") };
+  }
 
   // 1. Fetch Source Document (ต้องเป็นของ tenant ตัวเองเท่านั้น — กัน super_admin/แอดมิน
   // ของ tenant อื่นแปลงเอกสารของ tenant นี้โดยรู้/เดา id)
@@ -545,7 +572,7 @@ export async function convertDocument(sourceDocId: string, targetDocType: Docume
     .single();
 
   if (error || !sourceDoc) {
-    throw new Error("ไม่พบเอกสารต้นทางที่ต้องการแปลง");
+    return { success: false as const, error: "ไม่พบเอกสารต้นทางที่ต้องการแปลง" };
   }
 
   const items: DocumentItemInput[] = (sourceDoc.ext_document_items || []).map((it) => ({
@@ -574,6 +601,7 @@ export async function convertDocument(sourceDocId: string, targetDocType: Docume
   };
 
   const res = await createSmartAccDocument(payload);
+  if (!res.success) return res;
 
   // Update source doc status
   await supabase
@@ -646,6 +674,25 @@ export async function fetchTaxFilingData(yearMonth?: string) {
     salesDocs: docsRes.data ?? [],
     expenses: expensesRes.data ?? [],
   };
+}
+
+export async function logTaxFilingExport(payload: {
+  formType: "PND3" | "PND53" | "PP30" | "ETAX_XML";
+  filename: string;
+  periodYm: string;
+  recordCount: number;
+}) {
+  const profile = await requireProfile();
+  requireModuleView(profile, "tax-filing");
+  await logAudit({
+    action: "EXPORT",
+    entity: "document",
+    entity_id: payload.filename,
+    actor_id: profile.id,
+    actor_name: profile.display_name,
+    tenant_id: profile.tenant_id,
+    detail: payload,
+  });
 }
 
 

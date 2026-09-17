@@ -165,6 +165,7 @@ export async function saveDailySale(data: DailySaleInput) {
     entity_id: savedId,
     actor_id: profile.id,
     actor_name: profile.display_name,
+    tenant_id: tenantId,
     detail: {
       date: data.date,
       total_revenue: netTotal,
@@ -210,6 +211,7 @@ export async function deleteDailySale(id: number) {
     entity_id: id,
     actor_id: profile.id,
     actor_name: profile.display_name,
+    tenant_id: tenantId,
     detail: doomed
       ? { sale_id: id, ...doomed }
       : { sale_id: id, note: "อ่านข้อมูลเดิมไม่ได้ก่อนลบ" },
@@ -371,6 +373,7 @@ export async function recordArPayment(data: {
     entity_id: inserted?.id,
     actor_id: profile.id,
     actor_name: profile.display_name,
+    tenant_id: tenantId,
     detail: paymentPayload,
   });
 
@@ -450,6 +453,7 @@ export async function deleteArPayment(paymentId: number, saleDate: string) {
     entity_id: paymentId,
     actor_id: profile.id,
     actor_name: profile.display_name,
+    tenant_id: tenantId,
     detail: { payment_id: paymentId, sale_date: saleDate, ...(doomed ?? {}) },
   });
 

@@ -11,6 +11,7 @@ import { Pagination } from "@/components/pagination";
 import { rangeLabel, type PageInfo } from "@/lib/pagination";
 import { toast } from "sonner";
 import { errorMessage } from "@/lib/errors";
+import { localYmd } from "@/lib/local-date";
 import {
   Sparkles,
   Plus,
@@ -22,6 +23,7 @@ import {
   CheckCircle2,
   Receipt,
   Search,
+  Calendar,
 } from "lucide-react";
 
 export type OrderItem = {
@@ -94,6 +96,7 @@ export function PosClient({
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [searchTerm, setSearchTerm] = useState("");
   const [isPending, startTransition] = useTransition();
+  const [receivedDate, setReceivedDate] = useState(() => localYmd());
 
   // Price calculations
   const grossAmount = selectedServices.reduce((sum, s) => sum + s.price, 0);
@@ -131,6 +134,7 @@ export function PosClient({
       formData.set("discount_amount", String(discount));
       formData.set("net_amount", String(netAmount));
       formData.set("payment_method", paymentMethod);
+      formData.set("received_date", receivedDate);
       if (paymentMethod === "cash") {
         formData.set("cash_amount", String(netAmount));
         formData.set("transfer_amount", "0");
@@ -167,7 +171,7 @@ export function PosClient({
           gross_amount: grossAmount,
           discount_amount: discount,
           net_amount: netAmount,
-          received_at: new Date().toISOString(),
+          received_at: receivedDate,
           notes: String(formData.get("notes") ?? ""),
         };
         setOrders([newOrder, ...orders]);
@@ -273,6 +277,25 @@ export function PosClient({
                       </div>
                     </div>
                   </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label htmlFor="received_date" className="text-xs font-semibold flex items-center gap-1.5">
+                    <Calendar className="h-3.5 w-3.5 text-teal-600" />
+                    วันที่รับงาน / กรอกข้อมูล <span className="text-rose-500">*</span>
+                  </Label>
+                  <Input
+                    id="received_date"
+                    name="received_date"
+                    type="date"
+                    required
+                    value={receivedDate}
+                    onChange={(e) => setReceivedDate(e.target.value)}
+                    className="bg-white dark:bg-slate-900 max-w-xs"
+                  />
+                  <p className="text-[11px] text-slate-500">
+                    วันที่นี้ถูกบันทึกเป็นวันที่รับงานจริง และอยู่ใน audit log ทุกครั้งที่สร้างหรือเปลี่ยนสถานะ
+                  </p>
                 </div>
 
                 <hr className="border-slate-100 dark:border-slate-800" />

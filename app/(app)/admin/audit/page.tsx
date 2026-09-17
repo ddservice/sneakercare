@@ -53,6 +53,11 @@ type ScAuditRow = {
   actor_name: string | null;
   detail: Record<string, unknown> | null;
   created_at: string;
+  ip_address?: string | null;
+  browser?: string | null;
+  device?: string | null;
+  page_path?: string | null;
+  user_agent?: string | null;
 };
 
 type AuditRow = {
@@ -63,6 +68,10 @@ type AuditRow = {
   entityId: string | null;
   actor: string;
   detail: string;
+  ip?: string;
+  browser?: string;
+  device?: string;
+  page?: string;
 };
 
 const ACTION_CONFIG: Record<string, { label: string; color: string; Icon: React.ElementType }> = {
@@ -87,6 +96,7 @@ const ENTITY_LABEL: Record<string, string> = {
   document:          "เอกสาร",
   roster_employee:   "พนักงาน",
   settings:          "ตั้งค่า",
+  service_order:     "งานบริการ",
 };
 
 /** ตัดค่าที่ยาวเกินให้พออ่านในตาราง โดยยังเห็นเต็มได้ที่ title ของ cell */
@@ -102,10 +112,29 @@ function short(value: unknown): string {
 
 function formatDetail(detail: Record<string, unknown> | null, limit = 6): string {
   if (!detail || typeof detail !== "object") return "—";
-  const entries = Object.entries(detail);
+  const entries = Object.entries(detail).filter(
+    ([k]) => !["ip", "browser", "device", "page", "user_agent"].includes(k)
+  );
   if (entries.length === 0) return "—";
   const shown = entries.slice(0, limit).map(([k, v]) => `${k}: ${short(v)}`).join(" · ");
   return entries.length > limit ? `${shown} · (+${entries.length - limit})` : shown;
+}
+
+function mapAppAuditRow(r: ScAuditRow): AuditRow {
+  const detail = r.detail ?? {};
+  return {
+    key: `app-${r.id}`,
+    at: r.created_at,
+    action: text(r.action),
+    entityLabel: ENTITY_LABEL[r.entity] ?? r.entity,
+    entityId: r.entity_id,
+    actor: r.actor_name || "ระบบ",
+    detail: formatDetail(detail),
+    ip: r.ip_address || (typeof detail.ip === "string" ? detail.ip : "") || "",
+    browser: r.browser || (typeof detail.browser === "string" ? detail.browser : "") || "",
+    device: r.device || (typeof detail.device === "string" ? detail.device : "") || "",
+    page: r.page_path || (typeof detail.page === "string" ? detail.page : "") || "",
+  };
 }
 
 export default async function AuditLogPage({
@@ -131,7 +160,10 @@ export default async function AuditLogPage({
   if (source === "app") {
     // ต้อง cast เพราะ sc_audit_logs ยังไม่ถูก generate ลง database.types.ts
     let q = (supabase.from(SC_AUDIT_TABLE as never) as unknown as PostgrestLike<ScAuditRow>)
-      .select("id, action, entity, entity_id, actor_name, detail, created_at", { count: "exact" })
+      .select(
+        "id, action, entity, entity_id, actor_name, detail, created_at, ip_address, browser, device, page_path, user_agent",
+        { count: "exact" }
+      )
       .order("created_at", { ascending: false })
       .range(from, to);
 
@@ -143,17 +175,26 @@ export default async function AuditLogPage({
       loadError = error.message;
       migrationMissing =
         error.code === "PGRST205" || /does not exist|schema cache/i.test(error.message ?? "");
+      if (!migrationMissing && /column|ip_address/i.test(error.message ?? "")) {
+        const fallback = await (supabase.from(SC_AUDIT_TABLE as never) as unknown as PostgrestLike<ScAuditRow>)
+          .select("id, action, entity, entity_id, actor_name, detail, created_at", { count: "exact" })
+          .order("created_at", { ascending: false })
+          .range(from, to);
+        const fb = fallback as unknown as {
+          data: ScAuditRow[] | null;
+          count: number | null;
+          error: { message: string; code?: string } | null;
+        };
+        // ถ้า fallback ก็ยัง error คงข้อความเดิมไว้
+        if (!fb.error) {
+          loadError = null;
+          count = fb.count ?? null;
+          rows = (fb.data ?? []).map((r) => mapAppAuditRow(r));
+        }
+      }
     } else {
       count = c ?? null;
-      rows = (data ?? []).map((r) => ({
-        key: `app-${r.id}`,
-        at: r.created_at,
-        action: text(r.action),
-        entityLabel: ENTITY_LABEL[r.entity] ?? r.entity,
-        entityId: r.entity_id,
-        actor: r.actor_name || "ระบบ",
-        detail: formatDetail(r.detail),
-      }));
+      rows = (data ?? []).map((r) => mapAppAuditRow(r));
     }
   } else {
     let q = supabase
@@ -212,6 +253,7 @@ export default async function AuditLogPage({
           { label: "แก้ไข",     href: "/admin/audit?action=UPDATE" },
           { label: "สร้าง",     href: "/admin/audit?action=CREATE" },
           { label: "ยอดขาย",    href: "/admin/audit?entity=daily_sale" },
+          { label: "งานบริการ", href: "/admin/audit?entity=service_order" },
           { label: "ค่าใช้จ่าย", href: "/admin/audit?entity=expense" },
           { label: "เงินเดือน",  href: "/admin/audit?entity=payroll" },
           { label: "AR",        href: "/admin/audit?entity=ar_payment" },
@@ -243,7 +285,8 @@ export default async function AuditLogPage({
             Audit Log
           </h1>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
-            บันทึกการแก้ไข/ลบข้อมูลสำคัญ — อ่านอย่างเดียว ฐานข้อมูลมี trigger กัน UPDATE/DELETE ไว้อีกชั้น
+            บันทึกว่าใครทำอะไร เมื่อไหร่ จาก IP / เบราว์เซอร์ / อุปกรณ์ / หน้าใด — อ่านอย่างเดียว
+            ฐานข้อมูลมี trigger กัน UPDATE/DELETE ไว้อีกชั้น
           </p>
         </div>
         <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700">
@@ -329,13 +372,14 @@ export default async function AuditLogPage({
                   <TableHead className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider px-4 py-3 w-24">Action</TableHead>
                   <TableHead className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider px-4 py-3 w-40">ประเภท</TableHead>
                   <TableHead className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider px-4 py-3 w-32">ผู้ดำเนินการ</TableHead>
+                  <TableHead className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider px-4 py-3 w-40">IP / อุปกรณ์</TableHead>
                   <TableHead className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider px-4 py-3">รายละเอียด</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {rows.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={5} className="text-center py-12 text-slate-400 dark:text-slate-500">
+                    <TableCell colSpan={6} className="text-center py-12 text-slate-400 dark:text-slate-500">
                       {loadError
                         ? "ไม่สามารถแสดงข้อมูลได้"
                         : page > 1
@@ -363,6 +407,7 @@ export default async function AuditLogPage({
                             day: "2-digit",
                             hour: "2-digit",
                             minute: "2-digit",
+                            second: "2-digit",
                           })}
                         </TableCell>
 
@@ -384,6 +429,14 @@ export default async function AuditLogPage({
 
                         <TableCell className="px-4 py-3 text-sm font-medium text-slate-700 dark:text-slate-200">
                           {row.actor}
+                        </TableCell>
+
+                        <TableCell className="px-4 py-3 text-[11px] text-slate-500 dark:text-slate-400">
+                          <div className="font-mono">{row.ip || "—"}</div>
+                          <div>
+                            {[row.browser, row.device].filter(Boolean).join(" · ") || "—"}
+                          </div>
+                          {row.page ? <div className="font-mono text-slate-400 truncate max-w-[10rem]">{row.page}</div> : null}
                         </TableCell>
 
                         <TableCell
