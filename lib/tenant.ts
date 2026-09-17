@@ -1,4 +1,5 @@
 import "server-only";
+import { cache } from "react";
 import type { Profile } from "@/lib/auth";
 import { getSelectedBranchId } from "@/lib/branch";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -27,7 +28,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
  *   let query = supabase.from("sc_sales").select("*");
  *   if (tenantId) query = query.eq("tenant_id", tenantId);
  */
-export async function tenantFilter(profile: Profile): Promise<string | null> {
+export const tenantFilter = cache(async (profile: Profile): Promise<string | null> => {
   if (profile.role !== "super_admin") return profile.tenant_id;
 
   const selectedBranchId = await getSelectedBranchId(profile);
@@ -36,7 +37,7 @@ export async function tenantFilter(profile: Profile): Promise<string | null> {
   const admin = createAdminClient();
   const { data } = await admin.from("branches").select("tenant_id").eq("id", selectedBranchId).maybeSingle();
   return data?.tenant_id ?? null;
-}
+});
 
 /**
  * ใช้ก่อน insert/update เสมอเมื่อต้องระบุ tenant_id ตรงๆ ใน payload — throw ถ้าไม่มี tenant

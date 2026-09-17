@@ -23,7 +23,7 @@ export const getActiveBranches = cache(async () => {
 // ⚠️ [แก้บั๊กจริง 2026-09-17] เดิมเช็คแค่ `role !== "admin"` ⇒ super_admin (ซึ่ง branch_id เป็น
 // null เสมอ เพราะไม่ผูกกับ tenant ไหนเลย) ตกไปอยู่กลุ่มเดียวกับ staff/co_admin ที่ "ต้องมี
 // branch_id ตายตัว" ทำให้ได้ null กลับไปตลอดโดยไม่มีทางเลือกสาขา/tenant ผ่านคุกกี้ได้เลย
-export async function getSelectedBranchId(profile: Profile): Promise<string | null> {
+export const getSelectedBranchId = cache(async (profile: Profile): Promise<string | null> => {
   if (profile.role !== "admin" && profile.role !== "super_admin") {
     return profile.branch_id;
   }
@@ -31,7 +31,7 @@ export async function getSelectedBranchId(profile: Profile): Promise<string | nu
   const cookieStore = await cookies();
   const value = cookieStore.get(ACTIVE_BRANCH_COOKIE)?.value?.trim() ?? "";
   return value || null;
-}
+});
 
 export function assertWritableBranch(profile: Profile, branchId: string): string | null {
   if (!branchId) {

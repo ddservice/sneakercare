@@ -1,6 +1,8 @@
 import { requireProfile, requireModuleView } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { getSelectedBranchId } from "@/lib/branch";
+import { tenantFilter } from "@/lib/tenant";
+import { countLowStockAlerts } from "@/lib/low-stock-count";
 import { DashboardClient } from "./dashboard-client";
 
 export const dynamic = "force-dynamic";
@@ -10,77 +12,41 @@ export default async function DashboardPage() {
   requireModuleView(profile, "dashboard");
   const supabase = await createClient();
 
-  // ⚠️ [แก้บั๊กจริง 2026-09-17] เดิมหน้านี้ไม่กรอง tenant/branch เองเลย พึ่ง RLS อย่างเดียว —
-  // ใช้ได้ปกติกับ admin ทั่วไป (RLS บังคับให้เห็นแค่ tenant ตัวเองอยู่แล้วไม่ว่าจะเลือกสาขาไหน)
-  // แต่ super_admin RLS อนุญาตให้เห็นทุก tenant เสมอ ⇒ เลือกสาขาของ LUXSU ในตัวเลือกสาขาบนหัวเว็บ
-  // แล้วหน้านี้ยังโชว์ตัวเลขของ tenant #1 เหมือนเดิมทุกครั้ง (พิสูจน์แล้วว่าไม่กรองจริง)
-  // แก้โดยกรองด้วย tenant ของสาขาที่เลือกเฉพาะ super_admin เท่านั้น — ถ้าไม่เลือกสาขา (ดูรวม)
-  // ยังคงเห็นภาพรวมข้ามทุก tenant ต่อไปเหมือนเดิม (ตรงกับหลักการเดียวกับ badge สต๊อกต่ำใน layout.tsx)
+  // super_admin ที่เลือกสาขาไว้ → กรอง tenant ของสาขานั้น (tenantFilter จำค่าต่อ request)
+  // role อื่น RLS กรองให้อยู่แล้ว ไม่ต้อง .eq ซ้ำ
   const selectedBranchId = await getSelectedBranchId(profile);
-  let superAdminTenantId: string | null = null;
-  let superAdminBranchIds: string[] | null = null;
-  if (profile.role === "super_admin" && selectedBranchId) {
-    const { data: branchRow } = await supabase
-      .from("branches")
-      .select("tenant_id")
-      .eq("id", selectedBranchId)
-      .maybeSingle();
-    superAdminTenantId = branchRow?.tenant_id ?? null;
-    if (superAdminTenantId) {
-      const { data: tenantBranches } = await supabase
-        .from("branches")
-        .select("id")
-        .eq("tenant_id", superAdminTenantId);
-      superAdminBranchIds = (tenantBranches ?? []).map((b) => b.id).filter((id): id is string => !!id);
-    }
-  }
+  const tenantId = profile.role === "super_admin" ? await tenantFilter(profile) : null;
 
-  // Fetch real sales, opex, payments, orders, items, and low-stock items
   let salesQuery = supabase.from("sc_sales").select("*").order("date", { ascending: false });
   let opexQuery = supabase.from("sc_opex").select("*").order("month", { ascending: false });
   let paymentsQuery = supabase.from("sc_payments").select("*").order("sale_date", { ascending: false });
-  let ordersQuery = supabase.from("service_orders").select("*").order("received_at", { ascending: false });
-  let itemsQuery = supabase.from("items").select("id, name, item_stock(*)").order("name");
-  let lowStockQuery = supabase.from("v_low_stock").select("*");
-  // ขั้นที่ 4 ของ docs/sc-opex-refactor-plan.md — ฝั่ง OPEX อ่านจากตารางใหม่
-  // (เงินเดือน/ห้องเช่ายังมาจาก sc_opex จนกว่าจะถึงขั้นที่ 5)
   let expenseEntriesQuery = supabase
     .from("sc_expense_entries")
     .select("id, entry_date, amount, category, title, pay_method, legacy_ref");
+  let itemsCountQuery = supabase.from("items").select("id", { count: "exact", head: true });
 
-  if (superAdminTenantId) {
-    salesQuery = salesQuery.eq("tenant_id", superAdminTenantId);
-    opexQuery = opexQuery.eq("tenant_id", superAdminTenantId);
-    paymentsQuery = paymentsQuery.eq("tenant_id", superAdminTenantId);
-    ordersQuery = ordersQuery.eq("tenant_id", superAdminTenantId);
-    itemsQuery = itemsQuery.eq("tenant_id", superAdminTenantId);
-    expenseEntriesQuery = expenseEntriesQuery.eq("tenant_id", superAdminTenantId);
-    // v_low_stock ไม่มีคอลัมน์ tenant_id (เป็น view ที่ join item_stock/items) — กรองผ่าน
-    // branch_id ของสาขาทั้งหมดใน tenant นั้นแทน (รูปแบบเดียวกับ badge สต๊อกต่ำใน layout.tsx)
-    lowStockQuery = lowStockQuery.in(
-      "branch_id",
-      superAdminBranchIds && superAdminBranchIds.length > 0
-        ? superAdminBranchIds
-        : ["00000000-0000-0000-0000-000000000000"]
-    );
+  if (tenantId) {
+    salesQuery = salesQuery.eq("tenant_id", tenantId);
+    opexQuery = opexQuery.eq("tenant_id", tenantId);
+    paymentsQuery = paymentsQuery.eq("tenant_id", tenantId);
+    expenseEntriesQuery = expenseEntriesQuery.eq("tenant_id", tenantId);
+    itemsCountQuery = itemsCountQuery.eq("tenant_id", tenantId);
   }
 
   const [
     { data: salesRows },
     { data: opexRows },
     { data: paymentsRows },
-    { data: orders },
-    { data: stockItems },
-    { data: lowStock },
     { data: expenseEntries },
+    { count: catalogCount },
+    lowStockCount,
   ] = await Promise.all([
     salesQuery,
     opexQuery,
     paymentsQuery,
-    ordersQuery,
-    itemsQuery,
-    lowStockQuery,
     expenseEntriesQuery,
+    itemsCountQuery,
+    countLowStockAlerts(profile, selectedBranchId).catch(() => 0),
   ]);
 
   return (
@@ -88,9 +54,8 @@ export default async function DashboardPage() {
       salesRows={salesRows || []}
       opexRows={opexRows || []}
       paymentsRows={paymentsRows || []}
-      orders={orders || []}
-      stockItems={stockItems || []}
-      lowStock={lowStock || []}
+      catalogCount={catalogCount ?? 0}
+      lowStockCount={lowStockCount}
       expenseEntries={expenseEntries || []}
     />
   );

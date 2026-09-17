@@ -35,9 +35,11 @@ function groupByTenant(branches: BranchOption[]) {
 export function BranchPicker({
   branches,
   selectedBranchId,
+  fullWidth = false,
 }: {
   branches: BranchOption[];
   selectedBranchId: string | null;
+  fullWidth?: boolean;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -66,7 +68,11 @@ export function BranchPicker({
     <Select value={currentId} onValueChange={handleChange} disabled={pending} modal={false}>
       <SelectTrigger
         aria-label="สาขาที่กำลังดู"
-        className="h-9 max-w-[10.5rem] gap-2 rounded-full border-slate-200 bg-white px-2.5 shadow-sm hover:bg-slate-50 data-[size=default]:h-9 sm:max-w-[16rem] dark:border-slate-700 dark:bg-slate-800 dark:hover:bg-slate-800/80"
+        className={
+          fullWidth
+            ? "h-10 w-full max-w-none gap-2 rounded-xl border-slate-200 bg-white px-2.5 shadow-sm hover:bg-slate-50 data-[size=default]:h-10 dark:border-slate-700 dark:bg-slate-800 dark:hover:bg-slate-800/80"
+            : "h-9 max-w-[10.5rem] gap-2 rounded-full border-slate-200 bg-white px-2.5 shadow-sm hover:bg-slate-50 data-[size=default]:h-9 sm:max-w-[16rem] dark:border-slate-700 dark:bg-slate-800 dark:hover:bg-slate-800/80"
+        }
       >
         <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
           {pending ? (

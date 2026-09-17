@@ -14,6 +14,7 @@ interface MobileNavProps {
   brandName?: string;
   roleBadge?: string;
   displayName?: string;
+  branchPicker?: React.ReactNode;
 }
 
 /**
@@ -26,6 +27,7 @@ export function MobileNav({
   brandName = "DD-Management",
   roleBadge,
   displayName,
+  branchPicker,
 }: MobileNavProps) {
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
@@ -119,6 +121,13 @@ export function MobileNav({
                 <X className="h-4 w-4" />
               </button>
             </div>
+
+            {branchPicker ? (
+              <div className="border-b border-slate-100 px-3 py-3 dark:border-slate-800">
+                <p className="mb-2 px-1 text-[11px] font-medium text-slate-400">สาขาที่กำลังดู</p>
+                {branchPicker}
+              </div>
+            ) : null}
 
             {/* Nav items */}
             <nav

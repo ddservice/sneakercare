@@ -1,6 +1,7 @@
 import { requireProfile } from "@/lib/auth";
 import { withId, text } from "@/lib/db-rows";
 import { getSelectedBranchId, getActiveBranches } from "@/lib/branch";
+import { countLowStockAlerts } from "@/lib/low-stock-count";
 import { mainNavItemsFor, ROLE_LABEL } from "@/lib/permissions";
 import { Button } from "@/components/ui/button";
 import { logout } from "@/app/actions/auth";
@@ -12,15 +13,17 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { Footprints, LogOut, UserCircle } from "lucide-react";
 import Link from "next/link";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { tenantFilter } from "@/lib/tenant";
 
 export const dynamic = "force-dynamic";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const profile = await requireProfile();
-  const selectedBranchId = await getSelectedBranchId(profile);
-  const branches = await getActiveBranches();
   const mainNav = mainNavItemsFor(profile.role);
+  const [selectedBranchId, branches, lowStockCount] = await Promise.all([
+    getSelectedBranchId(profile),
+    getActiveBranches(),
+    getSelectedBranchId(profile).then((id) => countLowStockAlerts(profile, id).catch(() => 0)),
+  ]);
 
   // ✅ [multi-tenant 2026-09-17] super_admin เห็นสาขาข้าม tenant ได้แล้ว แต่คนละ tenant อาจตั้ง
   // ชื่อสาขาซ้ำกันได้ (เช่น "SneakerCare" ทั้งคู่) — ส่งชื่อ tenant แยกจากชื่อสาขา ให้ตัวเลือก
@@ -38,37 +41,10 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   }
 
   const avatarLetter = profile.display_name.trim().slice(0, 1) || "?";
-
-  // ── Low stock alert count for nav badge ──
-  let lowStockCount = 0;
-  try {
-    const adminDb = createAdminClient();
-    let q = adminDb.from("item_stock").select(
-      "id, current_qty, min_stock_level, alert_muted"
-    );
-    if (selectedBranchId) {
-      q = q.eq("branch_id", selectedBranchId);
-    } else if (profile.role !== "super_admin") {
-      // 🔴 [แก้ช่องโหว่จริง 2026-09-17] เดิมไม่มีการกรอง tenant เลยตรงนี้ — admin ของ tenant
-      // ไหนก็ตามที่ "ดูทุกสาขา" (ไม่ได้เลือกสาขาเจาะจง) จะเห็น badge แจ้งเตือนสต๊อกต่ำที่นับรวม
-      // ของทุก tenant ปนกันหมด ไม่ใช่แค่ tenant ของตัวเอง — super_admin ตั้งใจให้เห็นรวมทุก tenant
-      // ได้ต่อไป (เป็นมุมมองระดับแพลตฟอร์ม) แต่ admin ปกติต้องกรองเฉพาะ tenant ตัวเองเท่านั้น
-      const ownTenantId = await tenantFilter(profile);
-      if (ownTenantId) {
-        const { data: ownBranches } = await adminDb.from("inv_branches").select("id").eq("tenant_id", ownTenantId);
-        const ownBranchIds = (ownBranches ?? []).map((b) => b.id);
-        q = q.in("branch_id", ownBranchIds.length > 0 ? ownBranchIds : ["00000000-0000-0000-0000-000000000000"]);
-      }
-    }
-    const { data: stockRows } = await q;
-    // ไม่นับรายการที่ปิดแจ้งเตือนไว้ — ไม่งั้น badge จะขึ้นตัวเลขค้างที่พนักงานไม่มีทางเคลียร์ได้
-    // (เพราะ Telegram ก็ไม่ส่งแจ้งรายการนั้นอยู่แล้วเช่นกัน ดู supabase/functions ที่ deploy จริง)
-    lowStockCount = (stockRows || []).filter(
-      (s) => !s.alert_muted && Number(s.current_qty ?? 0) <= Number(s.min_stock_level ?? 0)
-    ).length;
-  } catch {
-    // non-fatal — badge just won't show
-  }
+  const canPickBranch = profile.role === "admin" || profile.role === "super_admin";
+  const branchPicker = canPickBranch ? (
+    <BranchPicker branches={branchOptions} selectedBranchId={selectedBranchId} />
+  ) : null;
 
   const alerts = { inventory: lowStockCount };
 
@@ -92,6 +68,15 @@ export default async function AppLayout({ children }: { children: React.ReactNod
               brandName="DD-Management"
               roleBadge={ROLE_LABEL[profile.role]}
               displayName={profile.display_name}
+              branchPicker={
+                branchPicker ? (
+                  <BranchPicker
+                    branches={branchOptions}
+                    selectedBranchId={selectedBranchId}
+                    fullWidth
+                  />
+                ) : null
+              }
             />
 
             {/* Logo icon */}
@@ -112,9 +97,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
           {/* Right: actions */}
           <div className="ml-auto flex items-center gap-1.5 sm:gap-2 shrink-0">
-            {(profile.role === "admin" || profile.role === "super_admin") && (
-              <BranchPicker branches={branchOptions} selectedBranchId={selectedBranchId} />
-            )}
+            {branchPicker ? <div className="hidden lg:block">{branchPicker}</div> : null}
 
             {/* User chip — hidden on mobile (shown in drawer instead) */}
             <div className="hidden md:flex items-center gap-2 rounded-full border border-slate-200 bg-white py-1 pr-3 pl-1 dark:border-slate-700 dark:bg-slate-800">
@@ -158,7 +141,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         </div>
 
         {/* ── Desktop Nav row (hidden on < lg — drawer handles it) ── */}
-        <div className="hidden lg:block border-t border-slate-100 dark:border-slate-800/70 bg-slate-50/60 dark:bg-slate-900/60 px-4 sm:px-6 py-1.5">
+        <div className="hidden lg:block border-t border-slate-100 px-4 sm:px-6 dark:border-slate-800/70">
           <div className="mx-auto max-w-7xl">
             <MainNav items={mainNav} alerts={alerts} />
           </div>

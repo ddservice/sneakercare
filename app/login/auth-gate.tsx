@@ -1,15 +1,15 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { useIsMounted } from "@/lib/use-is-mounted";
 import { LoginForm } from "./login-form";
 import { SetPasswordForm } from "./set-password-form";
 
-type GateState =
-  | { status: "checking" }
-  | { status: "login" }
-  | { status: "set-password"; mode: "invite" | "recovery" }
-  | { status: "link-expired" };
+type AuthLink =
+  | { kind: "none" }
+  | { kind: "hash"; accessToken: string; refreshToken: string; mode: "invite" | "recovery" }
+  | { kind: "otp"; tokenHash: string; mode: "invite" | "recovery" };
 
 /**
  * ตรวจ URL ตอนโหลดหน้า /login ว่ามาจากลิงก์เชิญ (invite) หรือลิงก์ตั้งรหัสผ่านใหม่ (recovery)
@@ -35,55 +35,83 @@ type GateState =
  * โปรเจกต์นี้ใช้แบบที่ 1 (hash fragment) แต่เผื่อไว้ทั้งสองแบบไม่ต้องพึ่งการเดา:
  *   1. hash fragment แบบ implicit flow: #access_token=...&refresh_token=...&type=recovery|invite
  *   2. query string แบบ OTP: ?token_hash=...&type=recovery|invite (ต้องเรียก verifyOtp() เอง)
+ *
+ * ⚠️ [2026-09-17] ห้ามอ่าน `window.location` แล้ว `setState` ตรงๆ ใน `useEffect` — CI แดงที่
+ * `react-hooks/set-state-in-effect`. URL (โดยเฉพาะ hash fragment) ไม่เคยไปถึงเซิร์ฟเวอร์
+ * จึงใช้ `useSyncExternalStore` อ่านฝั่ง client หลัง hydrate แล้วเรียก `setSession` เฉพาะตอน
+ * มี token จริง (setState เกิดหลัง await ไม่ใช่ในลำตัว effect)
  */
+function parseAuthLink(hash: string, search: string): AuthLink {
+  const hashParams = new URLSearchParams(hash.replace(/^#/, ""));
+  const searchParams = new URLSearchParams(search.startsWith("?") ? search.slice(1) : search);
+  const accessToken = hashParams.get("access_token");
+  const refreshToken = hashParams.get("refresh_token");
+  const tokenHash = searchParams.get("token_hash");
+  const mode: "invite" | "recovery" =
+    hashParams.get("type") === "invite" || searchParams.get("type") === "invite"
+      ? "invite"
+      : "recovery";
+
+  if (accessToken && refreshToken) {
+    return { kind: "hash", accessToken, refreshToken, mode };
+  }
+  if (tokenHash) {
+    return { kind: "otp", tokenHash, mode };
+  }
+  return { kind: "none" };
+}
+
+function subscribeAuthUrl(onStoreChange: () => void) {
+  window.addEventListener("hashchange", onStoreChange);
+  window.addEventListener("popstate", onStoreChange);
+  return () => {
+    window.removeEventListener("hashchange", onStoreChange);
+    window.removeEventListener("popstate", onStoreChange);
+  };
+}
+
+function getAuthUrlKey() {
+  return `${window.location.hash}\n${window.location.search}`;
+}
+
+function getServerAuthUrlKey() {
+  return "";
+}
+
 export function AuthGate() {
-  const [gate, setGate] = useState<GateState>({ status: "checking" });
+  const mounted = useIsMounted();
+  const urlKey = useSyncExternalStore(subscribeAuthUrl, getAuthUrlKey, getServerAuthUrlKey);
+  const [hash = "", search = ""] = urlKey.split("\n");
+  const link = parseAuthLink(hash, search);
+  const [session, setSession] = useState<"ok" | "expired" | null>(null);
 
   useEffect(() => {
-    const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
-    const searchParams = new URLSearchParams(window.location.search);
+    const current = parseAuthLink(hash, search);
+    if (current.kind === "none") return;
 
-    const accessToken = hashParams.get("access_token");
-    const refreshToken = hashParams.get("refresh_token");
-    const hashType = hashParams.get("type");
-    const tokenHash = searchParams.get("token_hash");
-    const queryType = searchParams.get("type");
-
-    const looksLikeAuthLink = !!(accessToken && refreshToken) || !!tokenHash;
-
-    if (!looksLikeAuthLink) {
-      setGate({ status: "login" });
-      return;
-    }
-
-    const resolvedMode: "invite" | "recovery" =
-      hashType === "invite" || queryType === "invite" ? "invite" : "recovery";
+    let cancelled = false;
+    const supabase = createClient();
 
     (async () => {
-      const supabase = createClient();
-
-      if (accessToken && refreshToken) {
-        // hash fragment — เซ็ต session เองตรงๆ จาก token ที่แกะมาแล้ว (พิสูจน์แล้วว่าทำงานจริง)
-        const { error } = await supabase.auth.setSession({
-          access_token: accessToken,
-          refresh_token: refreshToken,
-        });
-        setGate(error ? { status: "link-expired" } : { status: "set-password", mode: resolvedMode });
-        return;
-      }
-
-      if (tokenHash) {
-        // query string แบบ OTP — ไม่มี access_token/refresh_token ให้แกะเอง ต้อง verifyOtp()
-        const { error } = await supabase.auth.verifyOtp({
-          token_hash: tokenHash,
-          type: queryType === "invite" ? "invite" : "recovery",
-        });
-        setGate(error ? { status: "link-expired" } : { status: "set-password", mode: resolvedMode });
-      }
+      const { error } =
+        current.kind === "hash"
+          ? await supabase.auth.setSession({
+              access_token: current.accessToken,
+              refresh_token: current.refreshToken,
+            })
+          : await supabase.auth.verifyOtp({
+              token_hash: current.tokenHash,
+              type: current.mode === "invite" ? "invite" : "recovery",
+            });
+      if (!cancelled) setSession(error ? "expired" : "ok");
     })();
-  }, []);
 
-  if (gate.status === "checking") {
+    return () => {
+      cancelled = true;
+    };
+  }, [hash, search]);
+
+  if (!mounted) {
     return (
       <div className="flex items-center justify-center py-8">
         <div className="h-6 w-6 animate-spin rounded-full border-2 border-teal-600 border-t-transparent" />
@@ -91,7 +119,11 @@ export function AuthGate() {
     );
   }
 
-  if (gate.status === "link-expired") {
+  if (link.kind === "none") {
+    return <LoginForm />;
+  }
+
+  if (session === "expired") {
     return (
       <div className="space-y-4">
         <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs font-medium text-amber-800">
@@ -102,9 +134,13 @@ export function AuthGate() {
     );
   }
 
-  if (gate.status === "set-password") {
-    return <SetPasswordForm mode={gate.mode} />;
+  if (session === "ok") {
+    return <SetPasswordForm mode={link.mode} />;
   }
 
-  return <LoginForm />;
+  return (
+    <div className="flex items-center justify-center py-8">
+      <div className="h-6 w-6 animate-spin rounded-full border-2 border-teal-600 border-t-transparent" />
+    </div>
+  );
 }

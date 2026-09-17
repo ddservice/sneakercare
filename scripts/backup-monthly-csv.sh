@@ -72,7 +72,10 @@ notify() {
 # รายละเอียดเหตุผลเต็มดูที่ scripts/backup-db-to-r2.sh
 heartbeat() {
   local suffix="${1:-}"
-  [[ -z "${HEALTHCHECK_CSV_URL:-}" ]] && return 0
+  if [[ -z "${HEALTHCHECK_CSV_URL:-}" ]]; then
+    echo "[$(date -u +%FT%TZ)] ข้าม heartbeat CSV — HEALTHCHECK_CSV_URL ยังไม่ได้ตั้ง (ต้องเป็น check คนละตัวกับ HEALTHCHECK_URL: Period 1 month / Grace 2 days)" >&2
+    return 0
+  fi
   curl -fsS --max-time 10 --retry 3 "${HEALTHCHECK_CSV_URL}${suffix}" >/dev/null 2>&1 || true
 }
 
