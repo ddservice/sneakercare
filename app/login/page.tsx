@@ -1,4 +1,4 @@
-import { LoginForm } from "./login-form";
+import { AuthGate } from "./auth-gate";
 import { Footprints } from "lucide-react";
 
 export default function LoginPage() {
@@ -33,7 +33,7 @@ export default function LoginPage() {
             </p>
           </div>
 
-          <LoginForm />
+          <AuthGate />
         </div>
       </div>
 
