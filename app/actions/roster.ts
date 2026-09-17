@@ -208,21 +208,16 @@ export async function fetchSelectedShopHours(): Promise<{
     return { openTime: "09:00", closeTime: "20:00", branchName: null };
   }
   const supabase = createAdminClient();
-  const withHours = await supabase
+  const { data } = await supabase
     .from("inv_branches")
     .select("name, open_time, close_time")
     .eq("id", branchId)
     .maybeSingle();
-  if (!withHours.error && withHours.data) {
-    const row = withHours.data as { name: string; open_time?: string | null; close_time?: string | null };
-    return {
-      openTime: row.open_time || "09:00",
-      closeTime: row.close_time || "20:00",
-      branchName: row.name,
-    };
-  }
-  const fallback = await supabase.from("inv_branches").select("name").eq("id", branchId).maybeSingle();
-  return { openTime: "09:00", closeTime: "20:00", branchName: fallback.data?.name ?? null };
+  return {
+    openTime: data?.open_time || "09:00",
+    closeTime: data?.close_time || "20:00",
+    branchName: data?.name ?? null,
+  };
 }
 
 export async function applyGeneratedDayOffs(assignments: { employeeId: number; dayOff: number }[]) {

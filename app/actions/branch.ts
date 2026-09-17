@@ -70,19 +70,10 @@ export async function fetchManagedBranches(): Promise<{
   requireAdmin(profile);
   const supabase = createAdminClient();
 
-  const selectWithHours =
-    "id, name, tenant_id, address, phone, is_active, open_time, close_time";
-  let { data: rows, error } = await supabase
+  const { data: rows, error } = await supabase
     .from("inv_branches")
-    .select(selectWithHours)
+    .select("id, name, tenant_id, address, phone, is_active, open_time, close_time")
     .order("name");
-
-  if (error) {
-    ({ data: rows, error } = await supabase
-      .from("inv_branches")
-      .select("id, name, tenant_id, address, phone, is_active")
-      .order("name"));
-  }
   if (error || !rows) return { branches: [], tenants: [] };
 
   const tenantIds = [...new Set(rows.map((r) => r.tenant_id).filter(Boolean))];
@@ -96,20 +87,17 @@ export async function fetchManagedBranches(): Promise<{
       ? rows
       : rows.filter((r) => r.tenant_id === profile.tenant_id);
 
-  const branches: ManagedBranch[] = mine.map((r) => {
-    const row = r as typeof r & { open_time?: string | null; close_time?: string | null };
-    return {
-      id: row.id,
-      name: row.name,
-      tenantId: row.tenant_id,
-      tenantName: tenantNameById.get(row.tenant_id) ?? "—",
-      address: row.address ?? "",
-      phone: row.phone ?? "",
-      openTime: row.open_time || "09:00",
-      closeTime: row.close_time || "20:00",
-      isActive: row.is_active !== false,
-    };
-  });
+  const branches: ManagedBranch[] = mine.map((r) => ({
+    id: r.id,
+    name: r.name,
+    tenantId: r.tenant_id,
+    tenantName: tenantNameById.get(r.tenant_id) ?? "—",
+    address: r.address ?? "",
+    phone: r.phone ?? "",
+    openTime: r.open_time || "09:00",
+    closeTime: r.close_time || "20:00",
+    isActive: r.is_active !== false,
+  }));
 
   const tenants: ManagedTenant[] =
     profile.role === "super_admin"
@@ -161,17 +149,7 @@ export async function createBranch(input: {
     is_active: true,
   };
 
-  let { data, error } = await supabase.from("inv_branches").insert(payload).select("id, name").single();
-  if (error && /open_time|close_time/.test(error.message)) {
-    const withoutHours = {
-      name: payload.name,
-      tenant_id: payload.tenant_id,
-      address: payload.address,
-      phone: payload.phone,
-      is_active: payload.is_active,
-    };
-    ({ data, error } = await supabase.from("inv_branches").insert(withoutHours).select("id, name").single());
-  }
+  const { data, error } = await supabase.from("inv_branches").insert(payload).select("id, name").single();
   if (error || !data) {
     return { success: false as const, error: error?.message ?? "เพิ่มสาขาไม่สำเร็จ" };
   }
@@ -224,12 +202,7 @@ export async function updateBranch(input: {
     close_time: normalizeHm(input.closeTime || "", "20:00"),
   };
 
-  let { error } = await supabase.from("inv_branches").update(patch).eq("id", input.id);
-  if (error && /open_time|close_time/.test(error.message)) {
-    delete patch.open_time;
-    delete patch.close_time;
-    ({ error } = await supabase.from("inv_branches").update(patch).eq("id", input.id));
-  }
+  const { error } = await supabase.from("inv_branches").update(patch).eq("id", input.id);
   if (error) return { success: false as const, error: error.message };
 
   await logAudit({
