@@ -118,3 +118,32 @@ export function validatePayeeTaxId(taxId: string): string | null {
   if (d.length !== 13) return "เลขประจำตัวผู้เสียภาษีต้องเป็น 13 หลัก";
   return null;
 }
+
+/** แปลงแถวหนังสือรับรองเป็นรูปแบบพิมพ์ 50 ทวิ / ไฟล์ ภ.ง.ด. */
+export function certificateToWhtRecord(
+  row: {
+    payeeTaxId: string;
+    payeeName: string;
+    payeeAddress: string;
+    paymentDate: string;
+    incomeType: string;
+    whtRate: number;
+    baseAmount: number;
+    taxAmount: number;
+    payeeKind: WhtPayeeKind;
+  },
+  sequence: number
+) {
+  return {
+    sequence,
+    taxId: row.payeeTaxId,
+    name: row.payeeName,
+    address: row.payeeAddress,
+    date: row.paymentDate,
+    incomeType: row.incomeType,
+    whtRate: row.whtRate,
+    baseAmount: row.baseAmount,
+    taxAmount: row.taxAmount,
+    payeeKind: row.payeeKind,
+  };
+}

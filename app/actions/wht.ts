@@ -17,7 +17,6 @@ import {
   type WhtPayeeKind,
   type PndFormType,
 } from "@/lib/wht";
-import type { WhtRecord } from "@/lib/smartacc/tax-reports";
 
 export type WhtPayee = {
   id: string;
@@ -173,21 +172,6 @@ export async function fetchWhtCertificates(yearMonth?: string): Promise<WhtCerti
       rentalRecordId: row.rental_record_id,
     };
   });
-}
-
-export function certificateToWhtRecord(row: WhtCertificateRow, sequence: number): WhtRecord {
-  return {
-    sequence,
-    taxId: row.payeeTaxId,
-    name: row.payeeName,
-    address: row.payeeAddress,
-    date: row.paymentDate,
-    incomeType: row.incomeType,
-    whtRate: row.whtRate,
-    baseAmount: row.baseAmount,
-    taxAmount: row.taxAmount,
-    payeeKind: row.payeeKind,
-  };
 }
 
 export async function issuePayableCertificate(input: {

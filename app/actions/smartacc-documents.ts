@@ -13,7 +13,8 @@ import { requireTenantId, tenantFilter } from "@/lib/tenant";
 import { getSelectedBranchId } from "@/lib/branch";
 import { errorMessage } from "@/lib/errors";
 import { logAudit } from "@/lib/audit";
-import { fetchWhtCertificates, certificateToWhtRecord } from "@/app/actions/wht";
+import { fetchWhtCertificates } from "@/app/actions/wht";
+import { certificateToWhtRecord } from "@/lib/wht";
 
 /** หนึ่งรายการในสมุดที่อยู่ลูกค้า (sc_settings.dbd_company_registry) */
 export type DbdRegistryEntry = {
