@@ -9,6 +9,7 @@ import {
   saveStaffPayrollAdjustment,
   saveStaffProfileInfo,
   createStaffMember,
+  saveRentalIncome,
   type ExpensesPayload,
   type StaffPayslip,
 } from "@/app/actions/expenses";
@@ -188,6 +189,12 @@ export function ExpensesClient({
   const [bookPayeeName, setBookPayeeName] = useState("");
   const [bookPayeeTaxId, setBookPayeeTaxId] = useState("");
   const [bookPayeeAddress, setBookPayeeAddress] = useState("");
+  const [newRentPayer, setNewRentPayer] = useState("");
+  const [newRentPayerCustom, setNewRentPayerCustom] = useState("");
+  const [newRentAmount, setNewRentAmount] = useState(0);
+  const [newRentRoom, setNewRentRoom] = useState("");
+  const [newRentTaxId, setNewRentTaxId] = useState("");
+  const [newRentWht, setNewRentWht] = useState(0);
 
   function resetPayeeBookForm() {
     setEditingPayeeId("");
@@ -857,8 +864,7 @@ export function ExpensesClient({
 
       {/* ── Rental Income — แยกออกจากค่าใช้จ่ายโดยเจตนา (แก้บั๊ก 2026-09-02: เดิมถูกนับปนเป็น
           "ค่าดำเนินการ" เพราะ filter เช็คชื่อ category ผิด ทำให้รายรับกลายเป็นรายจ่ายในตัวเลขรวม) ── */}
-      {data.rentals.length > 0 && (
-        <div className="rounded-xl border border-emerald-200 bg-emerald-50/70 dark:bg-emerald-900/20 dark:border-emerald-800/60 px-4 py-3 print:hidden space-y-3">
+      <div className="rounded-xl border border-emerald-200 bg-emerald-50/70 dark:bg-emerald-900/20 dark:border-emerald-800/60 px-4 py-3 print:hidden space-y-3">
           <div className="flex items-center justify-between gap-4">
             <div className="flex items-center gap-3">
               <div className="rounded-lg bg-emerald-100 dark:bg-emerald-900/40 p-2 text-emerald-700 dark:text-emerald-300">
@@ -869,7 +875,7 @@ export function ExpensesClient({
                   รายได้อื่น — ค่าเช่าห้องจากพนักงาน (ไม่ปนกับยอดขายบริการ)
                 </div>
                 <div className="text-[10px] text-emerald-700/80 dark:text-emerald-400/80">
-                  ลงบัญชียอดเต็ม · ถ้าผู้เช่าหักภาษีไว้ กรอกด้านล่าง (เงินเข้าจริงน้อยกว่า แต่รายได้ไม่ลด)
+                  ระบุชื่อผู้จ่ายได้ · ลงบัญชียอดเต็ม · ถ้าผู้เช่าหักภาษีไว้ กรอกช่องถูกหัก (เงินเข้าจริงน้อยกว่า แต่รายได้ไม่ลด)
                 </div>
               </div>
             </div>
@@ -936,9 +942,124 @@ export function ExpensesClient({
                 </Button>
               </form>
             ))}
+            {data.rentals.length === 0 && (
+              <div className="text-[11px] text-emerald-800/80">ยังไม่มีรายรับค่าเช่าห้องในงวดนี้ — กรอกด้านล่างได้เลย</div>
+            )}
+            <form
+              className="grid gap-2 rounded-lg border border-dashed border-emerald-300 bg-white/60 p-2 sm:grid-cols-6 sm:items-end"
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (selectedMonth === "all") {
+                  toast.error("เลือกงวดเดือนก่อน จึงจะบันทึกรายได้ค่าเช่าห้องได้");
+                  return;
+                }
+                const payer = newRentPayer === "__custom__" ? newRentPayerCustom.trim() : newRentPayer.trim();
+                if (!payer) {
+                  toast.error("กรุณาระบุชื่อผู้เช่า / ผู้จ่ายค่าเช่า");
+                  return;
+                }
+                if (!newRentAmount || newRentAmount <= 0) {
+                  toast.error("กรุณาระบุยอดค่าเช่าที่ถูกต้อง");
+                  return;
+                }
+                startTransition(async () => {
+                  const res = await saveRentalIncome({
+                    month: selectedMonth,
+                    roomName: newRentRoom.trim() || undefined,
+                    tenantName: payer,
+                    tenantTaxId: newRentTaxId,
+                    amount: newRentAmount,
+                    whtRate: newRentWht,
+                  });
+                  if (!res.success) {
+                    toast.error(res.error);
+                    return;
+                  }
+                  toast.success(`บันทึกรายได้ค่าเช่าจาก ${payer} แล้ว`);
+                  setNewRentPayer("");
+                  setNewRentPayerCustom("");
+                  setNewRentAmount(0);
+                  setNewRentRoom("");
+                  setNewRentTaxId("");
+                  setNewRentWht(0);
+                  const updated = await fetchAllExpensesData(selectedMonth);
+                  setData(updated);
+                });
+              }}
+            >
+              <div className="sm:col-span-2 space-y-0.5">
+                <div className="text-[10px] font-bold text-emerald-800">ใครจ่ายค่าเช่า *</div>
+                <select
+                  value={newRentPayer}
+                  onChange={(e) => setNewRentPayer(e.target.value)}
+                  className="h-8 w-full rounded-md border px-2 text-xs"
+                >
+                  <option value="">— เลือกพนักงาน หรือกรอกเอง —</option>
+                  {data.payslips.map((p) => (
+                    <option key={p.employeeName} value={p.employeeName}>
+                      {p.employeeName}
+                    </option>
+                  ))}
+                  <option value="__custom__">กรอกชื่อเอง…</option>
+                </select>
+                {newRentPayer === "__custom__" && (
+                  <Input
+                    value={newRentPayerCustom}
+                    onChange={(e) => setNewRentPayerCustom(e.target.value)}
+                    placeholder="ชื่อผู้เช่า"
+                    className="h-8 text-xs mt-1"
+                  />
+                )}
+              </div>
+              <div className="space-y-0.5">
+                <div className="text-[10px] text-emerald-800">ยอดค่าเช่า *</div>
+                <Input
+                  type="number"
+                  step="any"
+                  value={newRentAmount || ""}
+                  onChange={(e) => setNewRentAmount(parseFloat(e.target.value) || 0)}
+                  className="h-8 text-xs font-mono"
+                />
+              </div>
+              <div className="space-y-0.5">
+                <div className="text-[10px] text-emerald-800">ชื่อห้อง (ถ้ามี)</div>
+                <Input
+                  value={newRentRoom}
+                  onChange={(e) => setNewRentRoom(e.target.value)}
+                  placeholder="เช่น ห้องชั้น 3"
+                  className="h-8 text-xs"
+                />
+              </div>
+              <div className="space-y-0.5">
+                <div className="text-[10px] text-emerald-800">ถูกหัก %</div>
+                <select
+                  value={String(newRentWht)}
+                  onChange={(e) => setNewRentWht(Number(e.target.value))}
+                  className="h-8 w-full rounded-md border px-2 text-xs"
+                >
+                  <option value="0">ไม่ถูกหัก</option>
+                  {WHT_RATES.map((rate) => (
+                    <option key={rate} value={rate}>{rate}%</option>
+                  ))}
+                </select>
+              </div>
+              <Button type="submit" size="sm" disabled={isPending} className="h-8 text-[11px]">
+                เพิ่มรายรับค่าเช่า
+              </Button>
+              {newRentWht > 0 && (
+                <div className="sm:col-span-6 space-y-0.5">
+                  <div className="text-[10px] text-emerald-800">เลขผู้เสียภาษีผู้เช่า 13 หลัก (จำเป็นเมื่อถูกหัก)</div>
+                  <Input
+                    value={newRentTaxId}
+                    onChange={(e) => setNewRentTaxId(e.target.value)}
+                    placeholder="13 หลัก"
+                    className="h-8 text-xs font-mono"
+                  />
+                </div>
+              )}
+            </form>
           </div>
         </div>
-      )}
 
       {/* ── เตือนเมื่อ "ของที่ซื้อเข้าคลัง" กับ "ค่าใช้จ่ายหมวดของใช้" ไม่ตรงกัน ──────────
           ระบบมี ledger เงินสองสายที่แยกกันสนิท และหน้านี้อ่านแค่ sc_opex ⇒ ของที่ซื้อแล้ว

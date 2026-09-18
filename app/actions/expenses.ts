@@ -9,7 +9,7 @@ import { SUPPLY_CATEGORIES, sumStockPurchases, monthBounds } from "@/lib/stock-p
 import { mirrorExpenseEntry, unmirrorExpenseEntry, mirrorPayslip } from "@/lib/expense-mirror";
 import { requireTenantId, tenantFilter } from "@/lib/tenant";
 import { fetchStaffMonthlyStatSummary } from "@/app/actions/roster";
-import { issuePayableCertificate, upsertWhtPayee, deleteCertificatesForOpex } from "@/app/actions/wht";
+import { issuePayableCertificate, upsertWhtPayee, deleteCertificatesForOpex, recordRentalWht } from "@/app/actions/wht";
 import { settleWht, BUILDING_RENT_CATEGORY } from "@/lib/wht";
 
 /** เดือนปัจจุบันในรูปแบบ "MM/YYYY" ที่ตาราง sc_opex ใช้ทั้งไฟล์ */
@@ -1376,6 +1376,119 @@ export async function deleteMiscExpenseItem(rowId: number, itemIndex: number) {
   });
 
   revalidatePath("/", "layout");
+  return { success: true };
+}
+
+export async function saveRentalIncome(input: {
+  month: string;
+  roomName?: string;
+  tenantName: string;
+  tenantTaxId?: string;
+  amount: number;
+  whtRate?: number;
+}): Promise<{ success: true } | { success: false; error: string }> {
+  const profile = await requireProfile();
+  requireModuleWrite(profile, "expenses");
+  const supabase = createAdminClient();
+  const tenantId = await requireTenantId(profile);
+
+  const month = input.month.trim();
+  if (!/^\d{2}\/\d{4}$/.test(month)) {
+    return { success: false, error: "เลือกงวดเดือนก่อน จึงจะบันทึกรายได้ค่าเช่าห้องได้" };
+  }
+  const tenantName = input.tenantName.trim();
+  if (!tenantName) return { success: false, error: "กรุณาระบุชื่อผู้เช่า / ผู้จ่ายค่าเช่า" };
+  const amount = Number(input.amount);
+  if (!Number.isFinite(amount) || amount <= 0) {
+    return { success: false, error: "กรุณาระบุยอดค่าเช่าที่ถูกต้อง" };
+  }
+
+  const { data: lastRoom } = await supabase
+    .from("sc_rental_records")
+    .select("room_index")
+    .eq("month", month)
+    .order("room_index", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const roomIndex = Number(lastRoom?.room_index ?? -1) + 1;
+  const roomName = input.roomName?.trim() || `ห้องเช่า ${roomIndex + 1}`;
+  const settlement = settleWht({
+    baseAmount: amount,
+    whtRate: Number(input.whtRate) || 0,
+    category: "rental_income",
+  });
+  const taxId = String(input.tenantTaxId ?? "").replace(/[^0-9]/g, "");
+  if (settlement.whtAmount > 0 && taxId.length !== 13) {
+    return { success: false, error: "ถ้าผู้เช่าหักภาษีไว้ ต้องมีเลขผู้เสียภาษี 13 หลัก" };
+  }
+
+  const { data: inserted, error } = await supabase
+    .from("sc_rental_records")
+    .insert({
+      month,
+      room_index: roomIndex,
+      room_name: roomName,
+      rent_amount: settlement.grossAmount,
+      income_amount: settlement.grossAmount,
+      tenant_name: tenantName,
+      tenant_tax_id: taxId.length === 13 ? taxId : null,
+      wht_rate: settlement.whtRate,
+      wht_withheld: settlement.whtAmount,
+      legacy_ref: `${month}|${roomIndex}`,
+      tenant_id: tenantId,
+    })
+    .select("id")
+    .maybeSingle();
+  if (error || !inserted) {
+    return { success: false, error: error?.message ?? "บันทึกค่าเช่าห้องไม่สำเร็จ" };
+  }
+
+  const { error: opexError } = await supabase.from("sc_opex").insert({
+    month,
+    category: "rental_income",
+    name: `ค่าเช่าห้อง — ${tenantName}`,
+    amount: settlement.grossAmount,
+    pay_method: "โอน",
+    recorded_by: profile.display_name,
+    key: `room_income_${Date.now()}`,
+    last_updated: new Date().toISOString(),
+    tenant_id: tenantId,
+  });
+  if (opexError) {
+    console.error("[expenses] บันทึก sc_opex รายได้ค่าเช่าไม่สำเร็จ:", opexError.message);
+    return { success: false, error: opexError.message };
+  }
+
+  if (settlement.whtAmount > 0) {
+    const withheld = await recordRentalWht({
+      rentalId: Number(inserted.id),
+      tenantName,
+      tenantTaxId: taxId,
+      whtRate: settlement.whtRate,
+    });
+    if (!withheld.success) {
+      console.error("[expenses] บันทึก WHT รายได้ค่าเช่าไม่สำเร็จ:", withheld.error);
+    }
+  }
+
+  await logAudit({
+    action: "CREATE",
+    entity: "expense",
+    entity_id: inserted.id,
+    actor_id: profile.id,
+    actor_name: profile.display_name,
+    tenant_id: tenantId,
+    detail: {
+      type: "rental_income",
+      month,
+      tenant_name: tenantName,
+      amount: settlement.grossAmount,
+      wht_amount: settlement.whtAmount,
+    },
+  });
+
+  revalidatePath("/", "layout");
+  revalidatePath("/tax-filing");
   return { success: true };
 }
 
