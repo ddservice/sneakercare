@@ -553,4 +553,9 @@ table {
   .printable-area .bg-slate-50 {
     background-color: #f1f5f9 !important;
   }
+  .printable-area img {
+    visibility: visible !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
 }

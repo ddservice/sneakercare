@@ -95,12 +95,70 @@ export function classifyPayeeKindFromTaxId(taxId: string): WhtPayeeKind {
   return "person";
 }
 
+/** ลำดับตามแบบ ภ.ง.ด.50 ทวิ ของกรมสรรพากร */
+export const TAWI50_INCOME_TYPES = {
+  "1": { article: "มาตรา 40(1)", label: "เงินเดือน ค่าจ้าง เบี้ยเลี้ยง โบนัส ฯลฯ" },
+  "2": { article: "มาตรา 40(2)", label: "ค่าธรรมเนียม ค่านายหน้า ฯลฯ" },
+  "3": { article: "มาตรา 40(3)", label: "ค่าแห่งลิขสิทธิ์ ฯลฯ" },
+  "4": { article: "มาตรา 40(4)", label: "ดอกเบี้ย เงินปันผล ส่วนแบ่งกำไร ฯลฯ" },
+  "5": { article: "มาตรา 40(5)", label: "ค่าเช่าอาคาร/อสังหาริมทรัพย์" },
+  "6": { article: "มาตรา 40(6)", label: "ค่าจ้างทำของ / ค่าบริการ" },
+} as const;
+
+export type Tawi50IncomeCode = keyof typeof TAWI50_INCOME_TYPES;
+
+export const TAWI50_CONDITIONS = [
+  { id: "1", label: "(1) หัก ณ ที่จ่าย" },
+  { id: "2", label: "(2) ออกให้ตลอดไป" },
+  { id: "3", label: "(3) ออกให้ครั้งเดียว" },
+  { id: "4", label: "(4) อื่น ๆ" },
+] as const;
+
+export type Tawi50ConditionId = (typeof TAWI50_CONDITIONS)[number]["id"];
+/** ค่าเริ่มต้นตามแบบกรมสรรพากรเมื่อร้านเป็นผู้หักตอนจ่ายเงิน */
+export const DEFAULT_TAWI50_CONDITION: Tawi50ConditionId = "1";
+
+const THAI_MONTHS_FULL = [
+  "มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน",
+  "กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม",
+];
+
 /** ประเภทเงินได้ที่พิมพ์บน 50 ทวิ / ไฟล์ e-Filing */
-export function incomeTypeForCategory(category?: string | null): { code: string; label: string } {
+export function incomeTypeForCategory(category?: string | null): { code: Tawi50IncomeCode; label: string } {
   if (category === BUILDING_RENT_CATEGORY || category === "rental_income") {
-    return { code: "5", label: "ค่าเช่า" };
+    const spec = TAWI50_INCOME_TYPES["5"];
+    return { code: "5", label: `${spec.label} (${spec.article})` };
   }
-  return { code: "6", label: "ค่าบริการ / ค่าจ้างทำของ" };
+  const spec = TAWI50_INCOME_TYPES["6"];
+  return { code: "6", label: `${spec.label} (${spec.article})` };
+}
+
+export function inferIncomeTypeCode(label: string, code?: string | null): Tawi50IncomeCode {
+  if (code && code in TAWI50_INCOME_TYPES) return code as Tawi50IncomeCode;
+  if (/เช่า/.test(label)) return "5";
+  if (/เงินเดือน|ค่าจ้าง(?!ทำของ)|โบนัส/.test(label)) return "1";
+  return "6";
+}
+
+/** บรรทัดประเภทเงินได้บน 50 ทวิ — มีมาตราให้ผู้รับนำไปยื่น ภ.ง.ด.90/91 */
+export function formatTawi50IncomeLine(code: string, storedLabel: string, whtRate: number): string {
+  const resolved = inferIncomeTypeCode(storedLabel, code);
+  const spec = TAWI50_INCOME_TYPES[resolved];
+  return `${spec.label} (${spec.article}) อัตราภาษี ${whtRate}%`;
+}
+
+/** จำนวนเงินบน 50 ทวิ — ตัวเลขธรรมดาหน่วยบาท ไม่ใช้ $ หรือสัญลักษณ์สกุลเงินของ locale */
+export function formatTawi50Amount(n: number): string {
+  return money(n).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+/** YYYY-MM-DD → วันที่ไทย พ.ศ. โดยไม่ผ่าน Date() เพื่อกันเลื่อนวันจาก UTC */
+export function thaiOfficialDate(isoDate: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(isoDate.trim());
+  if (!m) return isoDate;
+  const month = THAI_MONTHS_FULL[Number(m[2]) - 1];
+  if (!month) return isoDate;
+  return `${Number(m[3])} ${month} ${Number(m[1]) + 543}`;
 }
 
 export function certificateNumber(periodYm: string, sequence: number): string {
@@ -127,6 +185,7 @@ export function certificateToWhtRecord(
     payeeAddress: string;
     paymentDate: string;
     incomeType: string;
+    incomeTypeCode?: string | null;
     whtRate: number;
     baseAmount: number;
     taxAmount: number;
@@ -134,6 +193,7 @@ export function certificateToWhtRecord(
   },
   sequence: number
 ) {
+  const incomeTypeCode = inferIncomeTypeCode(row.incomeType, row.incomeTypeCode);
   return {
     sequence,
     taxId: row.payeeTaxId,
@@ -141,6 +201,8 @@ export function certificateToWhtRecord(
     address: row.payeeAddress,
     date: row.paymentDate,
     incomeType: row.incomeType,
+    incomeTypeCode,
+    incomeTypeLine: formatTawi50IncomeLine(incomeTypeCode, row.incomeType, row.whtRate),
     whtRate: row.whtRate,
     baseAmount: row.baseAmount,
     taxAmount: row.taxAmount,

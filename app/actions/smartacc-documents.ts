@@ -702,7 +702,21 @@ export async function fetchTaxFilingData(yearMonth?: string) {
     salesDocs: docsRes.data ?? [],
     expenses: expensesRes.data ?? [],
     whtCertificates: certs.map((row, i) => ({
-      ...certificateToWhtRecord(row, i + 1),
+      ...certificateToWhtRecord(
+        {
+          payeeTaxId: row.payeeTaxId,
+          payeeName: row.payeeName,
+          payeeAddress: row.payeeAddress,
+          paymentDate: row.paymentDate,
+          incomeType: row.incomeType,
+          incomeTypeCode: row.incomeTypeCode,
+          whtRate: row.whtRate,
+          baseAmount: row.baseAmount,
+          taxAmount: row.taxAmount,
+          payeeKind: row.payeeKind,
+        },
+        i + 1
+      ),
       certificateNumber: row.certificateNumber,
       direction: row.direction,
       netPayment: row.netPayment,

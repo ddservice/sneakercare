@@ -17,7 +17,15 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import type { TaxFilingSalesDoc, TaxFilingExpense, TaxFilingWhtCert } from "@/app/actions/smartacc-documents";
+import type { ShopProfile } from "@/app/actions/shop-settings";
 import { ModalBackdrop } from "@/components/modal-shell";
+import { Tawi50Certificate } from "@/components/tawi50-certificate";
+import {
+  DEFAULT_TAWI50_CONDITION,
+  TAWI50_CONDITIONS,
+  formatTawi50Amount,
+  type Tawi50ConditionId,
+} from "@/lib/wht";
 import {
   Landmark,
   FileSpreadsheet,
@@ -38,11 +46,13 @@ export function TaxFilingClient({
   initialExpenses: TaxFilingExpense[];
   initialWht?: TaxFilingWhtCert[];
   /** ข้อมูลบริษัทจริงจากหน้า /settings — ใช้พิมพ์หัวเอกสารทุกจุดในหน้านี้ ห้าม hardcode ทับ */
-  shopProfile?: { name: string; address: string; taxId: string; phone: string };
+  shopProfile?: ShopProfile;
 }) {
   const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().slice(0, 7));
   const [activeTab, setActiveTab] = useState<"efiling" | "tawi50" | "etax_xml">("efiling");
   const [selectedWhtCert, setSelectedWhtCert] = useState<TaxFilingWhtCert | null>(null);
+  const [tawiCondition, setTawiCondition] = useState<Tawi50ConditionId>(DEFAULT_TAWI50_CONDITION);
+  const [tawiOtherNote, setTawiOtherNote] = useState("");
 
   // Calculate real VAT and WHT from database records
   const filteredSales = initialSalesDocs.filter((d) =>
@@ -83,7 +93,7 @@ export function TaxFilingClient({
     name: r.name,
     address: r.address || shopProfile?.address || "",
     date: r.date,
-    incomeType: r.incomeType,
+    incomeType: r.incomeTypeLine || r.incomeType,
     whtRate: r.whtRate,
     baseAmount: r.baseAmount,
     taxAmount: r.taxAmount,
@@ -416,18 +426,22 @@ export function TaxFilingClient({
                             {r.certificateNumber} · Tax ID: {r.taxId}
                           </div>
                         </td>
-                        <td className="px-4 py-3 text-slate-600">{r.incomeType}</td>
+                        <td className="px-4 py-3 text-slate-600">{r.incomeTypeLine || r.incomeType}</td>
                         <td className="px-4 py-3 text-right font-mono font-semibold">
-                          ฿{r.baseAmount.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+                          {formatTawi50Amount(r.baseAmount)}
                         </td>
                         <td className="px-4 py-3 text-center font-mono">{r.whtRate}%</td>
-                        <td className="px-4 py-3 text-right font-mono font-bold text-teal-800">
-                          ฿{r.taxAmount.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+                        <td className="px-4 py-3 text-right font-mono font-semibold text-teal-800">
+                          {formatTawi50Amount(r.taxAmount)}
                         </td>
                         <td className="px-4 py-3 text-center">
                           <Button
                             size="sm"
-                            onClick={() => setSelectedWhtCert({ ...r, sequence: index + 1 })}
+                            onClick={() => {
+                              setTawiCondition(DEFAULT_TAWI50_CONDITION);
+                              setTawiOtherNote("");
+                              setSelectedWhtCert({ ...r, sequence: index + 1 });
+                            }}
                             variant="outline"
                             className="h-7 text-[11px] gap-1 text-teal-800 hover:bg-teal-50 border-teal-200 font-bold"
                           >
@@ -491,7 +505,7 @@ export function TaxFilingClient({
           className="bg-black/60 backdrop-blur-xs"
         >
           <div className="my-auto w-full max-w-3xl rounded-2xl bg-white p-6 shadow-2xl border border-slate-300 space-y-4">
-            <div className="flex items-center justify-between border-b border-slate-200 pb-3 print:hidden">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 pb-3 print:hidden">
               <div className="flex items-center gap-2">
                 <Landmark className="h-5 w-5 text-teal-700" />
                 <span className="text-sm font-bold text-slate-900">
@@ -502,7 +516,7 @@ export function TaxFilingClient({
                 <Button
                   size="sm"
                   onClick={() => window.print()}
-                  className="bg-teal-700 hover:bg-emerald-600 text-white font-bold text-xs gap-1.5 shadow-md"
+                  className="bg-teal-700 hover:bg-emerald-600 text-white font-semibold text-xs gap-1.5"
                 >
                   <Printer className="h-4 w-4" /> พิมพ์เอกสาร A4
                 </Button>
@@ -515,91 +529,60 @@ export function TaxFilingClient({
               </div>
             </div>
 
-            {/* Printable A4 Form Container */}
-            <div className="printable-area space-y-3 text-slate-950 font-sans border-2 border-slate-900 p-6 rounded-xl bg-white">
-              <div className="flex justify-between items-start border-b-2 border-slate-900 pb-3">
-                <div>
-                  <div className="text-xs font-bold uppercase tracking-wider text-slate-600">แบบ 50 ทวิ</div>
-                  <h1 className="text-base font-black">หนังสือรับรองการหักภาษี ณ ที่จ่าย</h1>
-                  <div className="text-[11px] text-slate-600">ตามมาตรา 50 ทวิ แห่งประมวลรัษฎากร</div>
-                </div>
-                <div className="text-right text-xs">
-                  <div className="font-mono font-bold">เล่มที่ / เลขที่: {selectedWhtCert.certificateNumber || `WHT-${selectedMonth.replace("-", "")}-${String(selectedWhtCert.sequence).padStart(4, "0")}`}</div>
-                  <div className="text-slate-600">วันที่ออก: {selectedWhtCert.date}</div>
-                </div>
+            <div className="print:hidden space-y-1.5 rounded-lg border border-slate-200 bg-slate-50 p-3 text-[11px]">
+              <div className="font-semibold text-slate-700">เงื่อนไขการหักภาษีที่พิมพ์บนเอกสาร</div>
+              <div className="flex flex-wrap gap-x-4 gap-y-1">
+                {TAWI50_CONDITIONS.map((item) => (
+                  <label key={item.id} className="flex items-center gap-1.5 text-slate-700">
+                    <input
+                      type="radio"
+                      name="tawi-condition"
+                      checked={tawiCondition === item.id}
+                      onChange={() => setTawiCondition(item.id)}
+                    />
+                    {item.label}
+                  </label>
+                ))}
               </div>
-
-              {/* Payer Information */}
-              <div className="text-xs border border-slate-300 p-3 rounded-lg bg-slate-50/50 space-y-1">
-                <div className="font-bold text-slate-800">1. ผู้มีหน้าที่หักภาษี ณ ที่จ่าย (ผู้จ่ายเงิน):</div>
-                <div className="font-bold text-sm">{shopProfile?.name || "ยังไม่ได้ตั้งค่าชื่อกิจการ — ไปที่ /settings"}</div>
-                <div className="flex justify-between text-slate-600">
-                  <span>เลขประจำตัวผู้เสียภาษีอากร: <strong className="font-mono text-slate-900">{shopProfile?.taxId || "-"}</strong></span>
-                  <span>สาขาที่: 00000</span>
-                </div>
-                <div className="text-slate-600">ที่อยู่: {shopProfile?.address || "-"}</div>
-              </div>
-
-              {/* Payee Information */}
-              <div className="text-xs border border-slate-300 p-3 rounded-lg bg-slate-50/50 space-y-1">
-                <div className="font-bold text-slate-800">2. ผู้ถูกหักภาษี ณ ที่จ่าย (ผู้รับเงิน):</div>
-                <div className="font-bold text-sm">{selectedWhtCert.name}</div>
-                <div className="flex justify-between text-slate-600">
-                  <span>เลขประจำตัวผู้เสียภาษีอากร / เลข ปชช: <strong className="font-mono text-slate-900">{selectedWhtCert.taxId}</strong></span>
-                  <span>สาขาที่: 00000</span>
-                </div>
-                <div className="text-slate-600">ที่อยู่: {selectedWhtCert.address}</div>
-              </div>
-
-              {/* Income Table */}
-              <table className="w-full text-xs border border-slate-900 text-left">
-                <thead className="bg-slate-100 font-bold border-b border-slate-900">
-                  <tr>
-                    <th className="p-2 border-r border-slate-300">ประเภทเงินได้พึงประเมินที่จ่าย</th>
-                    <th className="p-2 border-r border-slate-300 text-center w-28">วัน เดือน ปี ที่จ่าย</th>
-                    <th className="p-2 border-r border-slate-300 text-right w-32">จำนวนเงินที่จ่าย (บาท)</th>
-                    <th className="p-2 text-right w-32">ภาษีที่หักและนำส่ง (บาท)</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-200">
-                  <tr>
-                    <td className="p-2 border-r border-slate-300 font-medium">
-                      {selectedWhtCert.incomeType} (อัตราภาษี {selectedWhtCert.whtRate}%)
-                    </td>
-                    <td className="p-2 border-r border-slate-300 text-center font-mono">{selectedWhtCert.date}</td>
-                    <td className="p-2 border-r border-slate-300 text-right font-mono font-bold">
-                      {selectedWhtCert.baseAmount.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
-                    </td>
-                    <td className="p-2 text-right font-mono font-bold">
-                      {selectedWhtCert.taxAmount.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
-                    </td>
-                  </tr>
-                </tbody>
-                <tfoot className="bg-slate-50 font-bold border-t-2 border-slate-900">
-                  <tr>
-                    <td colSpan={2} className="p-2 text-right border-r border-slate-300">รวมเงินภาษีที่หักและนำส่งสุทธิ:</td>
-                    <td className="p-2 text-right font-mono border-r border-slate-300">
-                      {selectedWhtCert.baseAmount.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
-                    </td>
-                    <td className="p-2 text-right font-mono text-sm">
-                      ฿{selectedWhtCert.taxAmount.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
-                    </td>
-                  </tr>
-                </tfoot>
-              </table>
-
-              {/* Signatures */}
-              <div className="grid grid-cols-2 gap-8 pt-6 text-xs text-center">
-                <div className="border-t border-slate-400 pt-2 space-y-1">
-                  <div>ลงชื่อ .............................................................. ผู้มีหน้าที่หักภาษี</div>
-                  <div className="text-slate-500 font-medium">({shopProfile?.name || "ยังไม่ได้ตั้งชื่อกิจการ"})</div>
-                </div>
-                <div className="border-t border-slate-400 pt-2 space-y-1">
-                  <div>ลงชื่อ .............................................................. ผู้รับเงิน</div>
-                  <div className="text-slate-500 font-medium">({selectedWhtCert.name})</div>
-                </div>
-              </div>
+              {tawiCondition === "4" && (
+                <input
+                  value={tawiOtherNote}
+                  onChange={(e) => setTawiOtherNote(e.target.value)}
+                  placeholder="ระบุเงื่อนไขอื่น"
+                  className="h-8 w-full rounded-md border px-2 text-xs"
+                />
+              )}
+              <p className="text-slate-500">
+                ค่าเริ่มต้นคือ (1) หัก ณ ที่จ่าย · ลายเซ็นและตราประทับดึงจาก /settings เมื่อมี URL
+              </p>
             </div>
+
+            <Tawi50Certificate
+              cert={{
+                certificateNumber:
+                  selectedWhtCert.certificateNumber ||
+                  `WHT-${selectedMonth.replace("-", "")}-${String(selectedWhtCert.sequence).padStart(4, "0")}`,
+                paymentDate: selectedWhtCert.date,
+                incomeType: selectedWhtCert.incomeType,
+                incomeTypeCode: selectedWhtCert.incomeTypeCode,
+                baseAmount: selectedWhtCert.baseAmount,
+                taxAmount: selectedWhtCert.taxAmount,
+                whtRate: selectedWhtCert.whtRate,
+                payeeName: selectedWhtCert.name,
+                payeeTaxId: selectedWhtCert.taxId,
+                payeeAddress: selectedWhtCert.address,
+              }}
+              payer={{
+                name: shopProfile?.name || "ยังไม่ได้ตั้งค่าชื่อกิจการ — ไปที่ /settings",
+                taxId: shopProfile?.taxId || "-",
+                address: shopProfile?.address || "-",
+                signatoryName: shopProfile?.signatoryName,
+                signatureUrl: shopProfile?.signatureUrl,
+                stampUrl: shopProfile?.stampUrl,
+              }}
+              condition={tawiCondition}
+              otherNote={tawiOtherNote}
+            />
           </div>
         </ModalBackdrop>
         </PrintModalPortal>

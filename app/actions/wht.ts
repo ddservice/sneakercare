@@ -37,6 +37,7 @@ export type WhtCertificateRow = {
   payeeAddress: string;
   payeeKind: WhtPayeeKind;
   incomeType: string;
+  incomeTypeCode: string;
   baseAmount: number;
   vatAmount: number;
   grossAmount: number;
@@ -134,7 +135,7 @@ export async function fetchWhtCertificates(yearMonth?: string): Promise<WhtCerti
   let query = supabase
     .from("sc_wht_certificates")
     .select(
-      "id, certificate_number, direction, form_type, payment_date, income_type_label, base_amount, vat_amount, gross_amount, wht_rate, tax_amount, net_payment, legacy_opex_id, rental_record_id, payee_id, sc_wht_payees(name, tax_id, address, kind)"
+      "id, certificate_number, direction, form_type, payment_date, income_type_code, income_type_label, base_amount, vat_amount, gross_amount, wht_rate, tax_amount, net_payment, legacy_opex_id, rental_record_id, payee_id, sc_wht_payees(name, tax_id, address, kind)"
     )
     .order("payment_date", { ascending: true });
   const tenantId = await tenantFilter(profile);
@@ -162,6 +163,7 @@ export async function fetchWhtCertificates(yearMonth?: string): Promise<WhtCerti
       payeeAddress: payee?.address ?? "",
       payeeKind: kind,
       incomeType: row.income_type_label,
+      incomeTypeCode: row.income_type_code,
       baseAmount: Number(row.base_amount),
       vatAmount: Number(row.vat_amount),
       grossAmount: Number(row.gross_amount),

@@ -135,6 +135,54 @@ export function ShopProfileForm({ initialProfile }: { initialProfile: ShopProfil
                 ระบบจะนำ PromptPay ID นี้ไปปั่น QR Code ยอดเงินอัตโนมัติในใบแจ้งหนี้และใบวางบิล
               </p>
             </div>
+
+            <div className="sm:col-span-2 rounded-xl border border-slate-200 bg-slate-50/50 p-4 space-y-3">
+              <div className="text-xs font-semibold text-slate-800">ลายเซ็นและตราประทับบนหนังสือรับรอง 50 ทวิ</div>
+              <p className="text-[11px] text-slate-500">
+                เมื่อออกเอกสารแล้ว ระบบประทับรูปเหล่านี้ฝั่งผู้มีหน้าที่หักภาษีอัตโนมัติตอนพิมพ์ — วางเป็น URL ภาพพื้นโปร่งใส
+              </p>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-semibold text-slate-700">ชื่อผู้มีอำนาจลงนาม</Label>
+                  <Input
+                    value={profile.signatoryName}
+                    onChange={(e) => setProfile({ ...profile, signatoryName: e.target.value })}
+                    placeholder="เช่น ชื่อ-นามสกุล ผู้จัดการ"
+                    className="text-xs h-9 bg-white"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-semibold text-slate-700">URL ลายเซ็นดิจิทัล</Label>
+                  <Input
+                    value={profile.signatureUrl}
+                    onChange={(e) => setProfile({ ...profile, signatureUrl: e.target.value })}
+                    placeholder="https://.../signature.png"
+                    className="text-xs h-9 bg-white"
+                  />
+                </div>
+                <div className="space-y-1.5 sm:col-span-2">
+                  <Label className="text-xs font-semibold text-slate-700">URL ตราประทับบริษัท</Label>
+                  <Input
+                    value={profile.stampUrl}
+                    onChange={(e) => setProfile({ ...profile, stampUrl: e.target.value })}
+                    placeholder="https://.../stamp.png"
+                    className="text-xs h-9 bg-white"
+                  />
+                </div>
+              </div>
+              {(profile.signatureUrl || profile.stampUrl) && (
+                <div className="flex flex-wrap items-center gap-4">
+                  {profile.signatureUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element -- ลายเซ็นจาก URL ที่เจ้าของวางเอง
+                    <img src={profile.signatureUrl} alt="" className="h-12 max-w-[160px] object-contain bg-white border rounded p-1" />
+                  ) : null}
+                  {profile.stampUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element -- ตราประทับจาก URL ที่เจ้าของวางเอง
+                    <img src={profile.stampUrl} alt="" className="h-16 w-16 object-contain bg-white border rounded p-1" />
+                  ) : null}
+                </div>
+              )}
+            </div>
           </div>
 
           <div className="flex justify-end pt-2">

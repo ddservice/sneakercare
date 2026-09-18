@@ -16,6 +16,10 @@ const {
   classifyPayeeKindFromTaxId,
   incomeTypeForCategory,
   certificateNumber,
+  formatTawi50IncomeLine,
+  formatTawi50Amount,
+  thaiOfficialDate,
+  DEFAULT_TAWI50_CONDITION,
   BUILDING_RENT_CATEGORY,
   BUILDING_RENT_WHT_RATE,
 } = await import(new URL("../.test-build/wht.js", import.meta.url).href);
@@ -73,6 +77,20 @@ same("นิติบุคคล → ภ.ง.ด.53", pndFormForPayee("juristic
 same("เลขนิติบุคคลขึ้นต้น 0", classifyPayeeKindFromTaxId("0105551234567"), "juristic");
 same("เลขบัตรประชาชน", classifyPayeeKindFromTaxId("1234567890123"), "person");
 same("ประเภทเงินได้ค่าเช่า", incomeTypeForCategory(BUILDING_RENT_CATEGORY).code, "5");
+same(
+  "ป้ายค่าเช่ามีมาตรา 40(5)",
+  incomeTypeForCategory(BUILDING_RENT_CATEGORY).label.includes("มาตรา 40(5)"),
+  true
+);
+same(
+  "บรรทัด 50 ทวิ ค่าเช่าอาคาร",
+  formatTawi50IncomeLine("5", "ค่าเช่า", 5),
+  "ค่าเช่าอาคาร/อสังหาริมทรัพย์ (มาตรา 40(5)) อัตราภาษี 5%"
+);
+same("ตัวเลขบน 50 ทวิ ไม่ใช้ $", formatTawi50Amount(900), "900.00");
+same("ตัวเลขมีคอมม่าหลักพัน", formatTawi50Amount(18000), "18,000.00");
+same("วันที่บน 50 ทวิ เป็น พ.ศ.", thaiOfficialDate("2026-09-18"), "18 กันยายน 2569");
+same("เงื่อนไขเริ่มต้นคือหัก ณ ที่จ่าย", DEFAULT_TAWI50_CONDITION, "1");
 same("เลขที่หนังสือรับรอง", certificateNumber("2026-09", 1), "WHT-202609-0001");
 
 if (failures) {

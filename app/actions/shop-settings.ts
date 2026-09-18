@@ -13,6 +13,10 @@ export type ShopProfile = {
   taxId: string;
   logoUrl: string;
   promptPayId: string;
+  /** ชื่อผู้มีอำนาจลงนามบน 50 ทวิ / เอกสารหัก ณ ที่จ่าย */
+  signatoryName: string;
+  signatureUrl: string;
+  stampUrl: string;
 };
 
 export async function fetchShopProfile(): Promise<ShopProfile> {
@@ -44,6 +48,9 @@ export async function fetchShopProfile(): Promise<ShopProfile> {
     taxId: settingsMap["tax_id"] || "-",
     logoUrl: settingsMap["logo_url"] || "",
     promptPayId: settingsMap["promptpay_id"] || settingsMap["tax_id"] || "",
+    signatoryName: settingsMap["signatory_name"] || "",
+    signatureUrl: settingsMap["signature_url"] || "",
+    stampUrl: settingsMap["stamp_url"] || "",
   };
 }
 
@@ -62,6 +69,9 @@ export async function updateShopProfile(profile: Partial<ShopProfile>) {
   if (profile.taxId !== undefined) updates.push({ key: "tax_id", value: profile.taxId });
   if (profile.logoUrl !== undefined) updates.push({ key: "logo_url", value: profile.logoUrl });
   if (profile.promptPayId !== undefined) updates.push({ key: "promptpay_id", value: profile.promptPayId });
+  if (profile.signatoryName !== undefined) updates.push({ key: "signatory_name", value: profile.signatoryName });
+  if (profile.signatureUrl !== undefined) updates.push({ key: "signature_url", value: profile.signatureUrl });
+  if (profile.stampUrl !== undefined) updates.push({ key: "stamp_url", value: profile.stampUrl });
 
   for (const item of updates) {
     // onConflict ต้องระบุ (tenant_id, key) คู่กันเสมอหลัง 0032 — ไม่ใช่ key เดี่ยวเหมือนเดิม
@@ -75,6 +85,7 @@ export async function updateShopProfile(profile: Partial<ShopProfile>) {
   revalidatePath("/settings");
   revalidatePath("/invoicing");
   revalidatePath("/billing-notes");
+  revalidatePath("/tax-filing");
   return { success: true };
 }
 

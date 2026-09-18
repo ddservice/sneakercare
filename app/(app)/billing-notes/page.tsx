@@ -47,6 +47,9 @@ export default async function BillingNotesPage() {
     address: "-",
     logoUrl: "",
     promptPayId: "",
+    signatoryName: "",
+    signatureUrl: "",
+    stampUrl: "",
   };
 
   try {
