@@ -1,7 +1,7 @@
 import { requireProfile, requireModuleView } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { thaiBahtText } from "@/lib/smartacc/baht-text";
-import { fetchShopProfile } from "@/app/actions/shop-settings";
+import { fetchShopProfile, type ShopProfile } from "@/app/actions/shop-settings";
 import { PrintButton } from "@/components/print-button";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Layers, Plus } from "lucide-react";
@@ -40,7 +40,7 @@ export default async function BillingNotesPage() {
   // ของ "รวยรับทรัพย์168") — ตั้งแต่มีหลายนิติบุคคลใช้ระบบร่วมกัน ถ้า fetchShopProfile() ของ
   // tenant อื่นพลาด ค่าพวกนี้จะหลุดไปอยู่บนใบวางบิลของเขาแทน (ชื่อ/เลขผู้เสียภาษี/PromptPay
   // ข้ามนิติบุคคล) — เป็นการรั่วไหลข้อมูลที่ร้ายแรงกว่าค่าว่างเฉยๆ มาก
-  let shopProfile = {
+  let shopProfile: ShopProfile = {
     name: "ยังไม่ได้ตั้งค่าชื่อกิจการ — ไปที่ /settings",
     taxId: "-",
     phone: "",
