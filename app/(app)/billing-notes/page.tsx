@@ -51,6 +51,8 @@ export default async function BillingNotesPage() {
     signatureUrl: "",
     stampUrl: "",
     vatRegistered: true,
+    vatBranchSelected: true,
+    vatBranchName: null,
   };
 
   try {

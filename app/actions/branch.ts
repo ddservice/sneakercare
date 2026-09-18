@@ -50,6 +50,7 @@ export type ManagedBranch = {
   openTime: string;
   closeTime: string;
   isActive: boolean;
+  vatRegistered: boolean;
 };
 
 export type ManagedTenant = {
@@ -72,7 +73,7 @@ export async function fetchManagedBranches(): Promise<{
 
   const { data: rows, error } = await supabase
     .from("inv_branches")
-    .select("id, name, tenant_id, address, phone, is_active, open_time, close_time")
+    .select("id, name, tenant_id, address, phone, is_active, open_time, close_time, vat_registered")
     .order("name");
   if (error || !rows) return { branches: [], tenants: [] };
 
@@ -97,6 +98,7 @@ export async function fetchManagedBranches(): Promise<{
     openTime: r.open_time || "09:00",
     closeTime: r.close_time || "20:00",
     isActive: r.is_active !== false,
+    vatRegistered: r.vat_registered !== false,
   }));
 
   const tenants: ManagedTenant[] =
@@ -118,6 +120,7 @@ export async function createBranch(input: {
   phone?: string;
   openTime?: string;
   closeTime?: string;
+  vatRegistered?: boolean;
 }) {
   const profile = await requireProfile();
   requireAdmin(profile);
@@ -147,6 +150,7 @@ export async function createBranch(input: {
     open_time: normalizeHm(input.openTime || "", "09:00"),
     close_time: normalizeHm(input.closeTime || "", "20:00"),
     is_active: true,
+    vat_registered: input.vatRegistered !== false,
   };
 
   const { data, error } = await supabase.from("inv_branches").insert(payload).select("id, name").single();
@@ -160,10 +164,11 @@ export async function createBranch(input: {
     entity_id: data.id,
     actor_id: profile.id,
     actor_name: profile.display_name,
-    detail: { kind: "branch", name: data.name, tenant_id: tenantId },
+    detail: { kind: "branch", name: data.name, tenant_id: tenantId, vat_registered: payload.vat_registered },
   });
   revalidatePath("/", "layout");
   revalidatePath("/settings");
+  revalidatePath("/invoicing");
   return { success: true as const, id: data.id };
 }
 
@@ -175,6 +180,7 @@ export async function updateBranch(input: {
   openTime?: string;
   closeTime?: string;
   isActive?: boolean;
+  vatRegistered?: boolean;
 }) {
   const profile = await requireProfile();
   requireAdmin(profile);
@@ -200,6 +206,7 @@ export async function updateBranch(input: {
     is_active: input.isActive ?? true,
     open_time: normalizeHm(input.openTime || "", "09:00"),
     close_time: normalizeHm(input.closeTime || "", "20:00"),
+    vat_registered: input.vatRegistered !== false,
   }).eq("id", input.id);
   if (error) return { success: false as const, error: error.message };
 
@@ -214,6 +221,7 @@ export async function updateBranch(input: {
   revalidatePath("/", "layout");
   revalidatePath("/settings");
   revalidatePath("/roster");
+  revalidatePath("/invoicing");
   return { success: true as const };
 }
 

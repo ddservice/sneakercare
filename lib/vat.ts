@@ -1,12 +1,13 @@
 /**
- * VAT บนเอกสารขาย — จดทะเบียนเป็นระดับนิติบุคคล (tenant) ไม่ใช่ต่อสาขา
+ * VAT บนเอกสารขาย — จดทะเบียนเป็นระดับสาขา (คนละนิติบุคคล)
  *
  * ใบเสนอราคา / ใบส่งของ ไม่คิด VAT
- * ใบกำกับภาษี คิด 7% เสมอถ้าจด VAT (ยังไม่จด = ออกใบนี้ไม่ได้)
+ * ใบกำกับภาษี คิด 7% เสมอถ้าสาขาจด VAT (ยังไม่จด = ออกใบนี้ไม่ได้)
  * ใบแจ้งหนี้ / ใบวางบิล / ใบเสร็จ เลือกได้ต่อใบ: บิลเงินสด (0%) หรือบิล VAT (7%)
  * ค่าเริ่มต้น: แจ้งหนี้/วางบิล = VAT · ใบเสร็จ = เงินสด
  *
  * ⚠️ เซิร์ฟเวอร์ต้องเรียก documentVatRate() เอง ห้ามเชื่อ vat_rate จาก client
+ * ⚠️ อ่านสถานะจดจาก inv_branches ของสาขาที่เลือก ไม่ใช่ sc_settings ของทั้ง tenant
  */
 
 import { STANDARD_VAT_RATE, money } from "./wht";
@@ -21,13 +22,18 @@ const OPTIONAL_VAT: ReadonlySet<DocumentType> = new Set([
   "RECEIPT",
 ]);
 
-/** ไม่มีคีย์ใน sc_settings = จด VAT อยู่แล้ว (กิจการแรกที่กระทบยอดกับ Excel) */
+/** ไม่มีคีย์ใน sc_settings = จด VAT อยู่แล้ว (คีย์เก่าที่เลิกเขียนแล้ว) */
 export function parseVatRegistered(raw: string | null | undefined): boolean {
   if (raw === undefined || raw === null || String(raw).trim() === "") return true;
   const v = String(raw).trim().toLowerCase();
   if (v === "false" || v === "0" || v === "no") return false;
   if (v === "true" || v === "1" || v === "yes") return true;
   return true;
+}
+
+/** คอลัมน์สาขา: null/undefined = จด VAT (default หลัง 0043) */
+export function parseBranchVatFlag(raw: boolean | null | undefined): boolean {
+  return raw !== false;
 }
 
 export function canIssueTaxInvoice(vatRegistered: boolean): boolean {

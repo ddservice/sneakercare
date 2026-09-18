@@ -999,6 +999,7 @@ export type Database = {
           phone: string | null
           telegram_chat_id: string | null
           tenant_id: string
+          vat_registered: boolean
         }
         Insert: {
           address?: string | null
@@ -1011,6 +1012,7 @@ export type Database = {
           phone?: string | null
           telegram_chat_id?: string | null
           tenant_id?: string
+          vat_registered?: boolean
         }
         Update: {
           address?: string | null
@@ -1023,6 +1025,7 @@ export type Database = {
           phone?: string | null
           telegram_chat_id?: string | null
           tenant_id?: string
+          vat_registered?: boolean
         }
         Relationships: [
           {
@@ -2942,6 +2945,7 @@ export type Database = {
           phone: string | null
           telegram_chat_id: string | null
           tenant_id: string | null
+          vat_registered: boolean | null
         }
         Insert: {
           address?: string | null
@@ -2954,6 +2958,7 @@ export type Database = {
           phone?: string | null
           telegram_chat_id?: string | null
           tenant_id?: string | null
+          vat_registered?: boolean | null
         }
         Update: {
           address?: string | null
@@ -2966,6 +2971,7 @@ export type Database = {
           phone?: string | null
           telegram_chat_id?: string | null
           tenant_id?: string | null
+          vat_registered?: boolean | null
         }
         Relationships: [
           {

@@ -11,6 +11,7 @@ import { generatePromptPayPayload } from "@/lib/smartacc/promptpay";
 import { withId, text } from "@/lib/db-rows";
 import { requireTenantId, tenantFilter } from "@/lib/tenant";
 import { getSelectedBranchId } from "@/lib/branch";
+import { resolveBranchVat } from "@/lib/branch-vat";
 import { errorMessage } from "@/lib/errors";
 import { logAudit } from "@/lib/audit";
 import { fetchWhtCertificates } from "@/app/actions/wht";
@@ -18,7 +19,6 @@ import { certificateToWhtRecord } from "@/lib/wht";
 import {
   canIssueTaxInvoice,
   documentVatRate,
-  parseVatRegistered,
   settleDocumentVat,
 } from "@/lib/vat";
 
@@ -372,19 +372,21 @@ export async function createSmartAccDocument(payload: CreateDocumentPayload) {
     return { success: false as const, error: errorMessage(err, "ไม่สามารถระบุกิจการที่จะออกเอกสารได้") };
   }
 
-  // 1. VAT — อ่านสถานะจดทะเบียนของกิจการจากฐาน ไม่เชื่อค่าจากหน้าจอ
-  const { data: vatSetting } = await supabase
-    .from("sc_settings")
-    .select("value")
-    .eq("key", "vat_registered")
-    .eq("tenant_id", tenantId)
-    .maybeSingle();
-  const vatRegistered = parseVatRegistered(vatSetting?.value);
-
-  if (payload.docType === "TAX_INVOICE" && !canIssueTaxInvoice(vatRegistered)) {
+  // 1. VAT — อ่านจากสาขาที่เลือก ไม่เชื่อค่าจากหน้าจอ (แต่ละสาขาคนละนิติบุคคล)
+  const vatCtx = await resolveBranchVat(profile);
+  if (payload.docType === "TAX_INVOICE" && !vatCtx.branchSelected) {
     return {
       success: false as const,
-      error: "กิจการนี้ยังไม่จด VAT จึงออกใบกำกับภาษีไม่ได้ — ออกใบเสร็จเงินสดแทน หรือเปิดจด VAT ที่ /settings",
+      error: "เลือกสาขาที่หัวเว็บก่อน — VAT เป็นของแต่ละสาขา (คนละนิติบุคคล)",
+    };
+  }
+  const vatRegistered = vatCtx.vatRegistered;
+
+  if (payload.docType === "TAX_INVOICE" && !canIssueTaxInvoice(vatRegistered)) {
+    const branchHint = vatCtx.branchName ? `สาขา ${vatCtx.branchName}` : "สาขานี้";
+    return {
+      success: false as const,
+      error: `${branchHint} ยังไม่จด VAT จึงออกใบกำกับภาษีไม่ได้ — ตั้งค่าในการ์ดสาขาที่ /settings หรือออกใบเสร็จเงินสด`,
     };
   }
 

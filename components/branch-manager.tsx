@@ -33,6 +33,7 @@ export function BranchManager({
   const [closeTime, setCloseTime] = useState("20:00");
   const [newTenantName, setNewTenantName] = useState("");
   const [newTenantBranch, setNewTenantBranch] = useState("");
+  const [newVatRegistered, setNewVatRegistered] = useState(true);
 
   function refresh() {
     router.refresh();
@@ -40,7 +41,7 @@ export function BranchManager({
 
   function handleCreate() {
     startTransition(async () => {
-      const res = await createBranch({ name, tenantId, openTime, closeTime });
+      const res = await createBranch({ name, tenantId, openTime, closeTime, vatRegistered: newVatRegistered });
       if (!res.success) {
         toast.error(res.error);
         return;
@@ -81,6 +82,7 @@ export function BranchManager({
         openTime: String(data.get("openTime") ?? ""),
         closeTime: String(data.get("closeTime") ?? ""),
         isActive: data.get("isActive") === "on",
+        vatRegistered: data.get("vatRegistered") === "on",
       });
       if (!res.success) {
         toast.error(res.error);
@@ -100,7 +102,8 @@ export function BranchManager({
         </CardTitle>
         <CardDescription>
           แต่ละสาขาตั้งชื่อและเวลาเปิด-ปิดเองได้ ไม่ดึงของสาขาแรกมาใช้ —
-          SneakerCare เป็นชื่อสาขาของกิจการแรก ไม่ปนกับ LUXSU
+          SneakerCare เป็นชื่อสาขาของกิจการแรก ไม่ปนกับ LUXSU —
+          จด VAT ตั้งต่อสาขา เพราะแต่ละสาขาเป็นคนละนิติบุคคล
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6 p-4 sm:p-6">
@@ -155,9 +158,19 @@ export function BranchManager({
             <Input type="time" value={closeTime} onChange={(e) => setCloseTime(e.target.value)} />
           </div>
         </div>
-        <Button type="button" size="sm" disabled={pending || !name.trim()} onClick={handleCreate} className="gap-1">
-          <Plus className="h-3.5 w-3.5" /> เพิ่มสาขา
-        </Button>
+        <div className="flex flex-wrap items-center gap-3">
+          <Button type="button" size="sm" disabled={pending || !name.trim()} onClick={handleCreate} className="gap-1">
+            <Plus className="h-3.5 w-3.5" /> เพิ่มสาขา
+          </Button>
+          <label className="flex items-center gap-1.5 text-xs text-slate-600">
+            <input
+              type="checkbox"
+              checked={newVatRegistered}
+              onChange={(e) => setNewVatRegistered(e.target.checked)}
+            />
+            จด VAT
+          </label>
+        </div>
 
         <div className="space-y-3">
           {branches.map((branch) => (
@@ -173,10 +186,16 @@ export function BranchManager({
                 <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">
                   {isSuperAdmin ? `${branch.tenantName} · ${branch.name}` : branch.name}
                 </p>
-                <label className="flex items-center gap-1.5 text-xs text-slate-500">
-                  <input type="checkbox" name="isActive" defaultChecked={branch.isActive} />
-                  เปิดใช้งาน
-                </label>
+                <div className="flex flex-wrap items-center gap-3">
+                  <label className="flex items-center gap-1.5 text-xs text-slate-500">
+                    <input type="checkbox" name="vatRegistered" defaultChecked={branch.vatRegistered} />
+                    จด VAT
+                  </label>
+                  <label className="flex items-center gap-1.5 text-xs text-slate-500">
+                    <input type="checkbox" name="isActive" defaultChecked={branch.isActive} />
+                    เปิดใช้งาน
+                  </label>
+                </div>
               </div>
               <div className="grid gap-2 sm:grid-cols-2">
                 <Input name="name" defaultValue={branch.name} required />

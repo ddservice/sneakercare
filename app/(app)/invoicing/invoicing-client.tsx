@@ -204,9 +204,18 @@ export function InvoicingClient({
 }) {
   const router = useRouter();
   const [docType, setDocType] = useState<DocumentType>("INVOICE");
-  const vatRegistered = shopProfile?.vatRegistered !== false;
+  const vatBranchSelected = shopProfile?.vatBranchSelected !== false;
+  const vatRegistered = Boolean(vatBranchSelected && shopProfile?.vatRegistered !== false);
+  const vatBranchName = shopProfile?.vatBranchName?.trim() || "";
+  const vatLockReason = !vatRegistered
+    ? !vatBranchSelected
+      ? "เลือกสาขาที่หัวเว็บก่อน — VAT เป็นของแต่ละสาขา (คนละนิติบุคคล)"
+      : vatBranchName
+        ? `สาขา ${vatBranchName} ยังไม่จด VAT จึงออกใบกำกับภาษีไม่ได้ — ตั้งค่าในการ์ดสาขาที่ /settings`
+        : "สาขานี้ยังไม่จด VAT จึงออกใบกำกับภาษีไม่ได้ — ตั้งค่าในการ์ดสาขาที่ /settings"
+    : null;
   const [chargeVat, setChargeVat] = useState(() =>
-    defaultChargeVat(shopProfile?.vatRegistered !== false, "INVOICE")
+    defaultChargeVat(Boolean(shopProfile?.vatBranchSelected !== false && shopProfile?.vatRegistered !== false), "INVOICE")
   );
   const [isPending, startTransition] = useTransition();
   const [removedDocIds, setRemovedDocIds] = useState<string[]>([]);
@@ -389,8 +398,8 @@ export function InvoicingClient({
   }
 
   async function handleCreateDocument() {
-    if (docType === "TAX_INVOICE" && !vatRegistered) {
-      toast.error("กิจการนี้ยังไม่จด VAT จึงออกใบกำกับภาษีไม่ได้");
+    if (docType === "TAX_INVOICE" && vatLockReason) {
+      toast.error(vatLockReason);
       return;
     }
     if (!companyName.trim()) {
@@ -488,8 +497,8 @@ export function InvoicingClient({
   }
 
   function selectDocType(type: DocumentType) {
-    if (type === "TAX_INVOICE" && !vatRegistered) {
-      toast.error("กิจการนี้ยังไม่จด VAT จึงออกใบกำกับภาษีไม่ได้ — ตั้งค่าที่ /settings หรือออกใบเสร็จเงินสด");
+    if (type === "TAX_INVOICE" && vatLockReason) {
+      toast.error(vatLockReason);
       return;
     }
     setDocType(type);
@@ -523,7 +532,7 @@ export function InvoicingClient({
                 key={type}
                 type="button"
                 onClick={() => selectDocType(type)}
-                title={lockedTax ? "ยังไม่จด VAT — ออกใบกำกับภาษีไม่ได้" : undefined}
+                title={lockedTax ? vatLockReason ?? "ยังไม่จด VAT — ออกใบกำกับภาษีไม่ได้" : undefined}
                 className={`flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium transition-colors ${
                   docType === type
                     ? "bg-slate-900 text-white"
@@ -539,6 +548,11 @@ export function InvoicingClient({
               );
             })}
           </div>
+          {vatLockReason ? (
+            <p className="text-[11px] text-amber-800">{vatLockReason}</p>
+          ) : vatBranchName ? (
+            <p className="text-[11px] text-slate-500">VAT ของสาขา {vatBranchName} (จดทะเบียนแล้ว — เลือกบิลเงินสดหรือบิล VAT ต่อใบได้)</p>
+          ) : null}
 
           {/* ── Main Form Grid ── */}
           <div className="grid gap-8 lg:grid-cols-12">
@@ -949,8 +963,12 @@ export function InvoicingClient({
                     </div>
                   ) : (
                     <p className="text-[11px] text-slate-500">
-                      {!vatRegistered
-                        ? "กิจการนี้ยังไม่จด VAT — เอกสารเป็นบิลเงินสดทั้งหมด ตั้งค่าได้ที่ /settings"
+                      {!vatBranchSelected
+                        ? "เลือกสาขาที่หัวเว็บก่อน — VAT เป็นของแต่ละสาขา (คนละนิติบุคคล)"
+                        : !vatRegistered
+                        ? vatBranchName
+                          ? `สาขา ${vatBranchName} ยังไม่จด VAT — เอกสารเป็นบิลเงินสดทั้งหมด ตั้งค่าได้ที่การ์ดสาขาใน /settings`
+                          : "สาขานี้ยังไม่จด VAT — เอกสารเป็นบิลเงินสดทั้งหมด ตั้งค่าได้ที่การ์ดสาขาใน /settings"
                         : docType === "TAX_INVOICE"
                         ? "ใบกำกับภาษีคิด VAT 7% ตามที่จดทะเบียน"
                         : "ใบเสนอราคาและใบส่งของยังไม่คิด VAT"}

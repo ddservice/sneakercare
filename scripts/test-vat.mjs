@@ -1,9 +1,10 @@
 /**
- * ล็อกกฎ VAT บนเอกสารขาย — จด/ไม่จดเป็นระดับกิจการ, เงินสด vs VAT เลือกต่อใบ
+ * ล็อกกฎ VAT บนเอกสารขาย — จด/ไม่จดเป็นระดับสาขา, เงินสด vs VAT เลือกต่อใบ
  */
 
 const {
   parseVatRegistered,
+  parseBranchVatFlag,
   canIssueTaxInvoice,
   vatChoiceAllowed,
   defaultChargeVat,
@@ -33,6 +34,12 @@ same("ค่าว่าง = จด VAT", parseVatRegistered(""), true);
 same("true", parseVatRegistered("true"), true);
 same("false", parseVatRegistered("false"), false);
 same("0", parseVatRegistered("0"), false);
+
+console.log("\n[vat] คอลัมน์สาขา");
+same("null = จด VAT", parseBranchVatFlag(null), true);
+same("undefined = จด VAT", parseBranchVatFlag(undefined), true);
+same("true", parseBranchVatFlag(true), true);
+same("false", parseBranchVatFlag(false), false);
 
 console.log("\n[vat] ยังไม่จด — ทุกเอกสาร 0%, ออกใบกำกับไม่ได้");
 same("ออก TAX ไม่ได้", canIssueTaxInvoice(false), false);
