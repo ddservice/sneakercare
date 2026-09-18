@@ -12,7 +12,7 @@ import {
   type ExpensesPayload,
   type StaffPayslip,
 } from "@/app/actions/expenses";
-import { recordRentalWht } from "@/app/actions/wht";
+import { recordRentalWht, upsertWhtPayee } from "@/app/actions/wht";
 import {
   EXPENSE_CATEGORIES,
   CATEGORY_LIST,
@@ -60,6 +60,7 @@ import {
   ChevronRight,
   RefreshCw,
   AlertCircle,
+  Contact,
 } from "lucide-react";
 
 const THAI_MONTH_NAMES = [
@@ -181,6 +182,49 @@ export function ExpensesClient({
   const [expPayeeName, setExpPayeeName] = useState("");
   const [expPayeeTaxId, setExpPayeeTaxId] = useState("");
   const [expPayeeAddress, setExpPayeeAddress] = useState("");
+  const [showPayeeBook, setShowPayeeBook] = useState(false);
+  const [editingPayeeId, setEditingPayeeId] = useState("");
+  const [bookPayeeKind, setBookPayeeKind] = useState<"person" | "juristic">("person");
+  const [bookPayeeName, setBookPayeeName] = useState("");
+  const [bookPayeeTaxId, setBookPayeeTaxId] = useState("");
+  const [bookPayeeAddress, setBookPayeeAddress] = useState("");
+
+  function resetPayeeBookForm() {
+    setEditingPayeeId("");
+    setBookPayeeKind("person");
+    setBookPayeeName("");
+    setBookPayeeTaxId("");
+    setBookPayeeAddress("");
+  }
+
+  function openPayeeForEdit(payee: { id: string; kind: "person" | "juristic"; name: string; taxId: string; address: string }) {
+    setEditingPayeeId(payee.id);
+    setBookPayeeKind(payee.kind);
+    setBookPayeeName(payee.name);
+    setBookPayeeTaxId(payee.taxId);
+    setBookPayeeAddress(payee.address);
+  }
+
+  function handleSavePayeeBook(e: React.FormEvent) {
+    e.preventDefault();
+    startTransition(async () => {
+      const res = await upsertWhtPayee({
+        id: editingPayeeId || undefined,
+        kind: bookPayeeKind,
+        name: bookPayeeName,
+        taxId: bookPayeeTaxId,
+        address: bookPayeeAddress,
+      });
+      if (!res.success) {
+        toast.error(res.error);
+        return;
+      }
+      toast.success(editingPayeeId ? "แก้ไขผู้รับเงินแล้ว" : "เพิ่มผู้รับเงินในสมุดคู่ค้าแล้ว");
+      resetPayeeBookForm();
+      const updated = await fetchAllExpensesData(selectedMonth);
+      setData(updated);
+    });
+  }
 
   // Interactive Live Values State for Staff (Keyed by employeeName)
   //
@@ -617,9 +661,19 @@ export function ExpensesClient({
       <PageHeader
         className="print:hidden"
         title="ค่าใช้จ่ายและเงินเดือน"
-        description="บันทึกค่าใช้จ่ายตามหมวด ออกสลิปเงินเดือน และดูต้นทุนทั้งงวด"
+        description="บันทึกค่าใช้จ่ายตามหมวด ออกสลิปเงินเดือน และเก็บสมุดคู่ค้าสำหรับหัก ณ ที่จ่าย"
         actions={
           <>
+            <Button
+              variant="outline"
+              onClick={() => {
+                resetPayeeBookForm();
+                setShowPayeeBook(true);
+              }}
+              className="text-xs gap-1.5 h-9"
+            >
+              <Contact className="h-4 w-4" /> สมุดคู่ค้า / ผู้รับเงิน
+            </Button>
             <Button
               onClick={() => setShowAddExpenseModal(true)}
               className="text-xs gap-1.5 h-9"
@@ -1409,6 +1463,17 @@ export function ExpensesClient({
             <div className="flex items-center gap-2">
               <Button
                 size="sm"
+                variant="outline"
+                onClick={() => {
+                  resetPayeeBookForm();
+                  setShowPayeeBook(true);
+                }}
+                className="text-xs gap-1.5 h-8"
+              >
+                <Contact className="h-3.5 w-3.5" /> สมุดคู่ค้า
+              </Button>
+              <Button
+                size="sm"
                 onClick={() => setShowAddExpenseModal(true)}
                 className="bg-amber-500 hover:bg-amber-600 text-slate-950 font-black text-xs gap-1.5 h-8 shadow-xs"
               >
@@ -1486,6 +1551,113 @@ export function ExpensesClient({
             </div>
           </CardContent>
         </Card>
+      )}
+
+      {/* ── สมุดคู่ค้า / ผู้รับเงิน (เจ้าของตึก ซัพพลายเออร์ ออก 50 ทวิ) ── */}
+      {showPayeeBook && (
+        <ModalBackdrop
+          onClose={() => setShowPayeeBook(false)}
+          className="bg-black/60 backdrop-blur-xs"
+        >
+          <div className="my-auto w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-200 pb-3">
+              <div className="flex items-center gap-2">
+                <div className="h-8 w-8 rounded-full bg-slate-100 text-slate-800 flex items-center justify-center">
+                  <Contact className="h-4 w-4" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-slate-900">สมุดคู่ค้า / ผู้รับเงิน</h3>
+                  <p className="text-xs text-slate-500">เจ้าของตึก ซัพพลายเออร์ ผู้รับจ้าง — เก็บชื่อและเลข 13 หลักไว้เลือกตอนจ่าย</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowPayeeBook(false)}
+                className="rounded-full p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="max-h-48 overflow-y-auto rounded-lg border border-slate-200">
+              {(data.payees ?? []).length === 0 ? (
+                <div className="p-4 text-center text-xs text-slate-400">ยังไม่มีรายชื่อ — กรอกด้านล่างแล้วกดบันทึก</div>
+              ) : (
+                <ul className="divide-y divide-slate-100 text-xs">
+                  {(data.payees ?? []).map((p) => (
+                    <li key={p.id}>
+                      <button
+                        type="button"
+                        onClick={() => openPayeeForEdit(p)}
+                        className={`w-full px-3 py-2 text-left hover:bg-slate-50 ${editingPayeeId === p.id ? "bg-teal-50" : ""}`}
+                      >
+                        <div className="font-semibold text-slate-900">{p.name}</div>
+                        <div className="font-mono text-[10px] text-slate-500">
+                          {p.kind === "juristic" ? "นิติบุคคล · ภ.ง.ด.53" : "บุคคลธรรมดา · ภ.ง.ด.3"} · {p.taxId}
+                        </div>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+
+            <form onSubmit={handleSavePayeeBook} className="space-y-3 text-xs">
+              <div className="text-[11px] font-bold text-slate-600">
+                {editingPayeeId ? "แก้ไขผู้รับเงินที่เลือก" : "เพิ่มผู้รับเงินใหม่"}
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-1">
+                  <Label className="font-bold text-slate-700">ประเภท</Label>
+                  <select
+                    value={bookPayeeKind}
+                    onChange={(e) => setBookPayeeKind(e.target.value as "person" | "juristic")}
+                    className="w-full h-9 rounded-md border border-slate-300 bg-white px-2.5 text-xs"
+                  >
+                    <option value="person">บุคคลธรรมดา (ภ.ง.ด.3)</option>
+                    <option value="juristic">นิติบุคคล (ภ.ง.ด.53)</option>
+                  </select>
+                </div>
+                <div className="space-y-1">
+                  <Label className="font-bold text-slate-700">เลขผู้เสียภาษี 13 หลัก *</Label>
+                  <Input
+                    value={bookPayeeTaxId}
+                    onChange={(e) => setBookPayeeTaxId(e.target.value)}
+                    className="h-9 text-xs font-mono"
+                    required
+                  />
+                </div>
+              </div>
+              <div className="space-y-1">
+                <Label className="font-bold text-slate-700">ชื่อ-สกุล / ชื่อบริษัท *</Label>
+                <Input
+                  value={bookPayeeName}
+                  onChange={(e) => setBookPayeeName(e.target.value)}
+                  className="h-9 text-xs"
+                  required
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="font-bold text-slate-700">ที่อยู่ (สำหรับ 50 ทวิ)</Label>
+                <Input
+                  value={bookPayeeAddress}
+                  onChange={(e) => setBookPayeeAddress(e.target.value)}
+                  className="h-9 text-xs"
+                />
+              </div>
+              <div className="flex items-center justify-end gap-2 pt-1">
+                {editingPayeeId && (
+                  <Button type="button" variant="outline" size="sm" className="h-9 text-xs" onClick={resetPayeeBookForm}>
+                    ยกเลิกแก้ไข
+                  </Button>
+                )}
+                <Button type="submit" disabled={isPending} size="sm" className="h-9 text-xs gap-1">
+                  <Save className="h-4 w-4" /> {editingPayeeId ? "บันทึกการแก้ไข" : "เพิ่มผู้รับเงิน"}
+                </Button>
+              </div>
+            </form>
+          </div>
+        </ModalBackdrop>
       )}
 
       {/* ── ADD EXPENSE MODAL (WITH 6 STANDARD CATEGORIES & PRESETS) ── */}
@@ -1644,33 +1816,36 @@ export function ExpensesClient({
                     <div className="text-rose-700">− WHT {liveWht.whtRate}% ฿{liveWht.whtAmount.toLocaleString("th-TH", { minimumFractionDigits: 2 })}</div>
                     <div className="font-bold">ยอดโอนสุทธิ ฿{liveWht.netPayment.toLocaleString("th-TH", { minimumFractionDigits: 2 })}</div>
                   </div>
-                  {(data.payees ?? []).length > 0 && (
-                    <div className="space-y-1">
-                      <Label className="font-bold text-slate-700">ผู้รับเงินที่เคยบันทึก</Label>
-                      <select
-                        value={expPayeeId}
-                        onChange={(e) => {
-                          const id = e.target.value;
-                          setExpPayeeId(id);
-                          const p = (data.payees ?? []).find((x) => x.id === id);
-                          if (p) {
-                            setExpPayeeKind(p.kind);
-                            setExpPayeeName(p.name);
-                            setExpPayeeTaxId(p.taxId);
-                            setExpPayeeAddress(p.address);
-                          }
-                        }}
-                        className="w-full h-9 rounded-md border border-slate-300 bg-white px-2.5 text-xs"
-                      >
-                        <option value="">— กรอกใหม่ —</option>
-                        {(data.payees ?? []).map((p) => (
-                          <option key={p.id} value={p.id}>
-                            {p.name} · {p.taxId}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  )}
+                  <div className="space-y-1">
+                    <Label className="font-bold text-slate-700">ผู้รับเงินในสมุดคู่ค้า</Label>
+                    <select
+                      value={expPayeeId}
+                      onChange={(e) => {
+                        const id = e.target.value;
+                        setExpPayeeId(id);
+                        const p = (data.payees ?? []).find((x) => x.id === id);
+                        if (p) {
+                          setExpPayeeKind(p.kind);
+                          setExpPayeeName(p.name);
+                          setExpPayeeTaxId(p.taxId);
+                          setExpPayeeAddress(p.address);
+                        }
+                      }}
+                      className="w-full h-9 rounded-md border border-slate-300 bg-white px-2.5 text-xs"
+                    >
+                      <option value="">— กรอกใหม่ด้านล่าง —</option>
+                      {(data.payees ?? []).map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.name} · {p.taxId}
+                        </option>
+                      ))}
+                    </select>
+                    {(data.payees ?? []).length === 0 && (
+                      <p className="text-[10px] text-slate-500">
+                        ยังไม่มีรายชื่อ — กรอกด้านล่าง หรือเปิดปุ่ม “สมุดคู่ค้า / ผู้รับเงิน” ที่หัวหน้านี้
+                      </p>
+                    )}
+                  </div>
                   <div className="grid grid-cols-2 gap-2">
                     <div className="space-y-1">
                       <Label className="font-bold text-slate-700">ประเภทผู้รับเงิน</Label>

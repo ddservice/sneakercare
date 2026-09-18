@@ -5,6 +5,7 @@
 - **หมวดใหม่ `building_rent`** ("ค่าเช่าอาคาร/สถานที่") แยกจากสาธารณูปโภค · แถวเก่าชื่อ "สาธารณูปโภค & ค่าเช่า" / "ค่าเช่าร้าน" ยังอยู่หมวดเดิม ไม่ถูกย้าย
 - **รายได้ค่าเช่าห้อง** ยังเป็น `rental_income` แยกจากยอดขายบริการ · ถ้าผู้เช่าหักภาษีร้านไว้ กรอกที่ `/expenses` (WHT receivable) — รายได้ลงบัญชียังยอดเต็ม เงินเข้าจริงน้อยกว่า
 - **`/tax-filing`** ใช้แถว `sc_wht_certificates` จริง (payable เท่านั้นสำหรับไฟล์ ภ.ง.ด.3/53 + พิมพ์ 50 ทวิ) เลิกเดา 3% จากรายจ่าย ≥ ฿1,000
+- **สมุดคู่ค้าที่ `/expenses`:** ปุ่ม “สมุดคู่ค้า / ผู้รับเงิน” เพิ่ม/แก้ชื่อ เลข 13 หลัก ที่อยู่ ก่อนบันทึกจ่าย — ตอนจ่ายเลือกจากรายชื่อได้ · **ไม่ปนกับ `/invoicing`** เพราะหน้านั้นเป็นใบแจ้งหนี้ลูกค้า (Bill To) ไม่ใช่บิลซื้อจากซัพพลายเออร์
 - **apply production แล้ว (2026-09-18):** `0042` ผ่าน SSH+psql — `sc_wht_payees` / `sc_wht_certificates` + RLS 4 policy + unique `(tenant_id, tax_id)` / `(tenant_id, certificate_number)` + คอลัมน์ `tenant_name`/`tenant_tax_id`/`wht_rate`/`wht_withheld` บน `sc_rental_records` + หมวด `building_rent` (รันซ้ำ idempotent)
 - เทสต์: `npm run test:wht` · `scripts/test-migration-0042.mjs` · `npm run test:expenses` (เพิ่มเคส building_rent)
 
