@@ -50,6 +50,7 @@ export default async function BillingNotesPage() {
     signatoryName: "",
     signatureUrl: "",
     stampUrl: "",
+    vatRegistered: true,
   };
 
   try {

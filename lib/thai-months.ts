@@ -38,6 +38,15 @@ export function thaiMonthShort(year: number, monthIndex0: number): string {
   return `${THAI_MONTH_SHORT[monthIndex0]} ${String(year + 543).slice(-2)}`;
 }
 
+/** YYYY-MM-DD → วันที่ไทย พ.ศ. ไม่ผ่าน Date() เพื่อกันเลื่อนวันจาก UTC */
+export function thaiOfficialDate(isoDate: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(isoDate ?? "").trim());
+  if (!m) return isoDate;
+  const month = THAI_MONTH_NAMES[Number(m[2]) - 1];
+  if (!month) return isoDate;
+  return `${Number(m[3])} ${month} ${Number(m[1]) + 543}`;
+}
+
 export type IsoMonthOption = {
   value: string;
   label: string;

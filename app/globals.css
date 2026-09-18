@@ -432,6 +432,14 @@ table {
 ::-webkit-scrollbar-thumb { background-color: #d1d5db; border-radius: 9999px; }
 .dark ::-webkit-scrollbar-thumb { background-color: #475569; }
 
+/* เอกสารที่เตรียมพิมพ์ใช้ IBM Plex ทั้งบนจอและตอนพิมพ์
+   เดิมบังคับเฉพาะ @media print ทำให้ตัวอย่างบนจอเป็น Prompt
+   แถมน้ำหนัก font-black (900) ที่ Prompt ไม่มี → ตัวไทยดูเละ */
+.printable-area,
+.printable-area * {
+  font-family: var(--font-ibm-plex), "IBM Plex Sans Thai", sans-serif;
+}
+
 /* ══════════════════════════════════════════════════
    PRINT ENGINE — A4 Default
    ══════════════════════════════════════════════════ */

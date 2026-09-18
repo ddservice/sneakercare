@@ -15,6 +15,12 @@ import { errorMessage } from "@/lib/errors";
 import { logAudit } from "@/lib/audit";
 import { fetchWhtCertificates } from "@/app/actions/wht";
 import { certificateToWhtRecord } from "@/lib/wht";
+import {
+  canIssueTaxInvoice,
+  documentVatRate,
+  parseVatRegistered,
+  settleDocumentVat,
+} from "@/lib/vat";
 
 /** หนึ่งรายการในสมุดที่อยู่ลูกค้า (sc_settings.dbd_company_registry) */
 export type DbdRegistryEntry = {
@@ -51,6 +57,8 @@ export type CreateDocumentPayload = {
   billingRefDocIds?: string[];
   refParentDocId?: string;
   refParentDocNumber?: string;
+  /** true = บิล VAT 7% · false = บิลเงินสด · ไม่ส่ง = ใช้ค่าเริ่มต้นตามประเภทเอกสาร */
+  chargeVat?: boolean;
 };
 
 export type CatalogItem = {
@@ -364,12 +372,27 @@ export async function createSmartAccDocument(payload: CreateDocumentPayload) {
     return { success: false as const, error: errorMessage(err, "ไม่สามารถระบุกิจการที่จะออกเอกสารได้") };
   }
 
-  // 1. Calculate Totals
+  // 1. VAT — อ่านสถานะจดทะเบียนของกิจการจากฐาน ไม่เชื่อค่าจากหน้าจอ
+  const { data: vatSetting } = await supabase
+    .from("sc_settings")
+    .select("value")
+    .eq("key", "vat_registered")
+    .eq("tenant_id", tenantId)
+    .maybeSingle();
+  const vatRegistered = parseVatRegistered(vatSetting?.value);
+
+  if (payload.docType === "TAX_INVOICE" && !canIssueTaxInvoice(vatRegistered)) {
+    return {
+      success: false as const,
+      error: "กิจการนี้ยังไม่จด VAT จึงออกใบกำกับภาษีไม่ได้ — ออกใบเสร็จเงินสดแทน หรือเปิดจด VAT ที่ /settings",
+    };
+  }
+
   const subtotal = payload.items.reduce((sum, item) => sum + item.totalLineAmount, 0);
-  const isTaxApplicable = ["INVOICE", "BILLING_NOTE", "TAX_INVOICE", "RECEIPT"].includes(payload.docType);
-  const vatRate = isTaxApplicable ? 7.0 : 0.0;
-  const vatAmount = subtotal * (vatRate / 100);
-  const grandTotal = subtotal + vatAmount;
+  const vatRate = documentVatRate(vatRegistered, payload.docType, payload.chargeVat);
+  const totals = settleDocumentVat(subtotal, vatRate);
+  const vatAmount = totals.vatAmount;
+  const grandTotal = totals.grandTotal;
 
   // 2. Generate Standard Numbering: PREFIX-YYYYMMDD-XXXX (ตัวนับแยกต่อ tenant — migration 0036)
   const docNumber = await generateDocumentNumber(payload.docType, tenantId, new Date(payload.issueDate));
@@ -495,7 +518,7 @@ export async function createSmartAccDocument(payload: CreateDocumentPayload) {
     due_date: payload.dueDate || null,
     credit_term_days: payload.creditTermDays || 0,
     status: "DRAFT" as const,
-    subtotal_amount: subtotal,
+    subtotal_amount: totals.subtotal,
     discount_amount: 0.0,
     vat_rate: vatRate,
     vat_amount: vatAmount,
@@ -618,6 +641,7 @@ export async function convertDocument(sourceDocId: string, targetDocType: Docume
     notes: `แปลงมาจากเอกสาร ${sourceDoc.doc_number}`,
     refParentDocId: sourceDoc.id,
     refParentDocNumber: sourceDoc.doc_number,
+    ...(Number(sourceDoc.vat_rate) === 7 ? { chargeVat: true } : {}),
   };
 
   const res = await createSmartAccDocument(payload);
@@ -633,6 +657,109 @@ export async function convertDocument(sourceDocId: string, targetDocType: Docume
 
   revalidatePath("/invoicing");
   return res;
+}
+
+/**
+ * ลบเอกสารออกจากประวัติ (เอกสารตัวอย่าง / ออกผิด / ยังไม่ใช้)
+ *
+ * เลขที่เอกสารไม่ถูกนำกลับมาใช้ — ตัวนับ `ext_numbering_sequences` ไม่ย้อน
+ * ใบวางบิลที่อ้างเอกสารนี้เป็นรายการอ้างอิงต้องลบใบวางบิลก่อน (FK `ref_doc_id` ไม่ cascade)
+ */
+export async function deleteSmartAccDocument(docId: string) {
+  const profile = await requireProfile();
+  requireModuleWrite(profile, "invoicing");
+  const supabase = createAdminClient();
+  let tenantId: string;
+  try {
+    tenantId = await requireTenantId(profile);
+  } catch (err) {
+    return { success: false as const, error: errorMessage(err, "ไม่สามารถระบุกิจการที่จะลบเอกสารได้") };
+  }
+
+  const { data: doomed, error: fetchErr } = await supabase
+    .schema("extension_layer")
+    .from("ext_documents")
+    .select("id, doc_type, doc_number, issue_date, status, grand_total, notes, ref_parent_doc_number, ext_contacts(company_name, tax_id)")
+    .eq("id", docId)
+    .eq("tenant_id", tenantId)
+    .maybeSingle();
+
+  if (fetchErr || !doomed) {
+    return { success: false as const, error: "ไม่พบเอกสารที่ต้องการลบ" };
+  }
+
+  const { data: billedAs } = await supabase
+    .schema("extension_layer")
+    .from("ext_billing_references")
+    .select("billing_note_id")
+    .eq("ref_doc_id", docId)
+    .eq("tenant_id", tenantId)
+    .limit(8);
+
+  if (billedAs && billedAs.length > 0) {
+    const noteIds = billedAs
+      .map((row) => row.billing_note_id)
+      .filter((id): id is string => Boolean(id));
+    const { data: notes } = noteIds.length
+      ? await supabase
+          .schema("extension_layer")
+          .from("ext_documents")
+          .select("doc_number")
+          .in("id", noteIds)
+          .eq("tenant_id", tenantId)
+      : { data: [] as { doc_number: string }[] };
+    const nums = (notes ?? []).map((n) => n.doc_number).filter(Boolean).join(", ");
+    return {
+      success: false as const,
+      error: `เอกสารถูกอ้างในใบวางบิล${nums ? ` (${nums})` : ""} — ลบใบวางบิลนั้นก่อน`,
+    };
+  }
+
+  const { error: slipErr } = await supabase
+    .schema("extension_layer")
+    .from("ext_slip_verifications")
+    .delete()
+    .eq("document_id", docId);
+  if (slipErr) {
+    console.error("[invoicing] ลบสลิปที่ผูกเอกสารไม่สำเร็จ:", slipErr.message);
+  }
+
+  const { error } = await supabase
+    .schema("extension_layer")
+    .from("ext_documents")
+    .delete()
+    .eq("id", docId)
+    .eq("tenant_id", tenantId);
+
+  if (error) {
+    return { success: false as const, error: `ลบเอกสารไม่ได้: ${error.message}` };
+  }
+
+  const contact = doomed.ext_contacts;
+  await logAudit({
+    action: "DELETE",
+    entity: "document",
+    entity_id: doomed.doc_number,
+    actor_id: profile.id,
+    actor_name: profile.display_name,
+    tenant_id: tenantId,
+    detail: {
+      id: doomed.id,
+      doc_type: doomed.doc_type,
+      doc_number: doomed.doc_number,
+      issue_date: doomed.issue_date,
+      status: doomed.status,
+      grand_total: doomed.grand_total,
+      company_name: contact?.company_name ?? null,
+      tax_id: contact?.tax_id ?? null,
+      notes: doomed.notes,
+    },
+  });
+
+  revalidatePath("/invoicing");
+  revalidatePath("/billing-notes");
+  revalidatePath("/tax-filing");
+  return { success: true as const, docNumber: doomed.doc_number };
 }
 
 /** ใบส่งของ/ใบแจ้งหนี้ที่ยังไม่ชำระ — อนุมานจาก query จริงเช่นกัน */

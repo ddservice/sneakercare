@@ -1,9 +1,11 @@
 "use client";
 
 import { useState, useMemo, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import {
   createSmartAccDocument,
   convertDocument,
+  deleteSmartAccDocument,
   lookupDbdCompany,
   type CreateDocumentPayload,
   type DocumentItemInput,
@@ -13,13 +15,20 @@ import {
 } from "@/app/actions/smartacc-documents";
 import { DOC_TYPE_CONFIG, type DocumentType } from "@/lib/smartacc/types";
 import { thaiBahtText } from "@/lib/smartacc/baht-text";
+import { thaiOfficialDate } from "@/lib/thai-months";
+import {
+  defaultChargeVat,
+  documentVatRate,
+  settleDocumentVat,
+  vatChoiceAllowed,
+} from "@/lib/vat";
 import { Button } from "@/components/ui/button";
 import { PrintModalPortal } from "@/components/print-modal-portal";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
+import { SegmentedControl } from "@/components/inventory-shell";
 import {
   FileText,
   Building2,
@@ -30,9 +39,7 @@ import {
   Printer,
   CheckCircle2,
   Layers,
-  Sparkles,
   History,
-  Repeat,
 } from "lucide-react";
 
 // อนุมานจาก query จริงของ fetchPendingDeliveryOrders() — เดิมประกาศมือแล้วไม่ตรงกับฐานข้อมูล
@@ -45,6 +52,145 @@ import { ModalBackdrop } from "@/components/modal-shell";
 import { PageHeader } from "@/components/page-header";
 import { UnderlineNav } from "@/components/underline-nav";
 
+const DOC_STATUS_TH: Record<string, string> = {
+  DRAFT: "ฉบับร่าง",
+  PAID: "ชำระแล้ว",
+  CONVERTED: "แปลงแล้ว",
+};
+
+function formatAmount(n: number): string {
+  return Number(n || 0).toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function OfficialDocument({
+  doc,
+  shopProfile,
+}: {
+  doc: SmartAccDocument;
+  shopProfile?: ShopProfile;
+}) {
+  const cfg = DOC_TYPE_CONFIG[doc.doc_type as DocumentType];
+  const vat = Number(doc.vat_amount || 0);
+  const subtotal = Number(doc.subtotal_amount || doc.grand_total);
+  const items = doc.ext_document_items ?? [];
+  const signatory = shopProfile?.signatoryName?.trim() || shopProfile?.name || "ยังไม่ได้ตั้งชื่อกิจการ";
+
+  return (
+    <div className="printable-area bg-white p-8 text-[12px] leading-relaxed text-black">
+      <div className="flex items-start justify-between gap-6 border-b border-black pb-3">
+        <div className="flex min-w-0 items-start gap-3">
+          {shopProfile?.logoUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element -- โลโก้ร้านเป็น URL จาก /settings ใช้บนหัวเอกสาร A4
+            <img src={shopProfile.logoUrl} alt="" className="h-14 w-14 shrink-0 object-contain" />
+          ) : null}
+          <div className="min-w-0">
+            {/* fallback เป็นข้อความกลาง ห้าม hardcode ชื่อ/เลขผู้เสียภาษีของ tenant ใด */}
+            <div className="text-[15px] font-semibold">{shopProfile?.name || "ยังไม่ได้ตั้งค่าชื่อกิจการ — ไปที่ /settings"}</div>
+            <div className="mt-0.5 text-[11px]">{shopProfile?.address || "ยังไม่ได้ตั้งค่าที่อยู่"}</div>
+            <div className="text-[11px]">
+              เลขประจำตัวผู้เสียภาษี {shopProfile?.taxId || "-"}
+              {shopProfile?.phone ? `  โทร. ${shopProfile.phone}` : ""}
+            </div>
+          </div>
+        </div>
+        <div className="shrink-0 text-right">
+          <div className="text-[16px] font-semibold">{cfg?.labelTh || doc.doc_type}</div>
+          {cfg?.labelEn ? <div className="text-[10px] tracking-wide text-neutral-600">{cfg.labelEn}</div> : null}
+          <div className="mt-2 space-y-0.5 text-[11px]">
+            <div>เลขที่ {doc.doc_number}</div>
+            <div>วันที่ {thaiOfficialDate(doc.issue_date)}</div>
+            {doc.due_date ? <div>ครบกำหนด {thaiOfficialDate(doc.due_date)}</div> : null}
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-3 border border-black p-3 text-[11px]">
+        <div className="font-semibold">ลูกค้า</div>
+        <div className="mt-0.5 text-[13px] font-semibold">
+          {doc.ext_contacts?.company_name || "ยังไม่ได้ระบุชื่อลูกค้า"}
+        </div>
+        <div className="mt-1 flex flex-wrap gap-x-6 gap-y-0.5">
+          <span>เลขประจำตัวผู้เสียภาษี {doc.ext_contacts?.tax_id || "-"}</span>
+          <span>สาขา {doc.ext_contacts?.branch_code || "00000"}</span>
+        </div>
+        {doc.ext_contacts?.phone ? <div>โทร {doc.ext_contacts.phone}</div> : null}
+        <div>ที่อยู่ {doc.ext_contacts?.address || "-"}</div>
+      </div>
+
+      <table className="mt-3 w-full border-collapse border border-black text-[11px]">
+        <thead>
+          <tr>
+            <th className="w-10 border border-black bg-neutral-200 px-2 py-1.5 font-semibold">ลำดับ</th>
+            <th className="border border-black bg-neutral-200 px-2 py-1.5 text-left font-semibold">รายการ</th>
+            <th className="w-16 border border-black bg-neutral-200 px-2 py-1.5 font-semibold">จำนวน</th>
+            <th className="w-28 border border-black bg-neutral-200 px-2 py-1.5 font-semibold">ราคาต่อหน่วย</th>
+            <th className="w-28 border border-black bg-neutral-200 px-2 py-1.5 font-semibold">จำนวนเงิน</th>
+          </tr>
+        </thead>
+        <tbody>
+          {(items.length > 0 ? items : [{ id: "empty", item_name: "—", quantity: 1, unit_price: 0, total_line_amount: 0 }]).map((it, idx) => (
+            <tr key={it.id || idx}>
+              <td className="border border-black px-2 py-1.5 text-center tabular-nums">{idx + 1}</td>
+              <td className="border border-black px-2 py-1.5">{it.item_name}</td>
+              <td className="border border-black px-2 py-1.5 text-right tabular-nums">{it.quantity}</td>
+              <td className="border border-black px-2 py-1.5 text-right tabular-nums">
+                {formatAmount(Number(it.unit_price))}
+              </td>
+              <td className="border border-black px-2 py-1.5 text-right tabular-nums">
+                {formatAmount(Number(it.total_line_amount || Number(it.quantity) * Number(it.unit_price)))}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+        <tfoot>
+          <tr>
+            <td colSpan={3} rowSpan={vat > 0 ? 3 : 2} className="border border-black px-2 py-2 align-top">
+              <div className="font-semibold">จำนวนเงินรวมทั้งสิ้น (ตัวอักษร)</div>
+              <div className="mt-1">({thaiBahtText(Number(doc.grand_total || 0))})</div>
+            </td>
+            <td className="border border-black px-2 py-1.5 text-right">รวมมูลค่า</td>
+            <td className="border border-black px-2 py-1.5 text-right tabular-nums">{formatAmount(subtotal)}</td>
+          </tr>
+          {vat > 0 ? (
+            <tr>
+              <td className="border border-black px-2 py-1.5 text-right">ภาษีมูลค่าเพิ่ม 7%</td>
+              <td className="border border-black px-2 py-1.5 text-right tabular-nums">{formatAmount(vat)}</td>
+            </tr>
+          ) : null}
+          <tr>
+            <td className="border border-black px-2 py-1.5 text-right font-semibold">ยอดรวมสุทธิ</td>
+            <td className="border border-black px-2 py-1.5 text-right font-semibold tabular-nums">
+              {formatAmount(Number(doc.grand_total))}
+            </td>
+          </tr>
+        </tfoot>
+      </table>
+
+      {vat === 0 && doc.doc_type !== "QUOTATION" && doc.doc_type !== "DO" ? (
+        <div className="mt-2 text-[11px]">เอกสารนี้ไม่รวมภาษีมูลค่าเพิ่ม</div>
+      ) : null}
+
+      <div className="mt-10 grid grid-cols-2 gap-10 text-center text-[11px]">
+        <div>
+          <div className="mx-auto mb-8 h-10 w-44 border-b border-black" />
+          <div>ลงชื่อ ................................ ผู้รับเอกสาร</div>
+          <div className="mt-1">วันที่ ....... / ....... / .......</div>
+        </div>
+        <div>
+          {shopProfile?.signatureUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element -- ลายเซ็นจาก /settings
+            <img src={shopProfile.signatureUrl} alt="" className="mx-auto mb-1 h-10 max-w-[180px] object-contain" />
+          ) : (
+            <div className="mx-auto mb-8 h-10 w-44 border-b border-black" />
+          )}
+          <div>ลงชื่อ ................................ ผู้มีอำนาจลงนาม</div>
+          <div className="mt-1">({signatory})</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function InvoicingClient({
   pendingDOs,
   catalog,
@@ -56,8 +202,18 @@ export function InvoicingClient({
   existingDocs: SmartAccDocument[];
   shopProfile?: ShopProfile;
 }) {
+  const router = useRouter();
   const [docType, setDocType] = useState<DocumentType>("INVOICE");
+  const vatRegistered = shopProfile?.vatRegistered !== false;
+  const [chargeVat, setChargeVat] = useState(() =>
+    defaultChargeVat(shopProfile?.vatRegistered !== false, "INVOICE")
+  );
   const [isPending, startTransition] = useTransition();
+  const [removedDocIds, setRemovedDocIds] = useState<string[]>([]);
+  const visibleDocs = useMemo(
+    () => existingDocs.filter((doc) => !removedDocIds.includes(doc.id)),
+    [existingDocs, removedDocIds]
+  );
 
   // Contact / Customer State
   const [companyName, setCompanyName] = useState("");
@@ -88,7 +244,7 @@ export function InvoicingClient({
   const [selectedDoIds, setSelectedDoIds] = useState<string[]>([]);
 
   // Catalog UI State
-  const [catalogSearch, setCatalogSearch] = useState<string>("all");
+  const [catalogSearch, setCatalogSearch] = useState("");
   const [printingDoc, setPrintingDoc] = useState<SmartAccDocument | null>(null);
   const [catalogCategoryTab, setCatalogCategoryTab] = useState<string>("all");
 
@@ -121,10 +277,10 @@ export function InvoicingClient({
 
   // Calculations
   const subtotal = items.reduce((sum, it) => sum + it.totalLineAmount, 0);
-  const isTaxApplicable = ["INVOICE", "BILLING_NOTE", "TAX_INVOICE", "RECEIPT"].includes(docType);
-  const vatRate = isTaxApplicable ? 7.0 : 0.0;
-  const vatAmount = subtotal * (vatRate / 100);
-  const grandTotal = subtotal + vatAmount;
+  const vatRate = documentVatRate(vatRegistered, docType, vatChoiceAllowed(docType) ? chargeVat : undefined);
+  const totals = settleDocumentVat(subtotal, vatRate);
+  const vatAmount = totals.vatAmount;
+  const grandTotal = totals.grandTotal;
 
   // DBD search state
   const [isSearchingDbd, setIsSearchingDbd] = useState(false);
@@ -233,6 +389,10 @@ export function InvoicingClient({
   }
 
   async function handleCreateDocument() {
+    if (docType === "TAX_INVOICE" && !vatRegistered) {
+      toast.error("กิจการนี้ยังไม่จด VAT จึงออกใบกำกับภาษีไม่ได้");
+      return;
+    }
     if (!companyName.trim()) {
       toast.error("กรุณากรอกชื่อลูกค้าหรือชื่อบริษัท — เอกสารบัญชีต้องระบุผู้รับเอกสาร");
       return;
@@ -257,6 +417,7 @@ export function InvoicingClient({
       notes,
       promptPayTarget,
       billingRefDocIds: selectedDoIds,
+      chargeVat: vatChoiceAllowed(docType) ? chargeVat : undefined,
     };
 
     startTransition(async () => {
@@ -271,6 +432,7 @@ export function InvoicingClient({
           setBranchCode("00000");
           setAddress("");
           setDbdSearchInput("");
+          router.refresh();
         } else {
           toast.error(res.error);
         }
@@ -286,6 +448,7 @@ export function InvoicingClient({
         const res = await convertDocument(docId, targetType);
         if (res.success) {
           toast.success(`แปลงเอกสารเป็น ${res.docNumber} (${DOC_TYPE_CONFIG[targetType].labelTh}) เรียบร้อย`);
+          router.refresh();
         } else {
           toast.error(res.error);
         }
@@ -293,6 +456,44 @@ export function InvoicingClient({
         toast.error(errorMessage(err, "เกิดข้อผิดพลาดในการแปลงเอกสาร"));
       }
     });
+  }
+
+  function handleDelete(doc: SmartAccDocument) {
+    const typeLabel = DOC_TYPE_CONFIG[doc.doc_type as DocumentType]?.labelTh || doc.doc_type;
+    const customer = doc.ext_contacts?.company_name || "ยังไม่มีชื่อลูกค้า";
+    const amount = Number(doc.grand_total).toLocaleString("th-TH", { minimumFractionDigits: 2 });
+    if (
+      !confirm(
+        `ลบเอกสาร ${doc.doc_number} (${typeLabel}) ของ ${customer} ยอด ฿${amount}?\n\nเลขที่นี้จะไม่ถูกนำกลับมาใช้ — ถ้าเป็นใบกำกับภาษีที่ออกให้ลูกค้าจริงแล้ว ไม่ควรลบ`
+      )
+    ) {
+      return;
+    }
+
+    startTransition(async () => {
+      try {
+        const res = await deleteSmartAccDocument(doc.id);
+        if (res.success) {
+          setRemovedDocIds((prev) => (prev.includes(doc.id) ? prev : [...prev, doc.id]));
+          if (printingDoc?.id === doc.id) setPrintingDoc(null);
+          toast.success(`ลบเอกสาร ${res.docNumber} แล้ว`);
+          router.refresh();
+        } else {
+          toast.error(res.error);
+        }
+      } catch (err) {
+        toast.error(errorMessage(err, "ไม่สามารถลบเอกสารได้"));
+      }
+    });
+  }
+
+  function selectDocType(type: DocumentType) {
+    if (type === "TAX_INVOICE" && !vatRegistered) {
+      toast.error("กิจการนี้ยังไม่จด VAT จึงออกใบกำกับภาษีไม่ได้ — ตั้งค่าที่ /settings หรือออกใบเสร็จเงินสด");
+      return;
+    }
+    setDocType(type);
+    setChargeVat(defaultChargeVat(vatRegistered, type));
   }
 
   return (
@@ -307,7 +508,7 @@ export function InvoicingClient({
         onChange={(id) => setActiveView(id as "create" | "history")}
         items={[
           { id: "create", label: "ออกเอกสารใหม่", icon: Plus },
-          { id: "history", label: `ประวัติเอกสาร (${existingDocs.length})`, icon: History },
+          { id: "history", label: `ประวัติเอกสาร (${visibleDocs.length})`, icon: History },
         ]}
       />
 
@@ -315,13 +516,19 @@ export function InvoicingClient({
         <>
           {/* Document Type Selector */}
           <div className="flex flex-wrap gap-2 rounded-xl border border-slate-200 bg-white p-3 shadow-xs">
-            {(Object.keys(DOC_TYPE_CONFIG) as DocumentType[]).map((type) => (
+            {(Object.keys(DOC_TYPE_CONFIG) as DocumentType[]).map((type) => {
+              const lockedTax = type === "TAX_INVOICE" && !vatRegistered;
+              return (
               <button
                 key={type}
-                onClick={() => setDocType(type)}
+                type="button"
+                onClick={() => selectDocType(type)}
+                title={lockedTax ? "ยังไม่จด VAT — ออกใบกำกับภาษีไม่ได้" : undefined}
                 className={`flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium transition-colors ${
                   docType === type
                     ? "bg-slate-900 text-white"
+                    : lockedTax
+                    ? "border border-slate-200 bg-slate-50 text-slate-400"
                     : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
                 }`}
               >
@@ -329,7 +536,8 @@ export function InvoicingClient({
                 <span>:</span>
                 <span>{DOC_TYPE_CONFIG[type].labelTh}</span>
               </button>
-            ))}
+              );
+            })}
           </div>
 
           {/* ── Main Form Grid ── */}
@@ -341,36 +549,34 @@ export function InvoicingClient({
                 <CardHeader className="border-b border-slate-100 pb-3">
                   <div className="flex items-center justify-between">
                     <div>
-                      <CardTitle className="text-sm font-bold flex items-center gap-2">
-                        <Building2 className="h-4 w-4 text-teal-700" />
-                        ข้อมูลลูกค้า / ผู้รับเอกสาร (Bill To / Customer)
+                      <CardTitle className="flex items-center gap-2 text-sm font-semibold">
+                        <Building2 className="h-4 w-4 text-slate-500" />
+                        ข้อมูลลูกค้า
                       </CardTitle>
-                      <CardDescription className="text-xs mt-0.5">
-                        ระบุชื่อลูกค้าหรือบริษัทที่เราต้องการออกบิลไปเรียกเก็บเงิน
+                      <CardDescription className="mt-0.5 text-xs">
+                        ชื่อผู้รับเอกสารตามที่อยู่จดทะเบียน — ใช้บนใบเสนอราคาถึงใบกำกับภาษี
                       </CardDescription>
                     </div>
                     {shopProfile && (
-                      <div className="hidden sm:flex items-center gap-2 rounded-lg bg-teal-50 border border-teal-100 px-2.5 py-1 text-[11px] text-teal-800">
+                      <div className="hidden items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] text-slate-600 sm:flex">
                         {shopProfile.logoUrl && (
                           // eslint-disable-next-line @next/next/no-img-element -- โลโก้ร้านเป็น URL ที่เจ้าของวางเองจากโฮสต์ใดก็ได้ และใช้ในเอกสาร A4 ที่สั่งพิมพ์ (next/image ต้องประกาศ remotePatterns ล่วงหน้า และแทรก wrapper ที่กวนการจัดหน้ากระดาษ)
-                          <img src={shopProfile.logoUrl} alt="Logo" className="h-4 w-4 object-contain rounded" />
+                          <img src={shopProfile.logoUrl} alt="" className="h-4 w-4 rounded object-contain" />
                         )}
-                        <span>ผู้ออกบิล: <strong>{shopProfile.name}</strong></span>
+                        <span>ผู้ออกเอกสาร: {shopProfile.name}</span>
                       </div>
                     )}
                   </div>
                 </CardHeader>
                 <CardContent className="p-5 space-y-4">
                   {/* DBD Auto-Fill Bar */}
-                  <div className="rounded-xl border border-teal-200 bg-teal-50/50 p-3 space-y-2">
-                    <Label className="text-xs font-bold text-teal-900 flex items-center gap-1.5">
-                      <Search className="h-3.5 w-3.5 text-teal-700" />
-                      ค้นหาลูกค้าที่เคยบันทึกไว้ (13 หลัก หรือ ชื่อบริษัท)
+                  <div className="space-y-2 rounded-xl border border-slate-200 bg-slate-50/70 p-3">
+                    <Label className="flex items-center gap-1.5 text-xs font-medium text-slate-700">
+                      <Search className="h-3.5 w-3.5 text-slate-500" />
+                      ค้นหาลูกค้าที่เคยออกเอกสารด้วยกัน
                     </Label>
-                    <p className="text-[11px] text-teal-800/70 -mt-1">
-                      ค้นจากลูกค้าที่เคยออกเอกสารด้วยกันมาก่อนในระบบนี้เท่านั้น — <strong>ไม่ได้เชื่อมต่อกับ
-                      ฐานข้อมูลกรมพัฒนาธุรกิจการค้า (DBD) จริง</strong> ลูกค้าใหม่ต้องกรอกข้อมูลเองครั้งแรก
-                      แล้วระบบจะจำไว้ให้ค้นหาเจอในครั้งถัดไปอัตโนมัติ
+                    <p className="text-[11px] text-slate-500">
+                      ค้นจากรายชื่อในระบบนี้เท่านั้น ไม่ได้เชื่อมกรมพัฒนาธุรกิจการค้า — ลูกค้าใหม่กรอกเองครั้งแรก
                     </p>
                     <div className="flex gap-2">
                       <Input
@@ -382,15 +588,15 @@ export function InvoicingClient({
                             handleDbdSearch();
                           }
                         }}
-                        placeholder="พิมพ์เลขผู้เสียภาษี 13 หลัก หรือชื่อลูกค้าที่เคยบันทึกไว้..."
-                        className="text-xs h-9 bg-white font-mono"
+                        placeholder="เลขผู้เสียภาษี 13 หลัก หรือชื่อลูกค้า"
+                        className="h-9 bg-white font-mono text-xs"
                       />
                       <Button
                         type="button"
                         size="sm"
                         disabled={isSearchingDbd}
                         onClick={() => handleDbdSearch()}
-                        className="bg-teal-700 hover:bg-emerald-600 text-white text-xs h-9 px-4 shrink-0 font-semibold gap-1"
+                        className="h-9 shrink-0 gap-1 bg-slate-900 px-4 text-xs font-medium text-white hover:bg-slate-800"
                       >
                         {isSearchingDbd ? "กำลังค้นหา..." : "ค้นหา"}
                       </Button>
@@ -419,7 +625,7 @@ export function InvoicingClient({
                           <button
                             type="button"
                             onClick={() => handleDbdSearch(taxId)}
-                            className="text-[11px] text-teal-700 hover:underline font-semibold"
+                            className="text-[11px] font-medium text-slate-600 hover:underline"
                           >
                             ค้นจากเลขนี้
                           </button>
@@ -463,15 +669,14 @@ export function InvoicingClient({
               </Card>
 
               {/* Structured & Categorized Professional Catalog Quick Add Panel */}
-              <Card className="border-teal-200 bg-white shadow-xs overflow-hidden">
-                <CardHeader className="p-3.5 bg-gradient-to-r from-teal-50/80 via-slate-50 to-white border-b border-slate-200 flex flex-wrap items-center justify-between gap-2">
+              <Card className="overflow-hidden border-slate-200 bg-white shadow-xs">
+                <CardHeader className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 p-3.5">
                   <div>
-                    <CardTitle className="text-xs font-bold text-teal-950 flex items-center gap-1.5">
-                      <Sparkles className="h-4 w-4 text-teal-700" />
-                      เลือกรายการบริการ / สินค้าจากระบบ (Catalog)
+                    <CardTitle className="text-xs font-semibold text-slate-900">
+                      เลือกรายการจากแคตตาล็อก
                     </CardTitle>
                     <CardDescription className="text-[11px] text-slate-500">
-                      คลิกเพื่อเพิ่มรายการเข้าสู่เอกสารทันที พร้อมคำนวณภาษีและยอดสุทธิอัตโนมัติ
+                      คลิกเพื่อใส่ในเอกสาร — คำนวณยอดให้อัตโนมัติ
                     </CardDescription>
                   </div>
 
@@ -492,22 +697,22 @@ export function InvoicingClient({
                   {/* Category Filter Tabs */}
                   <div className="flex flex-wrap items-center gap-1.5 border-b border-slate-100 pb-2.5">
                     {[
-                      { id: "all", label: "🌐 ทั้งหมด", count: catalog.length },
-                      { id: "package", label: "👟 แพ็กเกจหลัก (Packages)", count: catalog.filter((c) => c.category === "package").length },
-                      { id: "treatment", label: "🛡️ บริการเสริม & ซ่อม (Treatments)", count: catalog.filter((c) => ["treatment", "cleaning", "repair", "protection"].includes(c.category)).length },
-                      { id: "product", label: "🧴 น้ำยา & อุปกรณ์ (Supplies)", count: catalog.filter((c) => c.category === "product").length },
+                      { id: "all", label: "ทั้งหมด", count: catalog.length },
+                      { id: "package", label: "แพ็กเกจ", count: catalog.filter((c) => c.category === "package").length },
+                      { id: "treatment", label: "บริการเสริม", count: catalog.filter((c) => ["treatment", "cleaning", "repair", "protection"].includes(c.category)).length },
+                      { id: "product", label: "สินค้า", count: catalog.filter((c) => c.category === "product").length },
                     ].map((tab) => (
                       <button
                         key={tab.id}
                         type="button"
                         onClick={() => setCatalogCategoryTab(tab.id)}
-                        className={`rounded-lg px-2.5 py-1 text-xs font-bold transition-all cursor-pointer ${
+                        className={`cursor-pointer rounded-lg px-2.5 py-1 text-xs font-medium transition-colors ${
                           catalogCategoryTab === tab.id
-                            ? "bg-teal-800 text-white shadow-2xs"
-                            : "bg-slate-50 text-slate-700 hover:bg-slate-100 border border-slate-200"
+                            ? "bg-slate-900 text-white"
+                            : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
                         }`}
                       >
-                        {tab.label} <span className="opacity-70 text-[10px]">({tab.count})</span>
+                        {tab.label} <span className="text-[10px] opacity-70">({tab.count})</span>
                       </button>
                     ))}
                   </div>
@@ -515,32 +720,23 @@ export function InvoicingClient({
                   {/* Filtered Grid Cards */}
                   <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 max-h-56 overflow-y-auto pr-1">
                     {filteredCatalog.map((cat) => {
-                      const isPkg = cat.category === "package";
-                      const isTreatment = ["treatment", "cleaning", "repair", "protection"].includes(cat.category);
-
                       return (
                         <div
                           key={cat.id}
                           onClick={() => handleAddCatalogItem(cat)}
-                          className={`flex items-center justify-between p-2.5 rounded-xl border transition-all cursor-pointer group text-xs ${
-                            isPkg
-                              ? "bg-teal-50/40 border-teal-200 hover:bg-teal-100/70 hover:border-teal-400"
-                              : isTreatment
-                              ? "bg-amber-50/40 border-amber-200 hover:bg-amber-100/70 hover:border-amber-400"
-                              : "bg-slate-50 border-slate-200 hover:bg-slate-100 hover:border-slate-300"
-                          }`}
+                          className="group flex cursor-pointer items-center justify-between rounded-xl border border-slate-200 bg-white p-2.5 text-xs transition-colors hover:border-slate-300 hover:bg-slate-50"
                         >
-                          <div className="space-y-0.5 min-w-0 pr-2">
-                            <div className="font-bold text-slate-900 truncate group-hover:text-teal-900">
+                          <div className="min-w-0 space-y-0.5 pr-2">
+                            <div className="truncate font-medium text-slate-900">
                               {cat.name}
                             </div>
-                            <div className="text-[10px] text-slate-500 flex items-center gap-1">
-                              <span className="font-mono">{cat.unit || "คู่"}</span>
+                            <div className="flex items-center gap-1 text-[11px] text-slate-500">
+                              <span>{cat.unit || "คู่"}</span>
                               {cat.price > 0 && (
                                 <>
                                   <span>·</span>
-                                  <span className="font-black text-teal-800 font-mono">
-                                    ฿{cat.price.toLocaleString()}
+                                  <span className="font-semibold tabular-nums text-slate-800">
+                                    {formatAmount(cat.price)}
                                   </span>
                                 </>
                               )}
@@ -550,9 +746,10 @@ export function InvoicingClient({
                           <Button
                             type="button"
                             size="sm"
-                            className="h-7 px-2 text-[11px] font-bold bg-white text-slate-800 border border-slate-300 group-hover:bg-emerald-600 group-hover:text-white group-hover:border-teal-700 shrink-0 shadow-2xs"
+                            variant="outline"
+                            className="h-7 shrink-0 px-2 text-[11px] font-medium"
                           >
-                            <Plus className="h-3 w-3 mr-0.5" /> เพิ่ม
+                            <Plus className="mr-0.5 h-3 w-3" /> เพิ่ม
                           </Button>
                         </div>
                       );
@@ -570,10 +767,10 @@ export function InvoicingClient({
               {/* DO Picker Section for Billing Notes */}
               {docType === "BILLING_NOTE" && (
                 <Card className="border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50 shadow-xs">
-                  <CardHeader className="border-b border-teal-100 pb-3">
-                    <CardTitle className="text-sm font-bold text-teal-900 flex items-center gap-2">
-                      <Layers className="h-4 w-4 text-teal-700" />
-                      DO-Picker: เลือกใบส่งของ / ใบแจ้งหนี้ที่ค้างชำระมารวมวางบิล
+                  <CardHeader className="border-b border-slate-200 pb-3">
+                    <CardTitle className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+                      <Layers className="h-4 w-4 text-slate-500" />
+                      เลือกใบส่งของ / ใบแจ้งหนี้ที่ค้างชำระ
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="p-4">
@@ -587,9 +784,9 @@ export function InvoicingClient({
                           <div
                             key={doItem.id}
                             onClick={() => handleToggleDo(doItem)}
-                            className={`flex items-center justify-between p-2.5 rounded-lg border text-xs cursor-pointer transition-all ${
+                            className={`flex cursor-pointer items-center justify-between rounded-lg border p-2.5 text-xs transition-colors ${
                               selectedDoIds.includes(doItem.id)
-                                ? "border-teal-600 bg-teal-100/80 font-semibold"
+                                ? "border-slate-900 bg-slate-100 font-medium"
                                 : "border-slate-200 bg-white hover:bg-slate-50"
                             }`}
                           >
@@ -598,15 +795,15 @@ export function InvoicingClient({
                                 type="checkbox"
                                 checked={selectedDoIds.includes(doItem.id)}
                                 onChange={() => {}}
-                                className="rounded text-teal-700"
+                                className="rounded"
                               />
                               <div>
-                                <span className="font-bold text-teal-800">{doItem.doc_number}</span>
-                                <span className="text-slate-500 ml-2">({doItem.issue_date})</span>
+                                <span className="font-medium tabular-nums text-slate-900">{doItem.doc_number}</span>
+                                <span className="ml-2 text-slate-500">{thaiOfficialDate(doItem.issue_date)}</span>
                               </div>
                             </div>
-                            <div className="font-mono font-bold text-slate-900">
-                              ฿{doItem.grand_total.toLocaleString()}
+                            <div className="font-semibold tabular-nums text-slate-900">
+                              {formatAmount(doItem.grand_total)}
                             </div>
                           </div>
                         ))}
@@ -620,7 +817,7 @@ export function InvoicingClient({
               <Card className="border-slate-200 dark:border-slate-700 shadow-sm">
                 <CardHeader className="border-b border-slate-100 pb-3 flex flex-row items-center justify-between">
                   <div>
-                    <CardTitle className="text-sm font-bold">รายการสินค้า / บริการ</CardTitle>
+                    <CardTitle className="text-sm font-semibold">รายการสินค้า / บริการ</CardTitle>
                     <CardDescription className="text-xs">
                       ระบุจำนวนและราคาต่อหน่วย
                     </CardDescription>
@@ -638,7 +835,7 @@ export function InvoicingClient({
                 <CardContent className="p-0">
                   <div className="overflow-x-auto">
                     <table className="w-full text-left text-xs">
-                      <thead className="border-b border-slate-100 bg-slate-50 text-slate-600 uppercase font-semibold">
+                      <thead className="border-b border-slate-100 bg-slate-50 text-xs font-medium text-slate-500">
                         <tr>
                           <th className="px-3 py-2.5">รายการ</th>
                           <th className="px-3 py-2.5 text-center w-20">จำนวน</th>
@@ -683,8 +880,8 @@ export function InvoicingClient({
                                   className="text-xs h-8 text-right font-mono"
                                 />
                               </td>
-                              <td className="p-2 text-right font-mono font-bold text-slate-800">
-                                {item.totalLineAmount.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+                              <td className="p-2 text-right font-semibold tabular-nums text-slate-800">
+                                {formatAmount(item.totalLineAmount)}
                               </td>
                               <td className="p-2 text-center">
                                 <button
@@ -709,11 +906,11 @@ export function InvoicingClient({
             <div className="lg:col-span-5 space-y-6">
               <Card className="border-slate-200 bg-slate-50/50 shadow-xs">
                 <CardHeader className="border-b border-slate-200 pb-3">
-                  <CardTitle className="text-sm font-bold flex items-center justify-between">
-                    <span>สรุปเอกสาร (Summary)</span>
-                    <Badge variant="outline" className="text-teal-800 bg-teal-50 border-teal-200 font-mono">
+                  <CardTitle className="flex items-center justify-between text-sm font-semibold">
+                    <span>สรุปเอกสาร</span>
+                    <span className="font-mono text-[11px] font-medium text-slate-500">
                       {DOC_TYPE_CONFIG[docType].prefix}-{issueDate.replace(/-/g, "")}-XXXX
-                    </Badge>
+                    </span>
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="p-5 space-y-4">
@@ -738,21 +935,43 @@ export function InvoicingClient({
                     </div>
                   </div>
 
+                  {vatChoiceAllowed(docType) && vatRegistered ? (
+                    <div className="space-y-1.5">
+                      <Label className="text-[11px] font-medium text-slate-600">ประเภทบิล</Label>
+                      <SegmentedControl
+                        value={chargeVat ? "vat" : "cash"}
+                        onChange={(id) => setChargeVat(id === "vat")}
+                        options={[
+                          { value: "cash", label: "บิลเงินสด" },
+                          { value: "vat", label: "บิล VAT 7%" },
+                        ]}
+                      />
+                    </div>
+                  ) : (
+                    <p className="text-[11px] text-slate-500">
+                      {!vatRegistered
+                        ? "กิจการนี้ยังไม่จด VAT — เอกสารเป็นบิลเงินสดทั้งหมด ตั้งค่าได้ที่ /settings"
+                        : docType === "TAX_INVOICE"
+                        ? "ใบกำกับภาษีคิด VAT 7% ตามที่จดทะเบียน"
+                        : "ใบเสนอราคาและใบส่งของยังไม่คิด VAT"}
+                    </p>
+                  )}
+
                   {/* Monetary Aggregation */}
                   <div className="space-y-2 border-t border-slate-200 pt-3 text-xs">
                     <div className="flex justify-between text-slate-600">
-                      <span>มูลค่ารวม (Subtotal):</span>
-                      <span className="font-mono font-bold">{subtotal.toLocaleString("th-TH", { minimumFractionDigits: 2 })} ฿</span>
+                      <span>มูลค่ารวม</span>
+                      <span className="font-semibold tabular-nums">{formatAmount(subtotal)}</span>
                     </div>
                     {vatRate > 0 && (
                       <div className="flex justify-between text-slate-600">
-                        <span>ภาษีมูลค่าเพิ่ม (VAT 7%):</span>
-                        <span className="font-mono font-bold text-teal-700">+{vatAmount.toLocaleString("th-TH", { minimumFractionDigits: 2 })} ฿</span>
+                        <span>ภาษีมูลค่าเพิ่ม 7%</span>
+                        <span className="font-semibold tabular-nums">+{formatAmount(vatAmount)}</span>
                       </div>
                     )}
-                    <div className="flex justify-between text-sm font-bold text-slate-900 border-t border-slate-200 pt-2">
-                      <span>ยอดสุทธิ (Grand Total):</span>
-                      <span className="font-mono text-teal-800 text-base">฿{grandTotal.toLocaleString("th-TH", { minimumFractionDigits: 2 })}</span>
+                    <div className="flex justify-between border-t border-slate-200 pt-2 text-sm font-semibold text-slate-900">
+                      <span>ยอดสุทธิ</span>
+                      <span className="tabular-nums text-base">{formatAmount(grandTotal)}</span>
                     </div>
                     {grandTotal > 0 && (
                       <div className="text-[11px] text-slate-500 text-right italic">
@@ -763,9 +982,9 @@ export function InvoicingClient({
 
                   {/* Dynamic PromptPay Target */}
                   <div className="rounded-xl border border-slate-200 bg-white p-4 space-y-2">
-                    <div className="flex items-center gap-1.5 text-xs font-bold text-slate-800">
-                      <QrCode className="h-4 w-4 text-teal-700" />
-                      <span>PromptPay Dynamic QR</span>
+                    <div className="flex items-center gap-1.5 text-xs font-medium text-slate-800">
+                      <QrCode className="h-4 w-4 text-slate-500" />
+                      <span>พร้อมเพย์</span>
                     </div>
                     <Input
                       value={promptPayTarget}
@@ -780,14 +999,14 @@ export function InvoicingClient({
                     type="button"
                     disabled={isPending}
                     onClick={handleCreateDocument}
-                    className="w-full h-11 bg-teal-700 hover:bg-emerald-600 text-white font-bold text-sm shadow-xs"
+                    className="h-11 w-full bg-slate-900 text-sm font-medium text-white shadow-xs hover:bg-slate-800"
                   >
                     {isPending ? "กำลังบันทึกเอกสาร..." : `ออกเอกสาร ${DOC_TYPE_CONFIG[docType].labelTh}`}
                   </Button>
 
                   {createdDoc && (
                     <div className="p-3 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs space-y-2">
-                      <div className="flex items-center gap-1.5 font-bold">
+                      <div className="flex items-center gap-1.5 font-medium">
                         <CheckCircle2 className="h-4 w-4 text-emerald-600" />
                         <span>ออกเอกสารเลขที่ {createdDoc.docNumber} สำเร็จ!</span>
                       </div>
@@ -800,99 +1019,93 @@ export function InvoicingClient({
         </>
       ) : (
         /* ── HISTORY & CONVERSION PIPELINE VIEW ── */
-        <Card className="border-slate-200 dark:border-slate-700 shadow-sm">
-          <CardHeader className="border-b border-slate-100 pb-3 flex flex-row items-center justify-between">
+        <Card className="border-slate-200 shadow-sm">
+          <CardHeader className="flex flex-row items-center justify-between border-b border-slate-100 pb-3">
             <div>
-              <CardTitle className="text-sm font-bold">รายการเอกสารทั้งหมดในระบบ</CardTitle>
+              <CardTitle className="text-sm font-semibold">ประวัติเอกสาร</CardTitle>
               <CardDescription className="text-xs">
-                สามารถกดแปลงเอกสาร (Convert) ตามสายงานได้ทันที
+                พิมพ์ แปลงตามสายงาน หรือลบเอกสารตัวอย่าง — เลขที่ที่ลบจะไม่ถูกนำกลับมาใช้
               </CardDescription>
             </div>
           </CardHeader>
           <CardContent className="p-0">
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs">
-                <thead className="border-b border-slate-100 bg-slate-50 text-slate-600 uppercase font-semibold">
+                <thead className="border-b border-slate-100 bg-slate-50 text-xs font-medium text-slate-500">
                   <tr>
-                    <th className="px-4 py-3">เลขที่เอกสาร</th>
-                    <th className="px-4 py-3">ประเภท</th>
-                    <th className="px-4 py-3">ลูกค้า</th>
-                    <th className="px-4 py-3">วันที่</th>
-                    <th className="px-4 py-3 text-right">ยอดสุทธิ</th>
-                    <th className="px-4 py-3 text-center">สถานะ</th>
-                    <th className="px-4 py-3 text-center">แปลงเอกสารต่อไป</th>
+                    <th className="px-4 py-3 font-medium">เลขที่</th>
+                    <th className="px-4 py-3 font-medium">ประเภท</th>
+                    <th className="px-4 py-3 font-medium">ลูกค้า</th>
+                    <th className="px-4 py-3 font-medium">วันที่</th>
+                    <th className="px-4 py-3 text-right font-medium">ยอดสุทธิ</th>
+                    <th className="px-4 py-3 font-medium">สถานะ</th>
+                    <th className="px-4 py-3 text-right font-medium">จัดการ</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {existingDocs.length === 0 ? (
+                  {visibleDocs.length === 0 ? (
                     <tr>
                       <td colSpan={7} className="p-8 text-center text-slate-400">
                         ยังไม่มีเอกสารในระบบ สามารถกด &ldquo;ออกเอกสารใหม่&rdquo; เพื่อเริ่มต้น
                       </td>
                     </tr>
                   ) : (
-                    existingDocs.map((doc) => {
-                      const nextTypes = DOC_TYPE_CONFIG[doc.doc_type as DocumentType]?.nextTypes || [];
+                    visibleDocs.map((doc) => {
+                      const cfg = DOC_TYPE_CONFIG[doc.doc_type as DocumentType];
+                      const nextTypes = cfg?.nextTypes || [];
                       return (
                         <tr key={doc.id} className="hover:bg-slate-50">
                           <td className="px-4 py-3">
-                            <span className="font-mono font-bold text-teal-800">{doc.doc_number}</span>
+                            <span className="font-medium tabular-nums text-slate-900">{doc.doc_number}</span>
                             {doc.ref_parent_doc_number && (
-                              <div className="text-[10px] text-slate-400 font-mono">
-                                แปลงจาก: {doc.ref_parent_doc_number}
+                              <div className="mt-0.5 text-[11px] text-slate-400">
+                                จาก {doc.ref_parent_doc_number}
                               </div>
                             )}
                           </td>
-                          <td className="px-4 py-3">
-                            <Badge variant="outline" className="text-[10px]">
-                              {DOC_TYPE_CONFIG[doc.doc_type as DocumentType]?.labelTh || doc.doc_type}
-                            </Badge>
-                          </td>
-                          <td className="px-4 py-3 font-medium text-slate-800">
+                          <td className="px-4 py-3 text-slate-700">{cfg?.labelTh || doc.doc_type}</td>
+                          <td className="px-4 py-3 text-slate-800">
                             {doc.ext_contacts?.company_name || "ยังไม่มีชื่อลูกค้า"}
                           </td>
-                          <td className="px-4 py-3 font-mono text-slate-500">
-                            {doc.issue_date}
+                          <td className="px-4 py-3 text-slate-500">
+                            {thaiOfficialDate(doc.issue_date)}
                           </td>
-                          <td className="px-4 py-3 text-right font-mono font-bold text-slate-900">
-                            ฿{Number(doc.grand_total).toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+                          <td className="px-4 py-3 text-right font-semibold tabular-nums text-slate-900">
+                            {formatAmount(Number(doc.grand_total))}
                           </td>
-                          <td className="px-4 py-3 text-center">
-                            <Badge
-                              variant="secondary"
-                              className={`text-[10px] ${
-                                doc.status === "PAID"
-                                  ? "bg-emerald-100 text-emerald-800"
-                                  : doc.status === "CONVERTED"
-                                  ? "bg-blue-100 text-blue-800"
-                                  : "bg-slate-100 text-slate-800"
-                              }`}
-                            >
-                              {doc.status}
-                            </Badge>
+                          <td className="px-4 py-3 text-slate-600">
+                            {DOC_STATUS_TH[doc.status] || doc.status}
                           </td>
-                          <td className="px-4 py-3 text-center">
-                            <div className="flex items-center justify-center gap-1">
-                              <Button
-                                size="sm"
-                                variant="outline"
+                          <td className="px-4 py-3">
+                            <div className="flex flex-wrap items-center justify-end gap-x-3 gap-y-1">
+                              <button
+                                type="button"
                                 onClick={() => setPrintingDoc(doc)}
-                                className="h-6 text-[10px] gap-1 px-2 border-teal-300 text-teal-800 hover:bg-teal-50 font-bold"
+                                className="text-xs font-medium text-slate-700 hover:text-slate-900"
                               >
-                                <Printer className="h-2.5 w-2.5" /> พิมพ์ A4
-                              </Button>
-                              {nextTypes.map((nxt) => (
-                                <Button
+                                พิมพ์
+                              </button>
+                              {nextTypes
+                                .filter((nxt) => vatRegistered || nxt !== "TAX_INVOICE")
+                                .map((nxt) => (
+                                <button
                                   key={nxt}
-                                  size="sm"
-                                  variant="outline"
+                                  type="button"
                                   disabled={isPending || doc.status === "CONVERTED"}
                                   onClick={() => handleConvert(doc.id, nxt)}
-                                  className="h-6 text-[10px] gap-1 px-2 border-slate-200 text-slate-700 hover:bg-slate-50"
+                                  className="text-xs font-medium text-slate-700 hover:text-slate-900 disabled:text-slate-300"
                                 >
-                                  <Repeat className="h-2.5 w-2.5" /> ➔ {DOC_TYPE_CONFIG[nxt].prefix}
-                                </Button>
+                                  เป็น {DOC_TYPE_CONFIG[nxt].labelTh}
+                                </button>
                               ))}
+                              <button
+                                type="button"
+                                disabled={isPending}
+                                onClick={() => handleDelete(doc)}
+                                className="text-xs font-medium text-rose-700 hover:text-rose-800 disabled:text-slate-300"
+                              >
+                                ลบ
+                              </button>
                             </div>
                           </td>
                         </tr>
@@ -906,30 +1119,30 @@ export function InvoicingClient({
         </Card>
       )}
 
-      {/* ── OFFICIAL A4 DOCUMENT PRINT MODAL (INVOICE / TAX INVOICE / DO / RECEIPT) ── */}
       {printingDoc && (
         <PrintModalPortal>
         <ModalBackdrop
           onClose={() => setPrintingDoc(null)}
           className="bg-black/60 backdrop-blur-xs"
         >
-          <div className="my-auto w-full max-w-4xl rounded-2xl bg-white p-6 shadow-2xl border border-slate-300 space-y-4">
+          <div className="my-auto w-full max-w-[210mm] space-y-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-2xl sm:p-6">
             <div className="flex items-center justify-between border-b border-slate-200 pb-3 print:hidden">
               <div className="flex items-center gap-2">
-                <FileText className="h-5 w-5 text-teal-700" />
-                <span className="text-sm font-bold text-slate-900">
-                  {DOC_TYPE_CONFIG[printingDoc.doc_type as DocumentType]?.labelTh || "เอกสารทางการ"} ({printingDoc.doc_number})
+                <FileText className="h-5 w-5 text-slate-500" />
+                <span className="text-sm font-semibold text-slate-900">
+                  {DOC_TYPE_CONFIG[printingDoc.doc_type as DocumentType]?.labelTh || "เอกสาร"} {printingDoc.doc_number}
                 </span>
               </div>
               <div className="flex items-center gap-2">
                 <Button
                   size="sm"
                   onClick={() => window.print()}
-                  className="bg-teal-700 hover:bg-emerald-600 text-white font-bold text-xs gap-1.5 shadow-md"
+                  className="gap-1.5 bg-slate-900 text-xs font-medium text-white hover:bg-slate-800"
                 >
-                  <Printer className="h-4 w-4" /> พิมพ์เอกสาร A4
+                  <Printer className="h-4 w-4" /> พิมพ์ A4
                 </Button>
                 <button
+                  type="button"
                   onClick={() => setPrintingDoc(null)}
                   className="rounded-full p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
                 >
@@ -938,126 +1151,10 @@ export function InvoicingClient({
               </div>
             </div>
 
-            {/* Printable A4 Document Canvas */}
-            <div className="printable-area space-y-4 text-slate-950 font-sans border-2 border-slate-900 p-8 rounded-xl bg-white">
-              {/* Header: Company & Doc Type */}
-              <div className="flex justify-between items-start border-b-2 border-slate-900 pb-4">
-                <div className="space-y-1">
-                  {/* ⚠️ fallback ต้องเป็นข้อความกลาง ห้าม hardcode ชื่อ/ที่อยู่/เลขผู้เสียภาษีของ
-                      tenant ใดตายตัว — เอกสารนี้พิมพ์ให้ลูกค้าจริง ถ้า fetch shopProfile พลาด
-                      ต้องไม่มีทางที่เลขผู้เสียภาษีของ tenant อื่นหลุดออกไปบนใบกำกับภาษี */}
-                  <h1 className="text-lg font-black tracking-tight uppercase">{shopProfile?.name || "ยังไม่ได้ตั้งค่าชื่อกิจการ — ไปที่ /settings"}</h1>
-                  <div className="text-xs text-slate-700">{shopProfile?.address || "ยังไม่ได้ตั้งค่าที่อยู่"}</div>
-                  <div className="text-xs text-slate-700">
-                    เลขประจำตัวผู้เสียภาษี: <strong className="font-mono">{shopProfile?.taxId || "-"}</strong> {shopProfile?.phone ? `· โทร. ${shopProfile.phone}` : ""}
-                  </div>
-                </div>
-                <div className="text-right space-y-1">
-                  <div className="text-lg font-black text-slate-900">
-                    {DOC_TYPE_CONFIG[printingDoc.doc_type as DocumentType]?.labelTh || printingDoc.doc_type}
-                  </div>
-                  <div className="text-xs font-mono font-bold">เลขที่: {printingDoc.doc_number}</div>
-                  <div className="text-xs text-slate-600">วันที่: {printingDoc.issue_date}</div>
-                  {printingDoc.due_date && <div className="text-xs text-rose-700 font-semibold">ครบกำหนด: {printingDoc.due_date}</div>}
-                </div>
-              </div>
-
-              {/* Customer Box — Bill To (มาตรฐานบัญชี: ต้องมีชื่อลูกค้าบนเอกสารทุกประเภท รวมใบเสนอราคา) */}
-              <div className="border border-slate-300 rounded-lg p-3 text-xs bg-slate-50 space-y-1">
-                <div className="font-bold uppercase tracking-wide text-slate-500">ลูกค้า / Bill To</div>
-                <div className="font-bold text-sm text-slate-950">
-                  {printingDoc.ext_contacts?.company_name || "ยังไม่ได้ระบุชื่อลูกค้า"}
-                </div>
-                <div className="flex flex-wrap justify-between gap-2 text-slate-600">
-                  <span>เลขประจำตัวผู้เสียภาษี: <strong className="font-mono text-slate-900">{printingDoc.ext_contacts?.tax_id || "-"}</strong></span>
-                  <span>สาขา: {printingDoc.ext_contacts?.branch_code || "00000"}</span>
-                </div>
-                {printingDoc.ext_contacts?.phone ? (
-                  <div className="text-slate-600">โทร: {printingDoc.ext_contacts.phone}</div>
-                ) : null}
-                <div className="text-slate-600">ที่อยู่: {printingDoc.ext_contacts?.address || "-"}</div>
-              </div>
-
-              {/* Items Table */}
-              <table className="w-full text-xs border border-slate-900 text-left">
-                <thead className="bg-slate-100 font-bold border-b border-slate-900">
-                  <tr>
-                    <th className="p-2 w-12 text-center border-r border-slate-300">ลำดับ</th>
-                    <th className="p-2 border-r border-slate-300">รายการสินค้า / บริการ</th>
-                    <th className="p-2 w-20 text-right border-r border-slate-300">จำนวน</th>
-                    <th className="p-2 w-28 text-right border-r border-slate-300">ราคาต่อหน่วย</th>
-                    <th className="p-2 w-32 text-right">จำนวนเงิน (บาท)</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-200">
-                  {printingDoc.ext_document_items?.map((it, idx) => (
-                    <tr key={it.id || idx}>
-                      <td className="p-2 text-center font-mono border-r border-slate-300">{idx + 1}</td>
-                      <td className="p-2 font-medium border-r border-slate-300">{it.item_name}</td>
-                      <td className="p-2 text-right font-mono border-r border-slate-300">{it.quantity}</td>
-                      <td className="p-2 text-right font-mono border-r border-slate-300">
-                        {Number(it.unit_price).toLocaleString("th-TH", { minimumFractionDigits: 2 })}
-                      </td>
-                      <td className="p-2 text-right font-mono font-bold">
-                        {/* คอลัมน์จริงชื่อ total_line_amount — เดิมอ่าน it.line_total ที่ไม่มีอยู่จริง
-                            เลยตกไปใช้ quantity × unit_price เสมอ ทำให้ส่วนลดรายบรรทัดหายไปจากใบพิมพ์ */}
-                        {Number(it.total_line_amount || it.quantity * it.unit_price).toLocaleString("th-TH", { minimumFractionDigits: 2 })}
-                      </td>
-                    </tr>
-                  )) || (
-                    <tr>
-                      <td className="p-2 text-center font-mono border-r border-slate-300">1</td>
-                      <td className="p-2 font-medium border-r border-slate-300">บริการทำความสะอาดและดูแลรักษารองเท้า</td>
-                      <td className="p-2 text-right font-mono border-r border-slate-300">1</td>
-                      <td className="p-2 text-right font-mono border-r border-slate-300">
-                        {Number(printingDoc.grand_total).toLocaleString("th-TH", { minimumFractionDigits: 2 })}
-                      </td>
-                      <td className="p-2 text-right font-mono font-bold">
-                        {Number(printingDoc.grand_total).toLocaleString("th-TH", { minimumFractionDigits: 2 })}
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-                <tfoot className="border-t-2 border-slate-900 bg-slate-50 text-xs">
-                  <tr>
-                    <td colSpan={3} rowSpan={3} className="p-3 border-r border-slate-300 align-top">
-                      <div className="font-bold text-slate-700">จำนวนเงินรวมทั้งสิ้น (ตัวอักษร):</div>
-                      <div className="font-bold text-sm text-slate-950 mt-1">
-                        ({thaiBahtText(Number(printingDoc.grand_total || 0))})
-                      </div>
-                    </td>
-                    <td className="p-2 text-right border-r border-slate-300 font-semibold">รวมมูลค่าสินค้า:</td>
-                    <td className="p-2 text-right font-mono font-bold">
-                      {Number(printingDoc.subtotal_amount || printingDoc.grand_total).toLocaleString("th-TH", { minimumFractionDigits: 2 })}
-                    </td>
-                  </tr>
-                  <tr>
-                    <td className="p-2 text-right border-r border-slate-300 font-semibold">ภาษีมูลค่าเพิ่ม (VAT 7%):</td>
-                    <td className="p-2 text-right font-mono font-bold">
-                      {Number(printingDoc.vat_amount || 0).toLocaleString("th-TH", { minimumFractionDigits: 2 })}
-                    </td>
-                  </tr>
-                  <tr className="border-t border-slate-300 font-black text-sm">
-                    <td className="p-2 text-right border-r border-slate-300">ยอดรวมสุทธิ:</td>
-                    <td className="p-2 text-right font-mono">
-                      ฿{Number(printingDoc.grand_total).toLocaleString("th-TH", { minimumFractionDigits: 2 })}
-                    </td>
-                  </tr>
-                </tfoot>
-              </table>
-
-              {/* Signatures */}
-              <div className="grid grid-cols-2 gap-8 pt-8 text-xs text-center">
-                <div className="border-t border-slate-400 pt-2 space-y-1">
-                  <div>ลงชื่อ .............................................................. ผู้รับบริการ / ลูกค้า</div>
-                  <div className="text-slate-500 font-medium">วันที่ ......./......./.......</div>
-                </div>
-                <div className="border-t border-slate-400 pt-2 space-y-1">
-                  <div>ลงชื่อ .............................................................. ผู้มีอำนาจลงนาม</div>
-                  <div className="text-slate-500 font-medium">({shopProfile?.name || "ยังไม่ได้ตั้งชื่อกิจการ"})</div>
-                </div>
-              </div>
-            </div>
+            <OfficialDocument
+              doc={printingDoc}
+              shopProfile={shopProfile}
+            />
           </div>
         </ModalBackdrop>
         </PrintModalPortal>

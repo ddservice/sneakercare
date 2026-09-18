@@ -136,6 +136,24 @@ export function ShopProfileForm({ initialProfile }: { initialProfile: ShopProfil
               </p>
             </div>
 
+            <div className="sm:col-span-2 rounded-xl border border-slate-200 bg-slate-50/50 p-4 space-y-2">
+              <label className="flex items-start gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={profile.vatRegistered}
+                  onChange={(e) => setProfile({ ...profile, vatRegistered: e.target.checked })}
+                  className="mt-0.5 h-4 w-4 rounded border-slate-300"
+                />
+                <span>
+                  <span className="block text-xs font-semibold text-slate-800">จดทะเบียนภาษีมูลค่าเพิ่ม (VAT)</span>
+                  <span className="mt-0.5 block text-[11px] text-slate-500">
+                    จดทะเบียนเป็นระดับกิจการ ไม่ใช่ต่อสาขา — ถ้าไม่จด ออกได้เฉพาะบิลเงินสด ไม่มีใบกำกับภาษี
+                    ถ้าจดแล้วที่หน้าออกเอกสารเลือกได้ต่อใบว่าเป็นบิลเงินสดหรือบิล VAT 7%
+                  </span>
+                </span>
+              </label>
+            </div>
+
             <div className="sm:col-span-2 rounded-xl border border-slate-200 bg-slate-50/50 p-4 space-y-3">
               <div className="text-xs font-semibold text-slate-800">ลายเซ็นและตราประทับบนหนังสือรับรอง 50 ทวิ</div>
               <p className="text-[11px] text-slate-500">
