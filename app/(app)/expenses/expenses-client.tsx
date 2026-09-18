@@ -12,12 +12,19 @@ import {
   type ExpensesPayload,
   type StaffPayslip,
 } from "@/app/actions/expenses";
+import { recordRentalWht } from "@/app/actions/wht";
 import {
   EXPENSE_CATEGORIES,
   CATEGORY_LIST,
   classifyExpenseCategory,
   type ExpenseCategoryKey,
 } from "@/lib/expense-categories";
+import {
+  settleWht,
+  WHT_RATES,
+  BUILDING_RENT_CATEGORY,
+  BUILDING_RENT_WHT_RATE,
+} from "@/lib/wht";
 import { thaiBahtText } from "@/lib/bahttext";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -166,6 +173,14 @@ export function ExpensesClient({
   const [expAmount, setExpAmount] = useState<number>(0);
   const [expPayMethod, setExpPayMethod] = useState("บัญชีร้าน (โอน)");
   const [expDate, setExpDate] = useState(new Date().toISOString().slice(0, 10));
+  const [expWithhold, setExpWithhold] = useState(false);
+  const [expVat, setExpVat] = useState(false);
+  const [expWhtRate, setExpWhtRate] = useState<number>(0);
+  const [expPayeeId, setExpPayeeId] = useState("");
+  const [expPayeeKind, setExpPayeeKind] = useState<"person" | "juristic">("person");
+  const [expPayeeName, setExpPayeeName] = useState("");
+  const [expPayeeTaxId, setExpPayeeTaxId] = useState("");
+  const [expPayeeAddress, setExpPayeeAddress] = useState("");
 
   // Interactive Live Values State for Staff (Keyed by employeeName)
   //
@@ -207,6 +222,7 @@ export function ExpensesClient({
   const categoryBreakdown = useMemo(() => {
     const map: Record<ExpenseCategoryKey, { total: number; count: number }> = {
       payroll: { total: data.totalPayroll, count: data.payslips.length },
+      building_rent: { total: 0, count: 0 },
       facility_utilities: { total: 0, count: 0 },
       supplies_cogs: { total: 0, count: 0 },
       marketing: { total: 0, count: 0 },
@@ -237,6 +253,25 @@ export function ExpensesClient({
   }, [data]);
 
   // Filter OPEX items by selected category filter
+  const liveWht = useMemo(
+    () =>
+      settleWht({
+        baseAmount: expAmount,
+        vatRate: expVat ? 7 : 0,
+        whtRate: expWhtRate,
+        category: expWithhold ? expCategory : undefined,
+      }),
+    [expAmount, expVat, expWhtRate, expWithhold, expCategory]
+  );
+
+  function onSelectExpenseCategory(next: ExpenseCategoryKey) {
+    setExpCategory(next);
+    if (next === BUILDING_RENT_CATEGORY) {
+      setExpWithhold(true);
+      setExpWhtRate(BUILDING_RENT_WHT_RATE);
+    }
+  }
+
   const filteredOpexList = useMemo(() => {
     if (selectedCategoryFilter === "all") return data.opexList;
     return data.opexList.filter((item) => {
@@ -518,13 +553,34 @@ export function ExpensesClient({
       formData.set("amount", String(expAmount));
       formData.set("pay_method", expPayMethod);
       formData.set("expense_date", expDate);
+      if (expWithhold) {
+        formData.set("withhold", "1");
+        formData.set("wht_rate", String(expWhtRate || (expCategory === BUILDING_RENT_CATEGORY ? BUILDING_RENT_WHT_RATE : 3)));
+        formData.set("vat_rate", expVat ? "7" : "0");
+        formData.set("payee_id", expPayeeId);
+        formData.set("payee_kind", expPayeeKind);
+        formData.set("payee_name", expPayeeName.trim());
+        formData.set("payee_tax_id", expPayeeTaxId.replace(/[^0-9]/g, ""));
+        formData.set("payee_address", expPayeeAddress.trim());
+      }
 
       const res = await addExpense(undefined, formData);
       if (res.success) {
-        toast.success(`บันทึกค่าใช้จ่าย "${expTitle}" สำเร็จเรียบร้อย`);
+        toast.success(
+          expWithhold
+            ? `บันทึก "${expTitle}" พร้อมออกหนังสือรับรอง 50 ทวิ แล้ว`
+            : `บันทึกค่าใช้จ่าย "${expTitle}" สำเร็จเรียบร้อย`
+        );
         setShowAddExpenseModal(false);
         setExpTitle("");
         setExpAmount(0);
+        setExpWithhold(false);
+        setExpVat(false);
+        setExpWhtRate(0);
+        setExpPayeeId("");
+        setExpPayeeName("");
+        setExpPayeeTaxId("");
+        setExpPayeeAddress("");
         const updated = await fetchAllExpensesData(selectedMonth);
         setData(updated);
       } else {
@@ -747,23 +803,85 @@ export function ExpensesClient({
 
       {/* ── Rental Income — แยกออกจากค่าใช้จ่ายโดยเจตนา (แก้บั๊ก 2026-09-02: เดิมถูกนับปนเป็น
           "ค่าดำเนินการ" เพราะ filter เช็คชื่อ category ผิด ทำให้รายรับกลายเป็นรายจ่ายในตัวเลขรวม) ── */}
-      {data.totalRentalIncome > 0 && (
-        <div className="flex items-center justify-between gap-4 rounded-xl border border-emerald-200 bg-emerald-50/70 dark:bg-emerald-900/20 dark:border-emerald-800/60 px-4 py-3 print:hidden">
-          <div className="flex items-center gap-3">
-            <div className="rounded-lg bg-emerald-100 dark:bg-emerald-900/40 p-2 text-emerald-700 dark:text-emerald-300">
-              <Building2 className="h-4 w-4" />
+      {data.rentals.length > 0 && (
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50/70 dark:bg-emerald-900/20 dark:border-emerald-800/60 px-4 py-3 print:hidden space-y-3">
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="rounded-lg bg-emerald-100 dark:bg-emerald-900/40 p-2 text-emerald-700 dark:text-emerald-300">
+                <Building2 className="h-4 w-4" />
+              </div>
+              <div>
+                <div className="text-xs font-bold text-emerald-900 dark:text-emerald-200">
+                  รายได้อื่น — ค่าเช่าห้องจากพนักงาน (ไม่ปนกับยอดขายบริการ)
+                </div>
+                <div className="text-[10px] text-emerald-700/80 dark:text-emerald-400/80">
+                  ลงบัญชียอดเต็ม · ถ้าผู้เช่าหักภาษีไว้ กรอกด้านล่าง (เงินเข้าจริงน้อยกว่า แต่รายได้ไม่ลด)
+                </div>
+              </div>
             </div>
-            <div>
-              <div className="text-xs font-bold text-emerald-900 dark:text-emerald-200">
-                รายรับค่าเช่าห้อง (แยกจากค่าใช้จ่าย — ไม่รวมในยอด &ldquo;รวมค่าใช้จ่ายทั้งหมด&rdquo; ด้านบน)
-              </div>
-              <div className="text-[10px] text-emerald-700/80 dark:text-emerald-400/80">
-                {data.rentals.map((r) => r.roomName).join(" · ")}
-              </div>
+            <div className="text-lg font-semibold tabular-nums text-emerald-700 dark:text-emerald-300 shrink-0">
+              +฿{data.totalRentalIncome.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
             </div>
           </div>
-          <div className="text-lg font-semibold tabular-nums text-emerald-700 dark:text-emerald-300 shrink-0">
-            +฿{data.totalRentalIncome.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+          <div className="grid gap-2">
+            {data.rentals.map((r) => (
+              <form
+                key={`${r.month}-${r.roomId}-${r.id}`}
+                className="grid gap-2 rounded-lg border border-emerald-100 bg-white/80 p-2 sm:grid-cols-6 sm:items-end"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (!r.id) {
+                    toast.error("รายการนี้มาจากข้อมูลเก่า ยังบันทึกหัก ณ ที่จ่ายฝั่งรายรับไม่ได้");
+                    return;
+                  }
+                  const fd = new FormData(e.currentTarget);
+                  startTransition(async () => {
+                    const res = await recordRentalWht({
+                      rentalId: r.id,
+                      tenantName: String(fd.get("tenant_name") ?? ""),
+                      tenantTaxId: String(fd.get("tenant_tax_id") ?? ""),
+                      whtRate: Number(fd.get("wht_rate") || 0),
+                    });
+                    if (!res.success) {
+                      toast.error(res.error);
+                      return;
+                    }
+                    toast.success("บันทึกรายได้ค่าเช่า / ภาษีที่ถูกหักไว้แล้ว");
+                    const updated = await fetchAllExpensesData(selectedMonth);
+                    setData(updated);
+                  });
+                }}
+              >
+                <div className="sm:col-span-2 space-y-0.5">
+                  <div className="text-[10px] font-bold text-emerald-800">{r.roomName}</div>
+                  <Input name="tenant_name" defaultValue={r.tenantName} placeholder="ชื่อผู้เช่า" className="h-8 text-xs" />
+                </div>
+                <div className="space-y-0.5">
+                  <div className="text-[10px] text-emerald-800">เลขผู้เสียภาษี</div>
+                  <Input name="tenant_tax_id" defaultValue={r.tenantTaxId} placeholder="13 หลัก" className="h-8 text-xs font-mono" />
+                </div>
+                <div className="space-y-0.5">
+                  <div className="text-[10px] text-emerald-800">ถูกหัก %</div>
+                  <select name="wht_rate" defaultValue={String(r.whtRate || 0)} className="h-8 w-full rounded-md border px-2 text-xs">
+                    <option value="0">ไม่ถูกหัก</option>
+                    {WHT_RATES.map((rate) => (
+                      <option key={rate} value={rate}>{rate}%</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="text-[11px] text-emerald-900">
+                  รายได้ ฿{r.totalIncome.toLocaleString()}
+                  {r.whtWithheld > 0 && (
+                    <div className="text-[10px] text-emerald-700">
+                      ถูกหัก ฿{r.whtWithheld.toLocaleString()} · เข้าจริง ฿{r.cashReceived.toLocaleString()}
+                    </div>
+                  )}
+                </div>
+                <Button type="submit" size="sm" variant="outline" disabled={isPending} className="h-8 text-[11px]">
+                  บันทึก
+                </Button>
+              </form>
+            ))}
           </div>
         </div>
       )}
@@ -1327,7 +1445,15 @@ export function ExpensesClient({
                             <span>{catMeta.icon}</span> {catMeta.shortLabel}
                           </span>
                         </td>
-                        <td className="px-3 py-2.5 font-bold text-slate-900 dark:text-slate-100">{item.name}</td>
+                        <td className="px-3 py-2.5 font-bold text-slate-900 dark:text-slate-100">
+                          {item.name}
+                          {item.whtAmount ? (
+                            <div className="text-[10px] font-medium text-rose-700">
+                              หัก ณ ที่จ่าย {item.whtRate}% ฿{item.whtAmount.toLocaleString()}
+                              {item.payeeName ? ` · ${item.payeeName}` : ""} · โอนสุทธิ ฿{item.netPayment?.toLocaleString()}
+                            </div>
+                          ) : null}
+                        </td>
                         <td className="px-3 py-2.5 text-slate-600">{item.payMethod}</td>
                         <td className="px-4 py-2.5 text-right font-mono font-bold text-slate-950">
                           ฿{item.amount.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
@@ -1405,7 +1531,7 @@ export function ExpensesClient({
                   <Label className="font-bold text-slate-700">หมวดหมู่มาตรฐาน *</Label>
                   <select
                     value={expCategory}
-                    onChange={(e) => setExpCategory(e.target.value as ExpenseCategoryKey)}
+                    onChange={(e) => onSelectExpenseCategory(e.target.value as ExpenseCategoryKey)}
                     className="w-full h-9 rounded-md border border-slate-300 bg-white px-2.5 text-xs font-bold text-slate-900"
                   >
                     {CATEGORY_LIST.filter((c) => c.key !== "payroll").map((c) => (
@@ -1472,6 +1598,106 @@ export function ExpensesClient({
                   </select>
                 </div>
               </div>
+
+              <label className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                <input
+                  type="checkbox"
+                  checked={expWithhold}
+                  onChange={(e) => {
+                    setExpWithhold(e.target.checked);
+                    if (e.target.checked && !expWhtRate) {
+                      setExpWhtRate(expCategory === BUILDING_RENT_CATEGORY ? BUILDING_RENT_WHT_RATE : 3);
+                    }
+                  }}
+                />
+                <span className="text-xs font-bold text-slate-800">หักภาษี ณ ที่จ่าย (ออกหนังสือรับรอง 50 ทวิ อัตโนมัติ)</span>
+              </label>
+
+              {expWithhold && (
+                <div className="space-y-3 rounded-lg border border-rose-200 bg-rose-50/50 p-3">
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-1">
+                      <Label className="font-bold text-slate-700">อัตราหัก ณ ที่จ่าย</Label>
+                      <select
+                        value={expWhtRate}
+                        onChange={(e) => setExpWhtRate(Number(e.target.value))}
+                        className="w-full h-9 rounded-md border border-slate-300 bg-white px-2.5 text-xs"
+                      >
+                        {WHT_RATES.map((rate) => (
+                          <option key={rate} value={rate}>
+                            {rate}%{rate === 5 ? " (ค่าเช่าอาคาร)" : ""}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <label className="flex items-center gap-2 pt-5 text-xs font-bold text-slate-700">
+                      <input type="checkbox" checked={expVat} onChange={(e) => setExpVat(e.target.checked)} />
+                      มี VAT 7%
+                    </label>
+                  </div>
+                  <div className="rounded-md bg-white px-3 py-2 text-[11px] text-slate-700 space-y-0.5 font-mono">
+                    <div>ฐานก่อน VAT ฿{liveWht.baseAmount.toLocaleString("th-TH", { minimumFractionDigits: 2 })}</div>
+                    {liveWht.vatAmount > 0 && (
+                      <div>+ VAT {liveWht.vatRate}% ฿{liveWht.vatAmount.toLocaleString("th-TH", { minimumFractionDigits: 2 })}</div>
+                    )}
+                    <div>ลงบัญชี (ค่าใช้จ่าย) ฿{liveWht.grossAmount.toLocaleString("th-TH", { minimumFractionDigits: 2 })}</div>
+                    <div className="text-rose-700">− WHT {liveWht.whtRate}% ฿{liveWht.whtAmount.toLocaleString("th-TH", { minimumFractionDigits: 2 })}</div>
+                    <div className="font-bold">ยอดโอนสุทธิ ฿{liveWht.netPayment.toLocaleString("th-TH", { minimumFractionDigits: 2 })}</div>
+                  </div>
+                  {(data.payees ?? []).length > 0 && (
+                    <div className="space-y-1">
+                      <Label className="font-bold text-slate-700">ผู้รับเงินที่เคยบันทึก</Label>
+                      <select
+                        value={expPayeeId}
+                        onChange={(e) => {
+                          const id = e.target.value;
+                          setExpPayeeId(id);
+                          const p = (data.payees ?? []).find((x) => x.id === id);
+                          if (p) {
+                            setExpPayeeKind(p.kind);
+                            setExpPayeeName(p.name);
+                            setExpPayeeTaxId(p.taxId);
+                            setExpPayeeAddress(p.address);
+                          }
+                        }}
+                        className="w-full h-9 rounded-md border border-slate-300 bg-white px-2.5 text-xs"
+                      >
+                        <option value="">— กรอกใหม่ —</option>
+                        {(data.payees ?? []).map((p) => (
+                          <option key={p.id} value={p.id}>
+                            {p.name} · {p.taxId}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-1">
+                      <Label className="font-bold text-slate-700">ประเภทผู้รับเงิน</Label>
+                      <select
+                        value={expPayeeKind}
+                        onChange={(e) => setExpPayeeKind(e.target.value as "person" | "juristic")}
+                        className="w-full h-9 rounded-md border border-slate-300 bg-white px-2.5 text-xs"
+                      >
+                        <option value="person">บุคคลธรรมดา (ภ.ง.ด.3)</option>
+                        <option value="juristic">นิติบุคคล (ภ.ง.ด.53)</option>
+                      </select>
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="font-bold text-slate-700">เลขผู้เสียภาษี 13 หลัก *</Label>
+                      <Input value={expPayeeTaxId} onChange={(e) => setExpPayeeTaxId(e.target.value)} className="h-9 text-xs font-mono" />
+                    </div>
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="font-bold text-slate-700">ชื่อเจ้าของตึก / ผู้รับเงิน *</Label>
+                    <Input value={expPayeeName} onChange={(e) => setExpPayeeName(e.target.value)} className="h-9 text-xs" />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="font-bold text-slate-700">ที่อยู่ (สำหรับ 50 ทวิ)</Label>
+                    <Input value={expPayeeAddress} onChange={(e) => setExpPayeeAddress(e.target.value)} className="h-9 text-xs" />
+                  </div>
+                </div>
+              )}
 
               <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-200">
                 <Button

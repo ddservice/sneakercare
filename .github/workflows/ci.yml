@@ -47,6 +47,9 @@ jobs:
       - name: RD e-Filing PND format (ภ.ง.ด.3/53)
         run: npm run test:tax
 
+      - name: Withholding tax settlement (ค่าเช่า + WHT 5%)
+        run: npm run test:wht
+
       - name: Roster auto-generate + Thai holiday calendar
         run: npm run test:roster
 

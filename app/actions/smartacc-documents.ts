@@ -13,6 +13,7 @@ import { requireTenantId, tenantFilter } from "@/lib/tenant";
 import { getSelectedBranchId } from "@/lib/branch";
 import { errorMessage } from "@/lib/errors";
 import { logAudit } from "@/lib/audit";
+import { fetchWhtCertificates, certificateToWhtRecord } from "@/app/actions/wht";
 
 /** หนึ่งรายการในสมุดที่อยู่ลูกค้า (sc_settings.dbd_company_registry) */
 export type DbdRegistryEntry = {
@@ -659,6 +660,7 @@ export async function fetchPendingDeliveryOrders() {
 /** ผลลัพธ์ของ fetchTaxFilingData() — อนุมานจาก query จริง ไม่ประกาศมือ */
 export type TaxFilingSalesDoc = Awaited<ReturnType<typeof fetchTaxFilingData>>["salesDocs"][number];
 export type TaxFilingExpense = Awaited<ReturnType<typeof fetchTaxFilingData>>["expenses"][number];
+export type TaxFilingWhtCert = Awaited<ReturnType<typeof fetchTaxFilingData>>["whtCertificates"][number];
 
 export async function fetchTaxFilingData(yearMonth?: string) {
   const profile = await requireProfile();
@@ -686,11 +688,25 @@ export async function fetchTaxFilingData(yearMonth?: string) {
     expensesQuery = expensesQuery.like("expense_date", `${yearMonth}%`);
   }
 
-  const [docsRes, expensesRes] = await Promise.all([docsQuery, expensesQuery]);
+  const [docsRes, expensesRes, certs] = await Promise.all([
+    docsQuery,
+    expensesQuery,
+    fetchWhtCertificates(yearMonth).catch((err) => {
+      console.error("[tax-filing] อ่านหนังสือรับรองไม่สำเร็จ:", err);
+      return [];
+    }),
+  ]);
 
   return {
     salesDocs: docsRes.data ?? [],
     expenses: expensesRes.data ?? [],
+    whtCertificates: certs.map((row, i) => ({
+      ...certificateToWhtRecord(row, i + 1),
+      certificateNumber: row.certificateNumber,
+      direction: row.direction,
+      netPayment: row.netPayment,
+      vatAmount: row.vatAmount,
+    })),
   };
 }
 

@@ -13,6 +13,7 @@ export default async function TaxFilingPage() {
     <TaxFilingClient
       initialSalesDocs={data.salesDocs}
       initialExpenses={data.expenses}
+      initialWht={data.whtCertificates}
       shopProfile={shopProfile}
     />
   );

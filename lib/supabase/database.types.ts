@@ -386,13 +386,6 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "ext_documents_branch_id_fkey"
-            columns: ["branch_id"]
-            isOneToOne: false
-            referencedRelation: "ext_branches"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "ext_documents_contact_id_fkey"
             columns: ["contact_id"]
             isOneToOne: false
@@ -997,36 +990,36 @@ export type Database = {
       inv_branches: {
         Row: {
           address: string | null
+          close_time: string
           created_at: string
           id: string
           is_active: boolean
           name: string
           open_time: string
-          close_time: string
           phone: string | null
           telegram_chat_id: string | null
           tenant_id: string
         }
         Insert: {
           address?: string | null
+          close_time?: string
           created_at?: string
           id?: string
           is_active?: boolean
           name: string
           open_time?: string
-          close_time?: string
           phone?: string | null
           telegram_chat_id?: string | null
           tenant_id?: string
         }
         Update: {
           address?: string | null
+          close_time?: string
           created_at?: string
           id?: string
           is_active?: boolean
           name?: string
           open_time?: string
-          close_time?: string
           phone?: string | null
           telegram_chat_id?: string | null
           tenant_id?: string
@@ -1599,34 +1592,49 @@ export type Database = {
           action: string
           actor_id: string | null
           actor_name: string
+          browser: string | null
           created_at: string
           detail: Json | null
+          device: string | null
           entity: string
           entity_id: string | null
           id: number
+          ip_address: string | null
+          page_path: string | null
           tenant_id: string
+          user_agent: string | null
         }
         Insert: {
           action: string
           actor_id?: string | null
           actor_name?: string
+          browser?: string | null
           created_at?: string
           detail?: Json | null
+          device?: string | null
           entity: string
           entity_id?: string | null
           id?: never
+          ip_address?: string | null
+          page_path?: string | null
           tenant_id?: string
+          user_agent?: string | null
         }
         Update: {
           action?: string
           actor_id?: string | null
           actor_name?: string
+          browser?: string | null
           created_at?: string
           detail?: Json | null
+          device?: string | null
           entity?: string
           entity_id?: string | null
           id?: never
+          ip_address?: string | null
+          page_path?: string | null
           tenant_id?: string
+          user_agent?: string | null
         }
         Relationships: [
           {
@@ -2183,7 +2191,11 @@ export type Database = {
           room_index: number
           room_name: string | null
           tenant_id: string
+          tenant_name: string | null
+          tenant_tax_id: string | null
           updated_at: string
+          wht_rate: number
+          wht_withheld: number
         }
         Insert: {
           branch_id?: string | null
@@ -2198,7 +2210,11 @@ export type Database = {
           room_index: number
           room_name?: string | null
           tenant_id?: string
+          tenant_name?: string | null
+          tenant_tax_id?: string | null
           updated_at?: string
+          wht_rate?: number
+          wht_withheld?: number
         }
         Update: {
           branch_id?: string | null
@@ -2213,7 +2229,11 @@ export type Database = {
           room_index?: number
           room_name?: string | null
           tenant_id?: string
+          tenant_name?: string | null
+          tenant_tax_id?: string | null
           updated_at?: string
+          wht_rate?: number
+          wht_withheld?: number
         }
         Relationships: [
           {
@@ -2443,6 +2463,141 @@ export type Database = {
             columns: ["branch_id"]
             isOneToOne: false
             referencedRelation: "inv_branches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sc_wht_certificates: {
+        Row: {
+          base_amount: number
+          certificate_number: string
+          created_at: string
+          created_by: string | null
+          direction: string
+          form_type: string
+          gross_amount: number
+          id: string
+          income_type_code: string
+          income_type_label: string
+          legacy_opex_id: number | null
+          net_payment: number
+          note: string | null
+          payee_id: string | null
+          payment_date: string
+          rental_record_id: number | null
+          tax_amount: number
+          tenant_id: string
+          vat_amount: number
+          wht_rate: number
+        }
+        Insert: {
+          base_amount: number
+          certificate_number: string
+          created_at?: string
+          created_by?: string | null
+          direction?: string
+          form_type: string
+          gross_amount: number
+          id?: string
+          income_type_code?: string
+          income_type_label?: string
+          legacy_opex_id?: number | null
+          net_payment: number
+          note?: string | null
+          payee_id?: string | null
+          payment_date: string
+          rental_record_id?: number | null
+          tax_amount: number
+          tenant_id: string
+          vat_amount?: number
+          wht_rate: number
+        }
+        Update: {
+          base_amount?: number
+          certificate_number?: string
+          created_at?: string
+          created_by?: string | null
+          direction?: string
+          form_type?: string
+          gross_amount?: number
+          id?: string
+          income_type_code?: string
+          income_type_label?: string
+          legacy_opex_id?: number | null
+          net_payment?: number
+          note?: string | null
+          payee_id?: string | null
+          payment_date?: string
+          rental_record_id?: number | null
+          tax_amount?: number
+          tenant_id?: string
+          vat_amount?: number
+          wht_rate?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sc_wht_certificates_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sc_wht_certificates_payee_id_fkey"
+            columns: ["payee_id"]
+            isOneToOne: false
+            referencedRelation: "sc_wht_payees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sc_wht_certificates_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sc_wht_payees: {
+        Row: {
+          address: string | null
+          created_at: string
+          id: string
+          is_active: boolean
+          kind: string
+          name: string
+          tax_id: string
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          address?: string | null
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          kind: string
+          name: string
+          tax_id: string
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          address?: string | null
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          kind?: string
+          name?: string
+          tax_id?: string
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sc_wht_payees_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
             referencedColumns: ["id"]
           },
         ]
@@ -2778,36 +2933,36 @@ export type Database = {
       branches: {
         Row: {
           address: string | null
+          close_time: string | null
           created_at: string | null
           id: string | null
           is_active: boolean | null
           name: string | null
           open_time: string | null
-          close_time: string | null
           phone: string | null
           telegram_chat_id: string | null
           tenant_id: string | null
         }
         Insert: {
           address?: string | null
+          close_time?: string | null
           created_at?: string | null
           id?: string | null
           is_active?: boolean | null
           name?: string | null
           open_time?: string | null
-          close_time?: string | null
           phone?: string | null
           telegram_chat_id?: string | null
           tenant_id?: string | null
         }
         Update: {
           address?: string | null
+          close_time?: string | null
           created_at?: string | null
           id?: string | null
           is_active?: boolean | null
           name?: string | null
           open_time?: string | null
-          close_time?: string | null
           phone?: string | null
           telegram_chat_id?: string | null
           tenant_id?: string | null

@@ -4,8 +4,6 @@ import { useState } from "react";
 import {
   generatePndEFilingFile,
   generatePp30VatText,
-  classifyPayeeKind,
-  extractThaiTaxId,
   digitsOnly,
   type WhtRecord,
   type VatTransaction,
@@ -18,7 +16,7 @@ import { PrintModalPortal } from "@/components/print-modal-portal";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import type { TaxFilingSalesDoc, TaxFilingExpense } from "@/app/actions/smartacc-documents";
+import type { TaxFilingSalesDoc, TaxFilingExpense, TaxFilingWhtCert } from "@/app/actions/smartacc-documents";
 import { ModalBackdrop } from "@/components/modal-shell";
 import {
   Landmark,
@@ -32,24 +30,23 @@ import {
 
 export function TaxFilingClient({
   initialSalesDocs,
-  initialExpenses,
+  initialExpenses: _initialExpenses,
+  initialWht = [],
   shopProfile,
 }: {
   initialSalesDocs: TaxFilingSalesDoc[];
   initialExpenses: TaxFilingExpense[];
+  initialWht?: TaxFilingWhtCert[];
   /** ข้อมูลบริษัทจริงจากหน้า /settings — ใช้พิมพ์หัวเอกสารทุกจุดในหน้านี้ ห้าม hardcode ทับ */
   shopProfile?: { name: string; address: string; taxId: string; phone: string };
 }) {
   const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().slice(0, 7));
   const [activeTab, setActiveTab] = useState<"efiling" | "tawi50" | "etax_xml">("efiling");
-  const [selectedWhtCert, setSelectedWhtCert] = useState<WhtRecord | null>(null);
+  const [selectedWhtCert, setSelectedWhtCert] = useState<TaxFilingWhtCert | null>(null);
 
   // Calculate real VAT and WHT from database records
   const filteredSales = initialSalesDocs.filter((d) =>
     (d.issue_date || "").startsWith(selectedMonth)
-  );
-  const filteredExpenses = initialExpenses.filter((e) =>
-    (e.expense_date || "").startsWith(selectedMonth)
   );
 
   const totalSalesSubtotal = filteredSales.reduce(
@@ -72,26 +69,26 @@ export function TaxFilingClient({
     vatAmount: Number(d.vat_amount || 0),
   }));
 
-  const whtRecords: WhtRecord[] = filteredExpenses
-    .filter((e) => Number(e.amount || 0) >= 1000)
-    .map((e, index) => {
-      const base = Number(e.amount || 0);
-      const rate = 3.0;
-      const tax = base * (rate / 100);
-      const taxId = extractThaiTaxId(e.note || "") || extractThaiTaxId(e.title || "");
-      return {
-        sequence: index + 1,
-        taxId,
-        name: e.title || "ผู้รับเงิน",
-        address: shopProfile?.address || "",
-        date: e.expense_date,
-        incomeType: e.category || "ค่าบริการ",
-        whtRate: rate,
-        baseAmount: base,
-        taxAmount: tax,
-        payeeKind: taxId ? classifyPayeeKind(taxId) : "juristic",
-      };
-    });
+  // เฉพาะรายการที่ร้านเป็นผู้หัก (payable) — รายได้ที่ถูกหักไว้ไม่ยื่น ภ.ง.ด.3/53 ในนามผู้จ่าย
+  const monthWht = initialWht.filter(
+    (r) => r.direction === "payable" && (r.date || "").startsWith(selectedMonth)
+  );
+  const receivableMonth = initialWht.filter(
+    (r) => r.direction === "receivable" && (r.date || "").startsWith(selectedMonth)
+  );
+  const receivableWithheld = receivableMonth.reduce((sum, r) => sum + r.taxAmount, 0);
+  const whtRecords: WhtRecord[] = monthWht.map((r, index) => ({
+    sequence: index + 1,
+    taxId: r.taxId,
+    name: r.name,
+    address: r.address || shopProfile?.address || "",
+    date: r.date,
+    incomeType: r.incomeType,
+    whtRate: r.whtRate,
+    baseAmount: r.baseAmount,
+    taxAmount: r.taxAmount,
+    payeeKind: r.payeeKind,
+  }));
 
   const pnd53Records = whtRecords.filter((r) => r.payeeKind !== "person");
   const pnd3Records = whtRecords.filter((r) => r.payeeKind === "person");
@@ -267,8 +264,8 @@ export function TaxFilingClient({
               </span>
               {whtRecords.some((r) => digitsOnly(r.taxId).length !== 13) && (
                 <span className="block text-amber-800 mt-1">
-                  บางรายการยังไม่มีเลขผู้เสียภาษี 13 หลักของผู้รับเงินในชื่อหรือหมายเหตุ — e-Filing จะปฏิเสธแถวนั้น
-                  ให้ใส่เลข 13 หลักในหมายเหตุรายจ่าย
+                  บางรายการยังไม่มีเลขผู้เสียภาษี 13 หลักของผู้รับเงิน — e-Filing จะปฏิเสธแถวนั้น
+                  ให้กรอกตอนบันทึกหัก ณ ที่จ่ายที่หน้า /expenses
                 </span>
               )}
             </p>
@@ -365,6 +362,13 @@ export function TaxFilingClient({
             </CardContent>
           </Card>
         </div>
+        {receivableMonth.length > 0 && (
+          <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-xs text-emerald-900">
+            รายได้อื่น (ค่าเช่าห้อง) ที่ผู้เช่าหักภาษีไว้ {receivableMonth.length} รายการ
+            รวมถูกหัก ฿{receivableWithheld.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+            — ไม่รวมในไฟล์ ภ.ง.ด.3/53 เพราะร้านเป็นผู้ถูกหัก ไม่ใช่ผู้หัก
+          </div>
+        )}
         </div>
       )}
 
@@ -396,19 +400,21 @@ export function TaxFilingClient({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {whtRecords.length === 0 ? (
+                  {monthWht.length === 0 ? (
                     <tr>
                       <td colSpan={7} className="p-8 text-center text-slate-400">
-                        ไม่มีรายการจ่ายที่เข้าเกณฑ์หักภาษี ณ ที่จ่ายในงวดเดือนนี้
+                        ยังไม่มีหนังสือรับรองหัก ณ ที่จ่ายในงวดนี้ — บันทึกตอนจ่ายที่ /expenses แล้วระบบจะออก 50 ทวิ ให้
                       </td>
                     </tr>
                   ) : (
-                    whtRecords.map((r) => (
-                      <tr key={r.sequence} className="hover:bg-slate-50">
-                        <td className="px-4 py-3 font-mono text-center">{r.sequence}</td>
+                    monthWht.map((r, index) => (
+                      <tr key={r.certificateNumber || index} className="hover:bg-slate-50">
+                        <td className="px-4 py-3 font-mono text-center">{index + 1}</td>
                         <td className="px-4 py-3">
                           <div className="font-semibold text-slate-900">{r.name}</div>
-                          <div className="text-[10px] text-slate-400 font-mono">Tax ID: {r.taxId}</div>
+                          <div className="text-[10px] text-slate-400 font-mono">
+                            {r.certificateNumber} · Tax ID: {r.taxId}
+                          </div>
                         </td>
                         <td className="px-4 py-3 text-slate-600">{r.incomeType}</td>
                         <td className="px-4 py-3 text-right font-mono font-semibold">
@@ -421,7 +427,7 @@ export function TaxFilingClient({
                         <td className="px-4 py-3 text-center">
                           <Button
                             size="sm"
-                            onClick={() => setSelectedWhtCert(r)}
+                            onClick={() => setSelectedWhtCert({ ...r, sequence: index + 1 })}
                             variant="outline"
                             className="h-7 text-[11px] gap-1 text-teal-800 hover:bg-teal-50 border-teal-200 font-bold"
                           >
@@ -518,7 +524,7 @@ export function TaxFilingClient({
                   <div className="text-[11px] text-slate-600">ตามมาตรา 50 ทวิ แห่งประมวลรัษฎากร</div>
                 </div>
                 <div className="text-right text-xs">
-                  <div className="font-mono font-bold">เล่มที่ / เลขที่: 50T-{selectedMonth.replace("-", "")}-{String(selectedWhtCert.sequence).padStart(4, "0")}</div>
+                  <div className="font-mono font-bold">เล่มที่ / เลขที่: {selectedWhtCert.certificateNumber || `WHT-${selectedMonth.replace("-", "")}-${String(selectedWhtCert.sequence).padStart(4, "0")}`}</div>
                   <div className="text-slate-600">วันที่ออก: {selectedWhtCert.date}</div>
                 </div>
               </div>

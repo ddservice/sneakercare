@@ -9,6 +9,8 @@ import { SUPPLY_CATEGORIES, sumStockPurchases, monthBounds } from "@/lib/stock-p
 import { mirrorExpenseEntry, unmirrorExpenseEntry, mirrorPayslip } from "@/lib/expense-mirror";
 import { requireTenantId, tenantFilter } from "@/lib/tenant";
 import { fetchStaffMonthlyStatSummary } from "@/app/actions/roster";
+import { issuePayableCertificate, upsertWhtPayee, deleteCertificatesForOpex } from "@/app/actions/wht";
+import { settleWht, BUILDING_RENT_CATEGORY } from "@/lib/wht";
 
 /** เดือนปัจจุบันในรูปแบบ "MM/YYYY" ที่ตาราง sc_opex ใช้ทั้งไฟล์ */
 function currentMonthMY(): string {
@@ -57,18 +59,35 @@ export type RealExpenseRecord = {
   payMethod: string;
   recordedBy: string;
   key?: string;
+  whtRate?: number;
+  whtAmount?: number;
+  netPayment?: number;
+  payeeName?: string;
 };
 
 export type RentalRecord = {
+  id: number;
   roomId: number;
   roomName: string;
   tenantName: string;
+  tenantTaxId: string;
   rentAmount: number;
   prevMeter: number;
   currMeter: number;
   electricCost: number;
   totalIncome: number;
+  whtRate: number;
+  whtWithheld: number;
+  cashReceived: number;
   month: string;
+};
+
+export type WhtPayeeOption = {
+  id: string;
+  kind: "person" | "juristic";
+  name: string;
+  taxId: string;
+  address: string;
 };
 
 export type ExpensesPayload = {
@@ -89,6 +108,7 @@ export type ExpensesPayload = {
   payslips: StaffPayslip[];
   miscExpenses: Array<{ name: string; amount: number; method: string; month: string }>;
   rentals: RentalRecord[];
+  payees: WhtPayeeOption[];
 };
 
 export type ExpenseActionState = {
@@ -208,7 +228,7 @@ export async function fetchAllExpensesData(timeRange: string = "this_month"): Pr
     ? null
     : supabase
         .from("sc_rental_records")
-        .select("month, room_index, room_name, prev_meter, curr_meter, rent_amount, income_amount")
+        .select("id, month, room_index, room_name, prev_meter, curr_meter, rent_amount, income_amount, tenant_name, tenant_tax_id, wht_rate, wht_withheld")
         .eq("month", targetMonthFilter)
         .order("room_index");
   if (rentalQuery && tenantId) rentalQuery = rentalQuery.eq("tenant_id", tenantId);
@@ -233,13 +253,26 @@ export async function fetchAllExpensesData(timeRange: string = "this_month"): Pr
     ? Promise.resolve({} as Record<string, { absentDays: number; leaveDays: number; lateDays: number; totalOtHours: number; totalPairs: number }>)
     : fetchStaffMonthlyStatSummary(targetSalesMonth);
 
-  const [opexRes, salesRes, employeeRes, rentalRes, stockRes, staffStatsSummary] = await Promise.all([
+  let payeeQuery = supabase.from("sc_wht_payees").select("id, kind, name, tax_id, address").eq("is_active", true).order("name");
+  if (tenantId) payeeQuery = payeeQuery.eq("tenant_id", tenantId);
+
+  let certQuery = isAllTime
+    ? null
+    : supabase
+        .from("sc_wht_certificates")
+        .select("legacy_opex_id, wht_rate, tax_amount, net_payment, payee_id")
+        .eq("direction", "payable");
+  if (certQuery && tenantId) certQuery = certQuery.eq("tenant_id", tenantId);
+
+  const [opexRes, salesRes, employeeRes, rentalRes, stockRes, staffStatsSummary, payeeRes, certRes] = await Promise.all([
     opexQuery,
     salesQuery,
     employeesQuery,
     failSoft(rentalQuery, "อ่าน sc_rental_records"),
     failSoft(stockQuery, "เทียบกับ ledger คลังสินค้า"),
     statsSummaryPromise,
+    failSoft(payeeQuery, "อ่าน sc_wht_payees"),
+    failSoft(certQuery, "อ่าน sc_wht_certificates"),
   ]);
 
   const allRows = opexRes.data || [];
@@ -326,7 +359,18 @@ export async function fetchAllExpensesData(timeRange: string = "this_month"): Pr
     console.error("[expenses] อ่าน sc_expense_entries ล้มเหลว ใช้ sc_opex แทน:", err);
   }
 
-  const opexList: RealExpenseRecord[] = breakdown.opexLines;
+  const opexList: RealExpenseRecord[] = breakdown.opexLines.map((line) => {
+    const cert = (certRes?.data ?? []).find((c) => Number(c.legacy_opex_id) === Number(line.id));
+    if (!cert) return line;
+    const payee = (payeeRes?.data ?? []).find((p) => p.id === cert.payee_id);
+    return {
+      ...line,
+      whtRate: Number(cert.wht_rate),
+      whtAmount: Number(cert.tax_amount),
+      netPayment: Number(cert.net_payment),
+      payeeName: payee?.name,
+    };
+  });
   const totalOpex = breakdown.totalOpex;
 
   // 2. Process Staff Payslips
@@ -657,15 +701,20 @@ export async function fetchAllExpensesData(timeRange: string = "this_month"): Pr
   const legacyRentals: RentalRecord[] = filteredRows
     .filter((r) => r.category === "rental_income")
     .map((r, idx: number) => ({
+      id: 0,
       roomId: idx,
       roomName: r.name || `ห้องเช่า ${idx + 1}`,
       tenantName: "",
+      tenantTaxId: "",
       rentAmount: Number(r.amount || 0),
       prevMeter: 0,
       currMeter: 0,
       electricCost: 0,
       totalIncome: Number(r.amount || 0),
-      month: r.month,
+      whtRate: 0,
+      whtWithheld: 0,
+      cashReceived: Number(r.amount || 0),
+      month: r.month ?? "",
     }));
 
   let rentals: RentalRecord[] = legacyRentals;
@@ -679,16 +728,21 @@ export async function fetchAllExpensesData(timeRange: string = "this_month"): Pr
         rentals = rentalRows.map((r) => {
           const income = Number(r.income_amount || 0);
           const rent = Number(r.rent_amount || 0);
+          const withheld = Number(r.wht_withheld || 0);
           return {
+            id: Number(r.id),
             roomId: Number(r.room_index),
             roomName: r.room_name || `ห้องเช่า ${Number(r.room_index) + 1}`,
-            tenantName: "",
+            tenantName: r.tenant_name || "",
+            tenantTaxId: r.tenant_tax_id || "",
             rentAmount: rent,
             prevMeter: Number(r.prev_meter || 0),
             currMeter: Number(r.curr_meter || 0),
-            // ส่วนที่เกินค่าเช่าคือค่าไฟที่เก็บเพิ่ม — เดิมแสดงเป็น 0 เสมอเพราะไม่เคยอ่านมา
             electricCost: Math.max(0, income - rent),
             totalIncome: income,
+            whtRate: Number(r.wht_rate || 0),
+            whtWithheld: withheld,
+            cashReceived: Math.max(0, income - withheld),
             month: String(r.month),
           };
         });
@@ -726,6 +780,13 @@ export async function fetchAllExpensesData(timeRange: string = "this_month"): Pr
     payslips,
     miscExpenses,
     rentals,
+    payees: (payeeRes?.data ?? []).map((p) => ({
+      id: p.id,
+      kind: p.kind === "juristic" ? "juristic" as const : "person" as const,
+      name: p.name,
+      taxId: p.tax_id,
+      address: p.address ?? "",
+    })),
   };
 }
 
@@ -1076,9 +1137,28 @@ export async function addExpense(
   const amount = parseFloat(formData.get("amount") as string);
   const payMethod = (formData.get("pay_method") as string) || "บัญชีร้าน";
   const expenseDate = (formData.get("expense_date") as string) || new Date().toISOString().slice(0, 10);
+  const withhold = formData.get("withhold") === "1";
+  const vatRate = formData.get("vat_rate") === "7" ? 7 : 0;
+  const whtRateRaw = Number(formData.get("wht_rate") || 0);
+  const categoryKey = category === "ค่าเช่าอาคาร/สถานที่" ? BUILDING_RENT_CATEGORY : undefined;
+  const settlement = withhold
+    ? settleWht({
+        baseAmount: amount,
+        vatRate,
+        whtRate: whtRateRaw,
+        category: categoryKey,
+      })
+    : settleWht({ baseAmount: amount, vatRate: 0, whtRate: 0 });
+  const bookedAmount = withhold ? settlement.grossAmount : amount;
 
   if (!title) return { error: "กรุณาระบุชื่อรายการค่าใช้จ่าย" };
   if (isNaN(amount) || amount <= 0) return { error: "กรุณาระบุจำนวนเงินที่ถูกต้อง" };
+  if (withhold && settlement.whtAmount > 0) {
+    const taxId = String(formData.get("payee_tax_id") ?? "").replace(/[^0-9]/g, "");
+    if (taxId.length !== 13) {
+      return { error: "หัก ณ ที่จ่ายต้องมีเลขผู้เสียภาษีผู้รับเงิน 13 หลัก" };
+    }
+  }
 
   const [y, m] = expenseDate.split("-");
   const monthKey = `${m}/${y}`;
@@ -1089,7 +1169,7 @@ export async function addExpense(
       month: monthKey,
       category,
       name: title,
-      amount,
+      amount: bookedAmount,
       pay_method: payMethod,
       recorded_by: profile.display_name,
       key: expenseKey,
@@ -1109,7 +1189,17 @@ export async function addExpense(
     entity_id: inserted?.id ?? expenseKey,
     actor_id: profile.id,
     actor_name: profile.display_name,
-    detail: { month: monthKey, category, name: title, amount, pay_method: payMethod, expense_date: expenseDate },
+    detail: {
+      month: monthKey,
+      category,
+      name: title,
+      amount: bookedAmount,
+      pay_method: payMethod,
+      expense_date: expenseDate,
+      vat_amount: settlement.vatAmount,
+      wht_amount: settlement.whtAmount,
+      net_payment: settlement.netPayment,
+    },
   });
 
   // เขียนกระจกเงาลงตารางใหม่ด้วย (ขั้นที่ 2 ของ docs/sc-opex-refactor-plan.md)
@@ -1118,16 +1208,49 @@ export async function addExpense(
     await mirrorExpenseEntry({
       legacyOpexId: inserted.id,
       entryDate: expenseDate,
-      amount,
+      amount: bookedAmount,
       rawCategory: category,
       title,
       payMethod,
       createdBy: profile.id,
       tenantId,
     });
+
+    if (withhold && settlement.whtAmount > 0) {
+      const payeeName = String(formData.get("payee_name") ?? "").trim();
+      const payeeKind = formData.get("payee_kind") === "juristic" ? "juristic" : "person";
+      const payeeTaxId = String(formData.get("payee_tax_id") ?? "").replace(/[^0-9]/g, "");
+      const payeeAddress = String(formData.get("payee_address") ?? "").trim();
+      const existingPayeeId = String(formData.get("payee_id") ?? "").trim();
+      const payee = existingPayeeId
+        ? { success: true as const, id: existingPayeeId }
+        : await upsertWhtPayee({
+            kind: payeeKind,
+            name: payeeName || title,
+            taxId: payeeTaxId,
+            address: payeeAddress,
+          });
+      if (payee.success) {
+        const issued = await issuePayableCertificate({
+          payeeId: payee.id,
+          paymentDate: expenseDate,
+          baseAmount: settlement.baseAmount,
+          vatRate: settlement.vatRate,
+          whtRate: settlement.whtRate,
+          category: categoryKey,
+          legacyOpexId: Number(inserted.id),
+          createdBy: profile.id,
+          tenantId,
+        });
+        if (!issued.success) {
+          console.error("[expenses] ออกหนังสือรับรอง 50 ทวิ ไม่สำเร็จ:", issued.error);
+        }
+      }
+    }
   }
 
   revalidatePath("/", "layout");
+  revalidatePath("/tax-filing");
   return { success: true };
 }
 
@@ -1160,6 +1283,8 @@ export async function deleteExpense(id: string | number) {
   if (error) {
     throw new Error(`ไม่สามารถลบรายการได้: ${error.message}`);
   }
+
+  await deleteCertificatesForOpex(numericId, tenantId);
 
   // ลบกระจกเงาในตารางใหม่ให้ตรงกัน ไม่งั้นสองฝั่งจะเพี้ยนทันทีที่มีคนลบรายการ
   await unmirrorExpenseEntry(numericId);

@@ -1,5 +1,6 @@
 export type ExpenseCategoryKey =
   | "payroll"
+  | "building_rent"
   | "facility_utilities"
   | "supplies_cogs"
   | "marketing"
@@ -46,12 +47,31 @@ export const EXPENSE_CATEGORIES: Record<ExpenseCategoryKey, ExpenseCategoryMeta>
       "สมทบประกันสังคมนายจ้าง",
     ],
   },
+  building_rent: {
+    key: "building_rent",
+    label: "ค่าเช่าอาคารและสถานที่ (Building Rent)",
+    shortLabel: "ค่าเช่าอาคาร/สถานที่",
+    icon: "🏠",
+    description: "ค่าเช่าตึก/ร้านจ่ายเจ้าของอาคาร — หัก ณ ที่จ่าย 5% ได้ตอนบันทึก ไม่ใช่รายจ่ายแยก",
+    colorClass: {
+      badge: "bg-orange-100 text-orange-900 border-orange-300",
+      border: "border-orange-300",
+      bg: "bg-orange-50/60",
+      text: "text-orange-900",
+      bar: "bg-orange-500",
+    },
+    presets: [
+      "ค่าเช่าอาคาร/สถานที่",
+      "ค่าเช่าตึกประจำเดือน",
+      "ค่าเช่าร้านจ่ายเจ้าของอาคาร",
+    ],
+  },
   facility_utilities: {
     key: "facility_utilities",
-    label: "สาธารณูปโภคและค่าเช่าร้าน (Utilities & Rent)",
+    label: "สาธารณูปโภค (Utilities)",
     shortLabel: "สาธารณูปโภค & ค่าเช่า",
     icon: "🏢",
-    description: "ค่าน้ำประปา, ค่าไฟฟ้า, ค่าอินเทอร์เน็ต & POS, ค่าเช่าร้าน, ค่าส่วนกลาง",
+    description: "ค่าน้ำประปา, ค่าไฟฟ้า, ค่าอินเทอร์เน็ต & POS, ค่าส่วนกลาง",
     colorClass: {
       badge: "bg-amber-100 text-amber-900 border-amber-300",
       border: "border-amber-300",
@@ -63,7 +83,6 @@ export const EXPENSE_CATEGORIES: Record<ExpenseCategoryKey, ExpenseCategoryMeta>
       "ค่าน้ำประปาประจำเดือน",
       "ค่าไฟฟ้าประจำเดือน",
       "ค่าอินเทอร์เน็ตและโทรศัพท์",
-      "ค่าเช่าสถานที่ / ค่าเช่าร้าน",
       "ค่าส่วนกลางและบำรุงรักษาอาคาร",
     ],
   },
@@ -233,7 +252,23 @@ export function classifyExpenseCategory(rawCategory: string = "", name: string =
     return "payroll";
   }
 
-  // 2. Utilities & Rent
+  // 2. ค่าเช่าอาคาร/ตึก — แยกจากค่าน้ำ-ค่าไฟ เพราะมีหัก ณ ที่จ่าย 5%
+  //    shortLabel เดิม "สาธารณูปโภค & ค่าเช่า" ยัง map เป็น facility_utilities ผ่าน
+  //    CATEGORY_KEY_BY_SHORT_LABEL อยู่แล้ว แถวเก่าจึงไม่ถูกย้ายหมวด
+  if (
+    cat.includes("ค่าเช่าอาคาร") ||
+    cat.includes("ค่าเช่าตึก") ||
+    cat.includes("building_rent") ||
+    title.includes("ค่าเช่าอาคาร") ||
+    title.includes("ค่าเช่าตึก") ||
+    title.includes("ค่าเช่าสถานที่") ||
+    title.includes("เจ้าของอาคาร") ||
+    title.includes("เจ้าของตึก")
+  ) {
+    return "building_rent";
+  }
+
+  // 3. Utilities (ไฟ/น้ำ/เน็ต — ไม่รวมค่าเช่าตึกก้อนใหม่)
   if (
     cat.includes("ค่าเช่า") ||
     cat.includes("ค่าน้ำ") ||
