@@ -4,7 +4,6 @@ import { requireProfile, requireAdmin } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
-  Settings,
   Users,
   ShieldCheck,
   Send,
@@ -20,6 +19,8 @@ import { fetchManagedBranches } from "@/app/actions/branch";
 import { ShopProfileForm } from "./shop-profile-form";
 import { BackupNotifyForm } from "./backup-notify-form";
 import { BranchManager } from "@/components/branch-manager";
+import { PageHeader } from "@/components/page-header";
+import { SettingsNav } from "@/components/settings-nav";
 
 export default async function SettingsPage() {
   const profile = await requireProfile();
@@ -37,20 +38,12 @@ export default async function SettingsPage() {
   const status = statusRows?.[0] ?? { is_set: false, value_suffix: null, updated_at: null };
 
   return (
-    <div className="space-y-8">
-      {/* ── Header Banner ── */}
-      <div className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-slate-200 bg-white p-6 shadow-xs">
-        <div className="space-y-1">
-          <div className="inline-flex items-center gap-1.5 rounded-md bg-teal-50 px-2.5 py-0.5 text-xs font-semibold text-teal-800 border border-teal-200">
-            <Settings className="h-3.5 w-3.5" />
-            System Administration
-          </div>
-          <h2 className="text-2xl font-bold tracking-tight text-slate-900">ตั้งค่าระบบ & ข้อมูลร้านค้า</h2>
-          <p className="text-xs text-slate-500">
-            จัดการข้อมูลร้าน หัวบิลเอกสาร โลโก้ เลขผู้เสียภาษี บัญชีผู้ใช้ และการแจ้งเตือน
-          </p>
-        </div>
-      </div>
+    <div className="space-y-6">
+      <PageHeader
+        title="ตั้งค่า"
+        description="ข้อมูลร้าน หัวบิล เลขผู้เสียภาษี สาขา ผู้ใช้ และการแจ้งเตือน"
+      />
+      <SettingsNav />
 
       {/* ── Shop Branding & Tax Profile Form ── */}
       <ShopProfileForm initialProfile={shopProfile} />

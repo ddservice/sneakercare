@@ -30,7 +30,7 @@ import {
 import Link from "next/link";
 import { errorMessage } from "@/lib/errors";
 import { PageHeader } from "@/components/page-header";
-import { cn } from "@/lib/utils";
+import { UnderlineNav } from "@/components/underline-nav";
 import type { Tables } from "@/lib/supabase/database.types";
 import type { MonthlyCogsRow } from "@/lib/reports";
 
@@ -241,33 +241,16 @@ export function ReportsClient({
         description="ส่งออก Excel/CSV ทุกโมดูล นำเข้าข้อมูลแบบกลุ่ม และรายงานต้นทุนวัสดุ"
       />
 
-      <nav
+      <UnderlineNav
         aria-label="เมนูนำเข้าส่งออก"
-        className="flex gap-1 overflow-x-auto border-b border-slate-200 pb-px scrollbar-none dark:border-slate-800"
-      >
-        {(
-          [
-            ["export", Download, "ส่งออก"],
-            ["import", Upload, "นำเข้า"],
-            ["cogs", FileSpreadsheet, "รายงานต้นทุน"],
-          ] as const
-        ).map(([tab, Icon, label]) => (
-          <button
-            key={tab}
-            type="button"
-            onClick={() => setActiveTab(tab)}
-            className={cn(
-              "inline-flex items-center gap-1.5 whitespace-nowrap border-b-2 px-3 py-2.5 text-sm font-medium transition-colors",
-              activeTab === tab
-                ? "border-emerald-600 text-emerald-700 dark:border-emerald-400 dark:text-emerald-300"
-                : "border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
-            )}
-          >
-            <Icon className="h-4 w-4" />
-            {label}
-          </button>
-        ))}
-      </nav>
+        value={activeTab}
+        onChange={(id) => setActiveTab(id as "export" | "import" | "cogs")}
+        items={[
+          { id: "export", label: "ส่งออก", icon: Download },
+          { id: "import", label: "นำเข้า", icon: Upload },
+          { id: "cogs", label: "รายงานต้นทุน", icon: FileSpreadsheet },
+        ]}
+      />
 
       {/* ── TAB 1: EXPORT HUB ── */}
       {activeTab === "export" && (

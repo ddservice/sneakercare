@@ -3,11 +3,13 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getActiveBranches } from "@/lib/branch";
 import { ROLE_LABEL, type Role } from "@/lib/permissions";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { EditUserForm, InviteUserForm, UserAccountActions, type BranchOption, type UserRow } from "./user-forms";
 import { withId, text, bool } from "@/lib/db-rows";
+import { PageHeader } from "@/components/page-header";
+import { SettingsNav } from "@/components/settings-nav";
 
 export default async function AdminUsersPage() {
   const profile = await requireProfile();
@@ -63,12 +65,15 @@ export default async function AdminUsersPage() {
   const branchName = new Map(branches.map((branch) => [branch.id, branch.name]));
 
   return (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between">
-        <CardTitle>ผู้ใช้และสิทธิ์</CardTitle>
-        <InviteUserForm branches={branches} />
-      </CardHeader>
-      <CardContent>
+    <div className="space-y-6">
+      <PageHeader
+        title="ผู้ใช้และสิทธิ์"
+        description="เชิญบัญชี กำหนดบทบาท และสาขาของกิจการนี้"
+        actions={<InviteUserForm branches={branches} />}
+      />
+      <SettingsNav />
+      <Card>
+        <CardContent className="pt-6">
         <Table>
           <TableHeader>
             <TableRow>
@@ -113,5 +118,6 @@ export default async function AdminUsersPage() {
         </Table>
       </CardContent>
     </Card>
+    </div>
   );
 }

@@ -37,6 +37,7 @@ import { toast } from "sonner";
 import { errorMessage } from "@/lib/errors";
 import { ModalBackdrop } from "@/components/modal-shell";
 import { PageHeader } from "@/components/page-header";
+import { UnderlineNav } from "@/components/underline-nav";
 import {
   Wallet,
   Building2,
@@ -668,9 +669,18 @@ export function ExpensesClient({
       <PageHeader
         className="print:hidden"
         title="ค่าใช้จ่ายและเงินเดือน"
-        description="บันทึกค่าใช้จ่ายตามหมวด ออกสลิปเงินเดือน และเก็บสมุดคู่ค้าสำหรับหัก ณ ที่จ่าย"
+        description="บันทึกค่าใช้จ่าย รายรับค่าเช่าห้องจากพนักงาน และสลิปเงินเดือน"
         actions={
           <>
+            <Button
+              variant="outline"
+              onClick={() => {
+                document.getElementById("rental-income")?.scrollIntoView({ behavior: "smooth", block: "start" });
+              }}
+              className="text-xs gap-1.5 h-9 border-emerald-300 text-emerald-800 hover:bg-emerald-50"
+            >
+              <Building2 className="h-4 w-4" /> รายรับค่าเช่าห้อง
+            </Button>
             <Button
               variant="outline"
               onClick={() => {
@@ -699,23 +709,23 @@ export function ExpensesClient({
       />
 
       {/* ── HIGH-END PROFESSIONAL ACCOUNTING MONTH SELECTOR TOOLBAR ── */}
-      <Card className="border-teal-200 bg-teal-50/50 shadow-xs print:hidden">
+      <Card className="border-slate-200 bg-slate-50/70 shadow-xs print:hidden dark:border-slate-800 dark:bg-slate-900/40">
         <CardContent className="p-4 space-y-3">
           <div className="flex flex-wrap items-center justify-between gap-3">
             {/* Left: Month Dropdown */}
             <div className="flex flex-wrap items-center gap-2.5">
               <div className="flex items-center gap-2">
-                <div className="h-8 w-8 rounded-lg bg-teal-800 text-white flex items-center justify-center font-bold shadow-2xs">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-900 text-white shadow-xs dark:bg-slate-100 dark:text-slate-900">
                   <Calendar className="h-4 w-4" />
                 </div>
-                <span className="text-xs font-bold text-teal-950">เลือกงวดบัญชี & เงินเดือน:</span>
+                <span className="text-xs font-semibold text-slate-700 dark:text-slate-200">เลือกงวดบัญชี</span>
               </div>
 
               <select
                 value={selectedMonth}
                 onChange={(e) => handleSelectMonth(e.target.value)}
                 disabled={isPending}
-                className="h-9 rounded-xl border-2 border-teal-600 bg-white px-3 text-xs font-bold text-teal-950 shadow-2xs focus:outline-none focus:ring-2 focus:ring-teal-500/20 cursor-pointer min-w-[240px]"
+                className="h-9 min-w-[240px] cursor-pointer rounded-lg border border-slate-300 bg-white px-3 text-xs font-medium text-slate-900 shadow-xs focus:outline-none focus:ring-2 focus:ring-slate-400/30 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
               >
                 {AVAILABLE_MONTHS.map((m) => (
                   <option key={m.value} value={m.value}>
@@ -767,8 +777,8 @@ export function ExpensesClient({
                 variant={selectedMonth === "all" ? "default" : "outline"}
                 onClick={() => handleSelectMonth("all")}
                 disabled={isPending}
-                className={`h-8 text-xs font-bold ${
-                  selectedMonth === "all" ? "bg-emerald-500 text-white" : "bg-white text-slate-700 border-slate-300"
+                className={`h-8 text-xs font-medium ${
+                  selectedMonth === "all" ? "bg-slate-900 text-white" : "bg-white text-slate-700 border-slate-300"
                 }`}
               >
                 🌐 รวมสะสมทุกงวด
@@ -777,10 +787,10 @@ export function ExpensesClient({
           </div>
 
           {/* Active Period Status Bar */}
-          <div className="flex items-center justify-between text-xs border-t border-teal-200/60 pt-2 font-medium text-teal-950">
+          <div className="flex items-center justify-between border-t border-slate-200 pt-2 text-xs font-medium text-slate-700 dark:border-slate-700 dark:text-slate-300">
             <div className="flex items-center gap-2">
-              <span>📅 กำลังแสดงผลงวด:</span>
-              <span className="font-extrabold text-teal-900 bg-white px-2 py-0.5 rounded-md border border-teal-200">
+              <span>กำลังแสดงงวด</span>
+              <span className="rounded-md border border-slate-200 bg-white px-2 py-0.5 font-semibold text-slate-900 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100">
                 {currentMonthMeta.monthName}
               </span>
               {isPending && (
@@ -796,83 +806,20 @@ export function ExpensesClient({
         </CardContent>
       </Card>
 
-      {/* ── Top Level Metric Summary Cards ── */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 print:hidden">
-        <Card className="border-slate-200 dark:border-slate-700 shadow-sm">
-          <CardContent className="p-4 flex items-center justify-between">
-            <div className="space-y-1">
-              <span className="text-xs font-medium text-slate-500">ยอดขายบริการ</span>
-              <div className="text-xl font-semibold tabular-nums text-slate-900 dark:text-slate-100">
-                ฿{data.totalMonthlySales.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
-              </div>
-              <div className="text-[10px] text-slate-400">ฐานคำนวณค่าคอมมิชชั่น</div>
-            </div>
-            <div className="rounded-xl bg-teal-50 p-2.5 text-teal-700">
-              <Receipt className="h-5 w-5" />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="border-indigo-200 shadow-xs">
-          <CardContent className="p-4 flex items-center justify-between">
-            <div className="space-y-1">
-              <span className="text-xs font-medium text-slate-500">ค่าแรงและเงินเดือนรวม</span>
-              <div className="text-xl font-semibold tabular-nums text-indigo-700">
-                ฿{data.totalPayroll.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
-              </div>
-              <div className="text-[10px] text-slate-400">พนักงาน {data.payslips.length} ท่าน</div>
-            </div>
-            <div className="rounded-xl bg-indigo-50 p-2.5 text-indigo-700">
-              <Users className="h-5 w-5" />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="border-slate-200 dark:border-slate-700 shadow-sm">
-          <CardContent className="p-4 flex items-center justify-between">
-            <div className="space-y-1">
-              <span className="text-xs font-medium text-slate-500">ค่าดำเนินการ</span>
-              <div className="text-xl font-semibold tabular-nums text-amber-700">
-                ฿{data.totalOpex.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
-              </div>
-              <div className="text-[10px] text-slate-400">สาธารณูปโภค, ค่าเช่า, การตลาด, ฯลฯ</div>
-            </div>
-            <div className="rounded-xl bg-amber-50 p-2.5 text-amber-700">
-              <Building2 className="h-5 w-5" />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="border-slate-200 dark:border-slate-700 shadow-sm">
-          <CardContent className="p-4 flex items-center justify-between">
-            <div className="space-y-1">
-              <span className="text-xs font-medium text-slate-500">รวมค่าใช้จ่ายทั้งหมด</span>
-              <div className="text-xl font-semibold tabular-nums text-slate-900 dark:text-slate-100">
-                ฿{data.netExpenses.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
-              </div>
-              <div className="text-[10px] text-slate-400">
-                เงินเดือน + ค่าดำเนินการ
-                {data.totalPartnerShare > 0 && " (รวมส่วนแบ่งหุ้นส่วนแล้ว)"}
-              </div>
-            </div>
-            <div className="rounded-xl bg-slate-50 p-2.5 text-slate-700">
-              <Wallet className="h-5 w-5" />
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
       {/* ── Rental Income — แยกออกจากค่าใช้จ่ายโดยเจตนา (แก้บั๊ก 2026-09-02: เดิมถูกนับปนเป็น
           "ค่าดำเนินการ" เพราะ filter เช็คชื่อ category ผิด ทำให้รายรับกลายเป็นรายจ่ายในตัวเลขรวม) ── */}
-      <div className="rounded-xl border border-emerald-200 bg-emerald-50/70 dark:bg-emerald-900/20 dark:border-emerald-800/60 px-4 py-3 print:hidden space-y-3">
+      <div
+        id="rental-income"
+        className="scroll-mt-4 rounded-xl border-2 border-emerald-400 bg-emerald-50/70 dark:bg-emerald-900/20 dark:border-emerald-700 px-4 py-3 print:hidden space-y-3"
+      >
           <div className="flex items-center justify-between gap-4">
             <div className="flex items-center gap-3">
               <div className="rounded-lg bg-emerald-100 dark:bg-emerald-900/40 p-2 text-emerald-700 dark:text-emerald-300">
                 <Building2 className="h-4 w-4" />
               </div>
               <div>
-                <div className="text-xs font-bold text-emerald-900 dark:text-emerald-200">
-                  รายได้อื่น — ค่าเช่าห้องจากพนักงาน (ไม่ปนกับยอดขายบริการ)
+                <div className="text-sm font-bold text-emerald-900 dark:text-emerald-200">
+                  กรอกตรงนี้ — รายรับค่าเช่าห้องจากพนักงาน
                 </div>
                 <div className="text-[10px] text-emerald-700/80 dark:text-emerald-400/80">
                   ระบุชื่อผู้จ่ายได้ · ลงบัญชียอดเต็ม · ถ้าผู้เช่าหักภาษีไว้ กรอกช่องถูกหัก (เงินเข้าจริงน้อยกว่า แต่รายได้ไม่ลด)
@@ -883,6 +830,11 @@ export function ExpensesClient({
               +฿{data.totalRentalIncome.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
             </div>
           </div>
+          {selectedMonth === "all" && (
+            <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] font-medium text-amber-800">
+              เลือกงวดเดือนก่อน จึงจะบันทึกรายได้ค่าเช่าห้องได้ — ปุ่มด้านบนซ้ายไม่ใช่ “รวมสะสมทุกงวด”
+            </p>
+          )}
           <div className="grid gap-2">
             {data.rentals.map((r) => (
               <form
@@ -1061,6 +1013,72 @@ export function ExpensesClient({
           </div>
         </div>
 
+      {/* ── Top Level Metric Summary Cards ── */}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 print:hidden">
+        <Card className="border-slate-200 dark:border-slate-700 shadow-sm">
+          <CardContent className="p-4 flex items-center justify-between">
+            <div className="space-y-1">
+              <span className="text-xs font-medium text-slate-500">ยอดขายบริการ</span>
+              <div className="text-xl font-semibold tabular-nums text-slate-900 dark:text-slate-100">
+                ฿{data.totalMonthlySales.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+              </div>
+              <div className="text-[10px] text-slate-400">ฐานคำนวณค่าคอมมิชชั่น</div>
+            </div>
+            <div className="rounded-xl bg-teal-50 p-2.5 text-teal-700">
+              <Receipt className="h-5 w-5" />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="border-indigo-200 shadow-xs">
+          <CardContent className="p-4 flex items-center justify-between">
+            <div className="space-y-1">
+              <span className="text-xs font-medium text-slate-500">ค่าแรงและเงินเดือนรวม</span>
+              <div className="text-xl font-semibold tabular-nums text-indigo-700">
+                ฿{data.totalPayroll.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+              </div>
+              <div className="text-[10px] text-slate-400">พนักงาน {data.payslips.length} ท่าน</div>
+            </div>
+            <div className="rounded-xl bg-indigo-50 p-2.5 text-indigo-700">
+              <Users className="h-5 w-5" />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="border-slate-200 dark:border-slate-700 shadow-sm">
+          <CardContent className="p-4 flex items-center justify-between">
+            <div className="space-y-1">
+              <span className="text-xs font-medium text-slate-500">ค่าดำเนินการ</span>
+              <div className="text-xl font-semibold tabular-nums text-amber-700">
+                ฿{data.totalOpex.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+              </div>
+              <div className="text-[10px] text-slate-400">สาธารณูปโภค, ค่าเช่า, การตลาด, ฯลฯ</div>
+            </div>
+            <div className="rounded-xl bg-amber-50 p-2.5 text-amber-700">
+              <Building2 className="h-5 w-5" />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="border-slate-200 dark:border-slate-700 shadow-sm">
+          <CardContent className="p-4 flex items-center justify-between">
+            <div className="space-y-1">
+              <span className="text-xs font-medium text-slate-500">รวมค่าใช้จ่ายทั้งหมด</span>
+              <div className="text-xl font-semibold tabular-nums text-slate-900 dark:text-slate-100">
+                ฿{data.netExpenses.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+              </div>
+              <div className="text-[10px] text-slate-400">
+                เงินเดือน + ค่าดำเนินการ
+                {data.totalPartnerShare > 0 && " (รวมส่วนแบ่งหุ้นส่วนแล้ว)"}
+              </div>
+            </div>
+            <div className="rounded-xl bg-slate-50 p-2.5 text-slate-700">
+              <Wallet className="h-5 w-5" />
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
       {/* ── เตือนเมื่อ "ของที่ซื้อเข้าคลัง" กับ "ค่าใช้จ่ายหมวดของใช้" ไม่ตรงกัน ──────────
           ระบบมี ledger เงินสองสายที่แยกกันสนิท และหน้านี้อ่านแค่ sc_opex ⇒ ของที่ซื้อแล้ว
           บันทึกเฉพาะฝั่งคลังจะหายจากยอดค่าใช้จ่ายโดยไม่มี error ให้เห็น (เคยขาดเกือบ ฿21,000
@@ -1209,55 +1227,22 @@ export function ExpensesClient({
 
       {/* ── Main Tab Navigation & Category Filter Pills ── */}
       <div className="space-y-3 print:hidden">
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 pb-2">
-          <div className="flex items-center gap-2">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => {
-                setActiveTab("overview");
-                setSelectedCategoryFilter("all");
-              }}
-              className={`rounded-none border-b-2 px-3 text-xs font-medium ${
-                activeTab === "overview"
-                  ? "border-emerald-600 bg-transparent text-emerald-700 shadow-none"
-                  : "border-transparent text-slate-500"
-              }`}
-            >
-              <Layers className="h-3.5 w-3.5 mr-1" /> รวมค่าใช้จ่ายทั้งหมด
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => {
-                setActiveTab("payroll");
-                setSelectedCategoryFilter("payroll");
-              }}
-              className={`rounded-none border-b-2 px-3 text-xs font-medium ${
-                activeTab === "payroll"
-                  ? "border-emerald-600 bg-transparent text-emerald-700 shadow-none"
-                  : "border-transparent text-slate-500"
-              }`}
-            >
-              <Users className="h-3.5 w-3.5 mr-1" /> บัญชีเงินเดือนพนักงาน ({data.payslips.length})
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => {
-                setActiveTab("opex");
-                if (selectedCategoryFilter === "payroll") setSelectedCategoryFilter("all");
-              }}
-              className={`rounded-none border-b-2 px-3 text-xs font-medium ${
-                activeTab === "opex"
-                  ? "border-emerald-600 bg-transparent text-emerald-700 shadow-none"
-                  : "border-transparent text-slate-500"
-              }`}
-            >
-              <Building2 className="h-3.5 w-3.5 mr-1" /> ค่าดำเนินการร้าน ({data.opexList.length})
-            </Button>
-          </div>
-        </div>
+        <UnderlineNav
+          aria-label="หมวดค่าใช้จ่าย"
+          value={activeTab}
+          onChange={(id) => {
+            const tab = id as "overview" | "payroll" | "opex";
+            setActiveTab(tab);
+            if (tab === "overview") setSelectedCategoryFilter("all");
+            if (tab === "payroll") setSelectedCategoryFilter("payroll");
+            if (tab === "opex" && selectedCategoryFilter === "payroll") setSelectedCategoryFilter("all");
+          }}
+          items={[
+            { id: "overview", label: "รวมค่าใช้จ่ายทั้งหมด", icon: Layers },
+            { id: "payroll", label: `บัญชีเงินเดือนพนักงาน (${data.payslips.length})`, icon: Users },
+            { id: "opex", label: `ค่าดำเนินการร้าน (${data.opexList.length})`, icon: Building2 },
+          ]}
+        />
 
         {/* Quick Filter Pill Buttons */}
         <div className="flex flex-wrap items-center gap-1.5 bg-slate-50 p-2 rounded-xl border border-slate-200">

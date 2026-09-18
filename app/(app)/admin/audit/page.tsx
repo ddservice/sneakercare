@@ -5,6 +5,9 @@ import { SC_AUDIT_TABLE } from "@/lib/audit";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Pagination } from "@/components/pagination";
+import { PageHeader } from "@/components/page-header";
+import { SettingsNav } from "@/components/settings-nav";
+import { UnderlineNav } from "@/components/underline-nav";
 import { DEFAULT_PAGE_SIZE, pageInfo, parsePage, rangeFor } from "@/lib/pagination";
 import { ShieldAlert, Trash2, Edit, Plus, Upload, Download, LogIn, LogOut, AlertTriangle } from "lucide-react";
 
@@ -277,45 +280,27 @@ export default async function AuditLogPage({
 
   return (
     <div className="space-y-5">
-      {/* Header */}
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <h1 className="text-xl font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
-            <ShieldAlert className="h-5 w-5 text-amber-500" />
-            Audit Log
-          </h1>
-          <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
-            บันทึกว่าใครทำอะไร เมื่อไหร่ จาก IP / เบราว์เซอร์ / อุปกรณ์ / หน้าใด — อ่านอย่างเดียว
-            ฐานข้อมูลมี trigger กัน UPDATE/DELETE ไว้อีกชั้น
-          </p>
-        </div>
-        <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700">
-          <span className="font-semibold text-slate-700 dark:text-slate-300">
-            {totalCount.toLocaleString("th-TH")}
-          </span>
-          <span>รายการทั้งหมด</span>
-        </div>
-      </div>
-
-      {/* เลือกสายของ log */}
-      <div className="flex flex-wrap gap-2 border-b border-slate-200 dark:border-slate-700 pb-2">
-        {[
-          { key: "app", label: "การเงิน / ยอดขาย (แอป)", href: "/admin/audit" },
-          { key: "inv", label: "คลังสินค้า (DB trigger)", href: "/admin/audit?source=inv" },
-        ].map((t) => (
-          <a
-            key={t.key}
-            href={t.href}
-            className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-all ${
-              source === t.key
-                ? "bg-emerald-500 text-white border-emerald-500"
-                : "bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700"
-            }`}
-          >
-            {t.label}
-          </a>
-        ))}
-      </div>
+      <PageHeader
+        title="ประวัติการใช้งาน"
+        description="ใครทำอะไร เมื่อไหร่ จาก IP / เบราว์เซอร์ / อุปกรณ์ / หน้าใด — อ่านอย่างเดียว"
+        actions={
+          <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-sm text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400">
+            <span className="font-semibold tabular-nums text-slate-700 dark:text-slate-200">
+              {totalCount.toLocaleString("th-TH")}
+            </span>{" "}
+            รายการ
+          </div>
+        }
+      />
+      <SettingsNav />
+      <UnderlineNav
+        aria-label="สายบันทึก"
+        value={source}
+        items={[
+          { id: "app", label: "การเงิน / ยอดขาย", href: "/admin/audit" },
+          { id: "inv", label: "คลังสินค้า", href: "/admin/audit?source=inv" },
+        ]}
+      />
 
       {/* ยังไม่ได้รัน migration 0011 */}
       {migrationMissing && (

@@ -3,11 +3,12 @@
 import { useState, useMemo } from "react";
 import type { AnalyticsDashboardData } from "@/app/actions/analytics";
 import { TimeRangeFilterBar } from "@/components/time-range-filter";
+import { PageHeader } from "@/components/page-header";
+import { UnderlineNav } from "@/components/underline-nav";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
-  TrendingUp,
   Receipt,
   Footprints,
   Boxes,
@@ -82,21 +83,10 @@ export function StatisticsClient({ initialData }: { initialData: AnalyticsDashbo
 
   return (
     <div className="space-y-6">
-      {/* ── Top Header Banner ── */}
-      <div className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-slate-200 bg-white p-6 shadow-xs">
-        <div className="space-y-1">
-          <div className="inline-flex items-center gap-1.5 rounded-md bg-teal-50 px-2.5 py-0.5 text-xs font-semibold text-teal-800 border border-teal-200">
-            <TrendingUp className="h-3.5 w-3.5" />
-            Shop Performance & Full Stock Analytics
-          </div>
-          <h2 className="text-2xl font-bold tracking-tight text-slate-900">
-            สถิติ & รายงานประสิทธิภาพร้าน (DD-Management)
-          </h2>
-          <p className="text-xs text-slate-500">
-            ข้อมูลยอดขายจริงย้อนหลังทุกช่วงเวลา พร้อมสรุปขนาดรองเท้าและสถานะคลังสินค้าทั้งหมด
-          </p>
-        </div>
-      </div>
+      <PageHeader
+        title="สถิติ"
+        description="ยอดขาย จำนวนคู่ และสถานะคลัง ตามช่วงเวลาที่เลือก"
+      />
 
       {/* ── Universal Time Filter Bar ── */}
       <TimeRangeFilterBar
@@ -104,31 +94,15 @@ export function StatisticsClient({ initialData }: { initialData: AnalyticsDashbo
         onSelectRange={(range) => setSelectedRange(range)}
       />
 
-      {/* ── View Mode Switcher ── */}
-      <div className="flex border-b border-slate-200">
-        <button
-          onClick={() => setActiveTab("sales")}
-          className={`flex items-center gap-2 border-b-2 px-6 py-3 text-xs font-bold transition-all ${
-            activeTab === "sales"
-              ? "border-teal-700 text-teal-900"
-              : "border-transparent text-slate-500 hover:text-slate-900"
-          }`}
-        >
-          <Receipt className="h-4 w-4" />
-          สถิติยอดขาย & ขนาดรองเท้า ({totalDays} วัน / ฿{totalRevenue.toLocaleString()})
-        </button>
-        <button
-          onClick={() => setActiveTab("inventory")}
-          className={`flex items-center gap-2 border-b-2 px-6 py-3 text-xs font-bold transition-all ${
-            activeTab === "inventory"
-              ? "border-teal-700 text-teal-900"
-              : "border-transparent text-slate-500 hover:text-slate-900"
-          }`}
-        >
-          <Boxes className="h-4 w-4" />
-          สต๊อกสินค้าทั้งหมด ({initialData.inventory.totalItemsCount} รายการ / ฿{initialData.inventory.totalStockValuation.toLocaleString()})
-        </button>
-      </div>
+      <UnderlineNav
+        aria-label="มุมมองสถิติ"
+        value={activeTab}
+        onChange={(id) => setActiveTab(id as "sales" | "inventory")}
+        items={[
+          { id: "sales", label: `ยอดขาย (${totalDays} วัน)`, icon: Receipt },
+          { id: "inventory", label: `คลังสินค้า (${initialData.inventory.totalItemsCount})`, icon: Boxes },
+        ]}
+      />
 
       {activeTab === "sales" ? (
         <>
@@ -138,7 +112,7 @@ export function StatisticsClient({ initialData }: { initialData: AnalyticsDashbo
               <CardContent className="p-5 flex items-center justify-between">
                 <div className="space-y-1">
                   <span className="text-xs font-semibold text-slate-500">ยอดขายรวมสุทธิ</span>
-                  <div className="text-2xl font-black text-slate-900 dark:text-slate-100">
+                  <div className="text-2xl font-semibold tabular-nums text-slate-900 dark:text-slate-100">
                     ฿{totalRevenue.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
                   </div>
                   <div className="text-[11px] text-slate-400">
@@ -155,7 +129,7 @@ export function StatisticsClient({ initialData }: { initialData: AnalyticsDashbo
               <CardContent className="p-5 flex items-center justify-between">
                 <div className="space-y-1">
                   <span className="text-xs font-semibold text-slate-500">จำนวนรองเท้าที่รับ</span>
-                  <div className="text-2xl font-black text-slate-900">
+                  <div className="text-2xl font-semibold tabular-nums text-slate-900">
                     {totalShoes.toLocaleString()} คู่
                   </div>
                   <div className="text-[11px] text-slate-400">
@@ -189,7 +163,7 @@ export function StatisticsClient({ initialData }: { initialData: AnalyticsDashbo
               <CardContent className="p-5 flex items-center justify-between">
                 <div className="space-y-1">
                   <span className="text-xs font-semibold text-slate-500">จำนวนวันที่มีรายการ</span>
-                  <div className="text-2xl font-black text-slate-900">{totalDays} วัน</div>
+                  <div className="text-2xl font-semibold tabular-nums text-slate-900">{totalDays} วัน</div>
                   <div className="text-[11px] text-slate-400">
                     ส่วนลดรวม ฿{totalDiscount.toLocaleString()}
                   </div>
@@ -247,7 +221,7 @@ export function StatisticsClient({ initialData }: { initialData: AnalyticsDashbo
                         {growthPct !== null ? (
                           <Badge
                             variant="outline"
-                            className={`text-[10px] font-black px-1.5 py-0 ${
+                            className={`text-[10px] font-semibold tabular-nums px-1.5 py-0 ${
                               growthPct > 0
                                 ? "bg-emerald-100 text-emerald-800 border-emerald-300 dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-700"
                                 : growthPct < 0
@@ -264,7 +238,7 @@ export function StatisticsClient({ initialData }: { initialData: AnalyticsDashbo
                         )}
                       </div>
 
-                      <span className="font-mono font-black text-sm text-teal-800 dark:text-teal-300">
+                      <span className="font-mono font-semibold tabular-nums text-sm text-teal-800 dark:text-teal-300">
                         ฿{m.revenue.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
                       </span>
                     </div>
@@ -313,7 +287,7 @@ export function StatisticsClient({ initialData }: { initialData: AnalyticsDashbo
                         <span className="font-bold text-xs text-slate-900 dark:text-slate-100">{s.label}</span>
                         <span className="text-xs font-mono font-bold text-teal-700 dark:text-teal-300">{pct}%</span>
                       </div>
-                      <div className="text-2xl font-black font-mono text-slate-900 dark:text-slate-100">
+                      <div className="text-2xl font-semibold tabular-nums font-mono text-slate-900 dark:text-slate-100">
                         {s.count.toLocaleString()} <span className="text-xs font-normal text-slate-500">คู่</span>
                       </div>
                       <div className="text-[11px] text-slate-400">{s.desc}</div>
@@ -394,7 +368,7 @@ export function StatisticsClient({ initialData }: { initialData: AnalyticsDashbo
               <CardContent className="p-5 flex items-center justify-between">
                 <div className="space-y-1">
                   <span className="text-xs font-semibold text-slate-500">จำนวนรายการสินค้าทั้งหมด</span>
-                  <div className="text-2xl font-black text-slate-900">
+                  <div className="text-2xl font-semibold tabular-nums text-slate-900">
                     {initialData.inventory.totalItemsCount} รายการ
                   </div>
                   <div className="text-[11px] text-slate-400">ครอบคลุมน้ำยาและอุปกรณ์</div>
@@ -424,7 +398,7 @@ export function StatisticsClient({ initialData }: { initialData: AnalyticsDashbo
                       </Badge>
                     )}
                   </span>
-                  <div className="text-2xl font-black text-rose-600">
+                  <div className="text-2xl font-semibold tabular-nums text-rose-600">
                     {initialData.inventory.lowStockCount} รายการ
                   </div>
                   <div className="text-[11px] text-rose-600 font-semibold">
@@ -441,7 +415,7 @@ export function StatisticsClient({ initialData }: { initialData: AnalyticsDashbo
               <CardContent className="p-5 flex items-center justify-between">
                 <div className="space-y-1">
                   <span className="text-xs font-semibold text-slate-500">มูลค่าสต๊อกคงเหลือรวม</span>
-                  <div className="text-2xl font-black text-slate-900 dark:text-slate-100 font-mono">
+                  <div className="text-2xl font-semibold tabular-nums text-slate-900 dark:text-slate-100 font-mono">
                     ฿{initialData.inventory.totalStockValuation.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
                   </div>
                   <div className="text-[11px] text-slate-400">คำนวณตาม Moving Average Cost</div>
@@ -508,7 +482,7 @@ export function StatisticsClient({ initialData }: { initialData: AnalyticsDashbo
                           <td className="px-4 py-2.5 font-bold text-slate-900 dark:text-slate-100">{it.name}</td>
                           <td className="px-4 py-2.5 text-slate-500">{it.category}</td>
                           <td className="px-4 py-2.5 text-right font-mono font-bold text-slate-900 dark:text-slate-100">
-                            <span className={isLow ? "text-rose-600 font-black" : ""}>
+                            <span className={isLow ? "text-rose-600 font-semibold tabular-nums" : ""}>
                               {it.currentQty.toLocaleString()} {it.baseUnit}
                             </span>
                           </td>

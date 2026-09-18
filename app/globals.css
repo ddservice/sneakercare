@@ -546,12 +546,14 @@ table {
   }
   .printable-area .border-slate-800,
   .printable-area .border-slate-300,
-  .printable-area .border-slate-200 {
+  .printable-area .border-slate-200,
+  .printable-area .border-black {
     border-color: #000000 !important;
   }
   .printable-area .bg-slate-100,
-  .printable-area .bg-slate-50 {
-    background-color: #f1f5f9 !important;
+  .printable-area .bg-slate-50,
+  .printable-area .bg-neutral-200 {
+    background-color: #d4d4d4 !important;
   }
   .printable-area img {
     visibility: visible !important;

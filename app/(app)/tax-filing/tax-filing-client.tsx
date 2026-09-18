@@ -19,6 +19,8 @@ import { toast } from "sonner";
 import type { TaxFilingSalesDoc, TaxFilingExpense, TaxFilingWhtCert } from "@/app/actions/smartacc-documents";
 import type { ShopProfile } from "@/app/actions/shop-settings";
 import { ModalBackdrop } from "@/components/modal-shell";
+import { PageHeader } from "@/components/page-header";
+import { UnderlineNav } from "@/components/underline-nav";
 import { Tawi50Certificate } from "@/components/tawi50-certificate";
 import {
   DEFAULT_TAWI50_CONDITION,
@@ -53,6 +55,7 @@ export function TaxFilingClient({
   const [selectedWhtCert, setSelectedWhtCert] = useState<TaxFilingWhtCert | null>(null);
   const [tawiCondition, setTawiCondition] = useState<Tawi50ConditionId>(DEFAULT_TAWI50_CONDITION);
   const [tawiOtherNote, setTawiOtherNote] = useState("");
+  const [tawiCopyNo, setTawiCopyNo] = useState<1 | 2>(1);
 
   // Calculate real VAT and WHT from database records
   const filteredSales = initialSalesDocs.filter((d) =>
@@ -188,67 +191,32 @@ export function TaxFilingClient({
   });
 
   return (
-    <div className="space-y-8">
-      {/* ── Header Banner ── */}
-      <div className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-slate-200 bg-white p-6 shadow-xs">
-        <div className="space-y-1">
-          <div className="inline-flex items-center gap-1.5 rounded-md bg-teal-50 px-2.5 py-0.5 text-xs font-semibold text-teal-800 border border-teal-200">
-            <Landmark className="h-3.5 w-3.5" />
-            Revenue Department & ETDA Standard Suite
-          </div>
-          <h2 className="text-2xl font-bold tracking-tight text-slate-900">
-            ศูนย์บริหารจัดการภาษี & e-Tax Invoice
-          </h2>
-          <p className="text-xs text-slate-500">
-            ข้อมูลภาษีคำนวณสดจากบิลขาย ({initialSalesDocs.length} ฉบับ) และรายการค่าใช้จ่ายจริงในระบบ
-          </p>
-        </div>
-
-        {/* Period Selector */}
-        <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 p-1.5">
-          <Calendar className="h-4 w-4 text-slate-500 ml-1" />
-          <input
-            type="month"
-            value={selectedMonth}
-            onChange={(e) => setSelectedMonth(e.target.value)}
-            className="bg-transparent text-xs font-bold text-slate-800 focus:outline-none pr-1"
-          />
-        </div>
-      </div>
-
-      {/* ── Sub Navigation ── */}
-      <div className="flex gap-2 border-b border-slate-200 pb-2">
-        <button
-          onClick={() => setActiveTab("efiling")}
-          className={`flex items-center gap-1.5 rounded-lg px-3.5 py-1.5 text-xs font-semibold transition-all ${
-            activeTab === "efiling"
-              ? "bg-emerald-500 text-white shadow-xs"
-              : "text-slate-600 hover:bg-slate-100"
-          }`}
-        >
-          <FileSpreadsheet className="h-4 w-4" /> ส่งออกไฟล์ e-Filing (ภ.พ.30, ภ.ง.ด.53)
-        </button>
-        <button
-          onClick={() => setActiveTab("tawi50")}
-          className={`flex items-center gap-1.5 rounded-lg px-3.5 py-1.5 text-xs font-semibold transition-all ${
-            activeTab === "tawi50"
-              ? "bg-emerald-500 text-white shadow-xs"
-              : "text-slate-600 hover:bg-slate-100"
-          }`}
-        >
-          <FileCheck2 className="h-4 w-4" /> หนังสือรับรอง 50 ทวิ (WHT Certificate)
-        </button>
-        <button
-          onClick={() => setActiveTab("etax_xml")}
-          className={`flex items-center gap-1.5 rounded-lg px-3.5 py-1.5 text-xs font-semibold transition-all ${
-            activeTab === "etax_xml"
-              ? "bg-emerald-500 text-white shadow-xs"
-              : "text-slate-600 hover:bg-slate-100"
-          }`}
-        >
-          <Code2 className="h-4 w-4" /> โครงสร้าง ETDA e-Tax XML (ขมธอ. 3-2560)
-        </button>
-      </div>
+    <div className="space-y-6">
+      <PageHeader
+        title="ภาษีและ e-Filing"
+        description={`ยื่น ภ.ง.ด. / พิมพ์ 50 ทวิ จากรายการหัก ณ ที่จ่ายจริง · บิลขาย ${initialSalesDocs.length} ฉบับ`}
+        actions={
+          <label className="inline-flex h-9 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-xs font-medium text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200">
+            <Calendar className="h-4 w-4 text-slate-500" />
+            <input
+              type="month"
+              value={selectedMonth}
+              onChange={(e) => setSelectedMonth(e.target.value)}
+              className="bg-transparent font-medium text-slate-800 focus:outline-none dark:text-slate-100"
+            />
+          </label>
+        }
+      />
+      <UnderlineNav
+        aria-label="เมนูภาษี"
+        value={activeTab}
+        onChange={(id) => setActiveTab(id as "efiling" | "tawi50" | "etax_xml")}
+        items={[
+          { id: "efiling", label: "ไฟล์ e-Filing", icon: FileSpreadsheet },
+          { id: "tawi50", label: "หนังสือรับรอง 50 ทวิ", icon: FileCheck2 },
+          { id: "etax_xml", label: "e-Tax XML", icon: Code2 },
+        ]}
+      />
 
       {/* ── TAB 1: E-FILING EXPORTS ── */}
       {activeTab === "efiling" && (
@@ -440,6 +408,7 @@ export function TaxFilingClient({
                             onClick={() => {
                               setTawiCondition(DEFAULT_TAWI50_CONDITION);
                               setTawiOtherNote("");
+                              setTawiCopyNo(1);
                               setSelectedWhtCert({ ...r, sequence: index + 1 });
                             }}
                             variant="outline"
@@ -530,7 +499,18 @@ export function TaxFilingClient({
             </div>
 
             <div className="print:hidden space-y-1.5 rounded-lg border border-slate-200 bg-slate-50 p-3 text-[11px]">
-              <div className="font-semibold text-slate-700">เงื่อนไขการหักภาษีที่พิมพ์บนเอกสาร</div>
+              <div className="font-semibold text-slate-700">ฉบับที่พิมพ์</div>
+              <div className="flex flex-wrap gap-x-4 gap-y-1">
+                <label className="flex items-center gap-1.5 text-slate-700">
+                  <input type="radio" checked={tawiCopyNo === 1} onChange={() => setTawiCopyNo(1)} />
+                  ฉบับที่ 1 (ให้ผู้ถูกหัก — แนบแบบแสดงรายการ)
+                </label>
+                <label className="flex items-center gap-1.5 text-slate-700">
+                  <input type="radio" checked={tawiCopyNo === 2} onChange={() => setTawiCopyNo(2)} />
+                  ฉบับที่ 2 (เก็บเป็นหลักฐานผู้หัก)
+                </label>
+              </div>
+              <div className="font-semibold text-slate-700 pt-1">เงื่อนไขการหักภาษีที่พิมพ์บนเอกสาร</div>
               <div className="flex flex-wrap gap-x-4 gap-y-1">
                 {TAWI50_CONDITIONS.map((item) => (
                   <label key={item.id} className="flex items-center gap-1.5 text-slate-700">
@@ -553,7 +533,7 @@ export function TaxFilingClient({
                 />
               )}
               <p className="text-slate-500">
-                ค่าเริ่มต้นคือ (1) หัก ณ ที่จ่าย · ลายเซ็นและตราประทับดึงจาก /settings เมื่อมี URL
+                ค่าเริ่มต้นคือ (1) หักภาษี ณ ที่จ่าย · ลายเซ็นและตราประทับดึงจาก /settings เมื่อมี URL
               </p>
             </div>
 
@@ -571,6 +551,7 @@ export function TaxFilingClient({
                 payeeName: selectedWhtCert.name,
                 payeeTaxId: selectedWhtCert.taxId,
                 payeeAddress: selectedWhtCert.address,
+                payeeKind: selectedWhtCert.payeeKind,
               }}
               payer={{
                 name: shopProfile?.name || "ยังไม่ได้ตั้งค่าชื่อกิจการ — ไปที่ /settings",
@@ -582,6 +563,7 @@ export function TaxFilingClient({
               }}
               condition={tawiCondition}
               otherNote={tawiOtherNote}
+              copyNo={tawiCopyNo}
             />
           </div>
         </ModalBackdrop>

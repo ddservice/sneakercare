@@ -42,6 +42,8 @@ export type PendingDeliveryOrder = PendingDeliveryOrderRow;
 import type { ShopProfile } from "@/app/actions/shop-settings";
 import { errorMessage } from "@/lib/errors";
 import { ModalBackdrop } from "@/components/modal-shell";
+import { PageHeader } from "@/components/page-header";
+import { UnderlineNav } from "@/components/underline-nav";
 
 export function InvoicingClient({
   pendingDOs,
@@ -294,42 +296,20 @@ export function InvoicingClient({
   }
 
   return (
-    <div className="space-y-8">
-      {/* ── Header Banner ── */}
-      <div className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-slate-200 bg-white p-6 shadow-xs">
-        <div className="space-y-1">
-          <div className="inline-flex items-center gap-1.5 rounded-md bg-teal-50 px-2.5 py-0.5 text-xs font-semibold text-teal-800 border border-teal-200">
-            <FileText className="h-3.5 w-3.5" />
-            Standard Document & Invoicing Pipeline
-          </div>
-          <h2 className="text-2xl font-bold tracking-tight text-slate-900">
-            ระบบออกเอกสาร & การเชื่อมโยงเอกสาร (Flow)
-          </h2>
-          <p className="text-xs text-slate-500">
-            ใบเสนอราคา (QA) ➔ ใบส่งของ (DO) ➔ ใบแจ้งหนี้ (INV) ➔ ใบวางบิล (BL) ➔ ใบเสร็จ/ใบกำกับภาษี (REC/TAX)
-          </p>
-        </div>
-
-        {/* View Switcher */}
-        <div className="flex gap-2">
-          <Button
-            size="sm"
-            variant={activeView === "create" ? "default" : "outline"}
-            onClick={() => setActiveView("create")}
-            className={`text-xs gap-1.5 h-9 ${activeView === "create" ? "bg-teal-700 hover:bg-emerald-600 text-white" : ""}`}
-          >
-            <Plus className="h-3.5 w-3.5" /> ออกเอกสารใหม่
-          </Button>
-          <Button
-            size="sm"
-            variant={activeView === "history" ? "default" : "outline"}
-            onClick={() => setActiveView("history")}
-            className={`text-xs gap-1.5 h-9 ${activeView === "history" ? "bg-teal-700 hover:bg-emerald-600 text-white" : ""}`}
-          >
-            <History className="h-3.5 w-3.5" /> ประวัติเอกสารทั้งหมด ({existingDocs.length})
-          </Button>
-        </div>
-      </div>
+    <div className="space-y-6">
+      <PageHeader
+        title="ออกเอกสาร"
+        description="ใบเสนอราคา → ส่งของ → แจ้งหนี้ → วางบิล → ใบเสร็จ / ใบกำกับภาษี"
+      />
+      <UnderlineNav
+        aria-label="เมนูออกเอกสาร"
+        value={activeView}
+        onChange={(id) => setActiveView(id as "create" | "history")}
+        items={[
+          { id: "create", label: "ออกเอกสารใหม่", icon: Plus },
+          { id: "history", label: `ประวัติเอกสาร (${existingDocs.length})`, icon: History },
+        ]}
+      />
 
       {activeView === "create" ? (
         <>
@@ -339,10 +319,10 @@ export function InvoicingClient({
               <button
                 key={type}
                 onClick={() => setDocType(type)}
-                className={`rounded-lg px-4 py-2 text-xs font-bold transition-all flex items-center gap-1.5 ${
+                className={`flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium transition-colors ${
                   docType === type
-                    ? "bg-emerald-500 text-white shadow-xs"
-                    : "text-slate-600 bg-slate-50 hover:bg-slate-100 border border-slate-200"
+                    ? "bg-slate-900 text-white"
+                    : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
                 }`}
               >
                 <span className="font-mono">{DOC_TYPE_CONFIG[type].prefix}</span>

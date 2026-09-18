@@ -108,10 +108,10 @@ export const TAWI50_INCOME_TYPES = {
 export type Tawi50IncomeCode = keyof typeof TAWI50_INCOME_TYPES;
 
 export const TAWI50_CONDITIONS = [
-  { id: "1", label: "(1) หัก ณ ที่จ่าย" },
+  { id: "1", label: "(1) หักภาษี ณ ที่จ่าย" },
   { id: "2", label: "(2) ออกให้ตลอดไป" },
   { id: "3", label: "(3) ออกให้ครั้งเดียว" },
-  { id: "4", label: "(4) อื่น ๆ" },
+  { id: "4", label: "อื่น ๆ (ระบุ)" },
 ] as const;
 
 export type Tawi50ConditionId = (typeof TAWI50_CONDITIONS)[number]["id"];
@@ -140,7 +140,46 @@ export function inferIncomeTypeCode(label: string, code?: string | null): Tawi50
   return "6";
 }
 
-/** บรรทัดประเภทเงินได้บน 50 ทวิ — มีมาตราให้ผู้รับนำไปยื่น ภ.ง.ด.90/91 */
+/** แถวในตารางแบบ ภ.ง.ด.50 ทวิ ตามฟอร์มกรมสรรพากร (ฉบับพิมพ์หนึ่งหน้า) */
+export const TAWI50_FORM_ROWS = [
+  { id: "1", no: "1", label: "เงินเดือน ค่าจ้าง เบี้ยเลี้ยง โบนัส ฯลฯ ตามมาตรา 40 (1)" },
+  { id: "2", no: "2", label: "ค่าธรรมเนียม ค่านายหน้า ฯลฯ ตามมาตรา 40 (2)" },
+  { id: "3", no: "3", label: "ค่าแห่งลิขสิทธิ์ ฯลฯ ตามมาตรา 40 (3)" },
+  {
+    id: "4a",
+    no: "4",
+    label: "(ก) ดอกเบี้ย ฯลฯ ตามมาตรา 40 (4) (ก)\n(ข) เงินปันผล ส่วนแบ่งกำไร ฯลฯ ตามมาตรา 40 (4) (ข)",
+  },
+  {
+    id: "4tp",
+    no: "4",
+    label: "การจ่ายเงินได้ที่ต้องหักภาษี ณ ที่จ่ายตามคำสั่งกรมสรรพากร ที่ ท.ป. 4/2528 ฯลฯ",
+  },
+  {
+    id: "5",
+    no: "5",
+    label: "ค่าจ้างทำของ ค่าบริการ ค่าเช่า ค่าขนส่ง ฯลฯ ตามมาตรา 3 เตรส",
+  },
+  { id: "6", no: "6", label: "อื่น ๆ (ระบุ)" },
+] as const;
+
+export type Tawi50FormRowId = (typeof TAWI50_FORM_ROWS)[number]["id"];
+
+/** ค่าเช่า/ค่าบริการ/ค่าจ้างทำของ กรอกข้อ 5 ตามแบบกรมสรรพากร ไม่แยกเป็นบรรทัดเอง */
+export function tawi50FormRowId(code: string): Tawi50FormRowId {
+  if (code === "1" || code === "2" || code === "3") return code;
+  if (code === "4") return "4a";
+  return "5";
+}
+
+export function tawi50RowSpecify(code: string, storedLabel: string): string {
+  const resolved = inferIncomeTypeCode(storedLabel, code);
+  if (resolved === "5") return "ค่าเช่า";
+  if (resolved === "6") return "ค่าบริการ / ค่าจ้างทำของ";
+  return "";
+}
+
+/** บรรทัดสรุปในรายการหน้าจอ — ฟอร์มพิมพ์ใช้ตารางข้อ 1–6 ของกรมสรรพากร */
 export function formatTawi50IncomeLine(code: string, storedLabel: string, whtRate: number): string {
   const resolved = inferIncomeTypeCode(storedLabel, code);
   const spec = TAWI50_INCOME_TYPES[resolved];

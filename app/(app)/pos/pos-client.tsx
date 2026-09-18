@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useState, useTransition } from "react";
 import { createServiceOrder, updateOrderStatus } from "@/app/actions/pos";
 import { Button } from "@/components/ui/button";
@@ -14,6 +13,7 @@ import { errorMessage } from "@/lib/errors";
 import { localYmd } from "@/lib/local-date";
 import { ServiceCatalogManager } from "@/components/service-catalog-manager";
 import { PageHeader } from "@/components/page-header";
+import { PosNav } from "@/components/pos-nav";
 import type { ShopService } from "@/app/actions/services";
 import {
   Sparkles,
@@ -213,16 +213,10 @@ export function PosClient({
   return (
     <div className="space-y-5">
       <PageHeader
-        title="งานบริการ / รับงาน"
-        description="บันทึกรับงาน คำนวณราคา และติดตามสถานะ — รายการบริการเป็นของกิจการที่เลือกอยู่ ไม่ดึงจากสาขาแรก"
-        actions={
-          <Link href="/pos/daily-entry">
-            <Button size="sm" className="bg-emerald-600 font-semibold hover:bg-emerald-700 text-white text-xs gap-1.5">
-              <Footprints className="h-4 w-4" /> ยอดสรุปรายวัน
-            </Button>
-          </Link>
-        }
+        title="งานบริการ"
+        description="บันทึกรับงาน คำนวณราคา และติดตามสถานะ — รายการบริการเป็นของกิจการที่เลือกอยู่"
       />
+      <PosNav />
 
       <div className="grid gap-8 lg:grid-cols-12">
         {/* ── LEFT COLUMN: POS RECEIVING FORM (7 COLS) ── */}

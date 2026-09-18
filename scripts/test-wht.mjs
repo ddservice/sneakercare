@@ -20,6 +20,8 @@ const {
   formatTawi50Amount,
   thaiOfficialDate,
   DEFAULT_TAWI50_CONDITION,
+  tawi50FormRowId,
+  tawi50RowSpecify,
   BUILDING_RENT_CATEGORY,
   BUILDING_RENT_WHT_RATE,
 } = await import(new URL("../.test-build/wht.js", import.meta.url).href);
@@ -91,6 +93,10 @@ same("ตัวเลขบน 50 ทวิ ไม่ใช้ $", formatTawi50A
 same("ตัวเลขมีคอมม่าหลักพัน", formatTawi50Amount(18000), "18,000.00");
 same("วันที่บน 50 ทวิ เป็น พ.ศ.", thaiOfficialDate("2026-09-18"), "18 กันยายน 2569");
 same("เงื่อนไขเริ่มต้นคือหัก ณ ที่จ่าย", DEFAULT_TAWI50_CONDITION, "1");
+same("ค่าเช่ากรอกข้อ 5 ของแบบ 50 ทวิ", tawi50FormRowId("5"), "5");
+same("ค่าบริการกรอกข้อ 5 ของแบบ 50 ทวิ", tawi50FormRowId("6"), "5");
+same("ระบุข้อ 5 เป็นค่าเช่า", tawi50RowSpecify("5", "ค่าเช่า"), "ค่าเช่า");
+same("เงินเดือนกรอกข้อ 1", tawi50FormRowId("1"), "1");
 same("เลขที่หนังสือรับรอง", certificateNumber("2026-09", 1), "WHT-202609-0001");
 
 if (failures) {

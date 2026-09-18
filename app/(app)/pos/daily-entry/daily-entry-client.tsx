@@ -30,7 +30,6 @@ import {
   Sparkles,
   Zap,
   TrendingUp,
-  Receipt,
   RotateCcw,
   Search,
   Check,
@@ -46,6 +45,8 @@ import {
 import Link from "next/link";
 import type { ShopService } from "@/app/actions/services";
 import { ModalBackdrop } from "@/components/modal-shell";
+import { PageHeader } from "@/components/page-header";
+import { PosNav } from "@/components/pos-nav";
 
 function sizePricesFromServices(services: ShopService[], allowLegacy: boolean) {
   const pick = (...codes: string[]) => {
@@ -615,38 +616,27 @@ export function DailyEntryClient({
   }, [viewPeriod, filterDate, customStartDate, customEndDate]);
 
   return (
-    <div className="space-y-8">
-      {/* ── Header Banner ── */}
-      <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl bg-gradient-to-r from-teal-800 via-teal-900 to-slate-900 p-6 text-white shadow-md">
-        <div className="space-y-1">
-          <div className="inline-flex items-center gap-2 rounded-full bg-teal-500/20 px-3 py-1 text-xs font-semibold text-teal-200 ring-1 ring-teal-400/30">
-            <Footprints className="h-3.5 w-3.5" />
-            DD-Management POS & Multi-Period View
-          </div>
-          <h2 className="text-2xl font-bold tracking-tight">บันทึกยอดขาย & สรุปภาพรวมย้อนหลัง</h2>
-          <p className="text-xs sm:text-sm text-teal-100/80">
-            เลือกดูรายวัน รายสัปดาห์ รายเดือน ภาพรวม และกำหนดช่วงเวลาย้อนหลังได้ทั้งระบบ
-          </p>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <Link href="/statistics">
-            <Button variant="outline" className="bg-white/10 text-white hover:bg-white/20 border-white/20 text-xs gap-1.5 h-9">
-              <TrendingUp className="h-4 w-4" /> กราฟสรุปสถิติ
-            </Button>
-          </Link>
-          <Link href="/reports">
-            <Button variant="outline" className="bg-white/10 text-white hover:bg-white/20 border-white/20 text-xs gap-1.5 h-9">
-              <BarChart3 className="h-4 w-4" /> รายงานสรุปผล
-            </Button>
-          </Link>
-          <Link href="/pos">
-            <Button variant="outline" className="bg-white/10 text-white hover:bg-white/20 border-white/20 text-xs gap-1.5 h-9">
-              <Receipt className="h-4 w-4" /> เปิดบิลหน้าร้าน
-            </Button>
-          </Link>
-        </div>
-      </div>
+    <div className="space-y-6">
+      <PageHeader
+        className="print:hidden"
+        title="ยอดขายรายวัน"
+        description="บันทึกจำนวนคู่ เงินสด เงินโอน และยอดค้างชำระ ตามงวดที่เลือก"
+        actions={
+          <>
+            <Link href="/statistics">
+              <Button variant="outline" size="sm" className="h-9 text-xs gap-1.5">
+                <TrendingUp className="h-4 w-4" /> สถิติ
+              </Button>
+            </Link>
+            <Link href="/reports">
+              <Button variant="outline" size="sm" className="h-9 text-xs gap-1.5">
+                <BarChart3 className="h-4 w-4" /> รายงาน
+              </Button>
+            </Link>
+          </>
+        }
+      />
+      <PosNav />
 
       {/* ── Period Selector & View Toolbar ── */}
       <Card className="border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50 shadow-xs">
@@ -663,7 +653,7 @@ export function DailyEntryClient({
                 variant={viewPeriod === "day" ? "default" : "outline"}
                 onClick={() => setViewPeriod("day")}
                 className={`h-8 text-xs font-bold ${
-                  viewPeriod === "day" ? "bg-emerald-500 text-white" : "bg-white text-slate-700"
+                  viewPeriod === "day" ? "bg-slate-900 text-white" : "bg-white text-slate-700"
                 }`}
               >
                 🗓️ รายวัน
@@ -674,7 +664,7 @@ export function DailyEntryClient({
                 variant={viewPeriod === "week" ? "default" : "outline"}
                 onClick={() => setViewPeriod("week")}
                 className={`h-8 text-xs font-bold ${
-                  viewPeriod === "week" ? "bg-emerald-500 text-white" : "bg-white text-slate-700"
+                  viewPeriod === "week" ? "bg-slate-900 text-white" : "bg-white text-slate-700"
                 }`}
               >
                 📅 รายสัปดาห์
@@ -685,7 +675,7 @@ export function DailyEntryClient({
                 variant={viewPeriod === "month" ? "default" : "outline"}
                 onClick={() => setViewPeriod("month")}
                 className={`h-8 text-xs font-bold ${
-                  viewPeriod === "month" ? "bg-emerald-500 text-white" : "bg-white text-slate-700"
+                  viewPeriod === "month" ? "bg-slate-900 text-white" : "bg-white text-slate-700"
                 }`}
               >
                 📆 รายเดือน
@@ -696,7 +686,7 @@ export function DailyEntryClient({
                 variant={viewPeriod === "all" ? "default" : "outline"}
                 onClick={() => setViewPeriod("all")}
                 className={`h-8 text-xs font-bold ${
-                  viewPeriod === "all" ? "bg-emerald-500 text-white" : "bg-white text-slate-700"
+                  viewPeriod === "all" ? "bg-slate-900 text-white" : "bg-white text-slate-700"
                 }`}
               >
                 🌐 ภาพรวมทั้งหมด
@@ -707,7 +697,7 @@ export function DailyEntryClient({
                 variant={viewPeriod === "custom" ? "default" : "outline"}
                 onClick={() => setViewPeriod("custom")}
                 className={`h-8 text-xs font-bold ${
-                  viewPeriod === "custom" ? "bg-emerald-500 text-white" : "bg-white text-slate-700"
+                  viewPeriod === "custom" ? "bg-slate-900 text-white" : "bg-white text-slate-700"
                 }`}
               >
                 🔍 กำหนดช่วงวันเอง
