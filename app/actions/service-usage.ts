@@ -48,12 +48,16 @@ export async function fetchUsageCatalog(): Promise<{
       .order("name"),
   ]);
   return {
-    services: (servicesRes.data ?? []).map((row) => ({ id: row.id, name: row.name })),
-    items: (itemsRes.data ?? []).map((row) => ({
-      id: row.id,
-      name: row.name,
-      unit: row.base_unit || "หน่วย",
-    })),
+    services: (servicesRes.data ?? [])
+      .filter((row): row is { id: string; name: string } => Boolean(row.id && row.name))
+      .map((row) => ({ id: row.id, name: row.name })),
+    items: (itemsRes.data ?? [])
+      .filter((row): row is { id: string; name: string; base_unit: string | null } => Boolean(row.id && row.name))
+      .map((row) => ({
+        id: row.id,
+        name: row.name,
+        unit: row.base_unit || "หน่วย",
+      })),
   };
 }
 
