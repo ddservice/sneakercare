@@ -10,7 +10,8 @@
  * ⚠️ อ่านสถานะจดจาก inv_branches ของสาขาที่เลือก ไม่ใช่ sc_settings ของทั้ง tenant
  */
 
-import { STANDARD_VAT_RATE, money } from "./wht";
+import { STANDARD_VAT_RATE } from "./wht";
+import { moneyNumber as money, settleExclusiveVat } from "./money";
 import type { DocumentType } from "./smartacc/types";
 
 export { STANDARD_VAT_RATE };
@@ -69,12 +70,11 @@ export function documentVatRate(
 }
 
 export function settleDocumentVat(subtotal: number, vatRate: 0 | typeof STANDARD_VAT_RATE) {
-  const base = money(Math.max(0, Number(subtotal) || 0));
-  const vatAmount = vatRate === STANDARD_VAT_RATE ? money(base * (STANDARD_VAT_RATE / 100)) : 0;
+  const settled = settleExclusiveVat(Math.max(0, Number(subtotal) || 0), vatRate === STANDARD_VAT_RATE ? "7" : "0");
   return {
-    subtotal: base,
+    subtotal: money(Number(settled.subtotal)),
     vatRate,
-    vatAmount,
-    grandTotal: money(base + vatAmount),
+    vatAmount: money(Number(settled.vatAmount)),
+    grandTotal: money(Number(settled.grandTotal)),
   };
 }

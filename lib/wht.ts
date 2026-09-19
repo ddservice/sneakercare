@@ -11,8 +11,10 @@
  * ภ.ง.ด.3 = ผู้รับเงินเป็นบุคคลธรรมดา · ภ.ง.ด.53 = นิติบุคคล
  *
  * ⚠️ ห้ามนับ WHT เข้า sc_opex.amount อีกครั้ง — ค่าเช่า ฿18,000 ที่กระทบยอดกับ Excel
- * ไว้แล้วเป็นยอดเต็มก่อนหัก ถ้าลง WHT ฿900 เป็นรายจ่ายแยกจะนับซ้ำ (ดู CLAUDE.md)
+ * ไว้แล้วเป็นยอดเต็มก่อนหัก ถ้าลง WHT ฿900 เป็นรายจ่ายแยกจะนับซ้ำ (ดู docs/money-and-tax.md)
  */
+
+import { moneyNumber } from "./money";
 
 export const WHT_RATES = [1, 2, 3, 5] as const;
 export type WhtRate = (typeof WHT_RATES)[number];
@@ -50,8 +52,7 @@ export type WhtSettlement = {
 };
 
 export function money(n: number): number {
-  if (!Number.isFinite(n)) return 0;
-  return Math.round(n * 100) / 100;
+  return moneyNumber(n);
 }
 
 export function isWhtRate(n: number): n is WhtRate {
