@@ -11,6 +11,8 @@ import { isYmd, receivedAtFromYmd, ymdToOrderDateCode } from "@/lib/local-date";
 import { planCheckout, shouldPostSale, type CheckoutPayment } from "@/lib/checkout";
 import { saveDailySale } from "@/app/actions/daily-sales";
 import { assertPeriodOpen } from "@/lib/period-close-store";
+import { mayLiveAutoIssue, planLiveStockIssue } from "@/lib/service-usage";
+import { readServiceUsageConfig } from "@/lib/service-usage-store";
 
 export type PosActionState = {
   error?: string;
@@ -172,7 +174,12 @@ export async function createServiceOrder(
   });
 
   // ยอดทางการอยู่ที่ sc_sales — ใบรับงานที่ชำระแล้วลงแถวขายหนึ่งใบ (คีย์ = order.id)
-  // ยังไม่ตัดสต๊อกอัตโนมัติ: ไม่มีสูตรของใช้ต่องาน เบิกที่ /stock-out ตามเดิม
+  // ตัดสต๊อกอัตโนมัติยังปิด: เบิกมือที่ /stock-out จนกว่าสูตร+จุดตัด+ธุรกรรมจะผ่านเงื่อนไข
+  const usage = await readServiceUsageConfig(tenantId);
+  const liveIssue = planLiveStockIssue({ flags: usage.flags, requestedPoint: "receive" });
+  if (mayLiveAutoIssue(usage.flags) || liveIssue.ok) {
+    console.warn("[pos] live auto-issue is blocked at server — skipped stock posting");
+  }
   const plan = planCheckout({
     orderId: order.id,
     orderNo,

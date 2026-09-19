@@ -53,6 +53,7 @@ export function planTaxRecon(input: TaxReconInput): {
   debitNotes: number;
   documentNetSales: number;
   salesGap: number;
+  salesGapReason: string;
   vatOut: number;
   vatIn: number;
   vatNet: number;
@@ -106,6 +107,7 @@ export function planTaxRecon(input: TaxReconInput): {
     debitNotes,
     documentNetSales,
     salesGap,
+    salesGapReason: explainSalesGap(salesGap),
     vatOut,
     vatIn,
     vatNet,
@@ -113,4 +115,15 @@ export function planTaxRecon(input: TaxReconInput): {
     readyToFile: false,
     blockers,
   };
+}
+
+export function explainSalesGap(gap: number): string {
+  const n = money(gap);
+  if (Math.abs(n) < 0.01) {
+    return "ยอดขายร้านเท่ากับสุทธิเอกสารที่ออกเลขแล้วในงวดนี้";
+  }
+  if (n > 0) {
+    return "ยอดขายร้านสูงกว่าเอกสารที่ออกเลขแล้ว — อาจมีขายที่ยังไม่ออกใบกำกับ/ใบเสร็จ หรือใบลดหนี้ยังเป็นร่างจึงยังไม่หัก และใบลดหนี้ยังไม่กลับ sc_sales";
+  }
+  return "สุทธิเอกสารสูงกว่ายอดขายร้าน — อาจออกเอกสารโดยยังไม่ลง sc_sales หรือใบลดหนี้/เพิ่มหนี้ยังไม่เชื่อมบัญชีร้าน";
 }

@@ -39,6 +39,7 @@ import { embedSellerSnapshot, planSellerSnapshot } from "@/lib/smartacc/snapshot
 import {
   canIssueOfficialNumber,
   consumesOfficialNumberOnCreate,
+  correctionOfficialIssueBlockedReason,
   issueBlockedReason,
   planDraftNumber,
 } from "@/lib/smartacc/issue";
@@ -971,13 +972,17 @@ export async function issueSmartAccDocument(docId: string) {
     return { success: false as const, error: "ไม่พบเอกสารที่ต้องการออกเลข" };
   }
 
-  if (!canIssueOfficialNumber(String(doc.status), String(doc.doc_number))) {
+  if (!canIssueOfficialNumber(String(doc.status), String(doc.doc_number), String(doc.doc_type))) {
+    const blocked = issueBlockedReason(String(doc.status), String(doc.doc_number), String(doc.doc_type));
+    if (correctionOfficialIssueBlockedReason(String(doc.doc_type))) {
+      return { success: false as const, error: blocked ?? "ออกเลขไม่ได้" };
+    }
     if (String(doc.status) !== "VOID" && !String(doc.doc_number).startsWith("DRAFT-")) {
       return { success: true as const, docNumber: doc.doc_number };
     }
     return {
       success: false as const,
-      error: issueBlockedReason(String(doc.status), String(doc.doc_number)) ?? "ออกเลขไม่ได้",
+      error: blocked ?? "ออกเลขไม่ได้",
     };
   }
 

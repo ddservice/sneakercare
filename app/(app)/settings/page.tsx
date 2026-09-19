@@ -16,7 +16,9 @@ import { BranchChatIdForm } from "../admin/settings/branch-chat-id-form";
 import { PermissionMatrix } from "../admin/settings/permission-matrix";
 import { fetchShopProfile, fetchBackupHeartbeatEnabled } from "@/app/actions/shop-settings";
 import { fetchManagedBranches } from "@/app/actions/branch";
+import { fetchUsageCatalog, fetchUsageConfig } from "@/app/actions/service-usage";
 import { ShopProfileForm } from "./shop-profile-form";
+import { ServiceUsageForm } from "./service-usage-form";
 import { BackupNotifyForm } from "./backup-notify-form";
 import { BranchManager } from "@/components/branch-manager";
 import { PageHeader } from "@/components/page-header";
@@ -27,12 +29,14 @@ export default async function SettingsPage() {
   requireAdmin(profile);
 
   const supabase = await createClient();
-  const [{ data: statusRows }, { data: branches }, shopProfile, backupNotifyEnabled, managed] = await Promise.all([
+  const [{ data: statusRows }, { data: branches }, shopProfile, backupNotifyEnabled, managed, usageConfig, usageCatalog] = await Promise.all([
     supabase.rpc("fn_integration_secret_status", { p_key: "telegram_bot_token" }),
     supabase.from("branches").select("id, name, telegram_chat_id").eq("is_active", true).order("name"),
     fetchShopProfile(),
     fetchBackupHeartbeatEnabled(),
     fetchManagedBranches(),
+    fetchUsageConfig(),
+    fetchUsageCatalog(),
   ]);
 
   const status = statusRows?.[0] ?? { is_set: false, value_suffix: null, updated_at: null };
@@ -47,6 +51,8 @@ export default async function SettingsPage() {
 
       {/* ── Shop Branding & Tax Profile Form ── */}
       <ShopProfileForm initialProfile={shopProfile} />
+
+      <ServiceUsageForm initialConfig={usageConfig} services={usageCatalog.services} items={usageCatalog.items} />
 
       <BranchManager
         branches={managed.branches}

@@ -11,6 +11,12 @@ import {
 import { generateETaxXML } from "@/lib/smartacc/etax-generator";
 import { downloadTextFile } from "@/lib/download-file";
 import { logTaxFilingExport } from "@/app/actions/smartacc-documents";
+import { preparePp30Filing, recordPp30Filed } from "@/app/actions/pp30-filing";
+import { postStagedReceipt, reviewStagedReceipt, stageReceipt } from "@/app/actions/receipt-staging";
+import { queueETaxSandbox, retryETaxSandbox } from "@/app/actions/etax-outbox";
+import { canRetryETax, userFacingETaxStatus, type ETaxOutboxItem } from "@/lib/etax-pipeline";
+import { reviewReceipt, vatCreditAmount, type PurchaseClass, type StagedReceipt } from "@/lib/receipt-staging";
+import type { Pp30FilingRecord } from "@/lib/pp30-filing";
 import { Button } from "@/components/ui/button";
 import { PrintModalPortal } from "@/components/print-modal-portal";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -58,6 +64,9 @@ export function TaxFilingClient({
   initialCorrectionDocs = [],
   initialClosedPeriods = [],
   initialPurchaseVatLines = [],
+  initialPp30Filings = [],
+  initialStagedReceipts = [],
+  initialETaxOutbox = [],
   canClosePeriod = false,
   shopProfile,
 }: {
@@ -69,6 +78,9 @@ export function TaxFilingClient({
   initialCorrectionDocs?: { doc_type: string; doc_number: string; issue_date: string; status: string; grand_total: number; vat_amount: number | null; subtotal_amount?: number | null }[];
   initialClosedPeriods?: string[];
   initialPurchaseVatLines?: PurchaseVatLine[];
+  initialPp30Filings?: Pp30FilingRecord[];
+  initialStagedReceipts?: StagedReceipt[];
+  initialETaxOutbox?: ETaxOutboxItem[];
   canClosePeriod?: boolean;
   /** ข้อมูลบริษัทจริงจากหน้า /settings — ใช้พิมพ์หัวเอกสารทุกจุดในหน้านี้ ห้าม hardcode ทับ */
   shopProfile?: ShopProfile;
@@ -76,8 +88,15 @@ export function TaxFilingClient({
   const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().slice(0, 7));
   const [closedPeriods, setClosedPeriods] = useState(initialClosedPeriods);
   const [purchaseLines, setPurchaseLines] = useState(initialPurchaseVatLines);
+  const [pp30Filings, setPp30Filings] = useState(initialPp30Filings);
+  const [stagedReceipts, setStagedReceipts] = useState(initialStagedReceipts);
+  const [etaxOutbox, setEtaxOutbox] = useState(initialETaxOutbox);
+  const [etaxStatus, setEtaxStatus] = useState("ยังไม่พร้อมส่ง");
   const [periodPending, startPeriodTransition] = useTransition();
   const [purchasePending, startPurchaseTransition] = useTransition();
+  const [pp30Pending, startPp30Transition] = useTransition();
+  const [stagePending, startStageTransition] = useTransition();
+  const [etaxPending, startEtaxTransition] = useTransition();
   const [purchaseForm, setPurchaseForm] = useState({
     date: new Date().toISOString().slice(0, 10),
     vendorName: "",
@@ -85,6 +104,27 @@ export function TaxFilingClient({
     invoiceNumber: "",
     baseAmount: "",
     vatAmount: "",
+  });
+  const [stageForm, setStageForm] = useState({
+    date: new Date().toISOString().slice(0, 10),
+    vendorName: "",
+    vendorTaxId: "",
+    invoiceNumber: "",
+    baseAmount: "",
+    vatAmount: "",
+    totalAmount: "",
+    source: "manual" as "manual" | "ocr",
+    purchaseClass: "unclassified" as PurchaseClass,
+    isFullTaxInvoice: false,
+    userConfirmedVatCredit: false,
+  });
+  const [pp30Form, setPp30Form] = useState({
+    reviewerName: "",
+    filerName: "",
+    filedAt: new Date().toISOString().slice(0, 10),
+    evidenceRef: "",
+    evidenceNote: "",
+    confirmedExternal: false,
   });
   const [activeTab, setActiveTab] = useState<"efiling" | "tawi50" | "etax_xml">("efiling");
   const [selectedWhtCert, setSelectedWhtCert] = useState<TaxFilingWhtCert | null>(null);
@@ -261,6 +301,8 @@ export function TaxFilingClient({
 
   const monthClosed = isPeriodClosed(selectedMonth, closedPeriods);
   const payerTaxId = digitsOnly(shopProfile?.taxId || "");
+  const currentPp30Filing = pp30Filings.find((row) => row.periodYm === selectedMonth);
+  const monthStaged = stagedReceipts.filter((row) => (row.date || "").startsWith(selectedMonth));
 
   function handleTogglePeriod() {
     if (!canClosePeriod) return;
@@ -316,6 +358,115 @@ export function TaxFilingClient({
     });
   }
 
+  function handleStageReceipt() {
+    if (!canClosePeriod) return;
+    startStageTransition(async () => {
+      const res = await stageReceipt({
+        date: stageForm.date,
+        vendorName: stageForm.vendorName,
+        vendorTaxId: stageForm.vendorTaxId,
+        invoiceNumber: stageForm.invoiceNumber,
+        baseAmount: Number(stageForm.baseAmount || 0),
+        vatAmount: Number(stageForm.vatAmount || 0),
+        totalAmount: Number(stageForm.totalAmount || stageForm.baseAmount || 0) + Number(stageForm.totalAmount ? 0 : stageForm.vatAmount || 0),
+        source: stageForm.source,
+        purchaseClass: stageForm.purchaseClass,
+        isFullTaxInvoice: stageForm.isFullTaxInvoice,
+        userConfirmedVatCredit: stageForm.userConfirmedVatCredit,
+      });
+      if (res.success) {
+        setStagedReceipts(res.receipts);
+        setStageForm((prev) => ({
+          ...prev,
+          vendorName: "",
+          vendorTaxId: "",
+          invoiceNumber: "",
+          baseAmount: "",
+          vatAmount: "",
+          totalAmount: "",
+          purchaseClass: "unclassified",
+          isFullTaxInvoice: false,
+          userConfirmedVatCredit: false,
+        }));
+        toast.success("เข้าคิวตรวจแล้ว — ยังไม่ลงสมุดจนกว่าจะอนุมัติ");
+      } else {
+        toast.error(res.error);
+      }
+    });
+  }
+
+  function handleReviewReceipt(row: StagedReceipt, patch: Partial<Pick<StagedReceipt, "purchaseClass" | "isFullTaxInvoice" | "userConfirmedVatCredit" | "approved">>) {
+    if (!canClosePeriod) return;
+    startStageTransition(async () => {
+      const res = await reviewStagedReceipt({
+        id: row.id,
+        purchaseClass: patch.purchaseClass ?? row.purchaseClass,
+        isFullTaxInvoice: patch.isFullTaxInvoice ?? row.isFullTaxInvoice,
+        userConfirmedVatCredit: patch.userConfirmedVatCredit ?? row.userConfirmedVatCredit,
+        approved: patch.approved ?? row.approved,
+      });
+      if (res.success) setStagedReceipts(res.receipts);
+      else toast.error(res.error);
+    });
+  }
+
+  function handlePostReceipt(id: string) {
+    if (!canClosePeriod) return;
+    startStageTransition(async () => {
+      const res = await postStagedReceipt(id);
+      if (res.success) {
+        setStagedReceipts(res.receipts);
+        toast.success("ลงสมุดจากคิวแล้ว — ภาษีซื้อนับเฉพาะใบที่ยืนยันเครดิต");
+      } else {
+        toast.error(res.error);
+      }
+    });
+  }
+
+  function handlePreparePp30() {
+    if (!canClosePeriod) return;
+    startPp30Transition(async () => {
+      const res = await preparePp30Filing({
+        periodYm: selectedMonth,
+        reviewerName: pp30Form.reviewerName,
+        paper: {
+          line4TaxableSales: pp30.line4TaxableSales,
+          line5OutputVat: pp30.line5OutputVat,
+          line6PurchaseBase: pp30.line6PurchaseBase,
+          line7InputVat: pp30.line7InputVat,
+          line11NetPayable: pp30.line11NetPayable,
+          line12NetExcess: pp30.line12NetExcess,
+        },
+      });
+      if (res.success) {
+        setPp30Filings(res.filings);
+        toast.success("ตั้งว่างวดนี้เตรียมข้อมูลแล้ว — ยังไม่ใช่ยื่นแล้ว");
+      } else {
+        toast.error(res.error);
+      }
+    });
+  }
+
+  function handleMarkPp30Filed() {
+    if (!canClosePeriod) return;
+    startPp30Transition(async () => {
+      const res = await recordPp30Filed({
+        periodYm: selectedMonth,
+        filerName: pp30Form.filerName,
+        filedAt: pp30Form.filedAt,
+        evidenceRef: pp30Form.evidenceRef,
+        evidenceNote: pp30Form.evidenceNote,
+        userConfirmedExternalFiling: pp30Form.confirmedExternal,
+      });
+      if (res.success) {
+        setPp30Filings(res.filings);
+        toast.success("บันทึกว่ายื่นที่เว็บสรรพากรแล้ว พร้อมหลักฐาน — แอปนี้ไม่ได้ยื่นแทน");
+      } else {
+        toast.error(res.error);
+      }
+    });
+  }
+
   function handleDownloadPndText(formType: "PND3" | "PND53") {
     const rows = formType === "PND3" ? pnd3Records : pnd53Records;
     if (rows.length === 0) {
@@ -345,6 +496,48 @@ export function TaxFilingClient({
       filename: file.filename,
       periodYm: selectedMonth,
       recordCount: file.recordCount,
+    });
+  }
+
+  function handleQueueSandbox(doc: TaxFilingSalesDoc) {
+    if (!canClosePeriod) return;
+    startEtaxTransition(async () => {
+      const res = await queueETaxSandbox({
+        docId: doc.id,
+        docNumber: doc.doc_number,
+        docTypeCode: "388",
+        issueDate: (doc.issue_date || "").slice(0, 10),
+        sellerTaxId: shopProfile?.taxId || "",
+        sellerName: shopProfile?.name || "",
+        sellerAddress: shopProfile?.address || "",
+        buyerTaxId: doc.ext_contacts?.tax_id || "",
+        buyerName: doc.ext_contacts?.company_name || "",
+        buyerAddress: doc.ext_contacts?.address || "",
+        subtotal: Number(doc.subtotal_amount || 0),
+        vatAmount: Number(doc.vat_amount || 0),
+        grandTotal: Number(doc.grand_total || 0),
+      });
+      if (res.success) {
+        setEtaxOutbox(res.outbox);
+        setEtaxStatus(res.item.userStatus);
+        toast(res.item.userStatus);
+      } else {
+        toast.error(res.error);
+      }
+    });
+  }
+
+  function handleRetrySandbox(id: string) {
+    if (!canClosePeriod) return;
+    startEtaxTransition(async () => {
+      const res = await retryETaxSandbox(id);
+      if (res.success) {
+        setEtaxOutbox(res.outbox);
+        setEtaxStatus(res.item.userStatus);
+        toast(res.item.userStatus);
+      } else {
+        toast.error(res.error);
+      }
     });
   }
 
@@ -601,7 +794,144 @@ export function TaxFilingClient({
               </table>
             </CardContent>
           </Card>
-          <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-600 space-y-1">
+          <Card className="border-slate-200 shadow-sm">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-semibold">คิวใบเสร็จเข้าสมุดซื้อ (ตรวจก่อนลง)</CardTitle>
+              <CardDescription className="text-xs">
+                รับเอกสารหรือวางผล OCR จากภายนอก — ห้ามเดายอด/ประเภท · ยอดซื้อแยกจากสิทธิใช้ภาษีซื้อ · ลงสมุดหลังอนุมัติเท่านั้น
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3 text-xs">
+              {canClosePeriod && !monthClosed && (
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <label className="space-y-1">
+                    <span className="text-slate-500">วันที่</span>
+                    <input type="date" value={stageForm.date} onChange={(e) => setStageForm((p) => ({ ...p, date: e.target.value }))} className="h-8 w-full rounded-md border px-2" />
+                  </label>
+                  <label className="space-y-1">
+                    <span className="text-slate-500">แหล่ง</span>
+                    <select value={stageForm.source} onChange={(e) => setStageForm((p) => ({ ...p, source: e.target.value as "manual" | "ocr" }))} className="h-8 w-full rounded-md border px-2">
+                      <option value="manual">กรอกจากใบจริง</option>
+                      <option value="ocr">วางผล OCR ภายนอก</option>
+                    </select>
+                  </label>
+                  <label className="space-y-1 sm:col-span-2">
+                    <span className="text-slate-500">ผู้ขาย / เลขที่</span>
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      <input value={stageForm.vendorName} onChange={(e) => setStageForm((p) => ({ ...p, vendorName: e.target.value }))} placeholder="ชื่อผู้ขาย" className="h-8 rounded-md border px-2" />
+                      <input value={stageForm.invoiceNumber} onChange={(e) => setStageForm((p) => ({ ...p, invoiceNumber: e.target.value }))} placeholder="เลขที่ใบเสร็จ" className="h-8 rounded-md border px-2" />
+                    </div>
+                  </label>
+                  <label className="space-y-1">
+                    <span className="text-slate-500">เลขผู้เสียภาษี</span>
+                    <input value={stageForm.vendorTaxId} onChange={(e) => setStageForm((p) => ({ ...p, vendorTaxId: e.target.value }))} className="h-8 w-full rounded-md border px-2 font-mono" inputMode="numeric" />
+                  </label>
+                  <label className="space-y-1">
+                    <span className="text-slate-500">ประเภทซื้อ</span>
+                    <select value={stageForm.purchaseClass} onChange={(e) => setStageForm((p) => ({ ...p, purchaseClass: e.target.value as PurchaseClass }))} className="h-8 w-full rounded-md border px-2">
+                      <option value="unclassified">ยังไม่จำแนก</option>
+                      <option value="goods">สินค้า</option>
+                      <option value="opex">ค่าใช้จ่าย</option>
+                      <option value="asset">สินทรัพย์</option>
+                    </select>
+                  </label>
+                  <label className="space-y-1">
+                    <span className="text-slate-500">ฐาน / VAT / รวม</span>
+                    <div className="grid grid-cols-3 gap-1">
+                      <input value={stageForm.baseAmount} onChange={(e) => setStageForm((p) => ({ ...p, baseAmount: e.target.value }))} placeholder="ฐาน" className="h-8 rounded-md border px-2 font-mono" inputMode="decimal" />
+                      <input value={stageForm.vatAmount} onChange={(e) => setStageForm((p) => ({ ...p, vatAmount: e.target.value }))} placeholder="VAT" className="h-8 rounded-md border px-2 font-mono" inputMode="decimal" />
+                      <input value={stageForm.totalAmount} onChange={(e) => setStageForm((p) => ({ ...p, totalAmount: e.target.value }))} placeholder="รวม" className="h-8 rounded-md border px-2 font-mono" inputMode="decimal" />
+                    </div>
+                  </label>
+                  <div className="space-y-1">
+                    <label className="flex items-center gap-2">
+                      <input type="checkbox" checked={stageForm.isFullTaxInvoice} onChange={(e) => setStageForm((p) => ({ ...p, isFullTaxInvoice: e.target.checked, userConfirmedVatCredit: e.target.checked ? p.userConfirmedVatCredit : false }))} />
+                      ใบกำกับภาษีเต็มรูป
+                    </label>
+                    <label className="flex items-center gap-2">
+                      <input type="checkbox" checked={stageForm.userConfirmedVatCredit} disabled={!stageForm.isFullTaxInvoice} onChange={(e) => setStageForm((p) => ({ ...p, userConfirmedVatCredit: e.target.checked }))} />
+                      ยืนยันใช้เครดิตภาษีซื้อ
+                    </label>
+                  </div>
+                  <div className="sm:col-span-2">
+                    <Button type="button" size="sm" disabled={stagePending} onClick={handleStageReceipt} className="h-8 bg-teal-700 text-xs text-white hover:bg-emerald-600">
+                      {stagePending ? "กำลังบันทึก…" : "เข้าคิวตรวจ"}
+                    </Button>
+                  </div>
+                </div>
+              )}
+              <table className="w-full text-left">
+                <thead className="border-b text-slate-500">
+                  <tr>
+                    <th className="py-1.5 font-medium">สถานะ</th>
+                    <th className="py-1.5 font-medium">ผู้ขาย</th>
+                    <th className="py-1.5 font-medium">ประเภท</th>
+                    <th className="py-1.5 text-right font-medium">ซื้อ / เครดิต VAT</th>
+                    <th className="py-1.5" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {monthStaged.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="py-3 text-slate-400">ยังไม่มีใบในคิวงวดนี้</td>
+                    </tr>
+                  ) : (
+                    monthStaged.map((row) => {
+                      const status = reviewReceipt(row, stagedReceipts);
+                      return (
+                        <tr key={row.id} className="border-b border-slate-100 align-top">
+                          <td className="py-1.5">
+                            {status === "posted" ? "ลงสมุดแล้ว" : status === "ready_to_post" ? "พร้อมลง" : "รอตรวจ"}
+                            <div className="text-[10px] text-slate-400">{row.source === "ocr" ? "OCR ภายนอก" : "กรอกมือ"}</div>
+                          </td>
+                          <td className="py-1.5">
+                            {row.vendorName}
+                            <div className="font-mono text-[10px] text-slate-400">{row.date} · {row.invoiceNumber || "-"}</div>
+                          </td>
+                          <td className="py-1.5">
+                            {canClosePeriod && !monthClosed && !row.postedRequestId ? (
+                              <select value={row.purchaseClass} onChange={(e) => handleReviewReceipt(row, { purchaseClass: e.target.value as PurchaseClass })} className="h-7 rounded-md border px-1">
+                                <option value="unclassified">ยังไม่จำแนก</option>
+                                <option value="goods">สินค้า</option>
+                                <option value="opex">ค่าใช้จ่าย</option>
+                                <option value="asset">สินทรัพย์</option>
+                              </select>
+                            ) : (
+                              row.purchaseClass
+                            )}
+                          </td>
+                          <td className="py-1.5 text-right font-mono">
+                            {row.totalAmount.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+                            <div className="text-[10px] text-slate-500">VAT {vatCreditAmount(row).toLocaleString("th-TH", { minimumFractionDigits: 2 })}</div>
+                          </td>
+                          <td className="py-1.5 text-right space-y-1">
+                            {canClosePeriod && !monthClosed && !row.postedRequestId ? (
+                              <>
+                                <label className="flex justify-end gap-1 text-[10px]">
+                                  <input type="checkbox" checked={row.isFullTaxInvoice} onChange={(e) => handleReviewReceipt(row, { isFullTaxInvoice: e.target.checked, userConfirmedVatCredit: e.target.checked ? row.userConfirmedVatCredit : false })} />
+                                  เต็มรูป
+                                </label>
+                                <label className="flex justify-end gap-1 text-[10px]">
+                                  <input type="checkbox" checked={row.userConfirmedVatCredit} disabled={!row.isFullTaxInvoice} onChange={(e) => handleReviewReceipt(row, { userConfirmedVatCredit: e.target.checked })} />
+                                  เครดิต VAT
+                                </label>
+                                <Button type="button" size="sm" variant="outline" disabled={stagePending} onClick={() => handleReviewReceipt(row, { approved: true })} className="h-7 text-[11px]">
+                                  อนุมัติ
+                                </Button>
+                                <Button type="button" size="sm" disabled={stagePending || status !== "ready_to_post"} onClick={() => handlePostReceipt(row.id)} className="h-7 bg-teal-700 text-[11px] text-white hover:bg-emerald-600">
+                                  ลงสมุด
+                                </Button>
+                              </>
+                            ) : null}
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </CardContent>
+          </Card>
             <p>
               ไฟล์ ภ.ง.ด.3 / ภ.ง.ด.53 สร้างตาม FORMAT กลาง กรมสรรพากร V2 (UTF-8, คั่นด้วย |, มีแถว Header H + Detail D)
               สำหรับอัปโหลดที่{" "}
@@ -814,43 +1144,107 @@ export function TaxFilingClient({
         </Card>
       )}
 
-      {/* ── TAB 3: ETDA XML VIEWER ── */}
+      {/* ── TAB 3: ETDA XML + SANDBOX QUEUE ── */}
       {activeTab === "etax_xml" && (
-        <Card className="border-slate-200 dark:border-slate-700 shadow-sm">
-          <CardHeader className="border-b border-slate-100 pb-3 flex flex-row items-center justify-between">
-            <div>
-              <CardTitle className="text-sm font-bold flex items-center gap-2">
-                <Code2 className="h-4 w-4 text-teal-700" />
-                โครงสร้างข้อมูล XML ตามมาตรฐาน ETDA (ขมธอ. 3-2560)
-              </CardTitle>
-              <CardDescription className="text-xs">
-                UN/CEFACT Tax Invoice Cross Industry Invoice XML Schema
+        <div className="space-y-4">
+          <Card className="border-amber-200 bg-amber-50/70 shadow-sm">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-semibold text-amber-950">คิว sandbox</CardTitle>
+              <CardDescription className="text-xs text-amber-900/80">
+                {etaxStatus} · สร้าง XML และใส่คิวทดสอบได้ แต่ช่องทาง live ปิดฝั่งเซิร์ฟเวอร์ — ไม่ได้ส่งกรมสรรพากร
               </CardDescription>
-            </div>
-            <Button
-              size="sm"
-              onClick={() => {
-                const filename = `etax_${selectedMonth}.xml`;
-                downloadTextFile(sampleETaxXml, filename, "application/xml");
-                toast.success("ดาวน์โหลดไฟล์ ETDA XML เรียบร้อย");
-                void logTaxFilingExport({
-                  formType: "ETAX_XML",
-                  filename,
-                  periodYm: selectedMonth,
-                  recordCount: filteredSales.length,
-                });
-              }}
-              className="bg-teal-700 hover:bg-emerald-600 text-white text-xs h-8 gap-1.5"
-            >
-              <Download className="h-3.5 w-3.5" /> ดาวน์โหลด XML
-            </Button>
-          </CardHeader>
-          <CardContent className="p-4">
-            <pre className="p-4 rounded-xl bg-slate-900 text-teal-300 text-[11px] font-mono overflow-x-auto max-h-96">
-              {sampleETaxXml}
-            </pre>
-          </CardContent>
-        </Card>
+            </CardHeader>
+            <CardContent className="space-y-3 text-xs text-amber-950">
+              {taxInvoiceRows.length === 0 ? (
+                <p>ยังไม่มีใบกำกับภาษีในงวดนี้ที่จะใส่คิว</p>
+              ) : (
+                <ul className="space-y-2">
+                  {taxInvoiceRows.map((doc) => (
+                    <li key={doc.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-200 bg-white px-3 py-2">
+                      <span className="font-mono">{doc.doc_number}</span>
+                      {canClosePeriod ? (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          disabled={etaxPending}
+                          onClick={() => handleQueueSandbox(doc)}
+                          className="h-7 text-[11px]"
+                        >
+                          {etaxPending ? "กำลังใส่คิว…" : "ใส่คิว sandbox"}
+                        </Button>
+                      ) : null}
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <div className="space-y-1">
+                <p className="font-semibold">รายการในคิว</p>
+                {(etaxOutbox ?? []).length === 0 ? (
+                  <p className="text-amber-900/70">ยังไม่มีรายการในคิว sandbox</p>
+                ) : (
+                  <ul className="space-y-2">
+                    {(etaxOutbox ?? []).map((item) => (
+                      <li key={item.id} className="rounded-lg border border-amber-200 bg-white px-3 py-2">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <span className="font-mono">{item.snapshot.docNumber}</span>
+                          <span>{item.userStatus || userFacingETaxStatus({ xmlCreated: true, adapter: { deliveredToRd: false, mode: "sandbox", message: item.lastMessage } })}</span>
+                        </div>
+                        {canClosePeriod && canRetryETax(item) ? (
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            disabled={etaxPending}
+                            onClick={() => handleRetrySandbox(item.id)}
+                            className="mt-2 h-7 text-[11px]"
+                          >
+                            ลองคิว sandbox อีกครั้ง
+                          </Button>
+                        ) : null}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+          <Card className="border-slate-200 dark:border-slate-700 shadow-sm">
+            <CardHeader className="border-b border-slate-100 pb-3 flex flex-row items-center justify-between">
+              <div>
+                <CardTitle className="text-sm font-bold flex items-center gap-2">
+                  <Code2 className="h-4 w-4 text-teal-700" />
+                  โครงสร้างข้อมูล XML ตามมาตรฐาน ETDA (ขมธอ. 3-2560)
+                </CardTitle>
+                <CardDescription className="text-xs">
+                  ตัวอย่างโครงสร้าง — ดาวน์โหลด XML ไม่ใช่การส่งกรมสรรพากร
+                </CardDescription>
+              </div>
+              <Button
+                size="sm"
+                onClick={() => {
+                  const filename = `etax_${selectedMonth}.xml`;
+                  downloadTextFile(sampleETaxXml, filename, "application/xml");
+                  toast.success("ดาวน์โหลดไฟล์ ETDA XML เรียบร้อย — ยังไม่ได้ส่ง");
+                  void logTaxFilingExport({
+                    formType: "ETAX_XML",
+                    filename,
+                    periodYm: selectedMonth,
+                    recordCount: filteredSales.length,
+                  });
+                }}
+                className="bg-teal-700 hover:bg-emerald-600 text-white text-xs h-8 gap-1.5"
+              >
+                <Download className="h-3.5 w-3.5" /> ดาวน์โหลด XML
+              </Button>
+            </CardHeader>
+            <CardContent className="p-4">
+              <pre className="p-4 rounded-xl bg-slate-900 text-teal-300 text-[11px] font-mono overflow-x-auto max-h-96">
+                {sampleETaxXml}
+              </pre>
+            </CardContent>
+          </Card>
+        </div>
       )}
 
       {/* ── OFFICIAL 50 TAWI PRINT MODAL (A4 ISOLATION) ── */}

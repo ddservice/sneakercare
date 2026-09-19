@@ -22,7 +22,8 @@ console.log("\n[issue] ตอนสร้างกินเลขเมื่อ
 check(!consumesOfficialNumberOnCreate("QUOTATION"), "ใบเสนอราคาไม่กินเลขตอนสร้าง", "QA กินเลข");
 check(!consumesOfficialNumberOnCreate("INVOICE"), "ใบแจ้งหนี้ไม่กินเลขตอนสร้าง", "INV กินเลข");
 check(consumesOfficialNumberOnCreate("TAX_INVOICE"), "ใบกำกับกินเลขตอนสร้าง", "TAX ไม่กินเลข");
-check(consumesOfficialNumberOnCreate("CREDIT_NOTE"), "ใบลดหนี้กินเลขตอนสร้าง", "CN ไม่กินเลข");
+check(!consumesOfficialNumberOnCreate("CREDIT_NOTE"), "ใบลดหนี้ไม่กินเลขตอนสร้างจนกว่าจะเชื่อมยอดขาย", "CN กินเลข");
+check(issueBlockedReason("DRAFT", "DRAFT-20260919-AB", "CREDIT_NOTE")?.includes("ยังไม่เชื่อม"), "ออกเลข CN ถูกบล็อกฝั่งสูตร", "CN ออกเลขได้");
 
 console.log("\n[issue] เลขร่าง");
 const draftNo = planDraftNumber("2026-09-19", "ab12cd");
@@ -32,6 +33,7 @@ check(!isDraftNumber("QA-20260919-0001"), "เลขทางการไม่�
 
 console.log("\n[issue] ออกเลข");
 check(canIssueOfficialNumber("DRAFT", draftNo), "ร่างที่มีเลขชั่วคราวออกเลขได้", "ออกเลขร่างไม่ได้");
+check(!canIssueOfficialNumber("DRAFT", draftNo, "CREDIT_NOTE"), "ร่างใบลดหนี้ออกเลขทางการไม่ได้", "CN ร่างออกเลขได้");
 check(!canIssueOfficialNumber("DRAFT", "QA-20260919-0001"), "มีเลขทางการแล้วออกซ้ำไม่ได้", "ออกเลขซ้ำได้");
 check(!canIssueOfficialNumber("VOID", draftNo), "ยกเลิกแล้วออกเลขไม่ได้", "VOID ยังออกเลขได้");
 check(issueBlockedReason("DRAFT", "QA-20260919-0001")?.includes("เลขทางการ"), "เหตุผลออกซ้ำชัด", `ได้ ${issueBlockedReason("DRAFT", "QA-20260919-0001")}`);

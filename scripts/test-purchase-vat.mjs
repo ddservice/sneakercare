@@ -66,6 +66,13 @@ const added = planAddPurchaseVat([], {
   id: "pv-1",
 });
 check(added.ok && added.next.length === 1, "เพิ่มใบกรอกเองได้", "เพิ่มไม่ได้");
+const replayVat = planAddPurchaseVat(added.next, {
+  date: "2026-09-12",
+  vatAmount: 7,
+  vendorName: "ร้านก",
+  id: "pv-1",
+});
+check(replayVat.ok && replayVat.next.length === 1, "id เดิมไม่เพิ่มบรรทัดสมุดซื้อ", `ได้ ${replayVat.next?.length}`);
 check(!planAddPurchaseVat([], { date: "2026-09-12", vatAmount: 7, vendorName: "" }).ok, "ไม่มีชื่อผู้ขายเพิ่มไม่ได้", "ชื่อว่างถูกเพิ่ม");
 check(!planAddPurchaseVat([], { date: "bad", vatAmount: 7, vendorName: "ก" }).ok, "วันที่ผิดรูปเพิ่มไม่ได้", "วันที่ผิดถูกเพิ่ม");
 const removed = planRemovePurchaseVat(added.next, "pv-1");

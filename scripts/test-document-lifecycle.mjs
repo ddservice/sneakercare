@@ -36,9 +36,14 @@ check(
 );
 check(!canDeleteDocument(draftTax), "ใบกำกับห้ามลบ", "TAX ร่างยังลบได้");
 check(
-  !canDeleteDocument({ status: "DRAFT", hasBillingRef: false, docType: "CREDIT_NOTE" }),
-  "ใบลดหนี้ห้ามลบ",
-  "CN ร่างยังลบได้"
+  canDeleteDocument({ status: "DRAFT", hasBillingRef: false, docType: "CREDIT_NOTE", docNumber: "DRAFT-20260919-CN" }),
+  "ใบลดหนี้เลขร่างลบได้",
+  "CN ร่างลบไม่ได้"
+);
+check(
+  !canDeleteDocument({ status: "DRAFT", hasBillingRef: false, docType: "CREDIT_NOTE", docNumber: "CN-20260919-0001" }),
+  "ใบลดหนี้เลขทางการห้ามลบ",
+  "CN ทางการยังลบได้"
 );
 check(!canDeleteDocument(draftBilled), "ถูกอ้างในใบวางบิลห้ามลบ", "DO ที่ถูกอ้างยังลบได้");
 check(!canDeleteDocument(converted), "แปลงแล้วห้ามลบ", "แปลงแล้วยังลบได้");

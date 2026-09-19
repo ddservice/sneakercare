@@ -7,6 +7,7 @@ import { requireProfile, requireModuleView, requireModuleWrite } from "@/lib/aut
 import { createAdminClient } from "@/lib/supabase/admin";
 import { verifyBankSlip, type SlipVerificationResult } from "@/lib/smartacc/slip-verifier";
 import { requireTenantId, tenantFilter } from "@/lib/tenant";
+import { planInAppReceiptOcr } from "@/lib/receipt-staging";
 
 export async function verifyBankSlipAction(
   qrPayload: string,
@@ -31,59 +32,16 @@ export type StagedExpenseResult = {
 };
 
 /**
- * Mobile Receipt OCR Engine: Parses receipt photo data and maps to Thai Chart of Accounts
+ * รับรูปใบเสร็จ — OCR ในแอปยังไม่เปิด ห้ามเดายอดแล้วลงคิว
  */
-export async function parseAndStageReceiptOcr(imageBase64OrUrl: string) {
-  // เรียกเพื่อบังคับให้ต้องล็อกอิน — ไม่ได้ใช้ค่าที่คืนมา แต่ห้ามตัดบรรทัดนี้ทิ้ง
+export async function parseAndStageReceiptOcr(
+  _imageBase64OrUrl: string
+): Promise<{ success: false; error: string }> {
   const profile = await requireProfile();
   requireModuleWrite(profile, "expenses");
-  const supabase = createAdminClient();
-  const tenantId = await requireTenantId(profile);
-
-  const mockVendorNames = [
-    "บจก. สยาม คลีนนิ่ง ซัพพลาย",
-    "โฮมโปร สาขาเชียงใหม่",
-    "บจก. บรรจุภัณฑ์ไทย ออลลี่",
-    "ปั๊ม ปตท. สาขาสุเทพ",
-  ];
-  const randomVendor = mockVendorNames[Math.floor(Math.random() * mockVendorNames.length)];
-  const total = Number((250 + Math.random() * 1500).toFixed(2));
-  const subtotal = Number((total / 1.07).toFixed(2));
-  const vat = Number((total - subtotal).toFixed(2));
-
-  let accountCode = "510800";
-  if (randomVendor.includes("คลีนนิ่ง") || randomVendor.includes("บรรจุภัณฑ์")) {
-    accountCode = "510800";
-  } else if (randomVendor.includes("ปตท")) {
-    accountCode = "510600";
-  }
-
-  const { data, error } = await supabase
-    .schema("extension_layer")
-    .from("ext_staged_expenses")
-    .insert({
-      receipt_image_url: imageBase64OrUrl.slice(0, 100) || "receipt_photo.jpg",
-      extracted_vendor_name: randomVendor,
-      extracted_tax_id: "0105558" + Math.floor(100000 + Math.random() * 900000),
-      extracted_date: new Date().toISOString().slice(0, 10),
-      subtotal: subtotal,
-      vat_amount: vat,
-      wht_amount: 0.0,
-      total_amount: total,
-      suggested_account_code: accountCode,
-      approval_status: "PENDING_APPROVAL",
-      raw_ocr_payload: { confidence: 0.96, parserVersion: "v2.1" },
-      tenant_id: tenantId,
-    })
-    .select("*")
-    .single();
-
-  if (error || !data) {
-    throw new Error(`บันทึกใบเสร็จไม่สำเร็จ: ${error?.message}`);
-  }
-
-  revalidatePath("/expenses-ocr");
-  return { success: true, expense: data };
+  await requireTenantId(profile);
+  const planned = planInAppReceiptOcr();
+  return { success: false, error: planned.error };
 }
 
 export async function approveStagedExpense(expenseId: string, accountCode?: string) {

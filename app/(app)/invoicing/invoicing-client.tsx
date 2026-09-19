@@ -18,7 +18,7 @@ import {
 import { DOC_TYPE_CONFIG, type DocumentType } from "@/lib/smartacc/types";
 import { canConvertDocument, canDeleteDocument, canVoidDocument } from "@/lib/smartacc/lifecycle";
 import { canCorrectParent, isCorrectionType } from "@/lib/smartacc/correction";
-import { canIssueOfficialNumber, consumesOfficialNumberOnCreate, isDraftNumber } from "@/lib/smartacc/issue";
+import { canIssueOfficialNumber, consumesOfficialNumberOnCreate } from "@/lib/smartacc/issue";
 import { resolveDocumentSeller } from "@/lib/smartacc/snapshot";
 import { thaiBahtText } from "@/lib/smartacc/baht-text";
 import { thaiOfficialDate } from "@/lib/thai-months";
@@ -586,7 +586,7 @@ export function InvoicingClient({
     <div className="space-y-6">
       <PageHeader
         title="ออกเอกสาร"
-        description="ร่าง QA/DO/INV/BL ยังไม่กินเลขทางการ · ใบกำกับ ใบเสร็จ ใบลด-เพิ่มหนี้ออกเลขทันที · หัวบิลใช้ภาพผู้ขายตอนออก"
+        description="ร่าง QA/DO/INV/BL/CN/DN ยังไม่กินเลขทางการ · ใบกำกับ ใบเสร็จออกเลขทันที · ใบลดหนี้/เพิ่มหนี้เป็นร่างจนกว่าจะเชื่อมยอดขาย/ลูกหนี้/ภาษี · หัวบิลใช้ภาพผู้ขายตอนออก"
       />
       <UnderlineNav
         aria-label="เมนูออกเอกสาร"
@@ -663,7 +663,7 @@ export function InvoicingClient({
                   ))}
               </select>
               <p className="text-[11px] leading-5 text-amber-900/80">
-                ลดหนี้หลายใบรวมกันห้ามเกินยอดต้นทาง (+ ใบเพิ่มหนี้) · ไม่กลับรายการยอดขายร้าน · ยังไม่ใช่แบบยื่นสรรพากร
+                ลดหนี้หลายใบรวมกันห้ามเกินยอดต้นทาง (+ ใบเพิ่มหนี้) · สร้างเป็นร่าง ไม่กินเลขทางการจนกว่าจะเชื่อมยอดขาย/ลูกหนี้/ภาษี · ไม่กลับรายการ sc_sales · ลดราคา/ชดเชยค่าบริการไม่เพิ่มสต๊อก
               </p>
             </div>
           ) : null}
@@ -1195,7 +1195,7 @@ export function InvoicingClient({
                       };
                       const showDelete = canDeleteDocument(life);
                       const showVoid = canVoidDocument(life);
-                      const showIssue = canIssueOfficialNumber(doc.status, doc.doc_number);
+                      const showIssue = canIssueOfficialNumber(doc.status, doc.doc_number, doc.doc_type);
                       return (
                         <tr key={doc.id} className="hover:bg-slate-50">
                           <td className="px-4 py-3">

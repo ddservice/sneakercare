@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-const { planTaxRecon, countsTowardOutputVat } = await import(
+const { planTaxRecon, countsTowardOutputVat, countsAsCreditNote, explainSalesGap } = await import(
   new URL("../.test-build/tax-recon.js", import.meta.url).href
 );
 
@@ -44,6 +44,9 @@ check(paper.creditNotes === 70, "ลดหนี้ = 70", `ได้ ${paper.cr
 check(paper.debitNotes === 107, "เพิ่มหนี้ = 107", `ได้ ${paper.debitNotes}`);
 check(paper.documentNetSales === 1107, "สุทธิเอกสาร = 1070-70+107", `ได้ ${paper.documentNetSales}`);
 check(paper.salesGap === 93, "ส่วนต่างบัญชี vs เอกสาร = 1200-1107", `ได้ ${paper.salesGap}`);
+check(paper.salesGapReason.includes("สูงกว่าเอกสาร"), "อธิบายส่วนต่างเมื่อบัญชีสูงกว่าเอกสาร", paper.salesGapReason);
+check(explainSalesGap(0).includes("เท่ากับ"), "ส่วนต่าง 0 มีคำอธิบาย", explainSalesGap(0));
+check(!countsAsCreditNote({ docType: "CREDIT_NOTE", status: "DRAFT", docNumber: "DRAFT-20260919-CN", issueDate: "2026-09-15", grandTotal: 70, vatAmount: 0 }), "ใบลดหนี้เลขร่างไม่นับในรายงาน", "ร่าง CN ยังนับ");
 check(paper.vatOut === 77, "ภาษีขายสุทธิ = 70-0+7", `ได้ ${paper.vatOut}`);
 check(paper.whtPayable === 900, "WHT ที่ต้องนำส่ง = 900", `ได้ ${paper.whtPayable}`);
 check(paper.readyToFile === false, "ยังไม่พร้อมยื่น", "สูตรบอกว่าพร้อมยื่น");

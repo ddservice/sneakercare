@@ -97,6 +97,9 @@ export function planAddPurchaseVat(
   if (vendorTaxId && vendorTaxId.length !== 13) {
     return { ok: false, error: "เลขผู้เสียภาษีผู้ขายต้องเป็น 13 หลัก ถ้าจะกรอก" };
   }
+  if (input.id && current.some((row) => row.id === input.id && !row.voided)) {
+    return { ok: true, next: [...current] };
+  }
   const line: PurchaseVatLine = {
     id: input.id || `pv-${date}-${Math.random().toString(36).slice(2, 10)}`,
     date,
