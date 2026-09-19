@@ -18,7 +18,7 @@ import {
 import { DOC_TYPE_CONFIG, type DocumentType } from "@/lib/smartacc/types";
 import { canConvertDocument, canDeleteDocument, canVoidDocument } from "@/lib/smartacc/lifecycle";
 import { canCorrectParent, isCorrectionType } from "@/lib/smartacc/correction";
-import { canIssueOfficialNumber, consumesOfficialNumberOnCreate } from "@/lib/smartacc/issue";
+import { canIssueOfficialNumber, consumesOfficialNumberOnCreate, isDraftNumber } from "@/lib/smartacc/issue";
 import { resolveDocumentSeller } from "@/lib/smartacc/snapshot";
 import { thaiBahtText } from "@/lib/smartacc/baht-text";
 import { thaiOfficialDate } from "@/lib/thai-months";
