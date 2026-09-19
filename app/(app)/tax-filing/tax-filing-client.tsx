@@ -932,32 +932,91 @@ export function TaxFilingClient({
               </table>
             </CardContent>
           </Card>
-            <p>
-              ไฟล์ ภ.ง.ด.3 / ภ.ง.ด.53 สร้างตาม FORMAT กลาง กรมสรรพากร V2 (UTF-8, คั่นด้วย |, มีแถว Header H + Detail D)
-              สำหรับอัปโหลดที่{" "}
-              <a
-                href="https://efiling.rd.go.th/"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="font-semibold text-teal-800 underline"
-              >
-                efiling.rd.go.th
-              </a>{" "}
-              — เลือกแบบ ภ.ง.ด. แล้วอัปโหลดไฟล์ โดยเลือกรูปแบบแบ่งข้อมูลด้วยสัญลักษณ์ |
-            </p>
-            <p>
-              เลขผู้เสียภาษีผู้มีหน้าที่หัก:{" "}
-              <span className="font-mono font-semibold text-slate-800">
-                {payerTaxId.length === 13 ? payerTaxId : "ยังไม่ได้ตั้ง 13 หลักที่ /settings"}
-              </span>
-              {whtRecords.some((r) => digitsOnly(r.taxId).length !== 13) && (
-                <span className="block text-amber-800 mt-1">
-                  บางรายการยังไม่มีเลขผู้เสียภาษี 13 หลักของผู้รับเงิน — e-Filing จะปฏิเสธแถวนั้น
-                  ให้กรอกตอนบันทึกหัก ณ ที่จ่ายที่หน้า /expenses
+          <Card className="border-slate-200 shadow-sm">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-semibold">บันทึกการยื่น ภ.พ.30 (ภายนอก)</CardTitle>
+              <CardDescription className="text-xs">
+                เตรียมข้อมูลแล้วไม่ใช่ยื่นแล้ว · ยื่นที่เว็บสรรพากรแล้วต้องมีผู้ยื่น วันยื่น และหลักฐาน — แอปนี้ไม่ได้ยื่นแทน
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3 text-xs">
+              <p className="text-slate-600">
+                สถานะงวดนี้:{" "}
+                <span className="font-semibold">
+                  {currentPp30Filing?.status === "filed"
+                    ? "บันทึกว่ายื่นภายนอกแล้ว"
+                    : currentPp30Filing?.status === "prepared"
+                      ? "เตรียมข้อมูลแล้ว"
+                      : "ยังเป็นกระดาษทำงาน"}
                 </span>
-              )}
-            </p>
-          </div>
+              </p>
+              {canClosePeriod ? (
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <label className="space-y-1">
+                    <span className="text-slate-500">ผู้ตรวจสอบ</span>
+                    <input value={pp30Form.reviewerName} onChange={(e) => setPp30Form((p) => ({ ...p, reviewerName: e.target.value }))} className="h-8 w-full rounded-md border px-2" />
+                  </label>
+                  <label className="space-y-1">
+                    <span className="text-slate-500">ผู้ยื่น</span>
+                    <input value={pp30Form.filerName} onChange={(e) => setPp30Form((p) => ({ ...p, filerName: e.target.value }))} className="h-8 w-full rounded-md border px-2" />
+                  </label>
+                  <label className="space-y-1">
+                    <span className="text-slate-500">วันที่ยื่น</span>
+                    <input type="date" value={pp30Form.filedAt} onChange={(e) => setPp30Form((p) => ({ ...p, filedAt: e.target.value }))} className="h-8 w-full rounded-md border px-2" />
+                  </label>
+                  <label className="space-y-1">
+                    <span className="text-slate-500">เลขที่รับ / หลักฐาน</span>
+                    <input value={pp30Form.evidenceRef} onChange={(e) => setPp30Form((p) => ({ ...p, evidenceRef: e.target.value }))} className="h-8 w-full rounded-md border px-2" />
+                  </label>
+                  <label className="space-y-1 sm:col-span-2">
+                    <span className="text-slate-500">หมายเหตุหลักฐาน</span>
+                    <input value={pp30Form.evidenceNote} onChange={(e) => setPp30Form((p) => ({ ...p, evidenceNote: e.target.value }))} className="h-8 w-full rounded-md border px-2" />
+                  </label>
+                  <label className="flex items-center gap-2 sm:col-span-2">
+                    <input type="checkbox" checked={pp30Form.confirmedExternal} onChange={(e) => setPp30Form((p) => ({ ...p, confirmedExternal: e.target.checked }))} />
+                    ยืนยันว่ายื่นที่เว็บสรรพากรแล้ว ไม่ใช่ยื่นจากแอปนี้
+                  </label>
+                  <div className="flex flex-wrap gap-2 sm:col-span-2">
+                    <Button type="button" size="sm" variant="outline" disabled={pp30Pending} onClick={handlePreparePp30} className="h-8 text-xs">
+                      {pp30Pending ? "กำลังบันทึก…" : "ตั้งว่าเตรียมข้อมูลแล้ว"}
+                    </Button>
+                    <Button type="button" size="sm" disabled={pp30Pending} onClick={handleMarkPp30Filed} className="h-8 bg-teal-700 text-xs text-white hover:bg-emerald-600">
+                      บันทึกว่ายื่นภายนอกแล้ว
+                    </Button>
+                  </div>
+                </div>
+              ) : null}
+            </CardContent>
+          </Card>
+          <Card className="border-slate-200 shadow-sm">
+            <CardContent className="space-y-2 p-4 text-xs text-slate-600">
+              <p>
+                ไฟล์ ภ.ง.ด.3 / ภ.ง.ด.53 สร้างตาม FORMAT กลาง กรมสรรพากร V2 (UTF-8, คั่นด้วย |, มีแถว Header H + Detail D)
+                สำหรับอัปโหลดที่{" "}
+                <a
+                  href="https://efiling.rd.go.th/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="font-semibold text-teal-800 underline"
+                >
+                  efiling.rd.go.th
+                </a>{" "}
+                — เลือกแบบ ภ.ง.ด. แล้วอัปโหลดไฟล์ โดยเลือกรูปแบบแบ่งข้อมูลด้วยสัญลักษณ์ |
+              </p>
+              <p>
+                เลขผู้เสียภาษีผู้มีหน้าที่หัก:{" "}
+                <span className="font-mono font-semibold text-slate-800">
+                  {payerTaxId.length === 13 ? payerTaxId : "ยังไม่ได้ตั้ง 13 หลักที่ /settings"}
+                </span>
+                {whtRecords.some((r) => digitsOnly(r.taxId).length !== 13) && (
+                  <span className="block text-amber-800 mt-1">
+                    บางรายการยังไม่มีเลขผู้เสียภาษี 13 หลักของผู้รับเงิน — e-Filing จะปฏิเสธแถวนั้น
+                    ให้กรอกตอนบันทึกหัก ณ ที่จ่ายที่หน้า /expenses
+                  </span>
+                )}
+              </p>
+            </CardContent>
+          </Card>
         <div className="grid gap-6 sm:grid-cols-3">
           <Card className="border-slate-200 dark:border-slate-700 shadow-sm">
             <CardHeader className="pb-3">
