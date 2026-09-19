@@ -27,7 +27,7 @@
 - **หน้าจอ:** `/pos` และยอดขายรายวันบอกไม่ให้กรอกงานที่ชำระแล้วซ้ำ
 - **ยังไม่ตัดสต๊อกอัตโนมัติ** — ไม่มีสูตรของใช้ต่องาน · เบิกที่ `/stock-out`
 - **`0045`:** คอลัมน์ `sc_sales.service_order_id` **apply production แล้ว 2026-09-19** · `/pos` ที่ชำระแล้วเขียนทั้ง `client_request_id` และ `service_order_id` · ยอดขายรายวันไม่ใส่คอลัมน์นี้ · ไม่แตะแถวขายเก่า
-- แอประยะ 3–6 **deploy production แล้ว 2026-09-19** (`accf870`) — ชุดนี้ให้ `/pos` เขียน `service_order_id`
+- แอประยะ 3–6 **deploy production แล้ว 2026-09-19** (`d5411d5`) — `/pos` ที่ชำระแล้วเขียน `service_order_id`
 - เทสต์: `npm run test:checkout` · `scripts/test-migration-0045.mjs` · `npm run test:idempotency` · `npm run test:guards`
 - **ไม่แตะสูตร dashboard / Excel** — ยังรวมแค่ `sc_sales` + `sc_payments`
 
