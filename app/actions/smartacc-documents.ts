@@ -1091,7 +1091,7 @@ export async function fetchTaxFilingData(yearMonth?: string) {
   let corrQuery = supabase
     .schema("extension_layer")
     .from("ext_documents")
-    .select("id, doc_type, doc_number, issue_date, status, grand_total, vat_amount")
+    .select("id, doc_type, doc_number, issue_date, status, grand_total, vat_amount, subtotal_amount")
     .in("doc_type", ["CREDIT_NOTE", "DEBIT_NOTE"])
     .neq("status", "VOID")
     .order("issue_date", { ascending: false });

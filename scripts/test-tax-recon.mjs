@@ -20,12 +20,15 @@ const docs = [
   { docType: "INVOICE", status: "DRAFT", docNumber: "DRAFT-20260919-AA", issueDate: "2026-09-12", grandTotal: 300, vatAmount: 0 },
   { docType: "CREDIT_NOTE", status: "DRAFT", docNumber: "CN-20260919-0001", issueDate: "2026-09-15", grandTotal: 70, vatAmount: 0 },
   { docType: "TAX_INVOICE", status: "DRAFT", docNumber: "TAX-20260801-0001", issueDate: "2026-08-01", grandTotal: 9999, vatAmount: 600 },
+  { docType: "INVOICE", status: "CONVERTED", docNumber: "INV-20260919-0003", issueDate: "2026-09-10", grandTotal: 1070, vatAmount: 70 },
+  { docType: "DEBIT_NOTE", status: "DRAFT", docNumber: "DN-20260919-0001", issueDate: "2026-09-16", grandTotal: 107, vatAmount: 7 },
 ];
 
 console.log("\n[tax-recon] นับเอกสาร");
 check(countsTowardOutputVat(docs[0]), "ใบกำกับที่ออกแล้วเข้ารายงาน", "TAX ไม่เข้า");
 check(!countsTowardOutputVat(docs[1]), "ใบที่ยกเลิกไม่นับ", "VOID ยังนับ");
 check(!countsTowardOutputVat(docs[2]), "เลขร่างไม่นับ", "DRAFT- ยังนับ");
+check(!countsTowardOutputVat(docs[5]), "ใบแจ้งหนี้ที่แปลงแล้วไม่นับซ้ำ", "CONVERTED ยังนับ");
 
 console.log("\n[tax-recon] กระดาษทำงาน");
 const paper = planTaxRecon({
@@ -38,9 +41,10 @@ const paper = planTaxRecon({
 });
 check(paper.documentSales === 1070, "ขายเอกสาร = 1070", `ได้ ${paper.documentSales}`);
 check(paper.creditNotes === 70, "ลดหนี้ = 70", `ได้ ${paper.creditNotes}`);
-check(paper.documentNetSales === 1000, "สุทธิเอกสาร = 1000", `ได้ ${paper.documentNetSales}`);
-check(paper.salesGap === 200, "ส่วนต่างบัญชี vs เอกสาร = 200", `ได้ ${paper.salesGap}`);
-check(paper.vatOut === 70, "ภาษีขาย = 70", `ได้ ${paper.vatOut}`);
+check(paper.debitNotes === 107, "เพิ่มหนี้ = 107", `ได้ ${paper.debitNotes}`);
+check(paper.documentNetSales === 1107, "สุทธิเอกสาร = 1070-70+107", `ได้ ${paper.documentNetSales}`);
+check(paper.salesGap === 93, "ส่วนต่างบัญชี vs เอกสาร = 1200-1107", `ได้ ${paper.salesGap}`);
+check(paper.vatOut === 77, "ภาษีขายสุทธิ = 70-0+7", `ได้ ${paper.vatOut}`);
 check(paper.whtPayable === 900, "WHT ที่ต้องนำส่ง = 900", `ได้ ${paper.whtPayable}`);
 check(paper.readyToFile === false, "ยังไม่พร้อมยื่น", "สูตรบอกว่าพร้อมยื่น");
 check(paper.blockers.some((b) => b.includes("ไม่ตรงกัน")), "มีตัวบล็อกส่วนต่างยอดขาย", "ไม่มีตัวบล็อกส่วนต่าง");
@@ -49,8 +53,8 @@ check(paper.blockers.some((b) => b.includes("ปิดงวด")), "มีต�
 
 const matched = planTaxRecon({
   periodYm: "2026-09",
-  booksRevenue: 1000,
-  booksCashIn: 1000,
+  booksRevenue: 1107,
+  booksCashIn: 1107,
   documents: docs,
   expenseVatIn: 20,
   whtPayable: 0,
@@ -60,8 +64,8 @@ check(matched.readyToFile === false, "ยอดตรงกันแล้วย
 
 const closed = planTaxRecon({
   periodYm: "2026-09",
-  booksRevenue: 1000,
-  booksCashIn: 1000,
+  booksRevenue: 1107,
+  booksCashIn: 1107,
   documents: docs,
   expenseVatIn: 20,
   whtPayable: 0,

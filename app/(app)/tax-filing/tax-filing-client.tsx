@@ -18,7 +18,9 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import type { TaxFilingSalesDoc, TaxFilingExpense, TaxFilingWhtCert } from "@/app/actions/smartacc-documents";
 import { planTaxRecon } from "@/lib/tax-recon";
+import { planPp30Paper } from "@/lib/pp30-paper";
 import { mergeInputVat } from "@/lib/input-vat";
+import { countsAsPurchaseVat } from "@/lib/purchase-vat";
 import { isPeriodClosed } from "@/lib/period-close";
 import { closePeriod, reopenPeriod } from "@/app/actions/period-close";
 import { addPurchaseVatLine, deletePurchaseVatLine } from "@/app/actions/purchase-vat";
@@ -64,7 +66,7 @@ export function TaxFilingClient({
   initialWht?: TaxFilingWhtCert[];
   initialBooksSales?: { date: string; total_revenue: number | null; amount_paid: number | null }[];
   initialBooksPayments?: { sale_date: string; amount: number | null }[];
-  initialCorrectionDocs?: { doc_type: string; doc_number: string; issue_date: string; status: string; grand_total: number; vat_amount: number | null }[];
+  initialCorrectionDocs?: { doc_type: string; doc_number: string; issue_date: string; status: string; grand_total: number; vat_amount: number | null; subtotal_amount?: number | null }[];
   initialClosedPeriods?: string[];
   initialPurchaseVatLines?: PurchaseVatLine[];
   canClosePeriod?: boolean;
@@ -104,16 +106,48 @@ export function TaxFilingClient({
     0
   );
 
-  const vatRecords: VatTransaction[] = filteredSales.map((d, index) => ({
-    sequence: index + 1,
-    invoiceNo: d.doc_number,
-    invoiceDate: d.issue_date,
-    partnerTaxId: d.ext_contacts?.tax_id || "0000000000000",
-    partnerBranch: d.ext_contacts?.branch_code || "00000",
-    partnerName: d.ext_contacts?.company_name || "ลูกค้าทั่วไป",
-    baseAmount: Number(d.subtotal_amount || 0),
-    vatAmount: Number(d.vat_amount || 0),
-  }));
+  const taxInvoiceRows = initialSalesDocs.filter(
+    (d) =>
+      d.doc_type === "TAX_INVOICE" &&
+      (d.issue_date || "").startsWith(selectedMonth) &&
+      !isDraftNumber(d.doc_number) &&
+      d.status !== "VOID" &&
+      d.status !== "CONVERTED"
+  );
+  const correctionRows = initialCorrectionDocs.filter(
+    (d) =>
+      (d.issue_date || "").startsWith(selectedMonth) &&
+      !isDraftNumber(d.doc_number) &&
+      d.status !== "VOID" &&
+      d.status !== "CONVERTED"
+  );
+  const vatRecords: VatTransaction[] = [
+    ...taxInvoiceRows.map((d, index) => ({
+      sequence: index + 1,
+      invoiceNo: d.doc_number,
+      invoiceDate: d.issue_date,
+      partnerTaxId: d.ext_contacts?.tax_id || "0000000000000",
+      partnerBranch: d.ext_contacts?.branch_code || "00000",
+      partnerName: d.ext_contacts?.company_name || "ลูกค้าทั่วไป",
+      baseAmount: Number(d.subtotal_amount || 0),
+      vatAmount: Number(d.vat_amount || 0),
+    })),
+    ...correctionRows.map((d, index) => {
+      const credit = d.doc_type === "CREDIT_NOTE";
+      const base = Number(d.subtotal_amount || 0);
+      const vat = Number(d.vat_amount || 0);
+      return {
+        sequence: taxInvoiceRows.length + index + 1,
+        invoiceNo: d.doc_number,
+        invoiceDate: d.issue_date,
+        partnerTaxId: "0000000000000",
+        partnerBranch: "00000",
+        partnerName: d.doc_type,
+        baseAmount: credit ? -base : base,
+        vatAmount: credit ? -vat : vat,
+      };
+    }),
+  ];
 
   // เฉพาะรายการที่ร้านเป็นผู้หัก (payable) — รายได้ที่ถูกหักไว้ไม่ยื่น ภ.ง.ด.3/53 ในนามผู้จ่าย
   const monthWht = initialWht.filter(
@@ -186,6 +220,42 @@ export function TaxFilingClient({
     expenseVatIn: inputVat.vatIn,
     inputVatComplete: inputVat.completeBook,
     whtPayable: monthWht.reduce((sum, r) => sum + r.taxAmount, 0),
+    periodClosed: isPeriodClosed(selectedMonth, closedPeriods),
+  });
+
+  const purchaseBase =
+    purchaseLines
+      .filter((line) => countsAsPurchaseVat(line) && line.date.startsWith(selectedMonth))
+      .reduce((sum, line) => sum + Number(line.baseAmount || 0), 0) +
+    monthWht
+      .filter((r) => Number(r.vatAmount || 0) > 0)
+      .reduce((sum, r) => sum + Number(r.baseAmount || 0), 0);
+
+  const pp30 = planPp30Paper({
+    periodYm: selectedMonth,
+    documents: [
+      ...initialSalesDocs.map((d) => ({
+        docType: d.doc_type,
+        status: d.status,
+        docNumber: d.doc_number,
+        issueDate: d.issue_date,
+        subtotal: Number(d.subtotal_amount || 0),
+        vatAmount: Number(d.vat_amount || 0),
+        grandTotal: Number(d.grand_total || 0),
+      })),
+      ...initialCorrectionDocs.map((d) => ({
+        docType: d.doc_type,
+        status: d.status,
+        docNumber: d.doc_number,
+        issueDate: d.issue_date,
+        subtotal: Number(d.subtotal_amount || 0),
+        vatAmount: Number(d.vat_amount || 0),
+        grandTotal: Number(d.grand_total || 0),
+      })),
+    ],
+    purchaseBase,
+    purchaseVat: inputVat.vatIn,
+    inputVatComplete: inputVat.completeBook,
     periodClosed: isPeriodClosed(selectedMonth, closedPeriods),
   });
 
@@ -389,7 +459,10 @@ export function TaxFilingClient({
                 <div className="flex justify-between gap-4"><span>เงินเข้าจริง</span><span className="font-mono">{paper.booksCashIn.toLocaleString("th-TH", { minimumFractionDigits: 2 })}</span></div>
                 <div className="flex justify-between gap-4"><span>สุทธิเอกสารขาย</span><span className="font-mono">{paper.documentNetSales.toLocaleString("th-TH", { minimumFractionDigits: 2 })}</span></div>
                 <div className="flex justify-between gap-4"><span>ส่วนต่างบัญชี vs เอกสาร</span><span className="font-mono">{paper.salesGap.toLocaleString("th-TH", { minimumFractionDigits: 2 })}</span></div>
-                <div className="flex justify-between gap-4"><span>ภาษีขายจากเอกสาร</span><span className="font-mono">{paper.vatOut.toLocaleString("th-TH", { minimumFractionDigits: 2 })}</span></div>
+                <div className="flex justify-between gap-4"><span>ภาษีขายสุทธิเอกสาร</span><span className="font-mono">{paper.vatOut.toLocaleString("th-TH", { minimumFractionDigits: 2 })}</span></div>
+                <div className="flex justify-between gap-4"><span>ภ.พ.30 ช่อง 5 ภาษีขาย</span><span className="font-mono">{pp30.line5OutputVat.toLocaleString("th-TH", { minimumFractionDigits: 2 })}</span></div>
+                <div className="flex justify-between gap-4"><span>ภ.พ.30 ช่อง 7 ภาษีซื้อ</span><span className="font-mono">{pp30.line7InputVat.toLocaleString("th-TH", { minimumFractionDigits: 2 })}</span></div>
+                <div className="flex justify-between gap-4"><span>ภ.พ.30 ช่อง 11 ต้องชำระ / 12 เกิน</span><span className="font-mono">{pp30.line11NetPayable > 0 ? pp30.line11NetPayable.toLocaleString("th-TH", { minimumFractionDigits: 2 }) : pp30.line12NetExcess.toLocaleString("th-TH", { minimumFractionDigits: 2 })}</span></div>
                 <div className="flex justify-between gap-4"><span>ภาษีซื้อรวม (ยังไม่ครบ)</span><span className="font-mono">{paper.vatIn.toLocaleString("th-TH", { minimumFractionDigits: 2 })}</span></div>
                 <div className="flex justify-between gap-4 text-amber-900/80"><span>จากใบหัก ณ ที่จ่าย</span><span className="font-mono">{inputVat.whtVatIn.toLocaleString("th-TH", { minimumFractionDigits: 2 })}</span></div>
                 <div className="flex justify-between gap-4 text-amber-900/80"><span>จากใบเสร็จที่กรอกเอง</span><span className="font-mono">{inputVat.purchaseVatIn.toLocaleString("th-TH", { minimumFractionDigits: 2 })}</span></div>
@@ -563,20 +636,27 @@ export function TaxFilingClient({
                 <Badge variant="outline" className="text-teal-800 bg-teal-50 border-teal-200">PP.30</Badge>
               </CardTitle>
               <CardDescription className="text-xs">
-                รายงานภาษีขายสำหรับอ้างอิง — ภ.พ.30 ยื่นโดยกรอกในเว็บ e-Filing ไม่ใช่ไฟล์แนบ | แบบ ภ.ง.ด.
+                กระดาษทำงานตามช่องแบบ ภ.พ.30 ของกรมสรรพากร — ยื่นโดยกรอกในเว็บ e-Filing ไม่ใช่ไฟล์แนบ และยังไม่พร้อมยื่น
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4 pt-1">
               <div className="text-xs space-y-1 text-slate-600">
-                <div className="flex justify-between">
-                  <span>ยอดขายฐานภาษี:</span>
-                  <span className="font-mono font-bold">฿{totalSalesSubtotal.toLocaleString("th-TH", { minimumFractionDigits: 2 })}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>ภาษีขาย (VAT 7%):</span>
-                  <span className="font-mono font-bold text-teal-700">฿{totalSalesVat.toLocaleString("th-TH", { minimumFractionDigits: 2 })}</span>
-                </div>
+                <div className="flex justify-between gap-3"><span>1. ยอดขายในเดือนนี้</span><span className="font-mono">{pp30.line1Sales.toLocaleString("th-TH", { minimumFractionDigits: 2 })}</span></div>
+                <div className="flex justify-between gap-3"><span>2. ยอดขายอัตรา 0%</span><span className="font-mono">{pp30.line2ZeroRated.toLocaleString("th-TH", { minimumFractionDigits: 2 })}</span></div>
+                <div className="flex justify-between gap-3"><span>3. ยอดขายยกเว้น</span><span className="font-mono">{pp30.line3Exempt.toLocaleString("th-TH", { minimumFractionDigits: 2 })}</span></div>
+                <div className="flex justify-between gap-3"><span>4. ยอดขายที่ต้องเสียภาษี</span><span className="font-mono font-bold">{pp30.line4TaxableSales.toLocaleString("th-TH", { minimumFractionDigits: 2 })}</span></div>
+                <div className="flex justify-between gap-3"><span>5. ภาษีขายเดือนนี้</span><span className="font-mono font-bold text-teal-700">{pp30.line5OutputVat.toLocaleString("th-TH", { minimumFractionDigits: 2 })}</span></div>
+                <div className="flex justify-between gap-3"><span>6. ยอดซื้อที่มีสิทธิหัก</span><span className="font-mono">{pp30.line6PurchaseBase.toLocaleString("th-TH", { minimumFractionDigits: 2 })}</span></div>
+                <div className="flex justify-between gap-3"><span>7. ภาษีซื้อเดือนนี้</span><span className="font-mono">{pp30.line7InputVat.toLocaleString("th-TH", { minimumFractionDigits: 2 })}</span></div>
+                <div className="flex justify-between gap-3"><span>8. ภาษีที่ต้องชำระ</span><span className="font-mono">{pp30.line8VatPayable.toLocaleString("th-TH", { minimumFractionDigits: 2 })}</span></div>
+                <div className="flex justify-between gap-3"><span>9. ภาษีที่ชำระเกิน</span><span className="font-mono">{pp30.line9VatExcess.toLocaleString("th-TH", { minimumFractionDigits: 2 })}</span></div>
+                <div className="flex justify-between gap-3"><span>10. ภาษีชำระเกินยกมา</span><span className="font-mono">{pp30.line10ExcessBroughtForward.toLocaleString("th-TH", { minimumFractionDigits: 2 })}</span></div>
+                <div className="flex justify-between gap-3"><span>11. สุทธิต้องชำระ</span><span className="font-mono font-bold">{pp30.line11NetPayable.toLocaleString("th-TH", { minimumFractionDigits: 2 })}</span></div>
+                <div className="flex justify-between gap-3"><span>12. สุทธิชำระเกิน</span><span className="font-mono font-bold">{pp30.line12NetExcess.toLocaleString("th-TH", { minimumFractionDigits: 2 })}</span></div>
               </div>
+              <p className="text-[11px] leading-snug text-slate-500">
+                สมุดขายนับจากใบกำกับภาษี + ใบเพิ่มหนี้ − ใบลดหนี้ · ช่อง 2–3 และ 10 ยังเป็น 0 เพราะระบบยังไม่แยก 0%/ยกเว้น และยังไม่เก็บภาษีเกินยกมา
+              </p>
               <Button
                 onClick={handleDownloadPp30Text}
                 className="w-full bg-teal-700 hover:bg-emerald-600 text-white text-xs font-semibold h-9 gap-1.5"

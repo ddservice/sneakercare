@@ -27,7 +27,7 @@ function money(n: number): number {
 }
 
 export function countsTowardOutputVat(doc: TaxReconDoc): boolean {
-  if (doc.status === "VOID") return false;
+  if (doc.status === "VOID" || doc.status === "CONVERTED") return false;
   if (isDraftNumber(doc.docNumber)) return false;
   return doc.docType === "INVOICE" || doc.docType === "TAX_INVOICE" || doc.docType === "RECEIPT";
 }
@@ -75,7 +75,9 @@ export function planTaxRecon(input: TaxReconInput): {
   const booksCashIn = money(input.booksCashIn);
   const salesGap = money(booksRevenue - documentNetSales);
   const vatOut = money(
-    periodDocs.filter(countsTowardOutputVat).reduce((sum, d) => sum + Number(d.vatAmount || 0), 0)
+    periodDocs.filter(countsTowardOutputVat).reduce((sum, d) => sum + Number(d.vatAmount || 0), 0) -
+      periodDocs.filter(countsAsCreditNote).reduce((sum, d) => sum + Number(d.vatAmount || 0), 0) +
+      periodDocs.filter(countsAsDebitNote).reduce((sum, d) => sum + Number(d.vatAmount || 0), 0)
   );
   const vatIn = money(input.expenseVatIn ?? 0);
   const vatNet = money(vatOut - vatIn);
