@@ -26,6 +26,7 @@ export type PlannedSale = {
   extraItems: string;
   paymentStatus: "ชำระครบ" | "ค้างชำระ";
   clientRequestId: string;
+  serviceOrderId: string;
 };
 
 export type PlannedStockOut = {
@@ -67,6 +68,7 @@ export function planCheckout(input: CheckoutInput): { sale: PlannedSale | null }
       extraItems: extra,
       paymentStatus: amountPaid >= net && net > 0 ? "ชำระครบ" : "ค้างชำระ",
       clientRequestId: input.orderId,
+      serviceOrderId: input.orderId,
     },
   };
 }

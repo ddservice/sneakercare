@@ -25,6 +25,8 @@ export type DailySaleInput = {
   extra_items?: string;
   payment_status?: string;
   clientRequestId?: string;
+  /** ใบรับงานจาก /pos เท่านั้น — ยอดขายรายวันห้ามใส่ */
+  serviceOrderId?: string;
 };
 
 export type ArPaymentRecord = {
@@ -129,6 +131,7 @@ export async function saveDailySale(data: DailySaleInput) {
     last_updated: new Date().toISOString(),
     tenant_id: tenantId,
     ...(!data.id && data.clientRequestId ? { client_request_id: data.clientRequestId } : {}),
+    ...(!data.id && data.serviceOrderId ? { service_order_id: data.serviceOrderId } : {}),
   };
 
   // เก็บค่าเดิมไว้ก่อนแก้ เพื่อให้ audit log บอกได้ว่าอะไรเปลี่ยนจากอะไรเป็นอะไร

@@ -76,6 +76,7 @@ check(countsTowardDashboardRevenue("sc_payments"), "sc_payments นับเป�
 check(!countsTowardDashboardRevenue("service_orders"), "service_orders ไม่นับเป็นรายได้", "ใบรับงานถูกนับเป็นรายได้");
 check(!countsTowardDashboardRevenue("ext_documents"), "เอกสารขายไม่นับเป็นรายได้ภาพรวม", "เอกสารขายถูกนับ");
 check(isPosTicketSale({ client_request_id: "order-1" }), "แถวที่มีคีย์ใบรับงานคืองานจาก /pos", "ไม่จำแนกใบรับงาน");
+check(isPosTicketSale({ service_order_id: "order-3" }), "แถวที่มี service_order_id คืองานจาก /pos", "ไม่จำแนก service_order_id");
 check(!isPosTicketSale({ client_request_id: null }), "แถวไม่มีคีย์คือยอดขายรายวัน", "แถวว่างถูกนับเป็น POS");
 
 console.log("\n[dashboard-books] เงินเข้าจริงเดือน ส.ค.");

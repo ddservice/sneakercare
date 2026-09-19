@@ -40,6 +40,7 @@ check(cash?.amountPaid === 400, "เงินสด amountPaid = 400", `ได�
 check(cash?.cash === 400 && cash?.transfer === 0, "เงินสดเข้าช่อง cash", "เงินสดไม่เข้าช่อง cash");
 check(cash?.paymentStatus === "ชำระครบ", "เงินสดสถานะชำระครบ", `ได้ ${cash?.paymentStatus}`);
 check(cash?.clientRequestId === base.orderId, "คีย์กันซ้ำ = id ใบรับงาน", `ได้ ${cash?.clientRequestId}`);
+check(cash?.serviceOrderId === base.orderId, "service_order_id = id ใบรับงาน", `ได้ ${cash?.serviceOrderId}`);
 check(cash?.extraItems.includes("SC-20260919-100"), "extra อ้างเลขใบรับงาน", `ได้ ${cash?.extraItems}`);
 
 const credit = planCheckout({ ...base, paymentMethod: "credit" }).sale;

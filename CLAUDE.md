@@ -26,9 +26,9 @@
 - **`createServiceOrder`:** หลังสร้างใบรับงาน เรียก `saveDailySale()` ตามแผน · กดซ้ำได้แถวขายเดียวเพราะ unique `client_request_id` (0044)
 - **หน้าจอ:** `/pos` และยอดขายรายวันบอกไม่ให้กรอกงานที่ชำระแล้วซ้ำ
 - **ยังไม่ตัดสต๊อกอัตโนมัติ** — ไม่มีสูตรของใช้ต่องาน · เบิกที่ `/stock-out`
-- **`0045`:** คอลัมน์ `sc_sales.service_order_id` ใน repo แล้ว **ยังไม่ apply** · แอปยังไม่เขียนคอลัมน์นี้
-- แอประยะ 3–6 **deploy production แล้ว 2026-09-19** (`accf870`) — ยังไม่ apply `0045`
-- เทสต์: `npm run test:checkout` · `scripts/test-migration-0045.mjs` · `npm run test:guards`
+- **`0045`:** คอลัมน์ `sc_sales.service_order_id` **apply production แล้ว 2026-09-19** · `/pos` ที่ชำระแล้วเขียนทั้ง `client_request_id` และ `service_order_id` · ยอดขายรายวันไม่ใส่คอลัมน์นี้ · ไม่แตะแถวขายเก่า
+- แอประยะ 3–6 **deploy production แล้ว 2026-09-19** (`accf870`) — ชุดนี้ให้ `/pos` เขียน `service_order_id`
+- เทสต์: `npm run test:checkout` · `scripts/test-migration-0045.mjs` · `npm run test:idempotency` · `npm run test:guards`
 - **ไม่แตะสูตร dashboard / Excel** — ยังรวมแค่ `sc_sales` + `sc_payments`
 
 ## ✅ ระยะ 4 ลบ vs ยกเลิกเอกสาร (2026-09-19)
@@ -198,7 +198,7 @@
 
 `0044` อยู่บน production แล้ว (2026-09-19): ปฏิเสธเบิกเกินที่ DB · unique `client_request_id` ของขาย/รับชำระ · `test:stock-concurrency` ผ่านบน PGlite (ยังไม่ใช่สอง session ของ Postgres จริง)  
 
-**ระยะ 3 (2026-09-19 แอปบน production แล้ว ยังไม่ apply `0045`):** `/pos` ที่ชำระแล้วลง `sc_sales` หนึ่งแถวต่อใบ · คีย์กันซ้ำ = `service_orders.id` · `0045` เพิ่ม `sc_sales.service_order_id` สำหรับรายงาน (แอปยังไม่เขียนคอลัมน์นี้จนกว่าจะ apply) · คลังยังเบิกมือที่ `/stock-out`
+**ระยะ 3 (2026-09-19 แอปบน production · `0045` apply แล้ว):** `/pos` ที่ชำระแล้วลง `sc_sales` หนึ่งแถวต่อใบ · คีย์กันซ้ำ = `service_orders.id` · `service_order_id` สำหรับรายงาน (ยอดขายรายวันไม่ใส่) · คลังยังเบิกมือที่ `/stock-out`
 
 ยังไม่มีทั้งระบบ: ลิ้นชักเงินสด · ตัดสต๊อกอัตโนมัติตอนรับงาน · ใบลดหนี้ที่กลับรายการ `sc_sales` หรือคืนสต๊อก · VAT effective date · GL/journal · e-Tax ส่งจริง · ภ.พ.30 ทางการ · สมุดภาษีซื้ออัตโนมัติจากทุกใบเสร็จซื้อ
 

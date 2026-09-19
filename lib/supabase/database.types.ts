@@ -2279,6 +2279,7 @@ export type Database = {
           last_updated: string | null
           payment_status: string | null
           recorded_by: string | null
+          service_order_id: string | null
           size_l: number | null
           size_m: number | null
           size_s: number | null
@@ -2300,6 +2301,7 @@ export type Database = {
           last_updated?: string | null
           payment_status?: string | null
           recorded_by?: string | null
+          service_order_id?: string | null
           size_l?: number | null
           size_m?: number | null
           size_s?: number | null
@@ -2321,6 +2323,7 @@ export type Database = {
           last_updated?: string | null
           payment_status?: string | null
           recorded_by?: string | null
+          service_order_id?: string | null
           size_l?: number | null
           size_m?: number | null
           size_s?: number | null

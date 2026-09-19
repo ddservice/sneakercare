@@ -9,5 +9,5 @@ export function isIdempotentReplay(error: { code?: string; message?: string } | 
   const code = String(error.code ?? "");
   const message = String(error.message ?? "");
   const unique = code === "23505" || /duplicate key/i.test(message);
-  return unique && /client_request|tenant_request_uidx/i.test(message);
+  return unique && /client_request|tenant_request_uidx|service_order|tenant_order_uidx/i.test(message);
 }

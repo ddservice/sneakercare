@@ -203,6 +203,7 @@ export async function createServiceOrder(
       extra_items: plan.sale.extraItems,
       payment_status: plan.sale.paymentStatus,
       clientRequestId: plan.sale.clientRequestId,
+      serviceOrderId: plan.sale.serviceOrderId,
     });
     if (!saleRes.success) {
       await logAudit({

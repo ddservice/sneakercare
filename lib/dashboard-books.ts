@@ -28,6 +28,7 @@ export type DashboardSaleLike = {
   grand_total?: number | string | null;
   discount?: number | string | null;
   client_request_id?: string | null;
+  service_order_id?: string | null;
 };
 
 export type DashboardPaymentLike = {
@@ -61,7 +62,9 @@ export function saleNet(sale: DashboardSaleLike): number {
 }
 
 export function isPosTicketSale(sale: DashboardSaleLike): boolean {
-  return Boolean(String(sale.client_request_id ?? "").trim());
+  return Boolean(
+    String(sale.client_request_id ?? "").trim() || String(sale.service_order_id ?? "").trim()
+  );
 }
 
 export function countsTowardDashboardRevenue(

@@ -4,9 +4,9 @@
 
 **0044 apply production แล้ว 2026-09-19** ผ่าน SSH+psql — ยืนยันมี `fn_reject_stock_over_issue` / `fn_consume_stock_outflow` · trigger บน `inv_stock_transactions` · `client_request_id` + unique บน `sc_sales` / `sc_payments`
 
-**ระยะ 3–6 แอปบน production แล้ว 2026-09-19** (`accf870`) — ยังไม่ apply `0045`
+**ระยะ 3–6 แอปบน production แล้ว 2026-09-19** (`accf870`) — **`0045` apply แล้ว** (คอลัมน์+unique บน `sc_sales.service_order_id`)
 
-**ระยะ 3:** `/pos` ที่ชำระแล้วลง `sc_sales` หนึ่งแถวต่อใบ · คีย์กันซ้ำ = id ใบรับงาน
+**ระยะ 3:** `/pos` ที่ชำระแล้วลง `sc_sales` หนึ่งแถวต่อใบ · คีย์กันซ้ำ = id ใบรับงาน · แอปเขียน `service_order_id` คู่กับคีย์กันซ้ำ (ยอดขายรายวันไม่ใส่)
 
 **ระยะ 4:** ลบ vs ยกเลิก · ใบลดหนี้ชั้นเอกสาร · snapshot ผู้ขาย · ร่างไม่กินเลขทางการ
 
@@ -17,7 +17,7 @@
 - แถบเมนูหัวเว็บใช้ชื่อสั้นชุดเดียว (ภาพรวม / งานบริการ / เอกสาร / คลัง / ค่าใช้จ่าย / ตารางงาน / ภาษี / สถิติ / ตั้งค่า) · ไอคอนโชว์ตั้งแต่ xl · ป้ายสาขา/ผู้ใช้เลิก `leading-tight` ที่ทับบรรทัด
 - `/login` มีติ๊ก «จดจำชื่อผู้ใช้ในเครื่องนี้» (localStorage เท่านั้น ไม่เก็บรหัส)
 - ระยะ 2 อยู่บน production: migration `0044` + `lib/idempotency.ts` + ฟอร์มขาย/รับชำระส่ง `clientRequestId` · เทสต์สองคำสั่งเบิกพร้อมกัน (`test:stock-concurrency`)
-- ระยะ 3 บน production: `lib/checkout.ts` · `createServiceOrder` เรียก `saveDailySale` เมื่อเงินสด/โอน/บัตร · ข้อความบน `/pos` และยอดขายรายวันกันกรอกซ้ำ · **ยังไม่ apply `0045`**
+- ระยะ 3 บน production: `lib/checkout.ts` · `createServiceOrder` เรียก `saveDailySale` เมื่อเงินสด/โอน/บัตร · ข้อความบน `/pos` และยอดขายรายวันกันกรอกซ้ำ · **`0045` apply แล้ว** · ชุดนี้ให้ `/pos` เขียน `service_order_id`
 - ระยะ 4 บน production: ลบ/ยกเลิก · ใบลดหนี้/เพิ่มหนี้ · snapshot ผู้ขาย · ร่าง `DRAFT-` แล้วค่อยออกเลข
 - ระยะ 5 บน production: กระดาษทำงานภาษี + ภาษีซื้อจากใบหัก ณ ที่จ่ายและใบเสร็จที่กรอกเอง + ปิดงวดบัญชีร้าน — ยังไม่พร้อมยื่น
 - ระยะ 6 บน production: สูตรภาพรวมล็อกเงินเข้าจริง · แยกแหล่งใบรับงาน vs ยอดขายรายวัน · ไม่นับ `service_orders` · ดึงย้อน 14 เดือน
@@ -35,7 +35,7 @@
 5. ไม่มีลิ้นชัก · ไม่มี GL · มีปิดงวดบัญชีร้านแล้ว (`sc_settings`) · มีใบลดหนี้ชั้นเอกสารแล้วแต่ยังไม่กลับรายการขาย/คลัง
 6. `service_role` ข้าม RLS — ทุก action ต้อง `tenantFilter()` / `requireTenantId()`
 8. Advisor CRITICAL ที่ `inv_v_item_stock` / `inv_v_low_stock` = staff-safe definer จาก `0021` — ห้ามเปิด `security_invoker` ทับ
-9. `0045` (`sc_sales.service_order_id`) ยังไม่ apply — แอปใช้แค่ `client_request_id` จนกว่าจะ apply + deploy คู่กัน
+9. `0045` apply แล้ว — `/pos` เขียน `service_order_id` คู่ `client_request_id` · ยอดขายรายวันไม่ใส่ · ไม่ backfill แถวเก่า
 
 ---
 
@@ -51,7 +51,7 @@
 | `lib/idempotency.ts` `lib/stock-errors.ts` | ตัวช่วยแอป |
 | `daily-sales.ts` + ฟอร์มยอดขายรายวัน | ส่งคีย์กันกดซ้ำ |
 | `lib/checkout.ts` `app/actions/pos.ts` | ระยะ 3: รับงานที่ชำระแล้วลง `sc_sales` |
-| `0045_sales_service_order_link.sql` | คอลัมน์ลิงก์ใบรับงาน (ยังไม่ apply) |
+| `0045_sales_service_order_link.sql` | คอลัมน์ลิงก์ใบรับงาน — apply production แล้ว 2026-09-19 |
 | `lib/smartacc/lifecycle.ts` `voidSmartAccDocument` | ระยะ 4: ลบ vs ยกเลิก เก็บเลข |
 | `lib/smartacc/correction.ts` + ประเภท CN/DN | ระยะ 4: ใบลดหนี้/เพิ่มหนี้ชั้นเอกสาร |
 | `lib/smartacc/snapshot.ts` | ระยะ 4: หัวบิลใช้ภาพผู้ขายตอนออก |
@@ -68,7 +68,7 @@
 
 1. ระยะ 5 ที่ยังค้าง: e-Tax ส่งจริง · ภ.พ.30 ทางการ · สมุดซื้ออัตโนมัติจากทุกใบเสร็จ
 2. ระยะ 4 ที่ยังค้าง: มติต้นทุนคืนของก่อนให้ CN แตะคลัง/บัญชีร้าน
-3. ระยะ 3 ที่ยังค้าง: ตัดสต๊อกอัตโนมัติตอนรับงาน · apply `0045`
+3. ระยะ 3 ที่ยังค้าง: ตัดสต๊อกอัตโนมัติตอนรับงาน (ยังไม่มีสูตรของใช้ต่องาน)
 4. Advisor ที่เหลือ: Leaked Password Protection (ตั้งใน Auth dashboard) · `public.vector` (อย่าย้ายมั่ว) · Multiple Permissive Policies ของคลังเป็นแบบแยก role
 5. อย่าไล่แทน `parseFloat` ทั้งแอป
 6. ห้ามสร้างตาราง legal entity
