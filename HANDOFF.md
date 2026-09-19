@@ -21,7 +21,7 @@
 - ระยะ 4 บน production: ลบ/ยกเลิก · ใบลดหนี้/เพิ่มหนี้ · snapshot ผู้ขาย · ร่าง `DRAFT-` แล้วค่อยออกเลข
 - ระยะ 5 บน production: กระดาษทำงานภาษี + กระดาษทำงาน ภ.พ.30 ช่อง 1–12 + ภาษีซื้อจากใบหัก ณ ที่จ่ายและใบเสร็จที่กรอกเอง + ปิดงวดบัญชีร้าน — ยังไม่พร้อมยื่น
 - ระยะ 6 บน production: สูตรภาพรวมล็อกเงินเข้าจริง · แยกแหล่งใบรับงาน vs ยอดขายรายวัน · ไม่นับ `service_orders` · ดึงย้อน 14 เดือน
-- leftover ใน repo (ยังไม่ push/deploy/apply `0046`): คิว e-Tax sandbox · ภ.พ.30 เตรียม≠ยื่น · คิวใบเสร็จ+CAS · สูตรของใช้ต่องานที่ตัดจริงยังปิด · CN/DN เป็นร่างออกเลขทางการไม่ได้ · `0046` ผ่าน PGlite แล้วยังไม่ apply production
+- leftover บน production แล้ว (`6486912` / `a7af426`) · **`0046` apply แล้ว 2026-09-20** — `sc_receipt_posts` + `sc_fn_post_receipt` + `sc_fn_guard_live_feature` · คิวใบเสร็จยังมี CAS ใน `sc_settings` · e-Tax เป็นคิว sandbox · CN/DN เป็นร่าง · ตัดสต๊อกอัตโนมัติยังปิด
 
 สำรวจจากโค้ด/schema — **ไม่ได้** ยึดข้อความ “แก้แล้ว” ในประวัติ
 
@@ -64,7 +64,7 @@
 | `lib/dashboard-books.ts` `/dashboard` | ระยะ 6: สูตรภาพรวมเงินเข้าจริง · แยกแหล่ง POS vs ยอดขายรายวัน · ไม่นับใบรับงานซ้ำ · ดึงย้อน 14 เดือน |
 | `lib/etax-pipeline.ts` `/tax-filing` คิว sandbox | leftover: สร้าง XML/คิวได้ · ช่องทาง live ปิด · ห้ามป้ายส่งสำเร็จ |
 | `lib/pp30-filing.ts` | leftover: เตรียมข้อมูล ≠ ยื่นแล้ว · ยื่นแล้วต้องมีผู้ยื่น/วัน/หลักฐาน |
-| `lib/receipt-staging.ts` + CAS | leftover: ไม่เดายอด/ประเภท · ลงสมุดหลังอนุมัติ · unique ตารางอยู่ใน `0046` ยังไม่ apply |
+| `lib/receipt-staging.ts` + CAS | leftover: ไม่เดายอด/ประเภท · ลงสมุดหลังอนุมัติ · unique ตาราง `0046` apply แล้ว |
 | `lib/service-usage.ts` `/settings` | leftover: สูตร version/วันมีผล/อนุมัติ · `LIVE_AUTO_ISSUE_ALLOWED=false` |
 | `lib/smartacc/issue.ts` + `correction-effects.ts` | leftover: CN/DN เป็นร่าง · ออกเลขถูกบล็อก · ลดราคา≠รับคืนของ |
 
@@ -72,13 +72,14 @@
 
 ## งานถัดไป
 
-1. รออนุมัติแล้วค่อยทำ: e-Tax ส่งจริง · ภ.พ.30 ยื่นจากแอป · OCR ในแอป · ตัดสต๊อกอัตโนมัติ · CN กลับ `sc_sales`/คืนสต๊อก · apply `0046`
+1. รออนุมัติแล้วค่อยทำ: e-Tax ส่งจริง · ภ.พ.30 ยื่นจากแอป · OCR ในแอป · ตัดสต๊อกอัตโนมัติ · CN กลับ `sc_sales`/คืนสต๊อก
 2. ระยะ 5 ที่ยังไม่มีสูตร: แยกยอดขาย 0%/ยกเว้น · ภาษีชำระเกินยกมา
 3. Advisor ที่เหลือ: Leaked Password Protection (ตั้งใน Auth dashboard) · `public.vector` (อย่าย้ายมั่ว) · Multiple Permissive Policies ของคลังเป็นแบบแยก role
 4. อย่าไล่แทน `parseFloat` ทั้งแอป
 5. ห้ามสร้างตาราง legal entity
 6. ห้ามรัน `test:staff` / `test:multi-tenant` / `check:money` ถ้าไม่ได้รับอนุญาตแตะ production
-7. อย่าเรียก `sc_fn_post_receipt` / `sc_fn_guard_live_feature` บน production จนกว่า `0046` จะ apply
+7. `0046` apply แล้ว — อย่าเปิด `etax_live` / `auto_issue` / `cn_official` ที่ `sc_fn_guard_live_feature` โดยไม่มติ
+8. ถ้าหน้า `/login` ค้างสปินเนอร์: ล้าง `.next` แล้ว build ใหม่ — เคยเจอ `TypeError: e[a] is not a function` ใน webpack-runtime หลัง leftover deploy
 
 ---
 
