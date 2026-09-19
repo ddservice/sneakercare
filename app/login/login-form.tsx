@@ -14,12 +14,41 @@ import {
   User,
 } from "lucide-react";
 
+const REMEMBER_KEY = "sc_remember_identifier";
+
+function readRememberedIdentifier(): string {
+  if (typeof window === "undefined") return "";
+  try {
+    return window.localStorage.getItem(REMEMBER_KEY) ?? "";
+  } catch {
+    return "";
+  }
+}
+
 export function LoginForm() {
   const [state, action, pending] = useActionState<LoginState, FormData>(login, undefined);
   const [showPassword, setShowPassword] = useState(false);
+  const [remember, setRemember] = useState(true);
+  const [identifier] = useState(() => readRememberedIdentifier());
+
+  function persistIdentifier(formData: FormData) {
+    const value = String(formData.get("identifier") ?? "").trim();
+    try {
+      if (remember && value) window.localStorage.setItem(REMEMBER_KEY, value);
+      else window.localStorage.removeItem(REMEMBER_KEY);
+    } catch {
+      /* เครื่องที่ปิด localStorage ยังล็อกอินได้ */
+    }
+  }
 
   return (
-    <form action={action} className="space-y-4">
+    <form
+      action={(formData) => {
+        persistIdentifier(formData);
+        return action(formData);
+      }}
+      className="space-y-4"
+    >
       {/* Identifier Input */}
       <div className="space-y-1.5">
         <Label htmlFor="identifier" className="text-xs font-semibold text-slate-700">
@@ -33,6 +62,7 @@ export function LoginForm() {
             type="text"
             placeholder="เช่น admin หรือ staff"
             autoComplete="username"
+            defaultValue={identifier}
             required
             className="h-10 rounded-lg border-slate-300 bg-white pl-10 text-sm font-normal text-slate-900 placeholder:text-slate-400 focus:border-teal-600 focus:ring-1 focus:ring-teal-600 shadow-xs"
           />
@@ -66,6 +96,23 @@ export function LoginForm() {
           </button>
         </div>
       </div>
+
+      <label className="flex items-start gap-2 text-xs leading-5 text-slate-600">
+        <input
+          type="checkbox"
+          name="remember"
+          value="1"
+          checked={remember}
+          onChange={(e) => setRemember(e.target.checked)}
+          className="mt-0.5 h-3.5 w-3.5 rounded border-slate-300 text-teal-700"
+        />
+        <span>
+          จดจำชื่อผู้ใช้ในเครื่องนี้
+          <span className="mt-0.5 block text-[11px] leading-4 text-slate-400">
+            ไม่บันทึกรหัสผ่าน · เครื่องรวมให้ยกเลิกติ๊กนี้
+          </span>
+        </span>
+      </label>
 
       {/* Error message */}
       {state?.error && (

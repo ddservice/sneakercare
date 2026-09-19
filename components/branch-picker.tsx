@@ -71,7 +71,7 @@ export function BranchPicker({
         className={
           fullWidth
             ? "h-9 w-full max-w-none gap-2 rounded-xl border-slate-200 bg-white px-2.5 shadow-sm hover:bg-slate-50 data-[size=default]:h-9 dark:border-slate-700 dark:bg-slate-800 dark:hover:bg-slate-800/80"
-            : "h-9 max-w-[9.5rem] gap-2 rounded-full border-slate-200 bg-white px-2.5 shadow-sm hover:bg-slate-50 data-[size=default]:h-9 sm:max-w-[16rem] dark:border-slate-700 dark:bg-slate-800 dark:hover:bg-slate-800/80"
+            : "h-9 max-w-[11rem] gap-2 rounded-full border-slate-200 bg-white px-2.5 shadow-sm hover:bg-slate-50 data-[size=default]:h-9 sm:max-w-[18rem] dark:border-slate-700 dark:bg-slate-800 dark:hover:bg-slate-800/80"
         }
       >
         <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
@@ -82,14 +82,14 @@ export function BranchPicker({
           )}
         </span>
         <span className="min-w-0 flex-1 text-left">
-          <span className="block truncate text-xs font-semibold leading-tight text-slate-800 dark:text-slate-100">
+          <span className="block truncate text-xs font-semibold leading-5 text-slate-800 dark:text-slate-100">
             {selected
               ? selected.tenantName && selected.tenantName !== selected.name
                 ? selected.tenantName
                 : selected.name
               : "ทุกสาขา"}
           </span>
-          <span className="block truncate text-[10px] leading-tight text-slate-500 dark:text-slate-400">
+          <span className="block truncate text-[11px] leading-4 text-slate-500 dark:text-slate-400">
             {selected
               ? selected.tenantName && selected.tenantName !== selected.name
                 ? `สาขา ${selected.name}`

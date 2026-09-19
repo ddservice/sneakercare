@@ -1993,6 +1993,7 @@ export type Database = {
       sc_payments: {
         Row: {
           amount: number | null
+          client_request_id: string | null
           created_at: string | null
           id: number
           notes: string | null
@@ -2004,6 +2005,7 @@ export type Database = {
         }
         Insert: {
           amount?: number | null
+          client_request_id?: string | null
           created_at?: string | null
           id?: number
           notes?: string | null
@@ -2015,6 +2017,7 @@ export type Database = {
         }
         Update: {
           amount?: number | null
+          client_request_id?: string | null
           created_at?: string | null
           id?: number
           notes?: string | null
@@ -2266,6 +2269,7 @@ export type Database = {
         Row: {
           amount_paid: number | null
           cash_amount: number | null
+          client_request_id: string | null
           created_at: string | null
           date: string
           discount: number | null
@@ -2286,6 +2290,7 @@ export type Database = {
         Insert: {
           amount_paid?: number | null
           cash_amount?: number | null
+          client_request_id?: string | null
           created_at?: string | null
           date: string
           discount?: number | null
@@ -2306,6 +2311,7 @@ export type Database = {
         Update: {
           amount_paid?: number | null
           cash_amount?: number | null
+          client_request_id?: string | null
           created_at?: string | null
           date?: string
           discount?: number | null

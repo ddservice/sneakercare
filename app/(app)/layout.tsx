@@ -86,10 +86,10 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
             {/* Brand text */}
             <div className="min-w-0">
-              <span className="block truncate text-base font-bold tracking-tight text-slate-900 dark:text-white">
+              <span className="block truncate text-base font-semibold leading-5 text-slate-900 dark:text-white">
                 DD-Management
               </span>
-              <p className="hidden sm:block text-[11px] text-slate-400 dark:text-slate-500 leading-none mt-0.5">
+              <p className="mt-0.5 hidden text-[11px] leading-4 text-slate-400 sm:block dark:text-slate-500">
                 ระบบบริหารจัดการร้าน
               </p>
             </div>
@@ -105,10 +105,10 @@ export default async function AppLayout({ children }: { children: React.ReactNod
                 {avatarLetter}
               </span>
               <span className="min-w-0 text-left">
-                <span className="block max-w-28 truncate text-xs font-semibold leading-tight text-slate-800 dark:text-slate-100">
+                <span className="block max-w-36 truncate text-xs font-semibold leading-5 text-slate-800 dark:text-slate-100">
                   {profile.display_name}
                 </span>
-                <span className="block text-[10px] leading-tight text-slate-500 dark:text-slate-400">
+                <span className="block text-[11px] leading-4 text-slate-500 dark:text-slate-400">
                   {ROLE_LABEL[profile.role]}
                 </span>
               </span>

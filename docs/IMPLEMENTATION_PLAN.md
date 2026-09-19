@@ -42,12 +42,13 @@
 
 เกณฑ์รับ: `test:money` `test:vat` `test:wht` `test:guards` ผ่าน · ผลลัพธ์เคส 1000/18000 เท่าเดิม
 
-### ระยะ 2 — ธุรกรรม / idempotency / กันสต๊อกเกิน (ยังไม่เริ่ม)
+### ระยะ 2 — ธุรกรรม / idempotency / กันสต๊อกเกิน (เขียนใน repo 2026-09-19 — ยังไม่ apply production)
 
-- unique + idempotency ต่อการบันทึกขาย/รับชำระ
-- ปฏิเสธเบิกเกินที่ DB แทน `greatest(0,…)` — มติแล้วว่าปฏิเสธ · ยังไม่แก้ trigger จนกว่ามีเทสต์สอง connection · ห้าม apply production ในรอบนี้
+- `0044` + `test-migration-0044.mjs`: ปฏิเสธเบิกเกินก่อน trigger ถัวเฉลี่ย · อนุมัติปรับลดใช้ `fn_consume_stock_outflow` · unique `(tenant_id, client_request_id)` บน `sc_sales` / `sc_payments`
+- แอปส่งคีย์จากฟอร์มยอดขายรายวัน · กดซ้ำได้ผลชุดเดียวถ้าคอลัมน์ถูก apply แล้ว
+- เทสต์ PGlite เป็นลำดับต่อกันบน connection เดียว (ชิ้นสุดท้ายสำเร็จครั้งเดียว) — ยังไม่ใช่สอง connection จริง
 
-เกณฑ์รับ: PGlite หรือ Postgres สอง connection · ของชิ้นสุดท้ายสำเร็จได้หนึ่งรายการ · checkout ซ้ำได้ผลชุดเดียว · transaction ล้มไม่มี partial (ต้องมี RPC ใหม่)
+เกณฑ์รับบนร้านจริง: apply `0044` หลังเจ้าของสั่ง + ของชิ้นสุดท้ายสำเร็จได้หนึ่งรายการ
 
 ### ระยะ 3 — POS–สต๊อก–รับชำระ end-to-end
 

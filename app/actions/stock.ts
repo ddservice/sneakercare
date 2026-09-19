@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { requireProfile, requireModuleWrite, type Profile } from "@/lib/auth";
 import { assertWritableBranch } from "@/lib/branch";
 import { canRecordWaste, canWrite } from "@/lib/permissions";
+import { stockWriteError } from "@/lib/stock-errors";
 
 export type StockActionState = { error?: string; success?: boolean } | undefined;
 
@@ -49,7 +50,7 @@ export async function createStockOut(_prev: StockActionState, formData: FormData
   });
 
   if (error) {
-    return { error: `บันทึกไม่สำเร็จ: ${error.message}` };
+    return { error: stockWriteError(error.message) };
   }
 
   revalidateStock(["/stock-out"]);
@@ -195,7 +196,7 @@ export async function createAdjustment(_prev: StockActionState, formData: FormDa
   });
 
   if (error) {
-    return { error: `บันทึกไม่สำเร็จ: ${error.message}` };
+    return { error: stockWriteError(error.message) };
   }
 
   revalidateStock(["/adjustments"]);
@@ -231,7 +232,7 @@ export async function createWaste(_prev: StockActionState, formData: FormData): 
   });
 
   if (error) {
-    return { error: `บันทึกไม่สำเร็จ: ${error.message}` };
+    return { error: stockWriteError(error.message) };
   }
 
   revalidateStock(["/stock-out"]);

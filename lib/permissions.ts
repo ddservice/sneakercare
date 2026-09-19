@@ -9,12 +9,10 @@ export type Role = UserRole;
 export const ROLES = ["admin", "co_admin", "staff"] as const;
 
 export const ROLE_LABEL: Record<Role, string> = {
-  admin: "Admin",
-  co_admin: "Co-Admin",
-  staff: "Staff",
-  // Super Admin = ผู้ดูแลแพลตฟอร์ม เห็นได้ทุก tenant (ดู CLAUDE.md หัวข้อ multi-tenant)
-  // ⚠️ ตอนนี้เป็นแค่ label เฉยๆ — DB ยังไม่ให้สิทธิ์พิเศษจริงจนกว่าจะถึง migration เฟส 2
-  super_admin: "Super Admin",
+  admin: "แอดมิน",
+  co_admin: "ผู้ช่วย",
+  staff: "พนักงาน",
+  super_admin: "ผู้ดูแลระบบ",
 };
 
 export type ModuleKey =
@@ -39,7 +37,10 @@ export type ModuleKey =
 export type AppModule = {
   key: ModuleKey;
   href: string;
+  /** ชื่อเต็ม — ใช้ในเมนูมือถือ */
   label: string;
+  /** ชื่อสั้นบนแถบเดสก์ท็อป ถ้าไม่ใส่ใช้ label */
+  navLabel?: string;
   icon?: string;
   isMainTab?: boolean;
   viewRoles: readonly Role[];
@@ -61,7 +62,8 @@ export const APP_MODULES: readonly AppModule[] = [
   {
     key: "pos",
     href: "/pos",
-    label: "งานบริการ/ยอดขาย",
+    label: "งานบริการ",
+    navLabel: "งานบริการ",
     isMainTab: true,
     viewRoles: ["admin", "co_admin", "staff"],
     writeRoles: ["admin", "co_admin", "staff"],
@@ -69,7 +71,8 @@ export const APP_MODULES: readonly AppModule[] = [
   {
     key: "invoicing",
     href: "/invoicing",
-    label: "ออกเอกสาร & วางบิล",
+    label: "ออกเอกสาร",
+    navLabel: "เอกสาร",
     isMainTab: true,
     viewRoles: ["admin", "co_admin"],
     writeRoles: ["admin", "co_admin"],
@@ -78,6 +81,7 @@ export const APP_MODULES: readonly AppModule[] = [
     key: "inventory",
     href: "/inventory",
     label: "คลังสินค้า",
+    navLabel: "คลัง",
     isMainTab: true,
     viewRoles: ["admin", "co_admin", "staff"],
     writeRoles: ["admin", "co_admin", "staff"],
@@ -85,7 +89,8 @@ export const APP_MODULES: readonly AppModule[] = [
   {
     key: "expenses",
     href: "/expenses",
-    label: "ค่าใช้จ่าย & พนักงาน",
+    label: "ค่าใช้จ่าย",
+    navLabel: "ค่าใช้จ่าย",
     isMainTab: true,
     viewRoles: ["admin", "co_admin"],
     writeRoles: ["admin", "co_admin"],
@@ -93,7 +98,8 @@ export const APP_MODULES: readonly AppModule[] = [
   {
     key: "roster",
     href: "/roster",
-    label: "ตารางงาน & กะ",
+    label: "ตารางงาน",
+    navLabel: "ตารางงาน",
     isMainTab: true,
     viewRoles: ["admin", "co_admin", "staff"],
     writeRoles: ["admin", "co_admin"],
@@ -101,7 +107,8 @@ export const APP_MODULES: readonly AppModule[] = [
   {
     key: "tax-filing",
     href: "/tax-filing",
-    label: "ภาษี & e-Tax",
+    label: "ภาษี",
+    navLabel: "ภาษี",
     isMainTab: true,
     viewRoles: ["admin"],
     writeRoles: ["admin"],

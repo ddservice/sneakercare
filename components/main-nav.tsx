@@ -106,7 +106,7 @@ export function NavItem({
             isActive ? "text-emerald-600 dark:text-emerald-300" : "text-slate-400 dark:text-slate-500"
           )}
         />
-        <span className="flex-1">{item.label}</span>
+        <span className="flex-1 leading-5">{item.label}</span>
         {/* Inline badge — never overlaps anything */}
         {alertCount > 0 && (
           <span
@@ -126,7 +126,7 @@ export function NavItem({
       prefetch
       onClick={onNavClick}
       className={cn(
-        "inline-flex items-center gap-1.5 whitespace-nowrap border-b-2 px-3 py-2.5 text-sm font-medium transition-colors",
+        "inline-flex items-center gap-1.5 whitespace-nowrap border-b-2 px-2.5 py-2 text-[13px] font-medium leading-5 transition-colors xl:px-3 xl:text-sm",
         isActive
           ? "border-emerald-600 text-emerald-700 dark:border-emerald-400 dark:text-emerald-300"
           : "border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
@@ -134,11 +134,11 @@ export function NavItem({
     >
       <Icon
         className={cn(
-          "h-4 w-4 shrink-0",
+          "hidden h-4 w-4 shrink-0 xl:block",
           isActive ? "text-emerald-600 dark:text-emerald-300" : "text-slate-400 dark:text-slate-500"
         )}
       />
-      <span>{item.label}</span>
+      <span>{item.navLabel ?? item.label}</span>
       {/* Inline badge — sits after label text, no absolute positioning */}
       {alertCount > 0 && (
         <span

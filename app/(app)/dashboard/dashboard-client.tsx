@@ -344,69 +344,41 @@ export function DashboardClient({
       />
 
       {/* ── Period Selector Toolbar ── */}
-      <Card className="border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50 shadow-xs">
-        <CardContent className="p-4 space-y-3">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="flex flex-wrap items-center gap-1.5">
-              <span className="text-xs font-semibold text-slate-600 dark:text-slate-300 flex items-center gap-1 mr-1">
-                <CalendarRange className="h-3.5 w-3.5 text-teal-700" /> เลือกช่วงเวลาย้อนหลัง:
+      <Card className="border-slate-200 bg-slate-50/50 shadow-xs dark:border-slate-700 dark:bg-slate-800/50">
+        <CardContent className="space-y-3 p-4">
+          <div className="flex flex-col gap-3">
+            <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+              <span className="mr-1 flex items-center gap-1 text-xs font-semibold leading-5 text-slate-600 dark:text-slate-300">
+                <CalendarRange className="h-3.5 w-3.5 text-slate-500" /> ช่วงเวลา
               </span>
-              <Button
-                type="button"
-                size="sm"
-                variant={period === "day" ? "default" : "outline"}
-                onClick={() => setPeriod("day")}
-                className={periodBtn(period === "day")}
-              >
-                🗓️ รายวัน
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                variant={period === "week" ? "default" : "outline"}
-                onClick={() => setPeriod("week")}
-                className={periodBtn(period === "week")}
-              >
-                📅 รายสัปดาห์
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                variant={period === "month" ? "default" : "outline"}
-                onClick={() => setPeriod("month")}
-                className={periodBtn(period === "month")}
-              >
-                📆 รายเดือน
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                variant={period === "all" ? "default" : "outline"}
-                onClick={() => setPeriod("all")}
-                className={periodBtn(period === "all")}
-              >
-                🌐 ภาพรวมทั้งหมด
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                variant={period === "custom" ? "default" : "outline"}
-                onClick={() => setPeriod("custom")}
-                className={periodBtn(period === "custom")}
-              >
-                🔍 กำหนดช่วงวันเอง
-              </Button>
+              {(
+                [
+                  ["day", "รายวัน"],
+                  ["week", "สัปดาห์"],
+                  ["month", "เดือน"],
+                  ["all", "ทั้งหมด"],
+                  ["custom", "กำหนดเอง"],
+                ] as const
+              ).map(([value, label]) => (
+                <Button
+                  key={value}
+                  type="button"
+                  size="sm"
+                  variant={period === value ? "default" : "outline"}
+                  onClick={() => setPeriod(value)}
+                  className={periodBtn(period === value)}
+                >
+                  {label}
+                </Button>
+              ))}
             </div>
 
-            {/* ── เกณฑ์รายรับ ────────────────────────────────────────────────
-                "เงินเข้าจริง" = เงินที่เข้าบัญชี/มือในช่วงนี้ (ค่าเริ่มต้น ตรงกับที่เจ้าของกระทบยอด)
-                "ตามบิล" = ยอดของบิลที่ออกในช่วงนี้ ไม่ว่าลูกค้าจะจ่ายแล้วหรือยัง
-                มีไว้ให้เทียบกับ Excel ที่บางเดือนคิดคนละเกณฑ์ โดยไม่ต้องแก้โค้ด */}
-            <div className="flex flex-wrap items-center gap-2 pt-1">
-              <span className="text-[11px] font-semibold text-slate-500">เกณฑ์รายรับ:</span>
+            {/* เกณฑ์รายรับ: เงินเข้าจริง = ค่าเริ่มต้นที่กระทบยอด Excel — ห้ามสลับโดยไม่ถาม */}
+            <div className="flex min-w-0 flex-wrap items-center gap-2">
+              <span className="text-[11px] font-semibold leading-4 text-slate-500">เกณฑ์รายรับ</span>
               {([
-                ["cash", "💵 เงินเข้าจริง"],
-                ["accrual", "🧾 ตามบิล"],
+                ["cash", "เงินเข้าจริง"],
+                ["accrual", "ตามบิล"],
               ] as const).map(([value, label]) => (
                 <Button
                   key={value}
@@ -417,15 +389,15 @@ export function DashboardClient({
                   className={`h-7 text-[11px] font-medium ${
                     revenueBasis === value
                       ? "bg-slate-800 text-white hover:bg-slate-700"
-                      : "bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700"
+                      : "bg-white text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300"
                   }`}
                 >
                   {label}
                 </Button>
               ))}
               {revenueBasis === "accrual" && (
-                <span className="text-[11px] text-amber-700 font-medium">
-                  รวมบิลที่ลูกค้ายังไม่จ่ายด้วย — ตัวเลขนี้จะไม่ตรงกับเงินในบัญชี
+                <span className="text-[11px] font-medium leading-4 text-amber-700">
+                  รวมบิลที่ลูกค้ายังไม่จ่าย — ไม่ตรงกับเงินในบัญชี
                 </span>
               )}
             </div>
@@ -499,7 +471,7 @@ export function DashboardClient({
           </div>
 
           <div className="flex items-center justify-between text-xs text-slate-600 dark:text-slate-400 font-medium border-t border-slate-200 dark:border-slate-700 pt-2">
-            <span>📊 กำลังแสดงผลช่วงเวลา: <span className="text-emerald-600 dark:text-emerald-400 font-semibold">{periodLabel}</span></span>
+            <span>กำลังแสดง: <span className="font-semibold text-emerald-600 dark:text-emerald-400">{periodLabel}</span></span>
             <span className="text-slate-500">บันทึกยอดขาย {filteredSales.length} วัน</span>
           </div>
         </CardContent>

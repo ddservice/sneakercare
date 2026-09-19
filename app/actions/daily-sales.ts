@@ -6,6 +6,7 @@ import { requireProfile, requireModuleView, requireModuleWrite } from "@/lib/aut
 import { logAudit } from "@/lib/audit";
 import type { Database } from "@/lib/supabase/database.types";
 import { requireTenantId, tenantFilter } from "@/lib/tenant";
+import { isIdempotentReplay } from "@/lib/idempotency";
 
 export type DailySaleInput = {
   id?: number;
@@ -22,6 +23,7 @@ export type DailySaleInput = {
   grand_total?: number;
   extra_items?: string;
   payment_status?: string;
+  clientRequestId?: string;
 };
 
 export type ArPaymentRecord = {
@@ -123,6 +125,7 @@ export async function saveDailySale(data: DailySaleInput) {
     recorded_by: profile.display_name || profile.username || "Staff",
     last_updated: new Date().toISOString(),
     tenant_id: tenantId,
+    ...(!data.id && data.clientRequestId ? { client_request_id: data.clientRequestId } : {}),
   };
 
   // เก็บค่าเดิมไว้ก่อนแก้ เพื่อให้ audit log บอกได้ว่าอะไรเปลี่ยนจากอะไรเป็นอะไร
@@ -156,6 +159,9 @@ export async function saveDailySale(data: DailySaleInput) {
   }
 
   if (error) {
+    if (!data.id && isIdempotentReplay(error)) {
+      return { success: true };
+    }
     return { success: false, error: error.message };
   }
 
@@ -339,6 +345,7 @@ export async function recordArPayment(data: {
   amount: number;
   pay_method: string;
   notes?: string;
+  clientRequestId?: string;
 }) {
   const profile = await requireProfile();
   requireModuleWrite(profile, "pos");
@@ -349,7 +356,7 @@ export async function recordArPayment(data: {
     return { success: false, error: "กรุณาระบุข้อมูลวันที่และจำนวนเงินให้ถูกต้อง" };
   }
 
-  const paymentPayload = {
+  const paymentPayload: Database["public"]["Tables"]["sc_payments"]["Insert"] = {
     sale_date: data.sale_date,
     received_date: data.received_date,
     amount: Number(data.amount),
@@ -357,6 +364,7 @@ export async function recordArPayment(data: {
     notes: data.notes || "",
     recorded_by: profile.display_name || profile.username || "Staff",
     tenant_id: tenantId,
+    ...(data.clientRequestId ? { client_request_id: data.clientRequestId } : {}),
   };
 
   const { data: inserted, error: paymentError } = await supabase.from("sc_payments")
@@ -364,6 +372,9 @@ export async function recordArPayment(data: {
     .select("id")
     .maybeSingle();
   if (paymentError) {
+    if (isIdempotentReplay(paymentError)) {
+      return { success: true };
+    }
     return { success: false, error: paymentError.message };
   }
 

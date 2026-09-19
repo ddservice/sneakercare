@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useTransition, useMemo } from "react";
+import { useState, useTransition, useMemo, useRef } from "react";
+import { newRequestId } from "@/lib/idempotency";
 import {
   saveDailySale,
   deleteDailySale,
@@ -101,6 +102,8 @@ export function DailyEntryClient({
     }));
   const [records, setRecords] = useState<DailySaleWithPayments[]>(initialRecords);
   const [isPending, startTransition] = useTransition();
+  const saleRequestIdRef = useRef(newRequestId());
+  const paymentRequestIdRef = useRef(newRequestId());
 
   // Form State
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -282,9 +285,11 @@ export function DailyEntryClient({
         amount: collectAmount,
         pay_method: collectMethod,
         notes: collectNotes,
+        clientRequestId: paymentRequestIdRef.current,
       });
 
       if (res.success) {
+        paymentRequestIdRef.current = newRequestId();
         toast.success(`บันทึกการรับชำระยอดค้าง ${collectAmount.toLocaleString()} ฿ เรียบร้อย`);
         setRecords((prev) =>
           prev.map((r) => {
@@ -444,10 +449,12 @@ export function DailyEntryClient({
         grand_total: netTotal,
         payment_status: currentPaymentStatus,
         extra_items: extraSummaryStr,
+        clientRequestId: editingId ? undefined : saleRequestIdRef.current,
       };
 
       const res = await saveDailySale(payload);
       if (res.success) {
+        if (!editingId) saleRequestIdRef.current = newRequestId();
         toast.success(editingId ? "อัปเดตบันทึกยอดขายรายวันสำเร็จ" : "บันทึกยอดขายประจำวันสำเร็จ");
         handleReset();
 
