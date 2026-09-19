@@ -1,8 +1,8 @@
 import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { DOC_TYPE_CONFIG, type DocumentType } from "./types";
+import { DOC_TYPE_CONFIG, isDocumentType, type DocumentType } from "./types";
 
-export { DOC_TYPE_CONFIG, type DocumentType };
+export { DOC_TYPE_CONFIG, isDocumentType, type DocumentType };
 
 export async function generateDocumentNumber(
   docType: DocumentType,

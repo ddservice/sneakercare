@@ -6,6 +6,7 @@ import { requireProfile, requireModuleView } from "@/lib/auth";
 import { getSelectedBranchId } from "@/lib/branch";
 import { parseSalesRow, parseStockRow, parseExpensesRow } from "@/lib/schemas/import-schemas";
 import { requireTenantId } from "@/lib/tenant";
+import { assertPeriodOpen } from "@/lib/period-close-store";
 
 export type BulkImportResult = {
   success: boolean;
@@ -46,6 +47,13 @@ export async function bulkImportSales(rows: Record<string, unknown>[]): Promise<
     if (validationError || !validated) {
       failed++;
       errors.push(`แถวที่ ${i + 1}: ${validationError ?? "ข้อมูลไม่ถูกต้อง"}`);
+      continue;
+    }
+
+    const closedSale = await assertPeriodOpen(tenantId, validated.date);
+    if (closedSale) {
+      failed++;
+      errors.push(`แถวที่ ${i + 1}: ${closedSale}`);
       continue;
     }
 
@@ -252,6 +260,13 @@ export async function bulkImportExpenses(rows: Record<string, unknown>[]): Promi
     if (validationError || !validated) {
       failed++;
       errors.push(`แถวที่ ${i + 1}: ${validationError ?? "ข้อมูลไม่ถูกต้อง"}`);
+      continue;
+    }
+
+    const closedExpense = await assertPeriodOpen(tenantId, validated.date);
+    if (closedExpense) {
+      failed++;
+      errors.push(`แถวที่ ${i + 1}: ${closedExpense}`);
       continue;
     }
 

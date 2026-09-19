@@ -22,10 +22,14 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { PageHeader } from "@/components/page-header";
-import { calculateExpenseBreakdown, applyEntriesToBreakdown, type ExpenseEntryLike } from "@/lib/expense-totals";
+import { type ExpenseEntryLike } from "@/lib/expense-totals";
+import {
+  DEFAULT_REVENUE_BASIS,
+  planDashboardBooks,
+  type DashboardPeriod,
+  type RevenueBasis,
+} from "@/lib/dashboard-books";
 import type { Tables } from "@/lib/supabase/database.types";
-
-type DashboardPeriod = "all" | "day" | "week" | "month" | "custom";
 
 export type DashboardSaleRow = Tables<"sc_sales">;
 export type DashboardOpexRow = Tables<"sc_opex">;
@@ -38,6 +42,7 @@ export function DashboardClient({
   catalogCount,
   lowStockCount,
   expenseEntries = [],
+  lookbackStart,
 }: {
   salesRows: DashboardSaleRow[];
   opexRows: DashboardOpexRow[];
@@ -50,6 +55,8 @@ export function DashboardClient({
    * ถ้าไม่ส่งมา จะตกกลับไปคำนวณจาก `sc_opex` ทั้งก้อนเหมือนเดิม
    */
   expenseEntries?: ExpenseEntryLike[];
+  /** วันแรกของช่วงที่เซิร์ฟเวอร์ดึงมา — ปุ่ม «ทั้งหมด» ไม่ใช่ทั้งประวัติ */
+  lookbackStart?: string;
 }) {
   // Period state
   //
@@ -75,7 +82,7 @@ export function DashboardClient({
   // ⚠️ ค่าเริ่มต้นต้องเป็น "cash" เสมอ — เจ้าของกระทบยอดกับ Excel ด้วยเกณฑ์เงินเข้าจริง
   // (ส.ค. 2569 = ฿24,524.79) **ห้ามเปลี่ยนค่าเริ่มต้นโดยไม่ถามเจ้าของ** (ดู CLAUDE.md)
   // ตัวเลือกนี้เพิ่มมาเพื่อให้เทียบกับ Excel เดือนอื่นที่คิดตามบิลได้โดยไม่ต้องแก้โค้ด
-  const [revenueBasis, setRevenueBasis] = useState<"cash" | "accrual">("cash");
+  const [revenueBasis, setRevenueBasis] = useState<RevenueBasis>(DEFAULT_REVENUE_BASIS);
   const [filterDate, setFilterDate] = useState(toTodayLocal);
   const [customStartDate, setCustomStartDate] = useState(toFirstOfMonthLocal);
   const [customEndDate, setCustomEndDate] = useState(toTodayLocal);
@@ -97,183 +104,48 @@ export function DashboardClient({
     }
   }
 
-  // Filter Sales & Expenses based on selected period
+  const books = useMemo(
+    () =>
+      planDashboardBooks({
+        sales: salesRows,
+        opex: opexRows,
+        payments: paymentsRows,
+        expenseEntries,
+        period,
+        filterDate,
+        customStartDate,
+        customEndDate,
+        revenueBasis,
+      }),
+    [salesRows, opexRows, paymentsRows, expenseEntries, period, filterDate, customStartDate, customEndDate, revenueBasis]
+  );
+
+  const filteredSales = books.filteredSales as DashboardSaleRow[];
   const {
-    filteredSales,
     totalExpensesForPeriod,
     partnerShareForPeriod,
     cashRevenueForPeriod,
     rentalIncomeForPeriod,
     outstandingForPeriod,
     paidBySaleDate,
-  } = useMemo(() => {
-    const baseDate = new Date(filterDate);
-    const dayOfWeek = baseDate.getDay();
-    const diffToMonday = (dayOfWeek + 6) % 7;
-    const monday = new Date(baseDate);
-    monday.setDate(baseDate.getDate() - diffToMonday);
-    const sunday = new Date(monday);
-    sunday.setDate(monday.getDate() + 6);
-    const monStr = monday.toISOString().slice(0, 10);
-    const sunStr = sunday.toISOString().slice(0, 10);
-
-    const [y, m] = filterDate.slice(0, 7).split("-");
-    const monthPrefixISO = filterDate.slice(0, 7); // "2026-08"
-    const monthPrefixLegacy = `${m}/${y}`; // "08/2026"
-
-    // 1. Filter Sales
-    const fSales = (salesRows || []).filter((s) => {
-      if (period === "day") return s.date === filterDate;
-      if (period === "week") return s.date >= monStr && s.date <= sunStr;
-      if (period === "month") return s.date?.startsWith(monthPrefixISO);
-      if (period === "custom") return s.date >= customStartDate && s.date <= customEndDate;
-      return true; // all
-    });
-
-    // 2. รวมยอดค่าใช้จ่ายด้วย "สูตรกลาง" ที่ใช้ร่วมกับหน้า /expenses
-    //
-    // ⚠️ (แก้ 2026-09-06) เดิมหน้านี้กรอง sc_opex ด้วย whitelist ของชื่อหมวดที่ hardcode ไว้ 8 ชื่อ
-    // แต่ `category` เป็นข้อความอิสระที่ฟอร์มสร้างชื่อใหม่ได้เรื่อยๆ หมวดที่ไม่อยู่ในรายชื่อจึงหาย
-    // จากยอดเงียบๆ ไม่มี error (ส.ค. 2569 ตกไป ฿6,600.51) และทำให้หน้านี้กับ /expenses
-    // แสดงยอดของเดือนเดียวกันไม่ตรงกัน — ตอนนี้ทั้งสองหน้าเรียก calculateExpenseBreakdown()
-    // ตัวเดียวกัน มี npm run test:expenses ล็อกไว้ **ห้ามเขียนกฎกรองเองที่นี่อีก**
-    const monthRows = (opexRows || []).filter((o) => {
-      const oMonth = String(o.month || "").trim();
-      if (period === "month" || period === "day" || period === "week") {
-        return oMonth === monthPrefixLegacy || oMonth === monthPrefixISO;
-      }
-      if (period === "custom") {
-        const [sy, sm] = customStartDate.slice(0, 7).split("-");
-        const [ey, em] = customEndDate.slice(0, 7).split("-");
-        return oMonth >= `${sm}/${sy}` && oMonth <= `${em}/${ey}`;
-      }
-      return true; // all time
-    });
-
-    // ฝั่ง OPEX มาจาก sc_expense_entries · เงินเดือน/ห้องเช่ายังมาจาก sc_opex
-    // กรองด้วย entry_date (วันจริง) แทนคีย์เดือนแบบข้อความ — ตรงไปตรงมากว่าและกรองช่วงวันได้จริง
-    const periodEntries = (expenseEntries || []).filter((e) => {
-      const d = String(e.entry_date ?? "");
-      if (!d) return false;
-      if (period === "month" || period === "day" || period === "week") return d.startsWith(monthPrefixISO);
-      if (period === "custom") return d.slice(0, 7) >= customStartDate.slice(0, 7) && d.slice(0, 7) <= customEndDate.slice(0, 7);
-      return true; // all time
-    });
-
-    const legacyBreakdown = calculateExpenseBreakdown(monthRows);
-    const breakdown =
-      (expenseEntries?.length ?? 0) > 0
-        ? applyEntriesToBreakdown(legacyBreakdown, periodEntries, monthRows)
-        : legacyBreakdown;
-    let expSum = breakdown.totalExpenses;
-    let partnerShare = breakdown.totalPartnerShare;
-
-    // มุมมองรายวัน/รายสัปดาห์: ค่าใช้จ่ายบันทึกเป็นรายเดือน จึงเฉลี่ยลงตามสัดส่วนวัน
-    if (period === "day" || period === "week") {
-      const daysInMonth = 31;
-      const ratio = period === "day" ? 1 / daysInMonth : 7 / daysInMonth;
-      expSum *= ratio;
-      partnerShare *= ratio;
-    }
-
-    // ── รายรับ "เงินเข้าจริงในช่วงเวลา" (cash basis) ──────────────────────────
-    //
-    // ⚠️ (แก้ 2026-09-07) เดิมหน้านี้ใช้ยอด "ตามบิล" (total_revenue) ซึ่งรวมบิลที่ลูกค้ายังไม่จ่าย
-    // จึงไม่ตรงกับที่เจ้าของกระทบยอดจริง — ส.ค. 69 ต่างกัน 2,100 บาท (บิลวันที่ 21 ส.ค.
-    // ที่ลูกค้าโอนวันที่ 1 ก.ย. ต้องไปนับเป็นรายรับของเดือนกันยายน ไม่ใช่สิงหาคม)
-    //
-    // เงินเข้าจริง = ยอดที่จ่ายตอนออกบิล (amount_paid ของบิลในช่วงนั้น)
-    //              + ยอดที่มาจ่ายย้อนหลัง (sc_payments ที่ received_date อยู่ในช่วงนั้น)
-    // ตัวหลังต้องกรองด้วย received_date ไม่ใช่ sale_date — เพราะเราสนใจว่า "เงินเข้าวันไหน"
-    const paidOnBills = fSales.reduce((acc, s) => acc + Number(s.amount_paid ?? 0), 0);
-    const arReceived = (paymentsRows || []).reduce((acc, p) => {
-      const d = String(p.received_date || "");
-      if (!d) return acc;
-      if (period === "day") return d === filterDate ? acc + Number(p.amount || 0) : acc;
-      if (period === "week") return d >= monStr && d <= sunStr ? acc + Number(p.amount || 0) : acc;
-      if (period === "month") return d.startsWith(monthPrefixISO) ? acc + Number(p.amount || 0) : acc;
-      if (period === "custom") return d >= customStartDate && d <= customEndDate ? acc + Number(p.amount || 0) : acc;
-      return acc + Number(p.amount || 0); // all time
-    }, 0);
-
-    // รายรับค่าเช่าห้องชั้น 3 — เป็นรายรับของร้านเหมือนกัน ต้องรวมในกำไรสุทธิ
-    // (เดิมหน้านี้ไม่นับเลย ทำให้กำไรต่ำกว่าที่ควรเป็น 6,000 บาท/เดือน)
-    let rentalIncome = breakdown.totalRentalIncome;
-    if (period === "day" || period === "week") {
-      const daysInMonth = 31;
-      rentalIncome *= period === "day" ? 1 / daysInMonth : 7 / daysInMonth;
-    }
-
-    // ── ยอดค้างชำระ ณ สิ้นช่วงเวลาที่เลือก ────────────────────────────────────
-    //
-    // ⚠️ (แก้ 2026-09-07) เดิมหักด้วย sc_payments **ทุกแถว** ไม่สนใจว่าเงินเข้าวันไหน
-    // ผลคือยอด 2,100 ของบิล 21 ส.ค. ที่ลูกค้าโอนวันที่ 1 ก.ย. ถูกนับว่า "จ่ายแล้ว" ตั้งแต่เดือน
-    // สิงหาคม ⇒ เมื่อรายรับเปลี่ยนไปใช้เกณฑ์เงินเข้าจริง (ไม่นับ 2,100 ในเดือน ส.ค.) ยอดนี้จึง
-    // **หายไปจากทั้งสองฝั่ง** — ไม่เป็นรายรับ และไม่เป็นลูกหนี้ด้วย งบไม่บาลานซ์
-    //
-    // ที่ถูกคือดูจากมุม "ณ สิ้นเดือนสิงหาคม เงินก้อนนี้เข้ามาหรือยัง" ⇒ ยังไม่เข้า ⇒ เป็นลูกหนี้
-    // พอเปลี่ยนไปดูเดือนกันยายนก็จะเห็นมันเป็นรายรับของเดือนนั้นแทน — ยอดไม่หายไปไหน
-    const periodEnd =
-      period === "day" ? filterDate
-      : period === "week" ? sunStr
-      : period === "month" ? `${monthPrefixISO}-31`
-      : period === "custom" ? customEndDate
-      : "9999-12-31"; // all time
-
-    const paidBySaleDate: Record<string, number> = {};
-    (paymentsRows || []).forEach((p) => {
-      if (!p.sale_date) return;
-      const received = String(p.received_date || "");
-      if (received && received > periodEnd) return; // เงินยังไม่เข้าภายในช่วงนี้
-      paidBySaleDate[p.sale_date] = (paidBySaleDate[p.sale_date] || 0) + Number(p.amount || 0);
-    });
-
-    const outstanding = fSales.reduce((acc, s) => {
-      const net = Number(s.total_revenue || (Number(s.grand_total || 0) - Number(s.discount || 0)));
-      const paid = Number(s.cash_amount || 0) + Number(s.transfer_amount || 0) + (paidBySaleDate[s.date] || 0);
-      return acc + Math.max(0, net - paid);
-    }, 0);
-
-    return {
-      filteredSales: fSales,
-      totalExpensesForPeriod: Math.round(expSum * 100) / 100,
-      partnerShareForPeriod: Math.round(partnerShare * 100) / 100,
-      cashRevenueForPeriod: Math.round((paidOnBills + arReceived) * 100) / 100,
-      rentalIncomeForPeriod: Math.round(rentalIncome * 100) / 100,
-      outstandingForPeriod: Math.round(outstanding * 100) / 100,
-      // ส่งออกไปให้ตารางรายวันใช้ตัดสิน "ชำระครบแล้วหรือยัง" ด้วยกรอบเวลาเดียวกัน
-      // ไม่งั้นการ์ดสรุปกับตารางจะบอกคนละเรื่องในบิลใบเดียวกัน
-      paidBySaleDate,
-    };
-  }, [salesRows, opexRows, paymentsRows, expenseEntries, period, filterDate, customStartDate, customEndDate]);
+    billRevenueForPeriod,
+    posTicketPaid,
+    dailyEntryPaid,
+    posTicketCount,
+    serviceRevenueForPeriod,
+    totalIncomeForPeriod,
+    netProfit,
+  } = books;
 
   const totalTransfer = filteredSales.reduce((acc, s) => acc + Number(s.transfer_amount || 0), 0);
   const totalCash = filteredSales.reduce((acc, s) => acc + Number(s.cash_amount || 0), 0);
-
-  // Exact Outstanding AR factoring in sc_payments
   const totalOutstanding = outstandingForPeriod;
-
-  // Total Shoes Count
   const sizeSCount = filteredSales.reduce((acc, s) => acc + Number(s.size_s || 0), 0);
   const sizeMCount = filteredSales.reduce((acc, s) => acc + Number(s.size_m || 0), 0);
   const sizeLCount = filteredSales.reduce((acc, s) => acc + Number(s.size_l || 0), 0);
   const sizeXLCount = filteredSales.reduce((acc, s) => acc + Number(s.size_xl || 0), 0);
   const totalShoes = sizeSCount + sizeMCount + sizeLCount + sizeXLCount;
-
-  // ยอด "ตามบิล" ของช่วงเวลาที่เลือก (ไม่สนว่าลูกค้าจ่ายแล้วหรือยัง)
-  const totalNetRevenue = filteredSales.reduce(
-    (acc, s) => acc + Number(s.total_revenue || (Number(s.grand_total || 0) - Number(s.discount || 0))),
-    0
-  );
-
-  // ── กำไรสุทธิ ────────────────────────────────────────────────────────────
-  //
-  // ⚠️ ใช้เกณฑ์ "เงินเข้าจริง" ให้ตรงกับที่เจ้าของกระทบยอดเอง (ยืนยันกับ Excel เดือน ส.ค. 69
-  // แล้วตรงเป๊ะที่ ฿24,524.79) — ห้ามเปลี่ยนกลับไปใช้ total_revenue ตามบิลโดยไม่คุยกันก่อน
-  //   กำไรสุทธิ = เงินเข้าจากบริการ + รายรับห้องเช่า − ค่าใช้จ่ายทั้งหมด
-  const serviceRevenueForPeriod = revenueBasis === "cash" ? cashRevenueForPeriod : totalNetRevenue;
-  const totalIncomeForPeriod = serviceRevenueForPeriod + rentalIncomeForPeriod;
-  const netProfit = totalIncomeForPeriod - totalExpensesForPeriod;
+  const totalNetRevenue = billRevenueForPeriod;
   const profitMarginPct = totalIncomeForPeriod > 0 ? (netProfit / totalIncomeForPeriod) * 100 : 0;
   const isProfitable = netProfit >= 0;
 
@@ -287,7 +159,11 @@ export function DashboardClient({
 
   // Period label
   const periodLabel = useMemo(() => {
-    if (period === "all") return "ภาพรวมสะสมทั้งหมด (All Time)";
+    if (period === "all") {
+      return lookbackStart
+        ? `สะสมย้อนหลังตั้งแต่ ${lookbackStart} (ไม่ดึงทั้งประวัติ)`
+        : "ภาพรวมสะสมทั้งหมด (All Time)";
+    }
     if (period === "day") return `รายวัน: ${filterDate}`;
     if (period === "week") {
       const baseDate = new Date(filterDate);
@@ -308,7 +184,7 @@ export function DashboardClient({
     }
     if (period === "custom") return `ช่วงวันที่: ${customStartDate} ถึง ${customEndDate}`;
     return "";
-  }, [period, filterDate, customStartDate, customEndDate]);
+  }, [period, filterDate, customStartDate, customEndDate, lookbackStart]);
 
   const periodBtn = (active: boolean) =>
     `h-8 text-xs font-medium ${
@@ -356,7 +232,7 @@ export function DashboardClient({
                   ["day", "รายวัน"],
                   ["week", "สัปดาห์"],
                   ["month", "เดือน"],
-                  ["all", "ทั้งหมด"],
+                  ["all", "ย้อนหลัง"],
                   ["custom", "กำหนดเอง"],
                 ] as const
               ).map(([value, label]) => (
@@ -529,6 +405,25 @@ export function DashboardClient({
               {rentalIncomeForPeriod > 0 && (
                 <div className="text-[11px] text-emerald-700 font-semibold">
                   + ค่าเช่าห้อง ฿{rentalIncomeForPeriod.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+                </div>
+              )}
+              {(posTicketPaid > 0 || dailyEntryPaid > 0) && (
+                <div className="text-[11px] text-slate-500">
+                  {posTicketPaid > 0 && (
+                    <span>
+                      จากใบรับงานที่ชำระแล้ว ฿{posTicketPaid.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+                      {posTicketCount > 0 ? ` (${posTicketCount} ใบ)` : ""}
+                    </span>
+                  )}
+                  {posTicketPaid > 0 && dailyEntryPaid > 0 && <span> · </span>}
+                  {dailyEntryPaid > 0 && (
+                    <span>
+                      จากยอดขายรายวัน ฿{dailyEntryPaid.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+                    </span>
+                  )}
+                  {posTicketPaid > 0 && (
+                    <span className="block text-amber-700">ห้ามกรอกใบรับงานที่ชำระแล้วซ้ำที่ยอดขายรายวัน</span>
+                  )}
                 </div>
               )}
               <div className="flex items-center gap-2 text-[11px] text-slate-500 font-medium">

@@ -8,11 +8,15 @@ import { logAudit } from "@/lib/audit";
 import { requireTenantId } from "@/lib/tenant";
 import { errorMessage } from "@/lib/errors";
 import { isYmd, receivedAtFromYmd, ymdToOrderDateCode } from "@/lib/local-date";
+import { planCheckout, shouldPostSale, type CheckoutPayment } from "@/lib/checkout";
+import { saveDailySale } from "@/app/actions/daily-sales";
+import { assertPeriodOpen } from "@/lib/period-close-store";
 
 export type PosActionState = {
   error?: string;
   success?: boolean;
   orderNo?: string;
+  postedToBooks?: boolean;
 } | undefined;
 
 export async function createServiceOrder(
@@ -42,7 +46,7 @@ export async function createServiceOrder(
   const netAmount = Number(formData.get("net_amount") ?? 0);
   const cashAmount = Number(formData.get("cash_amount") ?? 0);
   const transferAmount = Number(formData.get("transfer_amount") ?? 0);
-  const paymentMethod = String(formData.get("payment_method") ?? "cash") as "cash" | "transfer" | "credit" | "unpaid";
+  const paymentMethod = String(formData.get("payment_method") ?? "cash") as CheckoutPayment;
   const notes = String(formData.get("notes") ?? "").trim();
   const receivedDate = String(formData.get("received_date") ?? "").trim();
 
@@ -56,6 +60,11 @@ export async function createServiceOrder(
 
   if (netAmount < 0) {
     return { error: "ยอดสุทธิไม่ถูกต้อง" };
+  }
+
+  if (shouldPostSale(paymentMethod)) {
+    const closedErr = await assertPeriodOpen(tenantId, receivedDate);
+    if (closedErr) return { error: closedErr };
   }
 
   const supabase = await createClient();
@@ -153,6 +162,77 @@ export async function createServiceOrder(
     await supabase.from("service_order_items").insert(itemsToInsert);
   }
 
+  const serviceNames = serviceIdsRaw.map((itemStr) => {
+    try {
+      const item = JSON.parse(String(itemStr));
+      return String(item.name ?? "");
+    } catch {
+      return String(itemStr);
+    }
+  });
+
+  // ยอดทางการอยู่ที่ sc_sales — ใบรับงานที่ชำระแล้วลงแถวขายหนึ่งใบ (คีย์ = order.id)
+  // ยังไม่ตัดสต๊อกอัตโนมัติ: ไม่มีสูตรของใช้ต่องาน เบิกที่ /stock-out ตามเดิม
+  const plan = planCheckout({
+    orderId: order.id,
+    orderNo,
+    date: receivedDate,
+    paymentMethod,
+    gross: grossAmount,
+    discount: discountAmount,
+    net: netAmount,
+    cash: cashAmount,
+    transfer: transferAmount,
+    serviceNames,
+  });
+
+  let postedToBooks = false;
+  if (plan.sale) {
+    const saleRes = await saveDailySale({
+      date: plan.sale.date,
+      size_s: 0,
+      size_m: 0,
+      size_l: 0,
+      size_xl: 0,
+      cash_amount: plan.sale.cash,
+      transfer_amount: plan.sale.transfer,
+      amount_paid: plan.sale.amountPaid,
+      discount: plan.sale.discount,
+      gross_amount: plan.sale.gross,
+      grand_total: plan.sale.net,
+      extra_items: plan.sale.extraItems,
+      payment_status: plan.sale.paymentStatus,
+      clientRequestId: plan.sale.clientRequestId,
+    });
+    if (!saleRes.success) {
+      await logAudit({
+        action: "CREATE",
+        entity: "service_order",
+        entity_id: order.id,
+        actor_id: profile.id,
+        actor_name: profile.display_name,
+        tenant_id: tenantId,
+        detail: {
+          order_no: orderNo,
+          received_date: receivedDate,
+          received_at: receivedAt,
+          customer_name: customerName,
+          customer_phone: customerPhone,
+          net_amount: netAmount,
+          payment_method: paymentMethod,
+          services: serviceIdsRaw.length,
+          posted_to_books: false,
+          books_error: saleRes.error ?? "ไม่ทราบสาเหตุ",
+        },
+      });
+      return {
+        error: `รับงาน ${orderNo} แล้ว แต่ลงบัญชีไม่สำเร็จ: ${saleRes.error ?? "ไม่ทราบสาเหตุ"}`,
+        orderNo,
+      };
+    }
+    postedToBooks = true;
+  }
+
   await logAudit({
     action: "CREATE",
     entity: "service_order",
@@ -169,12 +249,13 @@ export async function createServiceOrder(
       net_amount: netAmount,
       payment_method: paymentMethod,
       services: serviceIdsRaw.length,
+      posted_to_books: postedToBooks,
     },
   });
 
   revalidatePath("/pos");
   revalidatePath("/dashboard");
-  return { success: true, orderNo };
+  return { success: true, orderNo, postedToBooks };
 }
 
 export async function updateOrderStatus(orderId: string, status: "received" | "in_progress" | "ready" | "delivered" | "cancelled") {

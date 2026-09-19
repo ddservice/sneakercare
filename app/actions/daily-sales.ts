@@ -7,6 +7,7 @@ import { logAudit } from "@/lib/audit";
 import type { Database } from "@/lib/supabase/database.types";
 import { requireTenantId, tenantFilter } from "@/lib/tenant";
 import { isIdempotentReplay } from "@/lib/idempotency";
+import { assertPeriodOpen } from "@/lib/period-close-store";
 
 export type DailySaleInput = {
   id?: number;
@@ -66,6 +67,8 @@ export async function saveDailySale(data: DailySaleInput) {
   const supabase = createAdminClient();
   // ⚠️ ใช้ service_role — bypass RLS ทั้งหมด ต้องกรอง/ระบุ tenant_id เองทุกจุดในไฟล์นี้
   const tenantId = await requireTenantId(profile);
+  const closedErr = await assertPeriodOpen(tenantId, data.date);
+  if (closedErr) return { success: false, error: closedErr };
 
   const cash = Number(data.cash_amount || 0);
   const transfer = Number(data.transfer_amount || 0);
@@ -137,6 +140,10 @@ export async function saveDailySale(data: DailySaleInput) {
       .eq("tenant_id", tenantId)
       .maybeSingle();
     before = prev ?? null;
+    if (before?.date && String(before.date) !== data.date) {
+      const prevClosed = await assertPeriodOpen(tenantId, String(before.date));
+      if (prevClosed) return { success: false, error: prevClosed };
+    }
   }
 
   let error;
@@ -200,6 +207,11 @@ export async function deleteDailySale(id: number) {
     .eq("id", id)
     .eq("tenant_id", tenantId)
     .maybeSingle();
+
+  if (doomed?.date) {
+    const closedErr = await assertPeriodOpen(tenantId, doomed.date);
+    if (closedErr) return { success: false, error: closedErr };
+  }
 
   // ⚠️ .eq("tenant_id", ...) กัน id ของ tenant อื่นถูกลบข้ามฝั่ง
   const { error } = await supabase.from("sc_sales")
@@ -356,6 +368,9 @@ export async function recordArPayment(data: {
     return { success: false, error: "กรุณาระบุข้อมูลวันที่และจำนวนเงินให้ถูกต้อง" };
   }
 
+  const closedErr = await assertPeriodOpen(tenantId, data.sale_date);
+  if (closedErr) return { success: false, error: closedErr };
+
   const paymentPayload: Database["public"]["Tables"]["sc_payments"]["Insert"] = {
     sale_date: data.sale_date,
     received_date: data.received_date,
@@ -447,6 +462,9 @@ export async function deleteArPayment(paymentId: number, saleDate: string) {
     .eq("id", paymentId)
     .eq("tenant_id", tenantId)
     .maybeSingle();
+
+  const closedErr = await assertPeriodOpen(tenantId, doomed?.sale_date ?? saleDate);
+  if (closedErr) return { success: false, error: closedErr };
 
   // ⚠️ .eq("tenant_id", ...) กัน id ของ tenant อื่นถูกลบข้ามฝั่ง
   const { error } = await supabase.from("sc_payments")

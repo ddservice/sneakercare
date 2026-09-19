@@ -21,6 +21,8 @@ const OPTIONAL_VAT: ReadonlySet<DocumentType> = new Set([
   "INVOICE",
   "BILLING_NOTE",
   "RECEIPT",
+  "CREDIT_NOTE",
+  "DEBIT_NOTE",
 ]);
 
 /** ไม่มีคีย์ใน sc_settings = จด VAT อยู่แล้ว (คีย์เก่าที่เลิกเขียนแล้ว) */

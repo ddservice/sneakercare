@@ -6,7 +6,7 @@
 import { revalidatePath } from "next/cache";
 import { requireProfile, requireModuleView, requireModuleWrite } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { generateDocumentNumber, type DocumentType } from "@/lib/smartacc/numbering";
+import { generateDocumentNumber, isDocumentType, type DocumentType } from "@/lib/smartacc/numbering";
 import { generatePromptPayPayload } from "@/lib/smartacc/promptpay";
 import { withId, text } from "@/lib/db-rows";
 import { requireTenantId, tenantFilter } from "@/lib/tenant";
@@ -15,12 +15,33 @@ import { resolveBranchVat } from "@/lib/branch-vat";
 import { errorMessage } from "@/lib/errors";
 import { logAudit } from "@/lib/audit";
 import { fetchWhtCertificates } from "@/app/actions/wht";
+import { fetchShopProfile } from "@/app/actions/shop-settings";
 import { certificateToWhtRecord } from "@/lib/wht";
 import {
   canIssueTaxInvoice,
   documentVatRate,
   settleDocumentVat,
 } from "@/lib/vat";
+import {
+  canConvertDocument,
+  canDeleteDocument,
+  canVoidDocument,
+  deleteBlockedReason,
+  voidBlockedReason,
+  appendVoidNote,
+} from "@/lib/smartacc/lifecycle";
+import {
+  isCorrectionType,
+  marksSourceConverted,
+  planCorrection,
+} from "@/lib/smartacc/correction";
+import { embedSellerSnapshot, planSellerSnapshot } from "@/lib/smartacc/snapshot";
+import {
+  canIssueOfficialNumber,
+  consumesOfficialNumberOnCreate,
+  issueBlockedReason,
+  planDraftNumber,
+} from "@/lib/smartacc/issue";
 
 /** หนึ่งรายการในสมุดที่อยู่ลูกค้า (sc_settings.dbd_company_registry) */
 export type DbdRegistryEntry = {
@@ -358,6 +379,16 @@ export async function fetchSmartAccDocuments(filterType?: DocumentType) {
   return data ?? [];
 }
 
+async function notesWithSellerSnapshot(notes: string | undefined): Promise<string> {
+  try {
+    const shop = await fetchShopProfile();
+    return embedSellerSnapshot(notes, planSellerSnapshot(shop));
+  } catch (err) {
+    console.error("[createDocument] เก็บภาพผู้ขายไม่สำเร็จ:", err);
+    return String(notes ?? "").trim();
+  }
+}
+
 /**
  * Create or save a new document with dynamic numbering and PromptPay payload
  */
@@ -396,8 +427,51 @@ export async function createSmartAccDocument(payload: CreateDocumentPayload) {
   const vatAmount = totals.vatAmount;
   const grandTotal = totals.grandTotal;
 
-  // 2. Generate Standard Numbering: PREFIX-YYYYMMDD-XXXX (ตัวนับแยกต่อ tenant — migration 0036)
-  const docNumber = await generateDocumentNumber(payload.docType, tenantId, new Date(payload.issueDate));
+  if (isCorrectionType(payload.docType)) {
+    if (!payload.refParentDocId) {
+      return { success: false as const, error: "ใบลดหนี้/เพิ่มหนี้ต้องอ้างเอกสารต้นทาง" };
+    }
+    const { data: parent } = await supabase
+      .schema("extension_layer")
+      .from("ext_documents")
+      .select("id, doc_type, status, grand_total")
+      .eq("id", payload.refParentDocId)
+      .eq("tenant_id", tenantId)
+      .maybeSingle();
+    if (!parent) {
+      return { success: false as const, error: "ไม่พบเอกสารต้นทางในกิจการนี้" };
+    }
+    const { data: siblings } = await supabase
+      .schema("extension_layer")
+      .from("ext_documents")
+      .select("doc_type, grand_total, status")
+      .eq("ref_parent_doc_id", parent.id)
+      .eq("tenant_id", tenantId)
+      .neq("status", "VOID");
+    const existingCreditTotal = (siblings ?? [])
+      .filter((row) => row.doc_type === "CREDIT_NOTE")
+      .reduce((sum, row) => sum + Number(row.grand_total || 0), 0);
+    const existingDebitTotal = (siblings ?? [])
+      .filter((row) => row.doc_type === "DEBIT_NOTE")
+      .reduce((sum, row) => sum + Number(row.grand_total || 0), 0);
+    const planned = planCorrection({
+      kind: payload.docType,
+      parentType: String(parent.doc_type),
+      parentStatus: String(parent.status),
+      parentGrandTotal: Number(parent.grand_total || 0),
+      existingCreditTotal,
+      existingDebitTotal,
+      requestAmount: grandTotal,
+    });
+    if (!planned.ok) {
+      return { success: false as const, error: planned.error };
+    }
+  }
+
+  // 2. ใบกำกับ/ใบเสร็จ/ใบลด-เพิ่มหนี้กินเลขตอนสร้าง · ประเภทอื่นใช้เลขร่างจนกว่าจะกดออกเลข
+  const docNumber = consumesOfficialNumberOnCreate(payload.docType)
+    ? await generateDocumentNumber(payload.docType, tenantId, new Date(payload.issueDate))
+    : planDraftNumber(payload.issueDate, Math.random().toString(36).slice(2, 10));
   const shareToken = "doc_" + Math.random().toString(36).substring(2, 10) + Date.now().toString(36);
 
   // 3. Generate Dynamic PromptPay QR Payload
@@ -527,7 +601,7 @@ export async function createSmartAccDocument(payload: CreateDocumentPayload) {
     grand_total: grandTotal,
     promptpay_payload: promptpayPayload,
     share_token: shareToken,
-    notes: payload.notes || null,
+    notes: await notesWithSellerSnapshot(payload.notes),
     ref_parent_doc_id: payload.refParentDocId || null,
     ref_parent_doc_number: payload.refParentDocNumber || null,
   };
@@ -620,6 +694,14 @@ export async function convertDocument(sourceDocId: string, targetDocType: Docume
     return { success: false as const, error: "ไม่พบเอกสารต้นทางที่ต้องการแปลง" };
   }
 
+  if (isCorrectionType(targetDocType)) {
+    if (String(sourceDoc.status) === "VOID") {
+      return { success: false as const, error: "เอกสารที่ยกเลิกแล้วออกใบลดหนี้/เพิ่มหนี้ไม่ได้" };
+    }
+  } else if (!canConvertDocument(String(sourceDoc.status))) {
+    return { success: false as const, error: "เอกสารที่ยกเลิกหรือแปลงแล้วแปลงต่อไม่ได้" };
+  }
+
   const items: DocumentItemInput[] = (sourceDoc.ext_document_items || []).map((it) => ({
     itemName: it.item_name,
     quantity: Number(it.quantity),
@@ -649,13 +731,14 @@ export async function convertDocument(sourceDocId: string, targetDocType: Docume
   const res = await createSmartAccDocument(payload);
   if (!res.success) return res;
 
-  // Update source doc status
-  await supabase
-    .schema("extension_layer")
-    .from("ext_documents")
-    .update({ status: "CONVERTED" })
-    .eq("id", sourceDocId)
-    .eq("tenant_id", tenantId);
+  if (marksSourceConverted(targetDocType)) {
+    await supabase
+      .schema("extension_layer")
+      .from("ext_documents")
+      .update({ status: "CONVERTED" })
+      .eq("id", sourceDocId)
+      .eq("tenant_id", tenantId);
+  }
 
   revalidatePath("/invoicing");
   return res;
@@ -698,22 +781,35 @@ export async function deleteSmartAccDocument(docId: string) {
     .eq("tenant_id", tenantId)
     .limit(8);
 
-  if (billedAs && billedAs.length > 0) {
-    const noteIds = billedAs
-      .map((row) => row.billing_note_id)
-      .filter((id): id is string => Boolean(id));
-    const { data: notes } = noteIds.length
-      ? await supabase
-          .schema("extension_layer")
-          .from("ext_documents")
-          .select("doc_number")
-          .in("id", noteIds)
-          .eq("tenant_id", tenantId)
-      : { data: [] as { doc_number: string }[] };
-    const nums = (notes ?? []).map((n) => n.doc_number).filter(Boolean).join(", ");
+  const hasBillingRef = Boolean(billedAs && billedAs.length > 0);
+  const lifecycle = {
+    status: String(doomed.status),
+    hasBillingRef,
+    docType: String(doomed.doc_type),
+    docNumber: String(doomed.doc_number),
+  };
+  if (!canDeleteDocument(lifecycle)) {
+    if (hasBillingRef) {
+      const noteIds = billedAs
+        .map((row) => row.billing_note_id)
+        .filter((id): id is string => Boolean(id));
+      const { data: notes } = noteIds.length
+        ? await supabase
+            .schema("extension_layer")
+            .from("ext_documents")
+            .select("doc_number")
+            .in("id", noteIds)
+            .eq("tenant_id", tenantId)
+        : { data: [] as { doc_number: string }[] };
+      const nums = (notes ?? []).map((n) => n.doc_number).filter(Boolean).join(", ");
+      return {
+        success: false as const,
+        error: `เอกสารถูกอ้างในใบวางบิล${nums ? ` (${nums})` : ""} — ใช้ยกเลิก ไม่ใช่ลบ`,
+      };
+    }
     return {
       success: false as const,
-      error: `เอกสารถูกอ้างในใบวางบิล${nums ? ` (${nums})` : ""} — ลบใบวางบิลนั้นก่อน`,
+      error: deleteBlockedReason(lifecycle) ?? "ห้ามลบเอกสารนี้ — ใช้ยกเลิก",
     };
   }
 
@@ -764,6 +860,170 @@ export async function deleteSmartAccDocument(docId: string) {
   return { success: true as const, docNumber: doomed.doc_number };
 }
 
+/**
+ * ยกเลิกเอกสารที่ห้ามลบ — เก็บเลขที่เดิม ตัวนับไม่ย้อน
+ * ไม่แตะ sc_sales / sc_payments (คนละสายกับเอกสาร SmartAcc)
+ */
+export async function voidSmartAccDocument(docId: string, reason: string) {
+  const profile = await requireProfile();
+  requireModuleWrite(profile, "invoicing");
+  const supabase = createAdminClient();
+  let tenantId: string;
+  try {
+    tenantId = await requireTenantId(profile);
+  } catch (err) {
+    return { success: false as const, error: errorMessage(err, "ไม่สามารถระบุกิจการที่จะยกเลิกเอกสารได้") };
+  }
+
+  const why = String(reason ?? "").trim();
+  if (why.length < 2) {
+    return { success: false as const, error: "กรุณาระบุเหตุผลที่ยกเลิก" };
+  }
+
+  const { data: doc, error: fetchErr } = await supabase
+    .schema("extension_layer")
+    .from("ext_documents")
+    .select("id, doc_type, doc_number, status, notes, grand_total")
+    .eq("id", docId)
+    .eq("tenant_id", tenantId)
+    .maybeSingle();
+
+  if (fetchErr || !doc) {
+    return { success: false as const, error: "ไม่พบเอกสารที่ต้องการยกเลิก" };
+  }
+
+  const { count: billedCount } = await supabase
+    .schema("extension_layer")
+    .from("ext_billing_references")
+    .select("billing_note_id", { count: "exact", head: true })
+    .eq("ref_doc_id", docId)
+    .eq("tenant_id", tenantId);
+
+  const lifecycle = {
+    status: String(doc.status),
+    hasBillingRef: (billedCount ?? 0) > 0,
+    docType: String(doc.doc_type),
+  };
+  if (!canVoidDocument(lifecycle)) {
+    return { success: false as const, error: voidBlockedReason(lifecycle) ?? "ยกเลิกเอกสารนี้ไม่ได้" };
+  }
+
+  const { error } = await supabase
+    .schema("extension_layer")
+    .from("ext_documents")
+    .update({
+      status: "VOID",
+      notes: appendVoidNote(doc.notes, why),
+    })
+    .eq("id", docId)
+    .eq("tenant_id", tenantId)
+    .neq("status", "VOID");
+
+  if (error) {
+    return { success: false as const, error: `ยกเลิกเอกสารไม่ได้: ${error.message}` };
+  }
+
+  await logAudit({
+    action: "UPDATE",
+    entity: "document",
+    entity_id: doc.doc_number,
+    actor_id: profile.id,
+    actor_name: profile.display_name,
+    tenant_id: tenantId,
+    detail: {
+      id: doc.id,
+      doc_type: doc.doc_type,
+      doc_number: doc.doc_number,
+      from_status: doc.status,
+      to_status: "VOID",
+      reason: why,
+      official_books_touched: false,
+    },
+  });
+
+  revalidatePath("/invoicing");
+  revalidatePath("/billing-notes");
+  revalidatePath("/tax-filing");
+  return { success: true as const, docNumber: doc.doc_number };
+}
+
+/** เปลี่ยนเลขร่างเป็นเลขทางการ — กินตัวนับครั้งเดียว เลขร่างไม่คืน */
+export async function issueSmartAccDocument(docId: string) {
+  const profile = await requireProfile();
+  requireModuleWrite(profile, "invoicing");
+  const supabase = createAdminClient();
+  let tenantId: string;
+  try {
+    tenantId = await requireTenantId(profile);
+  } catch (err) {
+    return { success: false as const, error: errorMessage(err, "ไม่สามารถระบุกิจการที่จะออกเลขได้") };
+  }
+
+  const { data: doc, error: fetchErr } = await supabase
+    .schema("extension_layer")
+    .from("ext_documents")
+    .select("id, doc_type, doc_number, status, issue_date")
+    .eq("id", docId)
+    .eq("tenant_id", tenantId)
+    .maybeSingle();
+
+  if (fetchErr || !doc) {
+    return { success: false as const, error: "ไม่พบเอกสารที่ต้องการออกเลข" };
+  }
+
+  if (!canIssueOfficialNumber(String(doc.status), String(doc.doc_number))) {
+    if (String(doc.status) !== "VOID" && !String(doc.doc_number).startsWith("DRAFT-")) {
+      return { success: true as const, docNumber: doc.doc_number };
+    }
+    return {
+      success: false as const,
+      error: issueBlockedReason(String(doc.status), String(doc.doc_number)) ?? "ออกเลขไม่ได้",
+    };
+  }
+
+  if (!isDocumentType(doc.doc_type)) {
+    return { success: false as const, error: "ประเภทเอกสารนี้ยังออกเลขทางการไม่ได้" };
+  }
+
+  const official = await generateDocumentNumber(
+    doc.doc_type,
+    tenantId,
+    new Date(doc.issue_date)
+  );
+
+  const { error } = await supabase
+    .schema("extension_layer")
+    .from("ext_documents")
+    .update({ doc_number: official })
+    .eq("id", docId)
+    .eq("tenant_id", tenantId)
+    .eq("doc_number", doc.doc_number);
+
+  if (error) {
+    return { success: false as const, error: `ออกเลขไม่ได้: ${error.message}` };
+  }
+
+  await logAudit({
+    action: "UPDATE",
+    entity: "document",
+    entity_id: official,
+    actor_id: profile.id,
+    actor_name: profile.display_name,
+    tenant_id: tenantId,
+    detail: {
+      id: doc.id,
+      doc_type: doc.doc_type,
+      from_number: doc.doc_number,
+      to_number: official,
+    },
+  });
+
+  revalidatePath("/invoicing");
+  revalidatePath("/billing-notes");
+  revalidatePath("/tax-filing");
+  return { success: true as const, docNumber: official };
+}
+
 /** ใบส่งของ/ใบแจ้งหนี้ที่ยังไม่ชำระ — อนุมานจาก query จริงเช่นกัน */
 export type PendingDeliveryOrderRow = Awaited<ReturnType<typeof fetchPendingDeliveryOrders>>[number];
 
@@ -777,7 +1037,8 @@ export async function fetchPendingDeliveryOrders() {
     .from("ext_documents")
     .select("id, doc_number, doc_type, issue_date, grand_total, status, ext_contacts(company_name)")
     .in("doc_type", ["DO", "INVOICE"])
-    .neq("status", "PAID");
+    .neq("status", "PAID")
+    .neq("status", "VOID");
   const pendingTenantId = await tenantFilter(profile);
   if (pendingTenantId) query = query.eq("tenant_id", pendingTenantId);
 
@@ -804,6 +1065,7 @@ export async function fetchTaxFilingData(yearMonth?: string) {
     .from("ext_documents")
     .select("*, ext_contacts(*)")
     .in("doc_type", ["INVOICE", "TAX_INVOICE", "RECEIPT"])
+    .neq("status", "VOID")
     .order("issue_date", { ascending: false });
   let expensesQuery = supabase.from("expenses").select("*").order("expense_date", { ascending: false });
 
@@ -818,18 +1080,40 @@ export async function fetchTaxFilingData(yearMonth?: string) {
     expensesQuery = expensesQuery.like("expense_date", `${yearMonth}%`);
   }
 
-  const [docsRes, expensesRes, certs] = await Promise.all([
+  let booksQuery = supabase
+    .from("sc_sales")
+    .select("date, total_revenue, amount_paid")
+    .order("date", { ascending: false });
+  let payQuery = supabase
+    .from("sc_payments")
+    .select("sale_date, amount")
+    .order("sale_date", { ascending: false });
+  let corrQuery = supabase
+    .schema("extension_layer")
+    .from("ext_documents")
+    .select("id, doc_type, doc_number, issue_date, status, grand_total, vat_amount")
+    .in("doc_type", ["CREDIT_NOTE", "DEBIT_NOTE"])
+    .neq("status", "VOID")
+    .order("issue_date", { ascending: false });
+
+  const [docsRes, expensesRes, certs, booksRes, payRes, corrRes] = await Promise.all([
     docsQuery,
     expensesQuery,
     fetchWhtCertificates(yearMonth).catch((err) => {
       console.error("[tax-filing] อ่านหนังสือรับรองไม่สำเร็จ:", err);
       return [];
     }),
+    (taxFilingTenantId ? booksQuery.eq("tenant_id", taxFilingTenantId) : booksQuery),
+    (taxFilingTenantId ? payQuery.eq("tenant_id", taxFilingTenantId) : payQuery),
+    (taxFilingTenantId ? corrQuery.eq("tenant_id", taxFilingTenantId) : corrQuery),
   ]);
 
   return {
     salesDocs: docsRes.data ?? [],
     expenses: expensesRes.data ?? [],
+    booksSales: booksRes.data ?? [],
+    booksPayments: payRes.data ?? [],
+    correctionDocs: corrRes.data ?? [],
     whtCertificates: certs.map((row, i) => ({
       ...certificateToWhtRecord(
         {

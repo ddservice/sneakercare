@@ -6,6 +6,8 @@ import {
   createSmartAccDocument,
   convertDocument,
   deleteSmartAccDocument,
+  voidSmartAccDocument,
+  issueSmartAccDocument,
   lookupDbdCompany,
   type CreateDocumentPayload,
   type DocumentItemInput,
@@ -14,6 +16,10 @@ import {
   type PendingDeliveryOrderRow,
 } from "@/app/actions/smartacc-documents";
 import { DOC_TYPE_CONFIG, type DocumentType } from "@/lib/smartacc/types";
+import { canConvertDocument, canDeleteDocument, canVoidDocument } from "@/lib/smartacc/lifecycle";
+import { canCorrectParent, isCorrectionType } from "@/lib/smartacc/correction";
+import { canIssueOfficialNumber, consumesOfficialNumberOnCreate, isDraftNumber } from "@/lib/smartacc/issue";
+import { resolveDocumentSeller } from "@/lib/smartacc/snapshot";
 import { thaiBahtText } from "@/lib/smartacc/baht-text";
 import { thaiOfficialDate } from "@/lib/thai-months";
 import {
@@ -56,6 +62,7 @@ const DOC_STATUS_TH: Record<string, string> = {
   DRAFT: "ฉบับร่าง",
   PAID: "ชำระแล้ว",
   CONVERTED: "แปลงแล้ว",
+  VOID: "ยกเลิกแล้ว",
 };
 
 function formatAmount(n: number): string {
@@ -73,10 +80,20 @@ function OfficialDocument({
   const vat = Number(doc.vat_amount || 0);
   const subtotal = Number(doc.subtotal_amount || doc.grand_total);
   const items = doc.ext_document_items ?? [];
-  const signatory = shopProfile?.signatoryName?.trim() || shopProfile?.name || "ยังไม่ได้ตั้งชื่อกิจการ";
+  const { seller } = resolveDocumentSeller(doc.notes, shopProfile ?? {});
+  const signatory = seller.signatoryName || seller.name || "ยังไม่ได้ตั้งชื่อกิจการ";
 
   return (
     <div className="printable-area bg-white p-8 text-[12px] leading-relaxed text-black">
+      {doc.status === "VOID" ? (
+        <div className="mb-3 border-2 border-black px-3 py-1 text-center text-[14px] font-semibold tracking-wide">
+          ยกเลิกแล้ว — เลขที่ {doc.doc_number} ยังใช้ต่อไม่ได้
+        </div>
+      ) : isDraftNumber(doc.doc_number) ? (
+        <div className="mb-3 border border-black px-3 py-1 text-center text-[12px] font-semibold">
+          ฉบับร่าง — ยังไม่มีเลขทางการ
+        </div>
+      ) : null}
       <div className="flex items-start justify-between gap-6 border-b border-black pb-3">
         <div className="flex min-w-0 items-start gap-3">
           {shopProfile?.logoUrl ? (
@@ -85,11 +102,11 @@ function OfficialDocument({
           ) : null}
           <div className="min-w-0">
             {/* fallback เป็นข้อความกลาง ห้าม hardcode ชื่อ/เลขผู้เสียภาษีของ tenant ใด */}
-            <div className="text-[15px] font-semibold">{shopProfile?.name || "ยังไม่ได้ตั้งค่าชื่อกิจการ — ไปที่ /settings"}</div>
-            <div className="mt-0.5 text-[11px]">{shopProfile?.address || "ยังไม่ได้ตั้งค่าที่อยู่"}</div>
+            <div className="text-[15px] font-semibold">{seller.name || "ยังไม่ได้ตั้งค่าชื่อกิจการ — ไปที่ /settings"}</div>
+            <div className="mt-0.5 text-[11px]">{seller.address || "ยังไม่ได้ตั้งค่าที่อยู่"}</div>
             <div className="text-[11px]">
-              เลขประจำตัวผู้เสียภาษี {shopProfile?.taxId || "-"}
-              {shopProfile?.phone ? `  โทร. ${shopProfile.phone}` : ""}
+              เลขประจำตัวผู้เสียภาษี {seller.taxId || "-"}
+              {seller.phone ? `  โทร. ${seller.phone}` : ""}
             </div>
           </div>
         </div>
@@ -251,6 +268,7 @@ export function InvoicingClient({
 
   // Selected DOs for Billing Note
   const [selectedDoIds, setSelectedDoIds] = useState<string[]>([]);
+  const [parentDocId, setParentDocId] = useState("");
 
   // Catalog UI State
   const [catalogSearch, setCatalogSearch] = useState("");
@@ -410,6 +428,12 @@ export function InvoicingClient({
       toast.error("กรุณาระบุรายการสินค้า/บริการอย่างน้อย 1 รายการ");
       return;
     }
+    if (isCorrectionType(docType) && !parentDocId) {
+      toast.error("เลือกเอกสารต้นทางก่อนออกใบลดหนี้/เพิ่มหนี้");
+      return;
+    }
+
+    const parentDoc = visibleDocs.find((d) => d.id === parentDocId);
 
     const payload: CreateDocumentPayload = {
       docType,
@@ -427,6 +451,9 @@ export function InvoicingClient({
       promptPayTarget,
       billingRefDocIds: selectedDoIds,
       chargeVat: vatChoiceAllowed(docType) ? chargeVat : undefined,
+      ...(parentDoc
+        ? { refParentDocId: parentDoc.id, refParentDocNumber: parentDoc.doc_number }
+        : {}),
     };
 
     startTransition(async () => {
@@ -496,6 +523,55 @@ export function InvoicingClient({
     });
   }
 
+  function handleVoid(doc: SmartAccDocument) {
+    const typeLabel = DOC_TYPE_CONFIG[doc.doc_type as DocumentType]?.labelTh || doc.doc_type;
+    const reason = window.prompt(
+      `ยกเลิก ${doc.doc_number} (${typeLabel}) — เลขที่นี้ยังเก็บไว้และไม่ถูกนำกลับมาใช้\nระบุเหตุผล:`
+    );
+    if (reason == null) return;
+    if (!reason.trim()) {
+      toast.error("กรุณาระบุเหตุผลที่ยกเลิก");
+      return;
+    }
+
+    startTransition(async () => {
+      try {
+        const res = await voidSmartAccDocument(doc.id, reason);
+        if (res.success) {
+          toast.success(`ยกเลิกเอกสาร ${res.docNumber} แล้ว — เลขที่ยังอยู่ในประวัติ`);
+          router.refresh();
+        } else {
+          toast.error(res.error);
+        }
+      } catch (err) {
+        toast.error(errorMessage(err, "ไม่สามารถยกเลิกเอกสารได้"));
+      }
+    });
+  }
+
+  function handleIssue(doc: SmartAccDocument) {
+    if (
+      !confirm(
+        `ออกเลขทางการให้ ${doc.doc_number}?\nเลขร่างจะถูกแทนที่ และตัวนับจะเดินไปหนึ่งเบอร์`
+      )
+    ) {
+      return;
+    }
+    startTransition(async () => {
+      try {
+        const res = await issueSmartAccDocument(doc.id);
+        if (res.success) {
+          toast.success(`ออกเลข ${res.docNumber} แล้ว`);
+          router.refresh();
+        } else {
+          toast.error(res.error);
+        }
+      } catch (err) {
+        toast.error(errorMessage(err, "ไม่สามารถออกเลขได้"));
+      }
+    });
+  }
+
   function selectDocType(type: DocumentType) {
     if (type === "TAX_INVOICE" && vatLockReason) {
       toast.error(vatLockReason);
@@ -503,13 +579,14 @@ export function InvoicingClient({
     }
     setDocType(type);
     setChargeVat(defaultChargeVat(vatRegistered, type));
+    if (!isCorrectionType(type)) setParentDocId("");
   }
 
   return (
     <div className="space-y-6">
       <PageHeader
         title="ออกเอกสาร"
-        description="ใบเสนอราคา → ส่งของ → แจ้งหนี้ → วางบิล → ใบเสร็จ / ใบกำกับภาษี"
+        description="ร่าง QA/DO/INV/BL ยังไม่กินเลขทางการ · ใบกำกับ ใบเสร็จ ใบลด-เพิ่มหนี้ออกเลขทันที · หัวบิลใช้ภาพผู้ขายตอนออก"
       />
       <UnderlineNav
         aria-label="เมนูออกเอกสาร"
@@ -552,6 +629,43 @@ export function InvoicingClient({
             <p className="text-[11px] text-amber-800">{vatLockReason}</p>
           ) : vatBranchName ? (
             <p className="text-[11px] text-slate-500">VAT ของสาขา {vatBranchName} (จดทะเบียนแล้ว — เลือกบิลเงินสดหรือบิล VAT ต่อใบได้)</p>
+          ) : null}
+          {isCorrectionType(docType) ? (
+            <div className="space-y-1.5 rounded-xl border border-amber-200 bg-amber-50/70 px-3 py-2">
+              <label className="text-[11px] font-semibold text-amber-900" htmlFor="correction-parent">
+                เอกสารต้นทาง (ใบแจ้งหนี้ / ใบกำกับ / ใบเสร็จ)
+              </label>
+              <select
+                id="correction-parent"
+                value={parentDocId}
+                onChange={(e) => {
+                  const id = e.target.value;
+                  setParentDocId(id);
+                  const parent = visibleDocs.find((d) => d.id === id);
+                  if (parent?.ext_contacts) {
+                    setCompanyName(parent.ext_contacts.company_name || "");
+                    setTaxId(parent.ext_contacts.tax_id || "");
+                    setBranchCode(parent.ext_contacts.branch_code || "00000");
+                    setAddress(parent.ext_contacts.address || "");
+                    setPhone(parent.ext_contacts.phone || "");
+                    setEmail(parent.ext_contacts.email || "");
+                  }
+                }}
+                className="h-9 w-full rounded-md border border-amber-300 bg-white px-2 text-xs"
+              >
+                <option value="">เลือกเอกสารต้นทาง</option>
+                {visibleDocs
+                  .filter((d) => canCorrectParent(d.doc_type, d.status))
+                  .map((d) => (
+                    <option key={d.id} value={d.id}>
+                      {d.doc_number} · {Number(d.grand_total).toLocaleString("th-TH", { minimumFractionDigits: 2 })} บาท
+                    </option>
+                  ))}
+              </select>
+              <p className="text-[11px] leading-5 text-amber-900/80">
+                ลดหนี้หลายใบรวมกันห้ามเกินยอดต้นทาง (+ ใบเพิ่มหนี้) · ไม่กลับรายการยอดขายร้าน · ยังไม่ใช่แบบยื่นสรรพากร
+              </p>
+            </div>
           ) : null}
 
           {/* ── Main Form Grid ── */}
@@ -923,7 +1037,9 @@ export function InvoicingClient({
                   <CardTitle className="flex items-center justify-between text-sm font-semibold">
                     <span>สรุปเอกสาร</span>
                     <span className="font-mono text-[11px] font-medium text-slate-500">
-                      {DOC_TYPE_CONFIG[docType].prefix}-{issueDate.replace(/-/g, "")}-XXXX
+                      {consumesOfficialNumberOnCreate(docType)
+                        ? `${DOC_TYPE_CONFIG[docType].prefix}-${issueDate.replace(/-/g, "")}-XXXX`
+                        : `DRAFT-${issueDate.replace(/-/g, "")}-XXXX`}
                     </span>
                   </CardTitle>
                 </CardHeader>
@@ -1042,7 +1158,7 @@ export function InvoicingClient({
             <div>
               <CardTitle className="text-sm font-semibold">ประวัติเอกสาร</CardTitle>
               <CardDescription className="text-xs">
-                พิมพ์ แปลงตามสายงาน หรือลบเอกสารตัวอย่าง — เลขที่ที่ลบจะไม่ถูกนำกลับมาใช้
+                พิมพ์ แปลงตามสายงาน ลบฉบับร่างที่ยังไม่มีคนอ้าง หรือยกเลิกเอกสารที่ออกแล้ว — เลขที่ยกเลิก/ลบไม่คืนตัวนับ
               </CardDescription>
             </div>
           </CardHeader>
@@ -1071,6 +1187,15 @@ export function InvoicingClient({
                     visibleDocs.map((doc) => {
                       const cfg = DOC_TYPE_CONFIG[doc.doc_type as DocumentType];
                       const nextTypes = cfg?.nextTypes || [];
+                      const life = {
+                        status: doc.status,
+                        hasBillingRef: false,
+                        docType: doc.doc_type,
+                        docNumber: doc.doc_number,
+                      };
+                      const showDelete = canDeleteDocument(life);
+                      const showVoid = canVoidDocument(life);
+                      const showIssue = canIssueOfficialNumber(doc.status, doc.doc_number);
                       return (
                         <tr key={doc.id} className="hover:bg-slate-50">
                           <td className="px-4 py-3">
@@ -1109,13 +1234,28 @@ export function InvoicingClient({
                                 <button
                                   key={nxt}
                                   type="button"
-                                  disabled={isPending || doc.status === "CONVERTED"}
+                                  disabled={
+                                    isPending ||
+                                    doc.status === "VOID" ||
+                                    (!isCorrectionType(nxt) && !canConvertDocument(doc.status))
+                                  }
                                   onClick={() => handleConvert(doc.id, nxt)}
                                   className="text-xs font-medium text-slate-700 hover:text-slate-900 disabled:text-slate-300"
                                 >
                                   เป็น {DOC_TYPE_CONFIG[nxt].labelTh}
                                 </button>
                               ))}
+                              {showIssue ? (
+                              <button
+                                type="button"
+                                disabled={isPending}
+                                onClick={() => handleIssue(doc)}
+                                className="text-xs font-medium text-teal-800 hover:text-teal-900 disabled:text-slate-300"
+                              >
+                                ออกเลข
+                              </button>
+                              ) : null}
+                              {showDelete ? (
                               <button
                                 type="button"
                                 disabled={isPending}
@@ -1124,6 +1264,17 @@ export function InvoicingClient({
                               >
                                 ลบ
                               </button>
+                              ) : null}
+                              {showVoid ? (
+                              <button
+                                type="button"
+                                disabled={isPending}
+                                onClick={() => handleVoid(doc)}
+                                className="text-xs font-medium text-amber-800 hover:text-amber-900 disabled:text-slate-300"
+                              >
+                                ยกเลิก
+                              </button>
+                              ) : null}
                             </div>
                           </td>
                         </tr>

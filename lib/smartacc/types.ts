@@ -4,7 +4,9 @@ export type DocumentType =
   | "INVOICE"
   | "BILLING_NOTE"
   | "TAX_INVOICE"
-  | "RECEIPT";
+  | "RECEIPT"
+  | "CREDIT_NOTE"
+  | "DEBIT_NOTE";
 
 export const DOC_TYPE_CONFIG: Record<
   DocumentType,
@@ -26,7 +28,7 @@ export const DOC_TYPE_CONFIG: Record<
     prefix: "INV",
     labelTh: "ใบแจ้งหนี้",
     labelEn: "Invoice",
-    nextTypes: ["BILLING_NOTE", "RECEIPT", "TAX_INVOICE"],
+    nextTypes: ["BILLING_NOTE", "RECEIPT", "TAX_INVOICE", "CREDIT_NOTE", "DEBIT_NOTE"],
   },
   BILLING_NOTE: {
     prefix: "BL",
@@ -38,12 +40,28 @@ export const DOC_TYPE_CONFIG: Record<
     prefix: "REC",
     labelTh: "ใบเสร็จรับเงิน",
     labelEn: "Receipt",
-    nextTypes: ["TAX_INVOICE"],
+    nextTypes: ["TAX_INVOICE", "CREDIT_NOTE", "DEBIT_NOTE"],
   },
   TAX_INVOICE: {
     prefix: "TAX",
     labelTh: "ใบกำกับภาษี",
     labelEn: "Tax Invoice",
+    nextTypes: ["CREDIT_NOTE", "DEBIT_NOTE"],
+  },
+  CREDIT_NOTE: {
+    prefix: "CN",
+    labelTh: "ใบลดหนี้",
+    labelEn: "Credit Note",
+    nextTypes: [],
+  },
+  DEBIT_NOTE: {
+    prefix: "DN",
+    labelTh: "ใบเพิ่มหนี้",
+    labelEn: "Debit Note",
     nextTypes: [],
   },
 };
+
+export function isDocumentType(value: string): value is DocumentType {
+  return Object.prototype.hasOwnProperty.call(DOC_TYPE_CONFIG, value);
+}

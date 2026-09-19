@@ -11,6 +11,7 @@ import { requireTenantId, tenantFilter } from "@/lib/tenant";
 import { fetchStaffMonthlyStatSummary } from "@/app/actions/roster";
 import { issuePayableCertificate, upsertWhtPayee, deleteCertificatesForOpex, recordRentalWht } from "@/app/actions/wht";
 import { settleWht, BUILDING_RENT_CATEGORY } from "@/lib/wht";
+import { assertPeriodOpen } from "@/lib/period-close-store";
 
 /** เดือนปัจจุบันในรูปแบบ "MM/YYYY" ที่ตาราง sc_opex ใช้ทั้งไฟล์ */
 function currentMonthMY(): string {
@@ -823,6 +824,8 @@ export async function saveStaffProfileInfo(payload: {
   requireModuleWrite(profile, "expenses");
   const supabase = createAdminClient();
   const tenantId = await requireTenantId(profile);
+  const closedProfile = await assertPeriodOpen(tenantId, currentMonthMY());
+  if (closedProfile) return { error: closedProfile };
 
   let cleanKeyName = payload.employeeKeyName;
   if (cleanKeyName.includes("ธีรภัทร")) cleanKeyName = "นายธีรภัทร ทาแผ";
@@ -932,6 +935,8 @@ export async function createStaffMember(payload: {
   requireModuleWrite(profile, "expenses");
   const supabase = createAdminClient();
   const tenantId = await requireTenantId(profile);
+  const closedProfile = await assertPeriodOpen(tenantId, currentMonthMY());
+  if (closedProfile) return { error: closedProfile };
 
   if (!payload.fullName.trim()) {
     return { error: "กรุณาระบุชื่อพนักงาน" };
@@ -1028,6 +1033,8 @@ export async function saveStaffPayrollAdjustment(payload: {
   requireModuleWrite(profile, "expenses");
   const supabase = createAdminClient();
   const tenantId = await requireTenantId(profile);
+  const closedPayroll = await assertPeriodOpen(tenantId, payload.month);
+  if (closedPayroll) return { error: closedPayroll };
 
   const m = payload.month;
   let cleanKeyName = payload.employeeName;
@@ -1153,6 +1160,8 @@ export async function addExpense(
 
   if (!title) return { error: "กรุณาระบุชื่อรายการค่าใช้จ่าย" };
   if (isNaN(amount) || amount <= 0) return { error: "กรุณาระบุจำนวนเงินที่ถูกต้อง" };
+  const closedErr = await assertPeriodOpen(tenantId, expenseDate);
+  if (closedErr) return { error: closedErr };
   if (withhold && settlement.whtAmount > 0) {
     const taxId = String(formData.get("payee_tax_id") ?? "").replace(/[^0-9]/g, "");
     if (taxId.length !== 13) {
@@ -1274,6 +1283,11 @@ export async function deleteExpense(id: string | number) {
     .eq("tenant_id", tenantId)
     .maybeSingle();
 
+  if (doomed?.month) {
+    const closedErr = await assertPeriodOpen(tenantId, doomed.month);
+    if (closedErr) throw new Error(closedErr);
+  }
+
   // ⚠️ .eq("tenant_id", ...) กัน id ของ tenant อื่นถูกลบข้ามฝั่ง
   const { error } = await supabase.from("sc_opex")
     .delete()
@@ -1332,6 +1346,9 @@ export async function deleteMiscExpenseItem(rowId: number, itemIndex: number) {
   if (fetchError || !row) {
     throw new Error(`ไม่พบรายการรายจ่ายเบ็ดเตล็ดแถวนี้: ${fetchError?.message || "row not found"}`);
   }
+
+  const closedMisc = await assertPeriodOpen(tenantId, row.month);
+  if (closedMisc) throw new Error(closedMisc);
 
   let items: Array<{ name: string; amount: number; method?: string }>;
   try {
@@ -1402,6 +1419,8 @@ export async function saveRentalIncome(input: {
   if (!Number.isFinite(amount) || amount <= 0) {
     return { success: false, error: "กรุณาระบุยอดค่าเช่าที่ถูกต้อง" };
   }
+  const closedRent = await assertPeriodOpen(tenantId, month);
+  if (closedRent) return { success: false, error: closedRent };
 
   const { data: lastRoom } = await supabase
     .from("sc_rental_records")

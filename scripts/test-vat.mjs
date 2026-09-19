@@ -52,6 +52,7 @@ same("QA", documentVatRate(true, "QUOTATION", true), 0);
 same("DO", documentVatRate(true, "DO", true), 0);
 same("TAX บังคับแม้ขอเงินสด", documentVatRate(true, "TAX_INVOICE", false), STANDARD_VAT_RATE);
 same("เลือกได้ที่ INV", vatChoiceAllowed("INVOICE"), true);
+same("เลือกได้ที่ใบลดหนี้", vatChoiceAllowed("CREDIT_NOTE"), true);
 same("เลือกไม่ได้ที่ TAX", vatChoiceAllowed("TAX_INVOICE"), false);
 
 console.log("\n[vat] ค่าเริ่มต้นต่อประเภท (จดแล้ว)");

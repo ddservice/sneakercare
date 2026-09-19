@@ -627,7 +627,7 @@ export function DailyEntryClient({
       <PageHeader
         className="print:hidden"
         title="ยอดขายรายวัน"
-        description="บันทึกจำนวนคู่ เงินสด เงินโอน และยอดค้างชำระ ตามงวดที่เลือก"
+        description="บันทึกจำนวนคู่ เงินสด เงินโอน และยอดค้างชำระ — งานที่รับที่หน้างานบริการและชำระแล้วลงบัญชีให้อย่ากรอกซ้ำ"
         actions={
           <>
             <Link href="/statistics">

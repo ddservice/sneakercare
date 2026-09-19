@@ -162,7 +162,11 @@ export function PosClient({
       if (res?.error) {
         toast.error(res.error);
       } else if (res?.success) {
-        toast.success(`บันทึกรับงานสำเร็จ เลขที่: ${res.orderNo}`);
+        toast.success(
+          res.postedToBooks
+            ? `บันทึกรับงานและลงยอดขายแล้ว ${res.orderNo} — อย่ากรอกงานนี้ซ้ำที่ยอดขายรายวัน`
+            : `บันทึกรับงานสำเร็จ ${res.orderNo} (ยังไม่ลงบัญชี จนกว่าจะเลือกชำระ)`
+        );
         // Reset form
         setSelectedServices(catalog.slice(0, 1));
         setDiscount(0);
@@ -214,7 +218,7 @@ export function PosClient({
     <div className="space-y-5">
       <PageHeader
         title="งานบริการ"
-        description="บันทึกรับงาน คำนวณราคา และติดตามสถานะ — รายการบริการเป็นของกิจการที่เลือกอยู่"
+        description="บันทึกรับงาน คำนวณราคา และติดตามสถานะ — ถ้าเลือกชำระแล้วระบบลงยอดขายให้ อย่ากรอกซ้ำที่ยอดขายรายวัน"
       />
       <PosNav />
 
@@ -476,6 +480,9 @@ export function PosClient({
                   {/* Payment Method Selector */}
                   <div className="space-y-1.5 pt-2 border-t border-slate-200/60 dark:border-slate-800">
                     <Label className="text-xs font-semibold">วิธีชำระเงิน</Label>
+                    <p className="text-[11px] leading-5 text-slate-500 dark:text-slate-400">
+                      เงินสด / โอน / บัตร = ลงบัญชีทันที · จ่ายตอนรับ = ยังไม่นับรายได้ · เบิกของใช้ที่หน้าเบิกคลัง
+                    </p>
                     <div className="grid grid-cols-4 gap-2">
                       {[
                         { id: "cash", label: "💵 เงินสด" },

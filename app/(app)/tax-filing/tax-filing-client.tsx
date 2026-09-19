@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import {
   generatePndEFilingFile,
   generatePp30VatText,
@@ -17,6 +17,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import type { TaxFilingSalesDoc, TaxFilingExpense, TaxFilingWhtCert } from "@/app/actions/smartacc-documents";
+import { planTaxRecon } from "@/lib/tax-recon";
+import { mergeInputVat } from "@/lib/input-vat";
+import { isPeriodClosed } from "@/lib/period-close";
+import { closePeriod, reopenPeriod } from "@/app/actions/period-close";
+import { addPurchaseVatLine, deletePurchaseVatLine } from "@/app/actions/purchase-vat";
+import type { PurchaseVatLine } from "@/lib/purchase-vat";
+import { isDraftNumber } from "@/lib/smartacc/issue";
 import type { ShopProfile } from "@/app/actions/shop-settings";
 import { ModalBackdrop } from "@/components/modal-shell";
 import { PageHeader } from "@/components/page-header";
@@ -36,21 +43,47 @@ import {
   FileCheck2,
   Calendar,
   Printer,
+  Lock,
+  Unlock,
 } from "lucide-react";
 
 export function TaxFilingClient({
   initialSalesDocs,
   initialExpenses: _initialExpenses,
   initialWht = [],
+  initialBooksSales = [],
+  initialBooksPayments = [],
+  initialCorrectionDocs = [],
+  initialClosedPeriods = [],
+  initialPurchaseVatLines = [],
+  canClosePeriod = false,
   shopProfile,
 }: {
   initialSalesDocs: TaxFilingSalesDoc[];
   initialExpenses: TaxFilingExpense[];
   initialWht?: TaxFilingWhtCert[];
+  initialBooksSales?: { date: string; total_revenue: number | null; amount_paid: number | null }[];
+  initialBooksPayments?: { sale_date: string; amount: number | null }[];
+  initialCorrectionDocs?: { doc_type: string; doc_number: string; issue_date: string; status: string; grand_total: number; vat_amount: number | null }[];
+  initialClosedPeriods?: string[];
+  initialPurchaseVatLines?: PurchaseVatLine[];
+  canClosePeriod?: boolean;
   /** ข้อมูลบริษัทจริงจากหน้า /settings — ใช้พิมพ์หัวเอกสารทุกจุดในหน้านี้ ห้าม hardcode ทับ */
   shopProfile?: ShopProfile;
 }) {
   const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().slice(0, 7));
+  const [closedPeriods, setClosedPeriods] = useState(initialClosedPeriods);
+  const [purchaseLines, setPurchaseLines] = useState(initialPurchaseVatLines);
+  const [periodPending, startPeriodTransition] = useTransition();
+  const [purchasePending, startPurchaseTransition] = useTransition();
+  const [purchaseForm, setPurchaseForm] = useState({
+    date: new Date().toISOString().slice(0, 10),
+    vendorName: "",
+    vendorTaxId: "",
+    invoiceNumber: "",
+    baseAmount: "",
+    vatAmount: "",
+  });
   const [activeTab, setActiveTab] = useState<"efiling" | "tawi50" | "etax_xml">("efiling");
   const [selectedWhtCert, setSelectedWhtCert] = useState<TaxFilingWhtCert | null>(null);
   const [tawiCondition, setTawiCondition] = useState<Tawi50ConditionId>(DEFAULT_TAWI50_CONDITION);
@@ -58,8 +91,8 @@ export function TaxFilingClient({
   const [tawiCopyNo, setTawiCopyNo] = useState<1 | 2>(1);
 
   // Calculate real VAT and WHT from database records
-  const filteredSales = initialSalesDocs.filter((d) =>
-    (d.issue_date || "").startsWith(selectedMonth)
+  const filteredSales = initialSalesDocs.filter(
+    (d) => (d.issue_date || "").startsWith(selectedMonth) && !isDraftNumber(d.doc_number)
   );
 
   const totalSalesSubtotal = filteredSales.reduce(
@@ -109,8 +142,109 @@ export function TaxFilingClient({
   const pnd3Tax = pnd3Records.reduce((sum, r) => sum + r.taxAmount, 0);
   const pnd53Base = pnd53Records.reduce((sum, r) => sum + r.baseAmount, 0);
   const pnd53Tax = pnd53Records.reduce((sum, r) => sum + r.taxAmount, 0);
+  const inputVat = mergeInputVat(
+    initialWht.map((r) => ({
+      date: r.date,
+      vatAmount: Number(r.vatAmount || 0),
+      direction: r.direction,
+      source: "wht_certificate" as const,
+    })),
+    purchaseLines,
+    selectedMonth
+  );
 
+  const paper = planTaxRecon({
+    periodYm: selectedMonth,
+    booksRevenue: initialBooksSales
+      .filter((row) => (row.date || "").startsWith(selectedMonth))
+      .reduce((sum, row) => sum + Number(row.total_revenue || 0), 0),
+    booksCashIn:
+      initialBooksSales
+        .filter((row) => (row.date || "").startsWith(selectedMonth))
+        .reduce((sum, row) => sum + Number(row.amount_paid || 0), 0) +
+      initialBooksPayments
+        .filter((row) => (row.sale_date || "").startsWith(selectedMonth))
+        .reduce((sum, row) => sum + Number(row.amount || 0), 0),
+    documents: [
+      ...initialSalesDocs.map((d) => ({
+        docType: d.doc_type,
+        status: d.status,
+        docNumber: d.doc_number,
+        issueDate: d.issue_date,
+        grandTotal: Number(d.grand_total || 0),
+        vatAmount: Number(d.vat_amount || 0),
+      })),
+      ...initialCorrectionDocs.map((d) => ({
+        docType: d.doc_type,
+        status: d.status,
+        docNumber: d.doc_number,
+        issueDate: d.issue_date,
+        grandTotal: Number(d.grand_total || 0),
+        vatAmount: Number(d.vat_amount || 0),
+      })),
+    ],
+    expenseVatIn: inputVat.vatIn,
+    inputVatComplete: inputVat.completeBook,
+    whtPayable: monthWht.reduce((sum, r) => sum + r.taxAmount, 0),
+    periodClosed: isPeriodClosed(selectedMonth, closedPeriods),
+  });
+
+  const monthClosed = isPeriodClosed(selectedMonth, closedPeriods);
   const payerTaxId = digitsOnly(shopProfile?.taxId || "");
+
+  function handleTogglePeriod() {
+    if (!canClosePeriod) return;
+    const closing = !monthClosed;
+    const ok = window.confirm(
+      closing
+        ? `ปิดงวด ${selectedMonth}? หลังปิดจะแก้ยอดขาย รับชำระ และรายจ่ายของเดือนนี้ไม่ได้ — การปิดงวดไม่ได้ทำให้พร้อมยื่นภาษี`
+        : `เปิดงวด ${selectedMonth} กลับมาให้แก้บัญชีร้านได้อีก`
+    );
+    if (!ok) return;
+    startPeriodTransition(async () => {
+      const res = closing ? await closePeriod(selectedMonth) : await reopenPeriod(selectedMonth);
+      if (res.success) {
+        setClosedPeriods(res.closed);
+        toast.success(closing ? `ปิดงวด ${selectedMonth} แล้ว` : `เปิดงวด ${selectedMonth} แล้ว`);
+      } else {
+        toast.error(res.error);
+      }
+    });
+  }
+
+  function handleAddPurchaseVat() {
+    if (!canClosePeriod) return;
+    startPurchaseTransition(async () => {
+      const res = await addPurchaseVatLine({
+        date: purchaseForm.date,
+        vendorName: purchaseForm.vendorName,
+        vendorTaxId: purchaseForm.vendorTaxId,
+        invoiceNumber: purchaseForm.invoiceNumber,
+        baseAmount: Number(purchaseForm.baseAmount || 0),
+        vatAmount: Number(purchaseForm.vatAmount || 0),
+      });
+      if (res.success) {
+        setPurchaseLines(res.lines);
+        setPurchaseForm((prev) => ({ ...prev, vendorName: "", vendorTaxId: "", invoiceNumber: "", baseAmount: "", vatAmount: "" }));
+        toast.success("บันทึกใบเสร็จซื้อแล้ว — ยังไม่ใช่สมุดซื้อเต็ม และยังไม่พร้อมยื่น");
+      } else {
+        toast.error(res.error);
+      }
+    });
+  }
+
+  function handleDeletePurchaseVat(id: string) {
+    if (!canClosePeriod) return;
+    startPurchaseTransition(async () => {
+      const res = await deletePurchaseVatLine(id);
+      if (res.success) {
+        setPurchaseLines(res.lines);
+        toast.success("ลบบรรทัดสมุดซื้อแล้ว");
+      } else {
+        toast.error(res.error);
+      }
+    });
+  }
 
   function handleDownloadPndText(formType: "PND3" | "PND53") {
     const rows = formType === "PND3" ? pnd3Records : pnd53Records;
@@ -194,17 +328,36 @@ export function TaxFilingClient({
     <div className="space-y-6">
       <PageHeader
         title="ภาษีและ e-Filing"
-        description={`ยื่น ภ.ง.ด. / พิมพ์ 50 ทวิ จากรายการหัก ณ ที่จ่ายจริง · บิลขาย ${initialSalesDocs.length} ฉบับ`}
+        description="กระดาษทำงานเทียบยอดขายร้านกับเอกสาร — ยังไม่พร้อมยื่น ภ.พ.30 / e-Tax"
         actions={
-          <label className="inline-flex h-9 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-xs font-medium text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200">
-            <Calendar className="h-4 w-4 text-slate-500" />
-            <input
-              type="month"
-              value={selectedMonth}
-              onChange={(e) => setSelectedMonth(e.target.value)}
-              className="bg-transparent font-medium text-slate-800 focus:outline-none dark:text-slate-100"
-            />
-          </label>
+          <div className="flex flex-wrap items-center gap-2">
+            <label className="inline-flex h-9 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-xs font-medium text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200">
+              <Calendar className="h-4 w-4 text-slate-500" />
+              <input
+                type="month"
+                value={selectedMonth}
+                onChange={(e) => setSelectedMonth(e.target.value)}
+                className="bg-transparent font-medium text-slate-800 focus:outline-none dark:text-slate-100"
+              />
+            </label>
+            {canClosePeriod && (
+              <Button
+                type="button"
+                size="sm"
+                variant={monthClosed ? "outline" : "default"}
+                disabled={periodPending}
+                onClick={handleTogglePeriod}
+                className={
+                  monthClosed
+                    ? "h-9 gap-1.5 text-xs"
+                    : "h-9 gap-1.5 bg-teal-700 text-xs text-white hover:bg-emerald-600"
+                }
+              >
+                {monthClosed ? <Unlock className="h-3.5 w-3.5" /> : <Lock className="h-3.5 w-3.5" />}
+                {periodPending ? "กำลังบันทึก…" : monthClosed ? "เปิดงวดนี้" : "ปิดงวดนี้"}
+              </Button>
+            )}
+          </div>
         }
       />
       <UnderlineNav
@@ -221,6 +374,160 @@ export function TaxFilingClient({
       {/* ── TAB 1: E-FILING EXPORTS ── */}
       {activeTab === "efiling" && (
         <div className="space-y-4">
+          <Card className="border-amber-200 bg-amber-50/60 shadow-sm">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-semibold text-amber-950">กระดาษทำงานงวด {selectedMonth}</CardTitle>
+              <CardDescription className="text-xs text-amber-900/80">
+                {monthClosed
+                  ? "งวดนี้ปิดแล้ว — ห้ามแก้บัญชีร้านของเดือนนี้ · ยังไม่พร้อมยื่น"
+                  : "ยังไม่ปิดงวด · ยังไม่พร้อมยื่น — ใช้เทียบตัวเลขก่อนกรอกเว็บสรรพากร"}
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-2 text-xs text-amber-950">
+              <div className="grid gap-2 sm:grid-cols-2">
+                <div className="flex justify-between gap-4"><span>ยอดขายบัญชีร้าน</span><span className="font-mono">{paper.booksRevenue.toLocaleString("th-TH", { minimumFractionDigits: 2 })}</span></div>
+                <div className="flex justify-between gap-4"><span>เงินเข้าจริง</span><span className="font-mono">{paper.booksCashIn.toLocaleString("th-TH", { minimumFractionDigits: 2 })}</span></div>
+                <div className="flex justify-between gap-4"><span>สุทธิเอกสารขาย</span><span className="font-mono">{paper.documentNetSales.toLocaleString("th-TH", { minimumFractionDigits: 2 })}</span></div>
+                <div className="flex justify-between gap-4"><span>ส่วนต่างบัญชี vs เอกสาร</span><span className="font-mono">{paper.salesGap.toLocaleString("th-TH", { minimumFractionDigits: 2 })}</span></div>
+                <div className="flex justify-between gap-4"><span>ภาษีขายจากเอกสาร</span><span className="font-mono">{paper.vatOut.toLocaleString("th-TH", { minimumFractionDigits: 2 })}</span></div>
+                <div className="flex justify-between gap-4"><span>ภาษีซื้อรวม (ยังไม่ครบ)</span><span className="font-mono">{paper.vatIn.toLocaleString("th-TH", { minimumFractionDigits: 2 })}</span></div>
+                <div className="flex justify-between gap-4 text-amber-900/80"><span>จากใบหัก ณ ที่จ่าย</span><span className="font-mono">{inputVat.whtVatIn.toLocaleString("th-TH", { minimumFractionDigits: 2 })}</span></div>
+                <div className="flex justify-between gap-4 text-amber-900/80"><span>จากใบเสร็จที่กรอกเอง</span><span className="font-mono">{inputVat.purchaseVatIn.toLocaleString("th-TH", { minimumFractionDigits: 2 })}</span></div>
+                <div className="flex justify-between gap-4"><span>หัก ณ ที่จ่ายที่ต้องนำส่ง</span><span className="font-mono">{paper.whtPayable.toLocaleString("th-TH", { minimumFractionDigits: 2 })}</span></div>
+                <div className="flex justify-between gap-4"><span>สถานะงวด</span><span className="font-medium">{monthClosed ? "ปิดแล้ว" : "ยังไม่ปิด"}</span></div>
+              </div>
+              <ul className="list-disc space-y-0.5 pl-4 text-amber-900/90">
+                {paper.blockers.map((b) => (
+                  <li key={b}>{b}</li>
+                ))}
+              </ul>
+            </CardContent>
+          </Card>
+          <Card className="border-slate-200 shadow-sm">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-semibold">สมุดภาษีซื้อจากใบเสร็จที่กรอกเอง</CardTitle>
+              <CardDescription className="text-xs">
+                กรอกจากใบกำกับภาษีซื้อจริงเท่านั้น — ไม่ดึง OCR จำลอง · ยังไม่ใช่สมุดซื้อเต็ม · ปิดงวดแล้วห้ามแก้
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3 text-xs">
+              {canClosePeriod && !monthClosed && (
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <label className="space-y-1">
+                    <span className="text-slate-500">วันที่ใบเสร็จ</span>
+                    <input
+                      type="date"
+                      value={purchaseForm.date}
+                      onChange={(e) => setPurchaseForm((p) => ({ ...p, date: e.target.value }))}
+                      className="h-8 w-full rounded-md border px-2"
+                    />
+                  </label>
+                  <label className="space-y-1">
+                    <span className="text-slate-500">เลขที่ใบเสร็จ</span>
+                    <input
+                      value={purchaseForm.invoiceNumber}
+                      onChange={(e) => setPurchaseForm((p) => ({ ...p, invoiceNumber: e.target.value }))}
+                      className="h-8 w-full rounded-md border px-2"
+                    />
+                  </label>
+                  <label className="space-y-1">
+                    <span className="text-slate-500">ชื่อผู้ขาย</span>
+                    <input
+                      value={purchaseForm.vendorName}
+                      onChange={(e) => setPurchaseForm((p) => ({ ...p, vendorName: e.target.value }))}
+                      className="h-8 w-full rounded-md border px-2"
+                    />
+                  </label>
+                  <label className="space-y-1">
+                    <span className="text-slate-500">เลขผู้เสียภาษี 13 หลัก (ถ้ามี)</span>
+                    <input
+                      value={purchaseForm.vendorTaxId}
+                      onChange={(e) => setPurchaseForm((p) => ({ ...p, vendorTaxId: e.target.value }))}
+                      className="h-8 w-full rounded-md border px-2 font-mono"
+                      inputMode="numeric"
+                    />
+                  </label>
+                  <label className="space-y-1">
+                    <span className="text-slate-500">ฐานภาษี</span>
+                    <input
+                      value={purchaseForm.baseAmount}
+                      onChange={(e) => setPurchaseForm((p) => ({ ...p, baseAmount: e.target.value }))}
+                      className="h-8 w-full rounded-md border px-2 font-mono"
+                      inputMode="decimal"
+                    />
+                  </label>
+                  <label className="space-y-1">
+                    <span className="text-slate-500">ภาษีมูลค่าเพิ่ม</span>
+                    <input
+                      value={purchaseForm.vatAmount}
+                      onChange={(e) => setPurchaseForm((p) => ({ ...p, vatAmount: e.target.value }))}
+                      className="h-8 w-full rounded-md border px-2 font-mono"
+                      inputMode="decimal"
+                    />
+                  </label>
+                  <div className="sm:col-span-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      disabled={purchasePending}
+                      onClick={handleAddPurchaseVat}
+                      className="h-8 bg-teal-700 text-xs text-white hover:bg-emerald-600"
+                    >
+                      {purchasePending ? "กำลังบันทึก…" : "เพิ่มใบเสร็จซื้อ"}
+                    </Button>
+                  </div>
+                </div>
+              )}
+              <table className="w-full text-left">
+                <thead className="border-b text-slate-500">
+                  <tr>
+                    <th className="py-1.5 font-medium">วันที่</th>
+                    <th className="py-1.5 font-medium">ผู้ขาย</th>
+                    <th className="py-1.5 text-right font-medium">VAT</th>
+                    {canClosePeriod && !monthClosed && <th className="py-1.5" />}
+                  </tr>
+                </thead>
+                <tbody>
+                  {purchaseLines.filter((line) => line.date.startsWith(selectedMonth)).length === 0 ? (
+                    <tr>
+                      <td colSpan={4} className="py-3 text-slate-400">
+                        ยังไม่มีใบเสร็จซื้อในงวดนี้
+                      </td>
+                    </tr>
+                  ) : (
+                    purchaseLines
+                      .filter((line) => line.date.startsWith(selectedMonth))
+                      .map((line) => (
+                        <tr key={line.id} className="border-b border-slate-100">
+                          <td className="py-1.5 font-mono">{line.date}</td>
+                          <td className="py-1.5">
+                            {line.vendorName}
+                            {line.invoiceNumber ? ` · ${line.invoiceNumber}` : ""}
+                          </td>
+                          <td className="py-1.5 text-right font-mono">
+                            {line.vatAmount.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+                          </td>
+                          {canClosePeriod && !monthClosed && (
+                            <td className="py-1.5 text-right">
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                disabled={purchasePending}
+                                onClick={() => handleDeletePurchaseVat(line.id)}
+                                className="h-7 text-[11px]"
+                              >
+                                ลบ
+                              </Button>
+                            </td>
+                          )}
+                        </tr>
+                      ))
+                  )}
+                </tbody>
+              </table>
+            </CardContent>
+          </Card>
           <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-600 space-y-1">
             <p>
               ไฟล์ ภ.ง.ด.3 / ภ.ง.ด.53 สร้างตาม FORMAT กลาง กรมสรรพากร V2 (UTF-8, คั่นด้วย |, มีแถว Header H + Detail D)
