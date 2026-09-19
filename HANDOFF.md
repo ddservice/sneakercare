@@ -4,7 +4,7 @@
 
 **0044 apply production แล้ว 2026-09-19** ผ่าน SSH+psql — ยืนยันมี `fn_reject_stock_over_issue` / `fn_consume_stock_outflow` · trigger บน `inv_stock_transactions` · `client_request_id` + unique บน `sc_sales` / `sc_payments`
 
-**ระยะ 3–6 แอปบน production แล้ว 2026-09-19** (`d5411d5`) — **`0045` apply แล้ว** และแอปเขียน `service_order_id` จาก `/pos`
+**ระยะ 3–6 แอปบน production แล้ว 2026-09-19** (`b265646`) — **`0045` apply แล้ว** และแอปเขียน `service_order_id` จาก `/pos` · กระดาษทำงาน ภ.พ.30 ช่อง 1–12 ยังไม่ใช่แบบยื่น
 
 **ระยะ 3:** `/pos` ที่ชำระแล้วลง `sc_sales` หนึ่งแถวต่อใบ · คีย์กันซ้ำ = id ใบรับงาน · แอปเขียน `service_order_id` คู่กับคีย์กันซ้ำ (ยอดขายรายวันไม่ใส่)
 
