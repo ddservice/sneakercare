@@ -790,7 +790,7 @@ export async function deleteSmartAccDocument(docId: string) {
   };
   if (!canDeleteDocument(lifecycle)) {
     if (hasBillingRef) {
-      const noteIds = billedAs
+      const noteIds = (billedAs ?? [])
         .map((row) => row.billing_note_id)
         .filter((id): id is string => Boolean(id));
       const { data: notes } = noteIds.length
