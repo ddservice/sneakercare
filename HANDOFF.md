@@ -1,6 +1,54 @@
 # HANDOFF
 
-อัปเดต 2026-09-19 — อ่านคู่กับ `CLAUDE.md` และ `docs/IMPLEMENTATION_PLAN.md`
+อัปเดต 2026-09-20 — อ่านคู่กับ `CLAUDE.md` และ `docs/IMPLEMENTATION_PLAN.md`
+
+## รวมประวัติ Git (2026-09-20) — ยังไม่ deploy
+
+ตรวจล่าสุดก่อนรวม (read-only):
+
+| จุด | HEAD | หมายเหตุ |
+|---|---|---|
+| merge-base | `a7af426` | leftover build fix |
+| เครื่องทำงาน (ก่อน merge) | `fdb3d4c` | มี type fix ของ `service-usage.ts` |
+| origin/master (ก่อน push) | `3df0766` | git am บน VPS แล้วถูก push |
+| VPS | `3df0766` + dirty `app/actions/service-usage.ts` | blob `03d04358` ตรงกับ type fix ในเครื่อง — **ไม่ได้** เปลี่ยน checkout/restart ในรอบนี้ |
+
+แพตช์ซ้ำจาก `git am`: `02f9e7b` ≡ `b20da5a` (import `isDraftNumber`) และ `8fe2fb7` ≡ `3df0766` (เอกสาร `0046`) — ต้นไม้ไฟล์เหมือนกัน ไม่ rebase ประวัติที่อยู่บน origin แล้ว
+
+**วิธีรวม:** merge `origin/master` เข้า `master` ของเครื่อง (`ort`) ได้ `3770f68` · สำรองที่ `backup/local-master-2026-09-20` (`fdb3d4c`) และ `backup/origin-master-2026-09-20` (`3df0766`) · แพตช์อยู่ใน `.git/merge-backup-2026-09-20/` (ไม่เข้า git)
+
+ผลลัพธ์มี leftover (`6486912`) + import `isDraftNumber` + เอกสาร `0046` + ตัวกรอง type ใน `fetchUsageCatalog`
+
+**deploy script:** `scripts/deploy-vps.mjs` ไม่ใช้ `reset --hard` / `checkout -- .` / `clean -fd` แล้ว · ถ้า dirty/untracked หรือ VPS ahead origin จะหยุด · สำรอง `.next` เป็น `.next-prev` · build/start ไม่ผ่านแล้ว `git switch -C master` กลับ commit เดิมแล้วคืน `.next-prev` แล้วรีสตาร์ต PM2 เมื่อ start ไม่ผ่าน · **ห้ามรัน deploy ในรอบนี้**
+
+**ก่อน deploy ครั้งหน้า:** บน VPS ตรวจ `git diff app/actions/service-usage.ts` — ถ้าเนื้อหาเดียวกับ origin หลัง push ค่อยเคลียร์ dirty ห้ามทิ้งงานที่ไม่ได้อยู่บน origin · อย่า `reset --hard` ทับ dirty นี้
+
+---
+
+## ช่องว่างสมุดซื้อ JSON+CAS vs `0046` (ยังไม่ย้ายข้อมูล / ไม่สลับเส้นเขียน)
+
+แอป `postStagedReceipt` ยังเขียนแค่ JSON ใน `sc_settings` (`receipt_staging` + CAS) แล้วค่อยเติมสมุดภาษีซื้อใน `sc_settings` อีกก้อน · **ไม่มีที่ไหนเรียก `sc_fn_post_receipt`** · unique ที่ `sc_receipt_posts` **จึงยังไม่กันซ้ำของเส้นทางแอป**
+
+แผนเปลี่ยนให้มีแหล่งหลักชุดเดียว (ยังไม่ลงมือ):
+
+1. นับแถว JSON ที่ `postedRequestId` มีค่า เทียบจำนวนแถว `sc_receipt_posts` ต่อ tenant — คาดว่าตารางยังว่างจากแอป
+2. แผนที่: `tenant_id` · `receipt_id` = id คิว · `request_id` = `postedRequestId` · `fingerprint` = `postedFingerprint` · ยอดซื้อ/VAT จากบรรทัดที่อนุมัติ
+3. backfill แถวที่ลงสมุดแล้วเข้าตารางในทรานแซกชันเดียว ข้ามแถวที่มีอยู่ · ห้ามเดายอด
+4. ช่วงคู่: เรียก RPC ก่อน แล้วค่อย CAS JSON · RPC conflict = ห้ามป้ายว่าลงสมุดใน JSON
+5. รายงานกระทบยอด: JSON ลงแล้วแต่ไม่มีแถวตาราง / ตารางมีแต่ JSON ไม่มี · ใบซ้ำข้ามระบบ
+6. ตัดเส้นเขียนเหลือ RPC เป็นหลัก · JSON เหลือเป็นคิวจนกว่าจะมีตารางคิว
+7. จนกว่าทุกเส้นทางเขียนผ่าน RPC ห้ามอ้างว่า unique ที่ตารางกันซ้ำครบ
+
+`etax_live` / `auto_issue` / `cn_official` ยังปิดฝั่งเซิร์ฟเวอร์และที่ `sc_fn_guard_live_feature`
+
+**ผลเทสต์ (เครื่องทำงาน, ก่อน push):**
+- ผ่าน: `test:usage` · `test:receipts` (รวม PGlite unique ของ SQL `0046` — ไม่ได้พิสูจน์ว่าแอปเรียก RPC) · `test:ui-contracts` · `test:etax` · `test:docs` · `test:tax-recon`
+- `npm run build` (`next build --webpack`) ผ่าน · ระหว่าง compile แก้ `lib/correction-effects.ts` ให้คืน `{ ok: false }` ชัดเมื่อต้นทุนเดิมไม่มี
+- `tsc --noEmit` ยังแดงที่ `.next/types/validator.ts` เท่านั้น (Route vs never) — Next build รัน TypeScript ของตัวเองผ่านแล้ว
+
+**commit ที่จะ push:** merge `3770f68` + commit เอกสาร/deploy/type ของรอบนี้ (SHA ใส่หลัง push สำเร็จ)
+
+---
 
 **0044 apply production แล้ว 2026-09-19** ผ่าน SSH+psql — ยืนยันมี `fn_reject_stock_over_issue` / `fn_consume_stock_outflow` · trigger บน `inv_stock_transactions` · `client_request_id` + unique บน `sc_sales` / `sc_payments`
 

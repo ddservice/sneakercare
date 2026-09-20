@@ -86,7 +86,7 @@ export function planPhysicalReturn(input: {
       originalUnitCost: line.originalUnitCost,
       sellingPrice: 0,
     });
-    if (line.costBasis === "original" && !cost.ok) return cost;
+    if (line.costBasis === "original" && "error" in cost) return cost;
   }
   return { ok: true, replay: false, stock: true, lines: [...input.lines] };
 }

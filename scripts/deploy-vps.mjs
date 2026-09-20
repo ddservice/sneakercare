@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 /**
  * scripts/deploy-vps.mjs
- * Script สำหรับ Deploy โค้ดไปยัง VPS ผ่าน SSH อัตโนมัติ
- * อ่านค่าตั้งค่าจาก .env.local หรือ Environment Variables
+ * Deploy โค้ด origin/master ไป VPS ผ่าน SSH
+ * ไม่ใช้ reset --hard / checkout -- . ที่ทิ้งงาน dirty
+ * รอบนี้ห้ามรันถ้าไม่ได้สั่ง deploy โดยตรง
  */
-
 import { readFileSync, existsSync } from "node:fs";
 import { spawn } from "node:child_process";
 import { resolve } from "node:path";
@@ -12,7 +12,7 @@ import { resolve } from "node:path";
 function loadEnvLocal() {
   const envPath = resolve(process.cwd(), ".env.local");
   if (!existsSync(envPath)) return {};
-  
+
   const content = readFileSync(envPath, "utf-8");
   const env = {};
   for (const line of content.split("\n")) {
@@ -48,24 +48,69 @@ if (!host || !user || !remotePath || !pm2App) {
   process.exit(1);
 }
 
-console.log(`\x1b[36m🚀 กำลังเตรียม Deploy ไปยัง VPS: ${user}@${host}:${port} (${remotePath})\x1b[0m`);
+const remoteCommands = `
+set -euo pipefail
+cd "${remotePath}"
+echo "==> [1/6] ตรวจ Git บน VPS ก่อนทิ้งงาน"
+if [ -n "$(git status --porcelain)" ]; then
+  echo "หยุด: มีไฟล์ dirty หรือ untracked — ห้าม checkout/reset ทับ"
+  git status --short
+  exit 2
+fi
+PREV="$(git rev-parse HEAD)"
+echo "release ปัจจุบัน \${PREV}"
+echo "==> [2/6] fetch origin/master"
+git fetch origin master
+REMOTE_HEAD="$(git rev-parse origin/master)"
+echo "origin/master \${REMOTE_HEAD}"
+AHEAD="$(git rev-list --count origin/master..HEAD)"
+if [ "\${AHEAD}" -gt 0 ]; then
+  echo "หยุด: VPS มี commit ที่ยังไม่อยู่บน origin/master (\${AHEAD})"
+  git log --oneline origin/master..HEAD
+  exit 3
+fi
+if [ "\${PREV}" != "\${REMOTE_HEAD}" ]; then
+  git merge --ff-only origin/master
+else
+  echo "HEAD ตรง origin/master แล้ว"
+fi
+RELEASE="$(git rev-parse HEAD)"
+echo "จะปล่อย \${RELEASE}"
+echo "==> [3/6] ติดตั้ง dependencies"
+npm install
+echo "==> [4/6] สำรอง .next แล้ว clean build (ห้ามถอด --webpack)"
+rm -rf .next-prev
+if [ -d .next ]; then
+  mv .next .next-prev
+fi
+restore_prev() {
+  echo "==> กู้คืน commit \${PREV} และ .next ชุดก่อนหน้า"
+  git switch --quiet -C master "\${PREV}"
+  rm -rf .next
+  if [ -d .next-prev ]; then
+    mv .next-prev .next
+  fi
+}
+if ! npm run build; then
+  echo "build ไม่ผ่าน"
+  restore_prev
+  exit 4
+fi
+echo "==> [5/6] รีสตาร์ต PM2 ${pm2App}"
+pm2 restart "${pm2App}"
+sleep 3
+echo "==> [6/6] ตรวจ /login บน 127.0.0.1:3003"
+if ! curl -sf -o /dev/null --max-time 20 http://127.0.0.1:3003/login; then
+  echo "start ไม่ผ่าน — กู้คืน release เดิม"
+  restore_prev
+  pm2 restart "${pm2App}"
+  exit 5
+fi
+rm -rf .next-prev
+echo "==> สำเร็จ release \${RELEASE} (กู้คืนได้ด้วย git checkout \${PREV} ถ้ายังมี .next-prev ไม่ถูกลบ)"
+`.trim();
 
-const remoteCommands = [
-  `set -e`,
-  `echo "==> [1/4] เข้าสู่ไดเรกทอรีโปรเจกต์"`,
-  `cd "${remotePath}"`,
-  `echo "==> [2/4] Pull โค้ดล่าสุดจาก origin/master"`,
-  `git checkout -- .`,
-  `git fetch origin master`,
-  `git reset --hard origin/master`,
-  `echo "==> [3/4] ติดตั้ง dependencies และ Clean Build (ห้ามถอด --webpack)"`,
-  `npm install`,
-  `rm -rf .next 2>/dev/null || true`,
-  `npm run build`,
-  `echo "==> [4/4] รีสตาร์ต PM2 Process '${pm2App}'"`,
-  `pm2 restart "${pm2App}"`,
-  `echo "==> ✅ Deploy เสร็จสมบูรณ์เรียบร้อย!"`,
-].join(" && ");
+console.log(`\x1b[36mกำลังเตรียม Deploy ไปยัง VPS: ${user}@${host}:${port} (${remotePath})\x1b[0m`);
 
 const sshArgs = [];
 if (sshKey) {
@@ -80,9 +125,9 @@ const sshProc = spawn("ssh", sshArgs, { stdio: "inherit" });
 
 sshProc.on("close", (code) => {
   if (code === 0) {
-    console.log(`\n\x1b[32m✨ สำเร็จ: Deploy ไปยัง VPS เรียบร้อยแล้ว\x1b[0m`);
+    console.log(`\n\x1b[32mสำเร็จ: Deploy ไปยัง VPS เรียบร้อยแล้ว\x1b[0m`);
   } else {
-    console.error(`\n\x1b[31m❌ ผิดพลาด: SSH exited with code ${code}\x1b[0m`);
+    console.error(`\n\x1b[31mผิดพลาด: SSH exited with code ${code}\x1b[0m`);
     process.exit(code || 1);
   }
 });
