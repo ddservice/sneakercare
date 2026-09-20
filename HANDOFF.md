@@ -46,7 +46,7 @@
 - `npm run build` (`next build --webpack`) ผ่าน · ระหว่าง compile แก้ `lib/correction-effects.ts` ให้คืน `{ ok: false }` ชัดเมื่อต้นทุนเดิมไม่มี
 - `tsc --noEmit` ยังแดงที่ `.next/types/validator.ts` เท่านั้น (Route vs never) — Next build รัน TypeScript ของตัวเองผ่านแล้ว
 
-**commit ที่จะ push:** merge `3770f68` + commit เอกสาร/deploy/type ของรอบนี้ (SHA ใส่หลัง push สำเร็จ)
+**commit ที่ push สำเร็จ:** `origin/master` = `c2f6a6a` = local HEAD · รวม merge `3770f68` · type fix `fdb3d4c` (`service-usage.ts` blob `03d04358`) · leftover `6486912`
 
 ---
 
