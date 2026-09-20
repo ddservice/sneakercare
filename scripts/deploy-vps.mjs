@@ -53,9 +53,10 @@ const remoteCommands = `
 set -euo pipefail
 cd "${remotePath}"
 echo "==> [1/6] ตรวจ Git บน VPS ก่อนทิ้งงาน"
-if [ -n "$(git status --porcelain)" ]; then
+DIRTY="$(git status --porcelain | grep -vE '^\\?\\? \\.next-(new|prev)/$' || true)"
+if [ -n "\${DIRTY}" ]; then
   echo "หยุด: มีไฟล์ dirty หรือ untracked — ห้าม checkout/reset ทับ"
-  git status --short
+  echo "\${DIRTY}"
   exit 2
 fi
 PREV="$(git rev-parse HEAD)"

@@ -20,6 +20,7 @@ check(!/git reset --hard/.test(deploy), "ไม่มี git reset --hard", "ย
 check(!/git checkout -- \./.test(deploy), "ไม่มี git checkout -- .", "ยังล้าง working tree");
 check(!/git clean -fd/.test(deploy), "ไม่มี git clean -fd", "ยังมี clean -fd");
 check(/status --porcelain/.test(deploy), "หยุดเมื่อ dirty/untracked", "ไม่เช็ค dirty");
+check(/grep -vE/.test(deploy) && /next-\(new\|prev\)/.test(deploy), "ยกเว้นเฉพาะ build artifact จาก dirty check", "build artifact ยังบล็อก bootstrap deploy");
 check(/merge --ff-only/.test(deploy), "อัปเดตแบบ ff-only", "ไม่ ff-only");
 check(/NEXT_DIST_DIR=\.next-new/.test(deploy), "build ไป .next-new", "ยัง build ทับ .next");
 check(/mv \.next \.next-prev/.test(deploy) && deploy.indexOf("npm run build") < deploy.indexOf("mv .next .next-prev"), "ย้าย .next หลัง build ผ่าน", "ย้ายก่อน build");
