@@ -77,13 +77,14 @@ else
 fi
 RELEASE="$(git rev-parse HEAD)"
 echo "จะปล่อย \${RELEASE}"
-echo "==> [3/6] ติดตั้ง dependencies (ยังเสิร์ฟ .next เดิม)"
-npm install
+echo "==> [3/6] ติดตั้ง dependencies จาก lockfile (ยังเสิร์ฟ .next เดิม)"
+npm ci
 echo "==> [4/6] build ไป .next-new ไม่ย้าย .next ที่กำลังเสิร์ฟ (ห้ามถอด --webpack)"
 rm -rf .next-new
 restore_source() {
   echo "==> คืนซอร์สเป็น \${PREV}"
   git switch --quiet -C master "\${PREV}"
+  git restore --worktree -- tsconfig.json package-lock.json || true
 }
 restore_release() {
   echo "==> กู้คืน commit \${PREV} และ .next ชุดก่อนหน้า"
@@ -98,6 +99,7 @@ if ! NEXT_DIST_DIR=.next-new npm run build; then
   restore_source
   exit 4
 fi
+git restore --worktree -- tsconfig.json package-lock.json || true
 echo "==> สลับ .next หลัง build ผ่าน"
 rm -rf .next-prev
 if [ -d .next ]; then

@@ -29,8 +29,8 @@ if (String(pkg.scripts.typecheck).includes("tsconfig.typecheck.json")) {
 }
 
 const nextEnv = fs.readFileSync("next-env.d.ts", "utf8");
-if (nextEnv.includes(".next/types/routes.d.ts")) {
-  ok("next-env.d.ts ยังดึง routes.d.ts");
+if (/\.next\/(?:dev\/)?types\/routes\.d\.ts/.test(nextEnv)) {
+  ok("next-env.d.ts ยังดึง routes.d.ts ของ dev หรือ build");
 } else {
   bad("next-env.d.ts ไม่ดึง routes.d.ts");
 }

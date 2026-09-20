@@ -97,21 +97,16 @@ export function LoginForm() {
         </div>
       </div>
 
-      <label className="flex items-start gap-2 text-xs leading-5 text-slate-600">
+      <label className="flex items-center gap-2 text-xs leading-5 text-slate-600">
         <input
           type="checkbox"
           name="remember"
           value="1"
           checked={remember}
           onChange={(e) => setRemember(e.target.checked)}
-          className="mt-0.5 h-3.5 w-3.5 rounded border-slate-300 text-teal-700"
+          className="h-3.5 w-3.5 rounded border-slate-300 text-teal-700"
         />
-        <span>
-          จดจำชื่อผู้ใช้ในเครื่องนี้
-          <span className="mt-0.5 block text-[11px] leading-4 text-slate-400">
-            ไม่บันทึกรหัสผ่าน · เครื่องรวมให้ยกเลิกติ๊กนี้
-          </span>
-        </span>
+        <span>จดจำชื่อผู้ใช้ในเครื่องนี้</span>
       </label>
 
       {/* Error message */}

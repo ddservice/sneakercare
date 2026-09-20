@@ -23,6 +23,8 @@ check(/status --porcelain/.test(deploy), "หยุดเมื่อ dirty/untr
 check(/merge --ff-only/.test(deploy), "อัปเดตแบบ ff-only", "ไม่ ff-only");
 check(/NEXT_DIST_DIR=\.next-new/.test(deploy), "build ไป .next-new", "ยัง build ทับ .next");
 check(/mv \.next \.next-prev/.test(deploy) && deploy.indexOf("npm run build") < deploy.indexOf("mv .next .next-prev"), "ย้าย .next หลัง build ผ่าน", "ย้ายก่อน build");
+check(/npm ci/.test(deploy), "ติดตั้งจาก lockfile ด้วย npm ci", "ยังใช้ npm install");
+check(/git restore --worktree -- tsconfig.json/.test(deploy), "คืน tsconfig หลัง Next เขียนทับ", "ไม่คืน tsconfig");
 check(/restore_release/.test(deploy) && /pm2 restart/.test(deploy), "start ไม่ผ่านแล้วคืน .next-prev และรีสตาร์ต", "ไม่มีทางกู้");
 check(/NEXT_DIST_DIR/.test(nextConfig), "next.config อ่าน NEXT_DIST_DIR", "ไม่มี distDir");
 

@@ -6,7 +6,7 @@
 สำเนา CLAUDE.md ก่อนย่ออยู่ที่ `docs/history/CLAUDE-2026-09-19-pre-erp-hardening.md`
 
 สถานะงานปัจจุบันและงานค้าง: **`HANDOFF.md`**  
-เลิฟโอเวอร์รอบ harden **ในรีโปปิดแล้ว** ที่ `origin/master` `fe94725` (2026-09-20) — งานที่เหลือไม่ใช่เขียนโค้ด: **deploy แอปเส้นสมุดซื้อ RPC + backfill JSON เก่า** ต้องอนุมัติชุดเดียว · VPS ยังเป็นโค้ดเก่ากว่านี้  
+เลิฟโอเวอร์รอบ harden **ในรีโปปิดแล้ว** และแอปขึ้น VPS แล้วที่ `d65cc9e` (2026-09-20) — **ยังไม่ backfill** แถวสมุดซื้อ JSON เก่า · `etax_live` / `auto_issue` / `cn_official` ยังปิด  
 แผนระยะและ Gap Analysis: **`docs/IMPLEMENTATION_PLAN.md`**  
 เงิน / VAT / WHT / rounding: **`docs/money-and-tax.md`**  
 เหตุผลการออกแบบคลัง: **`docs/architecture.md`**  
@@ -84,7 +84,7 @@
 - **typecheck:** `npm run typecheck` ใช้ `tsconfig.typecheck.json` ไม่ดึง `.next` (ไฟล์ generate ของ Next ชนกันเองเมื่อ `LayoutSlotMap["/"] = never`)
 - **deploy script:** build ที่ `.next-new` ไม่ย้าย `.next` ระหว่าง compile · dirty/untracked หรือ VPS ahead หยุด · start ไม่ผ่านคืน `.next-prev` + commit เดิม
 - **เทสต์สอง connection:** `scripts/test-receipt-pg.mjs` (embedded Postgres ถ้าไม่มี `TEST_DATABASE_URL`) แข่งลงใบเดียวกันได้หนึ่งแถว — คนละเรื่องกับ `test:stock-concurrency` ที่ยังเป็น PGlite เอนจินเดียว
-- โค้ดอยู่ที่ `origin/master` `fe94725` · **ยังไม่ deploy เส้นนี้ · ยังไม่ backfill แถว JSON เก่า**
+- โค้ดอยู่ที่ `origin/master` และ VPS รัน build `d65cc9e` · **ยังไม่ backfill แถว JSON เก่า**
 - เทสต์: `npm run test:receipts` · `npm run test:ui-contracts` · `npm run test:e2e-routes` (local/staging เท่านั้น)
 
 ## สถาปัตยกรรมที่ใช้งานจริง (ตรวจจากโค้ด 2026-09-20)
@@ -157,7 +157,7 @@
 25. **สมุดซื้อ:** ใบเสร็จเข้า staging ก่อน · ห้ามเดายอด/ประเภท · ยอดซื้อ ≠ สิทธิใช้ภาษีซื้อ · ลงสมุดหลังอนุมัติและมีคีย์กันซ้ำ
 26. **ตัดสต๊อกอัตโนมัติปิด** จนกว่าจะมีสูตรหน่วยฐานที่อนุมัติ จุดตัด และธุรกรรมกันซ้ำ — ห้ามเดาปริมาณจากชื่อบริการ · `LIVE_AUTO_ISSUE_ALLOWED=false` ฝั่งเซิร์ฟเวอร์
 27. **ใบลดหนี้:** ลดมูลค่า/VAT แยกจากรับคืนของ · ไม่มี GL แล้วห้ามอ้างว่ากลับบัญชีครบ · ห้ามแก้ ledger เดิมและห้ามกลับซ้ำ · ออกเลขทางการไม่ได้จนกว่าจะเชื่อมยอดขาย/ลูกหนี้/ภาษี
-28. **สมุดซื้อหลาย connection** unique ที่ตาราง `sc_receipt_posts` (`0046` apply แล้ว 2026-09-20) · แหล่งหลัก = `sc_fn_post_receipt` · JSON ใน `sc_settings` เป็นคิว/ภาพฉาย (CAS) · `sc_fn_guard_live_feature` บล็อก `etax_live` / `auto_issue` / `cn_official` ที่ DB · เส้นแอปนี้ยังไม่ขึ้น VPS จนกว่าจะอนุมัติ deploy
+28. **สมุดซื้อหลาย connection** unique ที่ตาราง `sc_receipt_posts` (`0046` apply แล้ว 2026-09-20) · แหล่งหลัก = `sc_fn_post_receipt` · JSON ใน `sc_settings` เป็นคิว/ภาพฉาย (CAS) · `sc_fn_guard_live_feature` บล็อก `etax_live` / `auto_issue` / `cn_official` ที่ DB · แอปเส้นนี้ขึ้น VPS แล้วที่ `d65cc9e` · **ยังไม่ backfill** แถว JSON เก่า
 
 ---
 
@@ -222,7 +222,7 @@
 
 **ระยะ 3 (2026-09-19 แอปบน production · `0045` apply แล้ว):** `/pos` ที่ชำระแล้วลง `sc_sales` หนึ่งแถวต่อใบ · คีย์กันซ้ำ = `service_orders.id` · `service_order_id` สำหรับรายงาน (ยอดขายรายวันไม่ใส่) · คลังยังเบิกมือที่ `/stock-out`
 
-**`0046` apply production แล้ว 2026-09-20** ผ่าน SSH+psql — มี `sc_receipt_posts` (unique ใบ/คีย์กันซ้ำ) · `sc_fn_post_receipt` · `sc_fn_guard_live_feature` · RLS เปิด · แอปที่ `fe94725` ลงสมุดผ่าน RPC เป็นแหล่งหลัก JSON ใน `sc_settings` เป็นคิว/ภาพฉาย — **ยังไม่ deploy เส้นนี้ / ยังไม่ backfill แถว JSON เก่า**
+**`0046` apply production แล้ว 2026-09-20** ผ่าน SSH+psql — มี `sc_receipt_posts` (unique ใบ/คีย์กันซ้ำ) · `sc_fn_post_receipt` · `sc_fn_guard_live_feature` · RLS เปิด · แอปบน VPS ที่ `d65cc9e` ลงสมุดผ่าน RPC เป็นแหล่งหลัก JSON ใน `sc_settings` เป็นคิว/ภาพฉาย — **ยังไม่ backfill แถว JSON เก่า**
 
 ยังไม่มีทั้งระบบ: ลิ้นชักเงินสด · ตัดสต๊อกอัตโนมัติตอนรับงาน (มีหน้าสูตรแล้วเส้นตัดจริงยังปิด) · ใบลดหนี้ที่กลับรายการ `sc_sales` หรือคืนสต๊อก · VAT effective date · GL/journal · e-Tax ส่งจริง (มีคิว sandbox) · ภ.พ.30 ยื่นจากแอป (บันทึกการยื่นภายนอกได้) · OCR ในแอป / สมุดซื้ออัตโนมัติจากทุกใบโดยไม่ตรวจ
 
@@ -232,5 +232,5 @@
 
 ## การทำงานของ agent ในรอบ harden นี้
 
-รอบ 2026-09-20 leftover **โค้ดในรีโปปิดแล้ว** ที่ `fe94725` (push แล้ว) · `0046` apply production แล้ว · แอปเส้น RPC **ยังไม่ขึ้น VPS** จนกว่าจะอนุมัติ deploy + backfill เป็นชุดเดียว  
+รอบ 2026-09-20 leftover **โค้ดในรีโปปิดแล้ว** และ **deploy แอปแล้ว** ที่ `d65cc9e` · `0046` apply แล้ว · **ยังไม่ backfill** JSON เก่า  
 ยังไม่อนุญาตถ้าไม่ได้สั่งรอบนั้น: เขียน/ลบข้อมูลร้านจริง · สร้างบิลหรือเก็บเงินจริง · ส่งเอกสารให้ลูกค้า · rotate credentials · เปลี่ยนนโยบายภาษี/ต้นทุนหรือย้ายข้อมูลย้อนหลัง · เปิด e-Tax live / ตัดสต๊อกอัตโนมัติ / ออกเลข CN ทางการ

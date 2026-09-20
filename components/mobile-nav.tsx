@@ -6,6 +6,7 @@ import { createPortal } from "react-dom";
 import { usePathname } from "next/navigation";
 import { Menu, X, Footprints } from "lucide-react";
 import { NavItem } from "@/components/main-nav";
+import { navGroupsFor } from "@/lib/nav-groups";
 import type { AppModule } from "@/lib/permissions";
 
 interface MobileNavProps {
@@ -95,7 +96,7 @@ export function MobileNav({
             {/* Drawer header */}
             <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 px-4 py-3.5">
               <div className="flex items-center gap-3">
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-400 to-emerald-600 text-white shadow-sm">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-teal-700 text-white">
                   <Footprints className="h-5 w-5" />
                 </div>
                 <div>
@@ -105,7 +106,7 @@ export function MobileNav({
                   {(roleBadge || displayName) && (
                     <div className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5">
                       {roleBadge && (
-                        <span className="font-semibold text-emerald-600 dark:text-emerald-400">{roleBadge}</span>
+                        <span className="font-semibold text-teal-700 dark:text-teal-400">{roleBadge}</span>
                       )}
                       {roleBadge && displayName && <span className="mx-1">·</span>}
                       {displayName}
@@ -131,27 +132,28 @@ export function MobileNav({
             ) : null}
 
             {/* Nav items */}
-            <nav
-              aria-label="Mobile navigation"
-              className="flex-1 overflow-y-auto py-3 px-3 space-y-0.5"
-            >
-              {items.map((item) => (
-                <NavItem
-                  key={item.href}
-                  item={item}
-                  alertCount={alerts[item.key] ?? 0}
-                  onNavClick={close}
-                  variant="vertical"
-                />
+            <nav aria-label="เมนูหลัก" className="flex-1 overflow-y-auto px-3 py-3">
+              {navGroupsFor(items).map((group) => (
+                <div key={group.id} className="mb-3 last:mb-0">
+                  {group.items.length > 1 ? (
+                    <p className="px-3 pb-1 text-[11px] font-medium tracking-wide text-slate-400">
+                      {group.label}
+                    </p>
+                  ) : null}
+                  <div className="space-y-0.5">
+                    {group.items.map((item) => (
+                      <NavItem
+                        key={item.href}
+                        item={item}
+                        alertCount={alerts[item.key] ?? 0}
+                        onNavClick={close}
+                        variant="vertical"
+                      />
+                    ))}
+                  </div>
+                </div>
               ))}
             </nav>
-
-            {/* Drawer footer */}
-            <div className="border-t border-slate-200 dark:border-slate-800 px-4 py-3">
-              <p className="text-[11px] text-slate-400 dark:text-slate-500 text-center">
-                DD-Management System
-              </p>
-            </div>
           </aside>
         </>,
         document.body

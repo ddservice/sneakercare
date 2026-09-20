@@ -1,11 +1,16 @@
 # HANDOFF
 
-อัปเดต 2026-09-20 (ปิด leftover โค้ดในรีโป) — อ่านคู่กับ `CLAUDE.md`
+อัปเดต 2026-09-20 (deploy VPS ตรง origin) — อ่านคู่กับ `CLAUDE.md`
 
-## สถานะรอบนี้ — leftover โค้ดปิดแล้ว · ยังไม่ deploy / ไม่ย้ายข้อมูล production
+## สถานะรอบนี้ — แอปบน VPS = `d65cc9e` · ยังไม่ backfill
 
-`origin/master` = `fe94725` · **ไม่มีงานเขียนโค้ดค้างจากรอบ harden นี้**  
-ที่เหลือต้องอนุมัติ: deploy แอปเส้นสมุดซื้อ RPC + backfill JSON เก่าเป็นชุดเดียว · ก่อน deploy ตรวจ dirty `app/actions/service-usage.ts` บน VPS
+`origin/master` ตอนปล่อยแอป = `d65cc9e` · VPS HEAD ตรง origin · ไฟล์ tracked สะอาดหลังคืน `tsconfig.json` / `package-lock.json` ที่ Next/`npm install` เขียนทับ · `.next-prev/` เป็นชุดกู้คืน อยู่ใน `.gitignore` แล้ว
+
+ตรวจหลัง deploy: `/login` local 200 · production `https://sneakercare.ddserviceth.com/login` ฟอร์มครบ · `/pos` `/dashboard` ไม่มีคุกกี้แล้ว 307 ไป login · PM2 `sneakercare` online · `LIVE_ETAX_SEND_ALLOWED` / `LIVE_AUTO_ISSUE_ALLOWED` / `CORRECTION_OFFICIAL_ISSUE_ALLOWED` = false · แอปเรียก `sc_fn_post_receipt`
+
+**ยังไม่ทำ:** backfill แถวสมุดซื้อจาก JSON เข้า `sc_receipt_posts` · login/คลิก POS ด้วยบัญชีจริงทุก role · Chrome/มือถือจริงนอก Cursor
+
+กู้คืนฉุกเฉินบน VPS: `mv .next-prev .next && git switch -C master 3df0766830fa0f96e497234e0482a852e07eaf9a && pm2 restart sneakercare`
 
 ### ผลเทสต์ระบบ (เครื่อง dev — ไม่แตะ production)
 
