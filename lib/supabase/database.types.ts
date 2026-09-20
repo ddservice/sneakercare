@@ -2342,6 +2342,40 @@ export type Database = {
           },
         ]
       }
+      sc_receipt_posts: {
+        // เพิ่มมือให้ตรง migration 0046 ที่ apply แล้ว จนกว่าจะรัน gen:types รอบถัดไป
+        Row: {
+          approved_by: string | null
+          created_at: string
+          fingerprint: string
+          purchase_amount: number
+          receipt_id: string
+          request_id: string
+          tenant_id: string
+          vat_credit: number
+        }
+        Insert: {
+          approved_by?: string | null
+          created_at?: string
+          fingerprint: string
+          purchase_amount?: number
+          receipt_id: string
+          request_id: string
+          tenant_id: string
+          vat_credit?: number
+        }
+        Update: {
+          approved_by?: string | null
+          created_at?: string
+          fingerprint?: string
+          purchase_amount?: number
+          receipt_id?: string
+          request_id?: string
+          tenant_id?: string
+          vat_credit?: number
+        }
+        Relationships: []
+      }
       sc_settings: {
         Row: {
           key: string
@@ -3907,6 +3941,23 @@ export type Database = {
       inv_fn_set_min_stock_level: {
         Args: { p_branch_id: string; p_item_id: string; p_new_min: number }
         Returns: undefined
+      }
+      sc_fn_guard_live_feature: { Args: { p_feature: string }; Returns: undefined }
+      sc_fn_post_receipt: {
+        Args: {
+          p_approved_by: string | null
+          p_fingerprint: string
+          p_purchase_amount: number
+          p_receipt_id: string
+          p_request_id: string
+          p_tenant_id: string
+          p_vat_credit: number
+        }
+        Returns: {
+          purchase_amount: number
+          replay: boolean
+          vat_credit: number
+        }[]
       }
       sc_get_my_role: { Args: never; Returns: string }
     }

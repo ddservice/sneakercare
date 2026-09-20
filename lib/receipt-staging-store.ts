@@ -1,5 +1,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { StagedReceipt } from "@/lib/receipt-staging";
+import { applyLedgerToQueue } from "@/lib/receipt-ledger";
+import { readReceiptLedger } from "@/lib/receipt-ledger-store";
 
 export const RECEIPT_STAGING_KEY = "receipt_staging";
 
@@ -30,7 +32,9 @@ export async function readStagedReceiptsState(tenantId: string): Promise<{
 }
 
 export async function readStagedReceipts(tenantId: string): Promise<StagedReceipt[]> {
-  return (await readStagedReceiptsState(tenantId)).receipts;
+  const { receipts } = await readStagedReceiptsState(tenantId);
+  const ledger = await readReceiptLedger(tenantId);
+  return applyLedgerToQueue(receipts, ledger);
 }
 
 export async function writeStagedReceipts(

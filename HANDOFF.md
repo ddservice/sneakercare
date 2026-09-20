@@ -1,6 +1,40 @@
 # HANDOFF
 
-อัปเดต 2026-09-20 — อ่านคู่กับ `CLAUDE.md` และ `docs/IMPLEMENTATION_PLAN.md`
+อัปเดต 2026-09-20 (รอบ receipt ledger + typecheck + deploy) — อ่านคู่กับ `CLAUDE.md`
+
+## สถานะรอบนี้ — ยังไม่ deploy / ไม่ย้ายข้อมูล production
+
+`origin/master` ก่อนรอบนี้ = `62d5435` · โค้ดเส้นทางลงสมุดใหม่ยังอยู่เครื่องจนกว่าจะ push
+
+### แก้แล้วในรีโป
+
+- **ลงสมุดใบเสร็จ:** แหล่งหลัก = `sc_receipt_posts` ผ่าน `sc_fn_post_receipt` · JSON คิวเป็นภาพฉาย · อ่านคิวแล้ว merge จากตาราง · CAS/ภาษีซื้อพังหลัง RPC แล้วยังถือว่าลงสมุด ห้าม rollback ตาราง · กดซ้ำ = replay
+- **typecheck:** ต้นเหตุคือไฟล์ generate ของ Next (`validator.ts` ใช้ `LayoutProps<Route>` เมื่อ `LayoutSlotMap["/"] = never` และ `app/layout.ts` ห้าม prop นอก children) ชนกับซอร์สเมื่อ `.next` ค้าง · `npm run typecheck` ใช้ `tsconfig.typecheck.json` ที่ไม่ดึง `.next` · `next-env.d.ts` ยังดึง `routes.d.ts`
+- **deploy:** build ที่ `.next-new` ไม่ย้าย `.next` ระหว่าง compile · dirty/untracked หรือ VPS ahead หยุด · start ไม่ผ่านคืน `.next-prev` + commit เดิม แล้วรีสตาร์ต PM2
+
+### แผน cutover สมุดซื้อ (ยังไม่ทำบน production)
+
+1. นับ JSON ที่ `postedRequestId` มีค่า เทียบ `sc_receipt_posts` ต่อ tenant
+2. backfill ด้วย RPC บนฐานทดสอบก่อน (สูตรใน `planBackfillLedgerFromQueue` + เทสต์ PGlite ผ่านแล้ว)
+3. deploy แอปที่อ่าน merge + เขียน RPC — ผู้ใช้ที่เปิดค้างเห็นสถานะจากตารางเมื่อโหลดใหม่
+4. กระทบยอด `reconReceiptBooks` จนช่องว่างเป็น 0
+5. ห้ามเปิด `etax_live` / `auto_issue` / `cn_official`
+
+ต้องอนุมัติเป็นชุดเดียว: deploy แอป + รัน backfill บน production (มี rollback 0046 อยู่แล้ว แต่ backfill ไม่ลบ JSON)
+
+### ผลทดสอบรอบนี้
+
+ผ่าน: `typecheck` (`tsconfig.typecheck.json`) · `test:receipts` (staging + ledger + cutover PGlite) · `test:ui-contracts` · `test:guards` (103 action รวม `postStagedReceipt`) · `test:checkout` · `test:money` · `test:docs` · `test:etax` · `test:idempotency` · `test:modals` · `test:deploy-vps`
+
+ไม่ผ่าน / ไม่รัน: สอง connection Postgres จริง — ไม่มี `TEST_DATABASE_URL` / docker / psql บนเครื่องนี้ · `test:staff` / `test:multi-tenant` / `check:money` ไม่รัน (แตะ production)
+
+ยังไม่ได้ทดสอบ: login/session จริงทุก role · POS/สต็อกบนเบราว์เซอร์ · Chrome/Edge/Firefox/Safari · มือถือ/แท็บเล็ตจริง · refresh/เน็ตหลุด/session หมดอายุแบบคลิก · `npm run build` รอบนี้ (build ที่เสิร์ฟ e2e เป็นชุดก่อนแก้ receipt ledger)
+
+ผ่านเพิ่ม: `test:e2e-routes` บน `http://127.0.0.1:3004` — ไม่มีคุกกี้แล้ว `/tax-filing` `/settings` `/pos` `/invoicing` เด้ง login · `/login` เปิดได้ · snapshot Cursor browser (Chromium ใน IDE) เห็นฟอร์ม login ครบ แต่กลายเป็นตัวอักษรไทยไม่ขึ้น — ไม่นับว่าตรวจ Chrome/มือถือจริง
+
+`etax_live` / `auto_issue` / `cn_official` ยังปิด
+
+---
 
 ## รวมประวัติ Git (2026-09-20) — ยังไม่ deploy
 
@@ -19,7 +53,7 @@
 
 ผลลัพธ์มี leftover (`6486912`) + import `isDraftNumber` + เอกสาร `0046` + ตัวกรอง type ใน `fetchUsageCatalog`
 
-**deploy script:** `scripts/deploy-vps.mjs` ไม่ใช้ `reset --hard` / `checkout -- .` / `clean -fd` แล้ว · ถ้า dirty/untracked หรือ VPS ahead origin จะหยุด · สำรอง `.next` เป็น `.next-prev` · build/start ไม่ผ่านแล้ว `git switch -C master` กลับ commit เดิมแล้วคืน `.next-prev` แล้วรีสตาร์ต PM2 เมื่อ start ไม่ผ่าน · **ห้ามรัน deploy ในรอบนี้**
+**deploy script:** `scripts/deploy-vps.mjs` ไม่ใช้ `git reset --hard` / `git checkout -- .` / `git clean -fd` · dirty/untracked หรือ VPS ahead หยุด · build ที่ `.next-new` แล้วค่อยสลับ `.next` · start ไม่ผ่านคืน `.next-prev` + commit เดิม แล้วรีสตาร์ต PM2 · **ห้ามรัน deploy จนกว่าจะอนุมัติชุด**
 
 **ก่อน deploy ครั้งหน้า:** บน VPS ตรวจ `git diff app/actions/service-usage.ts` — ถ้าเนื้อหาเดียวกับ origin หลัง push ค่อยเคลียร์ dirty ห้ามทิ้งงานที่ไม่ได้อยู่บน origin · อย่า `reset --hard` ทับ dirty นี้
 
@@ -27,26 +61,18 @@
 
 ## ช่องว่างสมุดซื้อ JSON+CAS vs `0046` (ยังไม่ย้ายข้อมูล / ไม่สลับเส้นเขียน)
 
-แอป `postStagedReceipt` ยังเขียนแค่ JSON ใน `sc_settings` (`receipt_staging` + CAS) แล้วค่อยเติมสมุดภาษีซื้อใน `sc_settings` อีกก้อน · **ไม่มีที่ไหนเรียก `sc_fn_post_receipt`** · unique ที่ `sc_receipt_posts` **จึงยังไม่กันซ้ำของเส้นทางแอป**
+แอป `postStagedReceipt` เรียก `sc_fn_post_receipt` เป็นแหล่งหลักแล้ว · JSON ใน `sc_settings` เป็นคิว/ภาพฉาย · unique ที่ตารางกันซ้ำเมื่อแอปเส้นทางนี้ขึ้น production · ใบที่ลงสมุดใน JSON ก่อนหน้านี้ยังไม่อยู่ในตารางจนกว่าจะ backfill
 
-แผนเปลี่ยนให้มีแหล่งหลักชุดเดียว (ยังไม่ลงมือ):
+แผนที่เหลือ (ยังไม่ย้ายข้อมูล production):
 
-1. นับแถว JSON ที่ `postedRequestId` มีค่า เทียบจำนวนแถว `sc_receipt_posts` ต่อ tenant — คาดว่าตารางยังว่างจากแอป
-2. แผนที่: `tenant_id` · `receipt_id` = id คิว · `request_id` = `postedRequestId` · `fingerprint` = `postedFingerprint` · ยอดซื้อ/VAT จากบรรทัดที่อนุมัติ
-3. backfill แถวที่ลงสมุดแล้วเข้าตารางในทรานแซกชันเดียว ข้ามแถวที่มีอยู่ · ห้ามเดายอด
-4. ช่วงคู่: เรียก RPC ก่อน แล้วค่อย CAS JSON · RPC conflict = ห้ามป้ายว่าลงสมุดใน JSON
-5. รายงานกระทบยอด: JSON ลงแล้วแต่ไม่มีแถวตาราง / ตารางมีแต่ JSON ไม่มี · ใบซ้ำข้ามระบบ
-6. ตัดเส้นเขียนเหลือ RPC เป็นหลัก · JSON เหลือเป็นคิวจนกว่าจะมีตารางคิว
-7. จนกว่าทุกเส้นทางเขียนผ่าน RPC ห้ามอ้างว่า unique ที่ตารางกันซ้ำครบ
+1. นับแถว JSON ที่ `postedRequestId` มีค่า เทียบจำนวนแถว `sc_receipt_posts` ต่อ tenant
+2. backfill ด้วย `sc_fn_post_receipt` บนฐานทดสอบแล้วค่อย production เมื่ออนุมัติ · replay ถ้ามีแถวแล้ว
+3. กระทบยอด `reconReceiptBooks` จนช่องว่างเป็น 0
+4. JSON เหลือเป็นคิว/ภาพฉาย — ตารางเป็นแหล่งหลักหลัง deploy
 
 `etax_live` / `auto_issue` / `cn_official` ยังปิดฝั่งเซิร์ฟเวอร์และที่ `sc_fn_guard_live_feature`
 
-**ผลเทสต์ (เครื่องทำงาน, ก่อน push):**
-- ผ่าน: `test:usage` · `test:receipts` (รวม PGlite unique ของ SQL `0046` — ไม่ได้พิสูจน์ว่าแอปเรียก RPC) · `test:ui-contracts` · `test:etax` · `test:docs` · `test:tax-recon`
-- `npm run build` (`next build --webpack`) ผ่าน · ระหว่าง compile แก้ `lib/correction-effects.ts` ให้คืน `{ ok: false }` ชัดเมื่อต้นทุนเดิมไม่มี
-- `tsc --noEmit` ยังแดงที่ `.next/types/validator.ts` เท่านั้น (Route vs never) — Next build รัน TypeScript ของตัวเองผ่านแล้ว
-
-**commit ที่ push สำเร็จ:** `origin/master` = `c2f6a6a` = local HEAD · รวม merge `3770f68` · type fix `fdb3d4c` (`service-usage.ts` blob `03d04358`) · leftover `6486912`
+**ผลเทสต์รอบก่อน push เดิม (เก็บไว้):** merge history + leftover · ดูหัวเอกสารรอบล่าสุดด้านบน
 
 ---
 
@@ -69,7 +95,7 @@
 - ระยะ 4 บน production: ลบ/ยกเลิก · ใบลดหนี้/เพิ่มหนี้ · snapshot ผู้ขาย · ร่าง `DRAFT-` แล้วค่อยออกเลข
 - ระยะ 5 บน production: กระดาษทำงานภาษี + กระดาษทำงาน ภ.พ.30 ช่อง 1–12 + ภาษีซื้อจากใบหัก ณ ที่จ่ายและใบเสร็จที่กรอกเอง + ปิดงวดบัญชีร้าน — ยังไม่พร้อมยื่น
 - ระยะ 6 บน production: สูตรภาพรวมล็อกเงินเข้าจริง · แยกแหล่งใบรับงาน vs ยอดขายรายวัน · ไม่นับ `service_orders` · ดึงย้อน 14 เดือน
-- leftover บน production แล้ว (`6486912` / `a7af426`) · **`0046` apply แล้ว 2026-09-20** — `sc_receipt_posts` + `sc_fn_post_receipt` + `sc_fn_guard_live_feature` · คิวใบเสร็จยังมี CAS ใน `sc_settings` · e-Tax เป็นคิว sandbox · CN/DN เป็นร่าง · ตัดสต๊อกอัตโนมัติยังปิด
+- leftover บน production แล้ว (`6486912` / `a7af426`) · **`0046` apply แล้ว 2026-09-20** — `sc_receipt_posts` + `sc_fn_post_receipt` + `sc_fn_guard_live_feature` · คิวยังเป็น JSON+CAS · โค้ดใหม่ลงสมุดผ่าน RPC หลัง deploy · e-Tax เป็นคิว sandbox · CN/DN เป็นร่าง · ตัดสต๊อกอัตโนมัติยังปิด
 
 สำรวจจากโค้ด/schema — **ไม่ได้** ยึดข้อความ “แก้แล้ว” ในประวัติ
 

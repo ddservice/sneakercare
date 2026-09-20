@@ -1,6 +1,9 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // Deploy บน VPS สร้างที่ NEXT_DIST_DIR (.next-new) เพื่อไม่ย้าย .next ที่กำลังเสิร์ฟ
+  distDir: process.env.NEXT_DIST_DIR || ".next",
+
   // ── Compression ──
   compress: true,
 

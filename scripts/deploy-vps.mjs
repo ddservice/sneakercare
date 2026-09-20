@@ -2,8 +2,9 @@
 /**
  * scripts/deploy-vps.mjs
  * Deploy โค้ด origin/master ไป VPS ผ่าน SSH
- * ไม่ใช้ reset --hard / checkout -- . ที่ทิ้งงาน dirty
- * รอบนี้ห้ามรันถ้าไม่ได้สั่ง deploy โดยตรง
+ * ไม่ใช้ reset --hard / checkout -- . / clean -fd
+ * สร้างที่ .next-new จนกว่าจะผ่าน แล้วค่อยสลับ — ไม่ย้าย .next ระหว่าง build
+ * ห้ามรันถ้าไม่ได้สั่ง deploy โดยตรง
  */
 import { readFileSync, existsSync } from "node:fs";
 import { spawn } from "node:child_process";
@@ -76,38 +77,45 @@ else
 fi
 RELEASE="$(git rev-parse HEAD)"
 echo "จะปล่อย \${RELEASE}"
-echo "==> [3/6] ติดตั้ง dependencies"
+echo "==> [3/6] ติดตั้ง dependencies (ยังเสิร์ฟ .next เดิม)"
 npm install
-echo "==> [4/6] สำรอง .next แล้ว clean build (ห้ามถอด --webpack)"
+echo "==> [4/6] build ไป .next-new ไม่ย้าย .next ที่กำลังเสิร์ฟ (ห้ามถอด --webpack)"
+rm -rf .next-new
+restore_source() {
+  echo "==> คืนซอร์สเป็น \${PREV}"
+  git switch --quiet -C master "\${PREV}"
+}
+restore_release() {
+  echo "==> กู้คืน commit \${PREV} และ .next ชุดก่อนหน้า"
+  restore_source
+  if [ -d .next-prev ]; then
+    rm -rf .next
+    mv .next-prev .next
+  fi
+}
+if ! NEXT_DIST_DIR=.next-new npm run build; then
+  echo "build ไม่ผ่าน — ไม่แตะ .next ที่กำลังเสิร์ฟ"
+  restore_source
+  exit 4
+fi
+echo "==> สลับ .next หลัง build ผ่าน"
 rm -rf .next-prev
 if [ -d .next ]; then
   mv .next .next-prev
 fi
-restore_prev() {
-  echo "==> กู้คืน commit \${PREV} และ .next ชุดก่อนหน้า"
-  git switch --quiet -C master "\${PREV}"
-  rm -rf .next
-  if [ -d .next-prev ]; then
-    mv .next-prev .next
-  fi
-}
-if ! npm run build; then
-  echo "build ไม่ผ่าน"
-  restore_prev
-  exit 4
-fi
+mv .next-new .next
 echo "==> [5/6] รีสตาร์ต PM2 ${pm2App}"
 pm2 restart "${pm2App}"
 sleep 3
 echo "==> [6/6] ตรวจ /login บน 127.0.0.1:3003"
 if ! curl -sf -o /dev/null --max-time 20 http://127.0.0.1:3003/login; then
   echo "start ไม่ผ่าน — กู้คืน release เดิม"
-  restore_prev
+  restore_release
   pm2 restart "${pm2App}"
   exit 5
 fi
-rm -rf .next-prev
-echo "==> สำเร็จ release \${RELEASE} (กู้คืนได้ด้วย git checkout \${PREV} ถ้ายังมี .next-prev ไม่ถูกลบ)"
+echo "==> สำเร็จ release \${RELEASE}"
+echo "กู้คืนฉุกเฉิน: mv .next-prev .next && git switch -C master \${PREV} && pm2 restart ${pm2App}"
 `.trim();
 
 console.log(`\x1b[36mกำลังเตรียม Deploy ไปยัง VPS: ${user}@${host}:${port} (${remotePath})\x1b[0m`);
