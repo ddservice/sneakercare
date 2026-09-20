@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import * as XLSX from "xlsx";
+import { downloadJsonWorkbook } from "@/lib/spreadsheet";
 import { ModalBackdrop } from "@/components/modal-shell";
 import {
   type RosterStaff,
@@ -596,15 +596,11 @@ export function RosterClient({
       "หมายเหตุวันหยุดแรงงาน": d.holiday || "",
     }));
 
-    const wb = XLSX.utils.book_new();
-    const wsStaff = XLSX.utils.json_to_sheet(staffSummaryData);
-    const wsSchedule = XLSX.utils.json_to_sheet(dailyScheduleData);
-
-    XLSX.utils.book_append_sheet(wb, wsStaff, "สรุปพนักงานและเงินเดือน");
-    XLSX.utils.book_append_sheet(wb, wsSchedule, `ตารางกะ_${MONTH_NAMES_THAI[currentMonth]}`);
-
     const fileName = `DD-Management_Roster_${MONTH_NAMES_THAI[currentMonth]}_${currentYear + 543}.xlsx`;
-    XLSX.writeFile(wb, fileName);
+    downloadJsonWorkbook(fileName, [
+      { name: "สรุปพนักงานและเงินเดือน", rows: staffSummaryData },
+      { name: `ตารางกะ_${MONTH_NAMES_THAI[currentMonth]}`, rows: dailyScheduleData },
+    ]);
     toast.success(`ดาวน์โหลดไฟล์ ${fileName} เรียบร้อยแล้ว`);
   }
 

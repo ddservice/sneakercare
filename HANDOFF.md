@@ -2,7 +2,19 @@
 
 อัปเดต 2026-09-20 (deploy VPS ตรง origin) — อ่านคู่กับ `CLAUDE.md`
 
-## สถานะรอบนี้ — เปลือกใหม่ขึ้น VPS ตั้งแต่ `bd18b27` · ยังไม่ backfill
+## สถานะรอบล่าสุด — security / spreadsheet / receipt cutover
+
+- อัปเดต Next.js และ `eslint-config-next` เป็น `16.3.5`, เปลี่ยน `middleware.ts` เป็น `proxy.ts`, CI ใช้ Node.js 22
+- SheetJS เปลี่ยนเป็นแพ็กเกจทางการ `xlsx-0.20.3`; จุดอ่าน/ส่งออก Excel รวมที่ `lib/spreadsheet.ts`; import รับ `.xlsx/.xls/.csv` ไม่เกิน 5 MB
+- `PageHeader` ถูกใช้บนหน้าใบวางบิล; หน้าเปลี่ยนรหัสผ่านไม่ใช้ `window.location.href`
+- ตรวจ production: `test:staff`, `test:multi-tenant`, `check:money` ผ่านและลบข้อมูลทดสอบแล้ว
+- backfill สมุดซื้อ production รันทั้ง dry-run และ `--apply`: 0 แถว, ช่องว่างระหว่าง JSON กับ `sc_receipt_posts` เป็น 0
+- ชุดทดสอบ local ผ่าน: lint, typecheck, money, VAT, WHT, checkout, lifecycle เอกสาร, tax reconciliation, e-Tax sandbox, receipt ledger/two-connection, period close, dashboard, expenses, usage, idempotency, guards 103 actions, modal, UI/role/deploy contracts, legacy และ migration 0011–0046
+- live flags ยังปิด: `etax_live` / `auto_issue` / `cn_official`
+
+หลัง commit/push ให้ใช้ `npm run deploy`; ยืนยัน VPS HEAD ตรง `origin/master`, PM2 online และ `/login` ได้ 200 แล้วเติมผลไว้ในบันทึกรอบนี้
+
+## บันทึกรอบเปลือกใหม่ก่อน security release
 
 release เปลือกใหม่เริ่มที่ `bd18b27` · VPS HEAD ต้องตรง `origin/master` · ไฟล์ tracked สะอาดหลังคืน `tsconfig.json` / `package-lock.json` ที่ Next/`npm install` เขียนทับ · `.next-prev/` เป็นชุดกู้คืน อยู่ใน `.gitignore` แล้ว
 
@@ -10,7 +22,7 @@ release เปลือกใหม่เริ่มที่ `bd18b27` · VPS 
 
 ตรวจหลัง deploy: `/login` local 200 · production `https://sneakercare.ddserviceth.com/login` ฟอร์มครบ · `/pos` `/dashboard` ไม่มีคุกกี้แล้ว 307 ไป login · PM2 `sneakercare` online · `LIVE_ETAX_SEND_ALLOWED` / `LIVE_AUTO_ISSUE_ALLOWED` / `CORRECTION_OFFICIAL_ISSUE_ALLOWED` = false · แอปเรียก `sc_fn_post_receipt`
 
-**ยังไม่ทำ:** backfill แถวสมุดซื้อจาก JSON เข้า `sc_receipt_posts` · login/คลิก POS ด้วยบัญชีจริงทุก role · Chrome/มือถือจริงนอก Cursor
+**ยังไม่ได้ทดสอบแบบคลิกจริง:** login/คลิก POS ด้วยบัญชีจริงทุก role · Chrome/มือถือจริงนอก Cursor
 
 กู้คืนฉุกเฉินบน VPS: `mv .next-prev .next && git switch -C master d65cc9ebf908b32d26af32f8abe5192fb6545344 && pm2 restart sneakercare`
 

@@ -24,7 +24,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
 
       - run: npm ci
@@ -63,6 +63,10 @@ jobs:
       # สลิปสูงกว่าจอ ⇒ แถบปุ่มพิมพ์/ปิดถูกดันหลุดขอบบนจนเลื่อนไปดูไม่ได้ และไม่มี Esc ให้กด)
       - name: Modal escape hatches (ทุก modal ต้องปิดได้)
         run: npm run test:modals
+
+      # เมนูต้องกรองตาม role, feature live ต้องยังปิด และ deploy ต้องมี rollback guard
+      - name: UI, role and deploy contracts
+        run: npm run test:ui-contracts
 
       # สูตรกลาง "อะไรนับเป็นค่าใช้จ่าย" — หน้า /dashboard กับ /expenses เคยแสดงยอด
       # ของเดือนเดียวกันไม่ตรงกัน เพราะเขียนกฎกรองกันคนละชุด และเป็นตัวเลข "ขาด" ที่ไม่มี error ให้เห็น

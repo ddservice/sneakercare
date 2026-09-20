@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import * as XLSX from "xlsx";
+import { downloadJsonWorkbook, downloadMatrixWorkbook, parseFirstSheet } from "@/lib/spreadsheet";
 import {
   bulkImportSales,
   bulkImportStock,
@@ -92,10 +92,9 @@ export function ReportsClient({
       ผู้บันทึก: s.recorded_by || "Staff",
     }));
 
-    const ws = XLSX.utils.json_to_sheet(data);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "DailySales");
-    XLSX.writeFile(wb, `DD-Management_Sales_Export_${new Date().toISOString().slice(0, 10)}.xlsx`);
+    downloadJsonWorkbook(`DD-Management_Sales_Export_${new Date().toISOString().slice(0, 10)}.xlsx`, [
+      { name: "DailySales", rows: data },
+    ]);
     toast.success("ส่งออกข้อมูลยอดขายเรียบร้อย");
   }
 
@@ -112,10 +111,9 @@ export function ReportsClient({
       สถานะ: (item.current_qty || 0) <= (item.min_stock_level || 1) ? "ใกล้หมด" : "ปกติ",
     }));
 
-    const ws = XLSX.utils.json_to_sheet(data);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Inventory");
-    XLSX.writeFile(wb, `DD-Management_Stock_Export_${new Date().toISOString().slice(0, 10)}.xlsx`);
+    downloadJsonWorkbook(`DD-Management_Stock_Export_${new Date().toISOString().slice(0, 10)}.xlsx`, [
+      { name: "Inventory", rows: data },
+    ]);
     toast.success("ส่งออกข้อมูลคลังสินค้าเรียบร้อย");
   }
 
@@ -132,10 +130,9 @@ export function ReportsClient({
       ผู้บันทึก: e.recorded_by || "Staff",
     }));
 
-    const ws = XLSX.utils.json_to_sheet(data);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Expenses");
-    XLSX.writeFile(wb, `DD-Management_Expenses_Export_${new Date().toISOString().slice(0, 10)}.xlsx`);
+    downloadJsonWorkbook(`DD-Management_Expenses_Export_${new Date().toISOString().slice(0, 10)}.xlsx`, [
+      { name: "Expenses", rows: data },
+    ]);
     toast.success("ส่งออกข้อมูลรายจ่ายเรียบร้อย");
   }
 
@@ -164,10 +161,7 @@ export function ReportsClient({
       fileName = "DD-Management_Expenses_Template.xlsx";
     }
 
-    const ws = XLSX.utils.aoa_to_sheet(headers);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Template");
-    XLSX.writeFile(wb, fileName);
+    downloadMatrixWorkbook(fileName, { name: "Template", rows: headers });
     toast.success(`ดาวน์โหลดแม่แบบ ${fileName} เรียบร้อย`);
   }
 
@@ -176,24 +170,35 @@ export function ReportsClient({
     const file = e.target.files?.[0];
     if (!file) return;
 
+    if (!/\\.(xlsx|xls|csv)$/i.test(file.name)) {
+      toast.error("รองรับเฉพาะไฟล์ .xlsx, .xls หรือ .csv");
+      e.target.value = "";
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error("ไฟล์ต้องมีขนาดไม่เกิน 5 MB");
+      e.target.value = "";
+      return;
+    }
+
     setImportFileName(file.name);
     const reader = new FileReader();
 
     reader.onload = (evt) => {
       try {
         const buffer = evt.target?.result;
-        const wb = XLSX.read(buffer, { type: "array" });
-        const sheetName = wb.SheetNames[0];
-        const sheet = wb.Sheets[sheetName];
-
-        const rows = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1 });
-        if (!rows || rows.length < 2) {
+        if (!(buffer instanceof ArrayBuffer)) {
+          toast.error("ไม่สามารถอ่านไฟล์ได้");
+          return;
+        }
+        const { headers, rows: dataRows } = parseFirstSheet(buffer) as {
+          headers: string[];
+          rows: SheetRow[];
+        };
+        if (headers.length === 0 || dataRows.length === 0) {
           toast.error("ไฟล์ไม่มีข้อมูลหรือรูปแบบไม่ถูกต้อง");
           return;
         }
-
-        const headers = rows[0].map(String);
-        const dataRows = XLSX.utils.sheet_to_json<SheetRow>(sheet);
 
         setImportHeaders(headers);
         setPreviewRows(dataRows.slice(0, 5));

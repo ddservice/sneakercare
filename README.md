@@ -10,10 +10,12 @@
 
 ## พัฒนาบนเครื่อง
 
+ใช้ Node.js 22 และติดตั้ง dependency จาก lockfile
+
 คัดลอก `.env.example` เป็น `.env.local` แล้วใส่ค่าจาก Supabase Project Settings → API
 
 ```bash
-npm install
+npm ci
 npm run dev
 ```
 
@@ -25,6 +27,6 @@ npm run dev
 
 รันด้วย `npm start` หลัง Nginx — ฟังแค่ `127.0.0.1` ไม่เปิดพอร์ตออกเน็ตตรง
 
-อัปเดตบนเซิร์ฟเวอร์แบบเดียวกับเว็บร้านอื่น: `git pull` → `npm run build` → `pm2 restart`
+อัปเดตด้วย `npm run deploy` จากเครื่องพัฒนา สคริปต์จะตรวจว่า VPS ไม่มีไฟล์ค้าง, ดึง Git แบบ fast-forward, ติดตั้งจาก lockfile, build แยกที่ `.next-new`, สลับ release เมื่อ build ผ่าน และคืน `.next-prev` อัตโนมัติถ้าเริ่มระบบไม่สำเร็จ
 
 ตั้ง `NEXT_PUBLIC_SITE_URL` บน VPS เป็นโดเมนจริง (ใช้กับลิงก์ในอีเมลเชิญผู้ใช้)

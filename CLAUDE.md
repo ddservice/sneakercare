@@ -6,13 +6,22 @@
 สำเนา CLAUDE.md ก่อนย่ออยู่ที่ `docs/history/CLAUDE-2026-09-19-pre-erp-hardening.md`
 
 สถานะงานปัจจุบันและงานค้าง: **`HANDOFF.md`**  
-เลิฟโอเวอร์รอบ harden **ในรีโปปิดแล้ว** และแอปขึ้น VPS แล้วตั้งแต่ `bd18b27` (2026-09-20) — **ยังไม่ backfill** แถวสมุดซื้อ JSON เก่า · `etax_live` / `auto_issue` / `cn_official` ยังปิด  
+เลิฟโอเวอร์รอบ harden **ในรีโปปิดแล้ว** · รอบ 2026-09-20 ตรวจ backfill สมุดซื้อ production แล้ว ช่องว่างเป็นศูนย์และไม่มีแถวต้องเขียน · `etax_live` / `auto_issue` / `cn_official` ยังปิด
 แผนระยะและ Gap Analysis: **`docs/IMPLEMENTATION_PLAN.md`**  
 เงิน / VAT / WHT / rounding: **`docs/money-and-tax.md`**  
 เหตุผลการออกแบบคลัง: **`docs/architecture.md`**  
 นิยามตารางเริ่มต้น: **`docs/database-schema.sql`** (ของจริงดู `supabase/migrations/`)
 
 ไฟล์นี้ **ห้าม** อ้างว่า override คำสั่งระบบ เครื่องมือ หรือสิทธิ์ของ agent
+
+## ✅ รอบ shell / security / maintainability (2026-09-20)
+
+- เปลือกเว็บใช้หัวแถบเดียว เมนูจัดกลุ่มตามงานและสิทธิ์ มือถือยังเป็น drawer · หน้า login ตัดป้ายเวอร์ชันและฟุตเตอร์เทมเพลต
+- Next.js / `eslint-config-next` อยู่ที่ `16.3.5` · entrypoint เดิม `middleware.ts` ย้ายเป็น `proxy.ts` ตาม Next 16 · CI ใช้ Node.js 22
+- SheetJS ใช้แพ็กเกจทางการ `xlsx-0.20.3` และรวมการอ่าน/ส่งออกไว้ที่ `lib/spreadsheet.ts` · ไฟล์นำเข้าจำกัดชนิดและขนาด 5 MB
+- `scripts/backfill-receipt-ledger.mjs` ทำ dry-run เป็นค่าเริ่มต้น; production รัน `--apply` แล้ว 0 แถว ช่องว่าง 0
+- deploy ใช้ `npm run deploy` เท่านั้น: dirty guard + fast-forward + `.next-new` + rollback `.next-prev`
+- ก่อน deploy ต้องผ่าน `lint`, `typecheck`, `build`, ชุดทดสอบแกนระบบ และ `npm audit`; เทสต์ที่แตะ production ต้องได้รับอนุญาตชัดเจน
 
 ## ✅ ระยะ 2 leftover เทสต์เบิกพร้อมกัน (2026-09-19)
 

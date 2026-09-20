@@ -3,6 +3,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { thaiBahtText } from "@/lib/smartacc/baht-text";
 import { fetchShopProfile, type ShopProfile } from "@/app/actions/shop-settings";
 import { PrintButton } from "@/components/print-button";
+import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Layers, Plus } from "lucide-react";
 import Link from "next/link";
@@ -72,14 +73,18 @@ export default async function BillingNotesPage() {
   if (!currentDoc) {
     return (
       <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <Link
-            href="/invoicing"
-            className="inline-flex items-center gap-1 text-xs font-semibold text-teal-800 hover:text-teal-900"
-          >
-            <ArrowLeft className="h-4 w-4" /> กลับหน้าออกเอกสาร
-          </Link>
-        </div>
+        <PageHeader
+          title="ใบวางบิล"
+          description="รวมเอกสารและติดตามยอดค้างชำระ"
+          actions={
+            <Link
+              href="/invoicing"
+              className="inline-flex items-center gap-1 text-xs font-semibold text-teal-800 hover:text-teal-900"
+            >
+              <ArrowLeft className="h-4 w-4" /> กลับหน้าออกเอกสาร
+            </Link>
+          }
+        />
         <div className="max-w-xl mx-auto rounded-xl border border-slate-200 bg-white p-12 text-center space-y-4 shadow-xs">
           <div className="mx-auto w-12 h-12 rounded-full bg-teal-50 flex items-center justify-center text-teal-700">
             <Layers className="h-6 w-6" />
@@ -104,18 +109,22 @@ export default async function BillingNotesPage() {
 
   return (
     <div className="space-y-6">
-      {/* Action Bar */}
-      <div className="flex items-center justify-between no-print">
-        <Link
-          href="/invoicing"
-          className="inline-flex items-center gap-1 text-xs font-semibold text-teal-800 hover:text-teal-900"
-        >
-          <ArrowLeft className="h-4 w-4" /> กลับหน้าออกเอกสาร
-        </Link>
-        <div className="flex gap-2">
-          <PrintButton label="สั่งพิมพ์ / บันทึก PDF (A4)" />
-        </div>
-      </div>
+      <PageHeader
+        title="ใบวางบิล"
+        description={`เลขที่ ${currentDoc.doc_number}`}
+        className="no-print"
+        actions={
+          <>
+            <Link
+              href="/invoicing"
+              className="inline-flex items-center gap-1 text-xs font-semibold text-teal-800 hover:text-teal-900"
+            >
+              <ArrowLeft className="h-4 w-4" /> กลับหน้าออกเอกสาร
+            </Link>
+            <PrintButton label="สั่งพิมพ์ / บันทึก PDF (A4)" />
+          </>
+        }
+      />
 
       {/* ── A4 Billing Note Render Template ── */}
       <div className="printable-area max-w-[210mm] mx-auto bg-white border border-slate-200 shadow-sm p-8 rounded-lg text-slate-800 text-xs font-sans">

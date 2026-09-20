@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import * as XLSX from "xlsx";
+import { downloadJsonWorkbook } from "@/lib/spreadsheet";
 import {
   PackagePlus,
   AlertTriangle,
@@ -296,10 +296,9 @@ export function InventoryClient({
       return row;
     });
 
-    const ws = XLSX.utils.json_to_sheet(data);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Inventory");
-    XLSX.writeFile(wb, `DD-Management_Inventory_${new Date().toISOString().slice(0, 10)}.xlsx`);
+    downloadJsonWorkbook(`DD-Management_Inventory_${new Date().toISOString().slice(0, 10)}.xlsx`, [
+      { name: "Inventory", rows: data },
+    ]);
     toast.success("ดาวน์โหลดไฟล์ Excel คลังสินค้าเรียบร้อย");
   }
 

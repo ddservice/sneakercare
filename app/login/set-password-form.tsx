@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,6 +16,7 @@ import { AlertCircle, ArrowRight, Eye, EyeOff, KeyRound } from "lucide-react";
  * คือการยืนยันตัวตนอยู่แล้วในตัว (ต่างจาก /account ที่ต้องกรอกรหัสผ่านเดิมเพราะเป็น session ปกติ)
  */
 export function SetPasswordForm({ mode }: { mode: "invite" | "recovery" }) {
+  const router = useRouter();
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -55,7 +58,8 @@ export function SetPasswordForm({ mode }: { mode: "invite" | "recovery" }) {
     await new Promise((resolve) => setTimeout(resolve, 400));
     setPending(false);
     setDone(true);
-    window.location.href = "/dashboard";
+    router.push("/dashboard");
+    router.refresh();
   }
 
   if (done) {
@@ -66,9 +70,9 @@ export function SetPasswordForm({ mode }: { mode: "invite" | "recovery" }) {
         </div>
         <p className="text-sm font-semibold text-slate-800">ตั้งรหัสผ่านสำเร็จแล้ว</p>
         <p className="text-xs text-slate-500">กำลังพาไปหน้าแดชบอร์ด...</p>
-        <a href="/dashboard" className="text-xs font-medium text-teal-700 underline underline-offset-2">
+        <Link href="/dashboard" className="text-xs font-medium text-teal-700 underline underline-offset-2">
           ถ้าไม่ไปเองภายในไม่กี่วินาที กดที่นี่
-        </a>
+        </Link>
       </div>
     );
   }

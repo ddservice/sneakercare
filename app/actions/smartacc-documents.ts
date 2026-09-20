@@ -1085,15 +1085,15 @@ export async function fetchTaxFilingData(yearMonth?: string) {
     expensesQuery = expensesQuery.like("expense_date", `${yearMonth}%`);
   }
 
-  let booksQuery = supabase
+  const booksQuery = supabase
     .from("sc_sales")
     .select("date, total_revenue, amount_paid")
     .order("date", { ascending: false });
-  let payQuery = supabase
+  const payQuery = supabase
     .from("sc_payments")
     .select("sale_date, amount")
     .order("sale_date", { ascending: false });
-  let corrQuery = supabase
+  const corrQuery = supabase
     .schema("extension_layer")
     .from("ext_documents")
     .select("id, doc_type, doc_number, issue_date, status, grand_total, vat_amount, subtotal_amount")

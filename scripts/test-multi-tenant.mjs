@@ -267,36 +267,46 @@ try {
     // ตาราง ext_documents ไม่มี trigger เขียน audit log เลย (ตรวจแล้วกับ production จริง) —
     // บัญชี T1/T2 ที่ใช้ในส่วนนี้จึงลบทิ้งได้สะอาดปกติเหมือนส่วน [1]-[6] ไม่ติด FK แบบ
     // section [7] (ไม่ต้องใช้บัญชี fixture ตายตัว)
+    const testPrefix = "TQ";
+    const testDate = "20991231";
+    await admin
+      .schema("extension_layer")
+      .from("ext_numbering_sequences")
+      .delete()
+      .in("tenant_id", [T1, T2])
+      .eq("doc_type", "QUOTATION")
+      .eq("prefix", testPrefix)
+      .eq("year_month", testDate);
+
     const numT1 = await asT1.schema("extension_layer").rpc("fn_generate_document_number", {
       p_doc_type: "QUOTATION",
-      p_prefix: "QA",
-      p_date_str: "20260917",
+      p_prefix: testPrefix,
+      p_date_str: testDate,
       p_tenant_id: T1,
     });
-    check(!numT1.error, `T1 ขอเลขที่เอกสารผ่าน RPC จริงสำเร็จ (${numT1.data})`, `ล้มเหลว: ${numT1.error?.message}`);
+    check(!numT1.error, `T1 ขอเลข fixture ผ่าน RPC จริงสำเร็จ (${numT1.data})`, `ล้มเหลว: ${numT1.error?.message}`);
 
     const numT2 = await asT2.schema("extension_layer").rpc("fn_generate_document_number", {
       p_doc_type: "QUOTATION",
-      p_prefix: "QA",
-      p_date_str: "20260917",
+      p_prefix: testPrefix,
+      p_date_str: testDate,
       p_tenant_id: T2,
     });
     check(
-      numT2.data === numT1.data,
-      `T2 ได้เลขที่เอกสารเดียวกับ T1 (${numT2.data}) — พิสูจน์ว่าตัวนับแยกต่อ tenant จริง ไม่สานต่อกัน`,
-      `ควรได้เลขเดียวกันแต่ได้ ${numT1.data} vs ${numT2.data}`
+      numT1.data === "TQ-20991231-0001" && numT2.data === numT1.data,
+      `ทั้งสอง tenant เริ่มเลข fixture ของตัวเองที่ ${numT1.data} — ตัวนับแยกต่อ tenant`,
+      `ควรเริ่ม TQ-20991231-0001 ทั้งคู่ แต่ได้ ${numT1.data} vs ${numT2.data}`
     );
     testRows.push({
       table: "ext_numbering_sequences",
-      match: { tenant_id: T1, doc_type: "QUOTATION", prefix: "QA", year_month: "20260917" },
+      match: { tenant_id: T1, doc_type: "QUOTATION", prefix: testPrefix, year_month: testDate },
       schema: "extension_layer",
     });
     testRows.push({
       table: "ext_numbering_sequences",
-      match: { tenant_id: T2, doc_type: "QUOTATION", prefix: "QA", year_month: "20260917" },
+      match: { tenant_id: T2, doc_type: "QUOTATION", prefix: testPrefix, year_month: testDate },
       schema: "extension_layer",
     });
-
     const insT1 = await asT1
       .schema("extension_layer")
       .from("ext_documents")
