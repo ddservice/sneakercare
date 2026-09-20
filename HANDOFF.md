@@ -1,10 +1,42 @@
 # HANDOFF
 
-อัปเดต 2026-09-20 (รอบ receipt ledger + typecheck + deploy) — อ่านคู่กับ `CLAUDE.md`
+อัปเดต 2026-09-20 (รอบเทสต์ระบบหลัง receipt ledger) — อ่านคู่กับ `CLAUDE.md`
 
 ## สถานะรอบนี้ — ยังไม่ deploy / ไม่ย้ายข้อมูล production
 
-`origin/master` ก่อนรอบนี้ = `62d5435` · โค้ดเส้นทางลงสมุดใหม่ยังอยู่เครื่องจนกว่าจะ push
+`origin/master` ก่อนรอบเทสต์ = `7bac933` (ลงสมุดผ่าน RPC แล้ว) · งานค้างรอบนี้คือเทสต์ระบบ + เทสต์สอง connection ของ Postgres จริง + e2e local
+
+### ผลเทสต์ระบบ (เครื่อง dev — ไม่แตะ production)
+
+ผ่าน: `test:receipts` ทั้งชุด รวม `test-receipt-pg` — embedded Postgres 18 สอง session แข่ง `sc_fn_post_receipt` ใบเดียวกันได้หนึ่งแถว · `test:tax-recon` · `test:vat` · `test:wht` · `test:dashboard` · `test:period-close` · `test:usage` · `test:roster` · `test:expenses` · `test:reports` · `test:legacy` · `test:stock-concurrency` · `test:ui-contracts` (role-matrix + layout-slot + deploy-script) · `npm run build --webpack` ของโค้ดปัจจุบัน · `test:e2e-routes` บน `http://127.0.0.1:3005` (build ใหม่)
+
+ไม่รัน (แตะ production / ไม่ได้อนุญาต): `test:staff` · `test:multi-tenant` · `check:money`
+
+ยังไม่ได้ทดสอบและต้องป้ายแบบนี้: Chrome/Edge/Firefox/Safari จริง · มือถือ/แท็บเล็ตจริง · login ทุก role · คลิก POS/สต็อก/ลงสมุดบนเบราว์เซอร์ · refresh/เน็ตหลุด · backfill production
+
+### เบราว์เซอร์ local (Cursor Chromium — ไม่ใช่ Chrome จริง)
+
+- `http://127.0.0.1:3005/login` ฟอร์มครบ (ชื่อผู้ใช้ / รหัส / จดจำชื่อ / เข้าสู่ระบบ) · a11y เป็นไทยถูกต้อง
+- viewport 390×844 และ 768×1024 ฟอร์มยังใช้ได้ ไม่ล้นจอ
+- `/pos` และ `/dashboard` ไม่มีคุกกี้แล้วเด้ง `/login`
+- อย่านับว่าตรวจ Chrome/มือถือจริง — ฟอนต์ไทยใน snapshot ของ IDE เคยเป็น tofu บน desktop แต่ a11y ยังอ่านไทยได้
+
+### เทสต์สอง connection ของ Postgres
+
+- `scripts/test-receipt-pg.mjs` ขึ้น embedded-postgres ถ้าไม่มี `TEST_DATABASE_URL` · ปฏิเสธ URL production (`supabase.co` / รหัสโปรเจกต์)
+- ตัดคอมเมนต์ SQL ก่อน apply 0046 เพราะ Windows WIN874 รับ `·` ในคอมเมนต์ไม่ได้
+- ไม่ห่อ `BEGIN` ค้างล็อก unique — ให้แต่ละ RPC เป็นธุรกรรมของตัวเอง ไม่เช่นนั้นสอง session จะรอกันจน timeout
+- PGlite ใน `test-receipt-concurrency` ยังเป็นเอนจินเดียวตามเดิม
+
+`etax_live` / `auto_issue` / `cn_official` ยังปิด · backfill สมุดซื้อบน production ยังต้องอนุมัติชุดเดียวกับ deploy
+
+---
+
+อัปเดต 2026-09-20 (รอบ receipt ledger + typecheck + deploy) — อ่านคู่กับ `CLAUDE.md`
+
+## สถานะรอบก่อน — ยังไม่ deploy / ไม่ย้ายข้อมูล production
+
+`origin/master` ก่อนรอบนั้น = `62d5435` · โค้ดเส้นทางลงสมุดใหม่ push แล้วที่ `7bac933`
 
 ### แก้แล้วในรีโป
 

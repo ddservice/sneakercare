@@ -147,7 +147,7 @@
 25. **สมุดซื้อ:** ใบเสร็จเข้า staging ก่อน · ห้ามเดายอด/ประเภท · ยอดซื้อ ≠ สิทธิใช้ภาษีซื้อ · ลงสมุดหลังอนุมัติและมีคีย์กันซ้ำ
 26. **ตัดสต๊อกอัตโนมัติปิด** จนกว่าจะมีสูตรหน่วยฐานที่อนุมัติ จุดตัด และธุรกรรมกันซ้ำ — ห้ามเดาปริมาณจากชื่อบริการ · `LIVE_AUTO_ISSUE_ALLOWED=false` ฝั่งเซิร์ฟเวอร์
 27. **ใบลดหนี้:** ลดมูลค่า/VAT แยกจากรับคืนของ · ไม่มี GL แล้วห้ามอ้างว่ากลับบัญชีครบ · ห้ามแก้ ledger เดิมและห้ามกลับซ้ำ · ออกเลขทางการไม่ได้จนกว่าจะเชื่อมยอดขาย/ลูกหนี้/ภาษี
-28. **สมุดซื้อหลาย connection** unique ที่ตาราง `sc_receipt_posts` (`0046` apply แล้ว 2026-09-20) · คิวยังเขียน JSON ใน `sc_settings` (CAS) · ลงสมุดอะตอมผ่าน `sc_fn_post_receipt` เมื่อแอปเรียก · `sc_fn_guard_live_feature` บล็อก `etax_live` / `auto_issue` / `cn_official` ที่ DB
+28. **สมุดซื้อหลาย connection** unique ที่ตาราง `sc_receipt_posts` (`0046` apply แล้ว 2026-09-20) · แหล่งหลัก = `sc_fn_post_receipt` · JSON ใน `sc_settings` เป็นคิว/ภาพฉาย (CAS) · `sc_fn_guard_live_feature` บล็อก `etax_live` / `auto_issue` / `cn_official` ที่ DB · เส้นแอปนี้ยังไม่ขึ้น VPS จนกว่าจะอนุมัติ deploy
 
 ---
 
@@ -187,7 +187,7 @@
 | `npm run test:vat` / `test:wht` | VAT เอกสาร / WHT |
 | `npm run test:tax-recon` | กระดาษทำงานภาษี + ภ.พ.30 เตรียม/ยื่น (ยังไม่พร้อมยื่น) |
 | `npm run test:etax` | คิว e-Tax sandbox — XML/HTTP ไม่ใช่ส่งสำเร็จ |
-| `npm run test:receipts` | คิวใบเสร็จ · แยกเครดิต VAT · ห้ามเดาแล้วลงสมุด |
+| `npm run test:receipts` | คิวใบเสร็จ · แยกเครดิต VAT · ห้ามเดาแล้วลงสมุด · สอง connection Postgres จริง (`test-receipt-pg` / embedded-postgres ถ้าไม่มี `TEST_DATABASE_URL`) |
 | `npm run test:usage` | สูตรของใช้ต่องาน · ตัดอัตโนมัติยังปิด |
 | `npm run test:ui-contracts` | สิทธิ์โมดูล + ปิดเส้นทาง live ฝั่งเซิร์ฟเวอร์ — **ไม่ใช่คลิกเบราว์เซอร์** |
 | `npm run test:e2e-routes` | GET หน้าหลักโดยไม่มีคุกกี้ต้องเด้ง login — รันเมื่อตั้ง `E2E_BASE_URL` เป็น local/staging เท่านั้น |
@@ -200,7 +200,7 @@
 | `npm run test:legacy` | แถบประมาณการในระบบเดิม |
 | `npm run check:money` | ค่าเงินนอกช่วงในตารางเงิน (แตะ production — อย่ารันถ้าไม่ได้รับอนุญาต) |
 | `npm run test:staff` / `test:multi-tenant` | แตะ production จริง — **อย่ารันในรอบ harden โดยไม่ได้รับอนุญาต** |
-| `npm run typecheck` / `lint` / `build` | ตรวจโค้ด (typecheck บนเครื่อง dev อาจแดงจาก `.next/types`) |
+| `npm run typecheck` / `lint` / `build` | ตรวจโค้ด (`typecheck` ใช้ `tsconfig.typecheck.json` ไม่ดึง `.next`) |
 
 เพิ่มเทสต์คู่กับโค้ดที่แก้ **อย่า** เปลี่ยน assertion เพื่อให้ผ่าน
 
@@ -212,7 +212,7 @@
 
 **ระยะ 3 (2026-09-19 แอปบน production · `0045` apply แล้ว):** `/pos` ที่ชำระแล้วลง `sc_sales` หนึ่งแถวต่อใบ · คีย์กันซ้ำ = `service_orders.id` · `service_order_id` สำหรับรายงาน (ยอดขายรายวันไม่ใส่) · คลังยังเบิกมือที่ `/stock-out`
 
-**`0046` apply production แล้ว 2026-09-20** ผ่าน SSH+psql — มี `sc_receipt_posts` (unique ใบ/คีย์กันซ้ำ) · `sc_fn_post_receipt` · `sc_fn_guard_live_feature` · RLS เปิด · แอปยังเขียนคิวใบเสร็จใน `sc_settings` (CAS) คู่กับตาราง unique
+**`0046` apply production แล้ว 2026-09-20** ผ่าน SSH+psql — มี `sc_receipt_posts` (unique ใบ/คีย์กันซ้ำ) · `sc_fn_post_receipt` · `sc_fn_guard_live_feature` · RLS เปิด · แอปที่ `7bac933+` ลงสมุดผ่าน RPC เป็นแหล่งหลัก JSON ใน `sc_settings` เป็นคิว/ภาพฉาย — **ยังไม่ deploy เส้นนี้ / ยังไม่ backfill แถว JSON เก่า**
 
 ยังไม่มีทั้งระบบ: ลิ้นชักเงินสด · ตัดสต๊อกอัตโนมัติตอนรับงาน (มีหน้าสูตรแล้วเส้นตัดจริงยังปิด) · ใบลดหนี้ที่กลับรายการ `sc_sales` หรือคืนสต๊อก · VAT effective date · GL/journal · e-Tax ส่งจริง (มีคิว sandbox) · ภ.พ.30 ยื่นจากแอป (บันทึกการยื่นภายนอกได้) · OCR ในแอป / สมุดซื้ออัตโนมัติจากทุกใบโดยไม่ตรวจ
 
