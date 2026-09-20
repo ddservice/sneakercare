@@ -2,15 +2,17 @@
 
 อัปเดต 2026-09-20 (deploy VPS ตรง origin) — อ่านคู่กับ `CLAUDE.md`
 
-## สถานะรอบนี้ — แอปบน VPS = `d65cc9e` · ยังไม่ backfill
+## สถานะรอบนี้ — เปลือกใหม่ขึ้น VPS ตั้งแต่ `bd18b27` · ยังไม่ backfill
 
-`origin/master` ตอนปล่อยแอป = `d65cc9e` · VPS HEAD ตรง origin · ไฟล์ tracked สะอาดหลังคืน `tsconfig.json` / `package-lock.json` ที่ Next/`npm install` เขียนทับ · `.next-prev/` เป็นชุดกู้คืน อยู่ใน `.gitignore` แล้ว
+release เปลือกใหม่เริ่มที่ `bd18b27` · VPS HEAD ต้องตรง `origin/master` · ไฟล์ tracked สะอาดหลังคืน `tsconfig.json` / `package-lock.json` ที่ Next/`npm install` เขียนทับ · `.next-prev/` เป็นชุดกู้คืน อยู่ใน `.gitignore` แล้ว
+
+เปลือกใหม่: หัวเว็บเหลือแถบเดียว · desktop จัดกลุ่ม งานบริการ / เงิน / คลัง / ตารางงาน / ตั้งค่า ตามสิทธิ์เดิม · mobile คง drawer · login เหลือชื่อร้านและฟอร์มสั้น ไม่มีป้ายเวอร์ชัน/ฟุตเตอร์เทมเพลต · Remember เก็บเฉพาะชื่อผู้ใช้ใน localStorage
 
 ตรวจหลัง deploy: `/login` local 200 · production `https://sneakercare.ddserviceth.com/login` ฟอร์มครบ · `/pos` `/dashboard` ไม่มีคุกกี้แล้ว 307 ไป login · PM2 `sneakercare` online · `LIVE_ETAX_SEND_ALLOWED` / `LIVE_AUTO_ISSUE_ALLOWED` / `CORRECTION_OFFICIAL_ISSUE_ALLOWED` = false · แอปเรียก `sc_fn_post_receipt`
 
 **ยังไม่ทำ:** backfill แถวสมุดซื้อจาก JSON เข้า `sc_receipt_posts` · login/คลิก POS ด้วยบัญชีจริงทุก role · Chrome/มือถือจริงนอก Cursor
 
-กู้คืนฉุกเฉินบน VPS: `mv .next-prev .next && git switch -C master 3df0766830fa0f96e497234e0482a852e07eaf9a && pm2 restart sneakercare`
+กู้คืนฉุกเฉินบน VPS: `mv .next-prev .next && git switch -C master d65cc9ebf908b32d26af32f8abe5192fb6545344 && pm2 restart sneakercare`
 
 ### ผลเทสต์ระบบ (เครื่อง dev — ไม่แตะ production)
 
