@@ -1,10 +1,11 @@
 # HANDOFF
 
-อัปเดต 2026-09-20 (รอบเทสต์ระบบหลัง receipt ledger) — อ่านคู่กับ `CLAUDE.md`
+อัปเดต 2026-09-20 (ปิด leftover โค้ดในรีโป) — อ่านคู่กับ `CLAUDE.md`
 
-## สถานะรอบนี้ — ยังไม่ deploy / ไม่ย้ายข้อมูล production
+## สถานะรอบนี้ — leftover โค้ดปิดแล้ว · ยังไม่ deploy / ไม่ย้ายข้อมูล production
 
-`origin/master` ก่อนรอบเทสต์ = `7bac933` (ลงสมุดผ่าน RPC แล้ว) · งานค้างรอบนี้คือเทสต์ระบบ + เทสต์สอง connection ของ Postgres จริง + e2e local
+`origin/master` = `fe94725` · **ไม่มีงานเขียนโค้ดค้างจากรอบ harden นี้**  
+ที่เหลือต้องอนุมัติ: deploy แอปเส้นสมุดซื้อ RPC + backfill JSON เก่าเป็นชุดเดียว · ก่อน deploy ตรวจ dirty `app/actions/service-usage.ts` บน VPS
 
 ### ผลเทสต์ระบบ (เครื่อง dev — ไม่แตะ production)
 

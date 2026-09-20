@@ -6,6 +6,7 @@
 สำเนา CLAUDE.md ก่อนย่ออยู่ที่ `docs/history/CLAUDE-2026-09-19-pre-erp-hardening.md`
 
 สถานะงานปัจจุบันและงานค้าง: **`HANDOFF.md`**  
+เลิฟโอเวอร์รอบ harden **ในรีโปปิดแล้ว** ที่ `origin/master` `fe94725` (2026-09-20) — งานที่เหลือไม่ใช่เขียนโค้ด: **deploy แอปเส้นสมุดซื้อ RPC + backfill JSON เก่า** ต้องอนุมัติชุดเดียว · VPS ยังเป็นโค้ดเก่ากว่านี้  
 แผนระยะและ Gap Analysis: **`docs/IMPLEMENTATION_PLAN.md`**  
 เงิน / VAT / WHT / rounding: **`docs/money-and-tax.md`**  
 เหตุผลการออกแบบคลัง: **`docs/architecture.md`**  
@@ -77,7 +78,16 @@
 - **ไม่สลับค่าเริ่มต้นเกณฑ์** · ไม่แตะยอด Excel ที่ล็อกไว้
 - เทสต์: `npm run test:dashboard`
 
-## สถาปัตยกรรมที่ใช้งานจริง (ตรวจจากโค้ด 2026-09-19)
+## ✅ leftover 2026-09-20 ลงสมุดซื้อ + harden deploy/typecheck (โค้ดในรีโป)
+
+- **ลงสมุดใบเสร็จ:** แหล่งหลัก = `sc_receipt_posts` ผ่าน `sc_fn_post_receipt` · JSON ใน `sc_settings` เป็นคิว/ภาพฉาย · อ่านแล้ว merge จากตาราง · CAS/ภาษีซื้อพังหลัง RPC แล้วยังถือว่าลงสมุด ห้าม rollback ตาราง · กดซ้ำ = replay
+- **typecheck:** `npm run typecheck` ใช้ `tsconfig.typecheck.json` ไม่ดึง `.next` (ไฟล์ generate ของ Next ชนกันเองเมื่อ `LayoutSlotMap["/"] = never`)
+- **deploy script:** build ที่ `.next-new` ไม่ย้าย `.next` ระหว่าง compile · dirty/untracked หรือ VPS ahead หยุด · start ไม่ผ่านคืน `.next-prev` + commit เดิม
+- **เทสต์สอง connection:** `scripts/test-receipt-pg.mjs` (embedded Postgres ถ้าไม่มี `TEST_DATABASE_URL`) แข่งลงใบเดียวกันได้หนึ่งแถว — คนละเรื่องกับ `test:stock-concurrency` ที่ยังเป็น PGlite เอนจินเดียว
+- โค้ดอยู่ที่ `origin/master` `fe94725` · **ยังไม่ deploy เส้นนี้ · ยังไม่ backfill แถว JSON เก่า**
+- เทสต์: `npm run test:receipts` · `npm run test:ui-contracts` · `npm run test:e2e-routes` (local/staging เท่านั้น)
+
+## สถาปัตยกรรมที่ใช้งานจริง (ตรวจจากโค้ด 2026-09-20)
 
 | ชั้น | ของจริง |
 |---|---|
@@ -108,7 +118,7 @@
 |---|---|
 | เงิน VAT WHT ปัดเศษ | `docs/money-and-tax.md` แล้วใช้ `lib/money.ts` |
 | คลัง / ต้นทุน / audit คลัง | `docs/architecture.md` + กฎด้านล่าง |
-| งานค้างรอบนี้ | `HANDOFF.md` |
+| งานค้างรอบนี้ | `HANDOFF.md` — leftover โค้ดปิดแล้ว · ที่เหลือคืออนุมัติ deploy + backfill |
 | แผนระยะถัดไป | `docs/IMPLEMENTATION_PLAN.md` |
 | ประวัติ incident / deploy เก่า | `docs/history/` — อ่านเฉพาะตอนไล่บั๊กเก่า |
 | schema เริ่มต้น | `docs/database-schema.sql` แล้วเทียบ migrations |
@@ -212,7 +222,7 @@
 
 **ระยะ 3 (2026-09-19 แอปบน production · `0045` apply แล้ว):** `/pos` ที่ชำระแล้วลง `sc_sales` หนึ่งแถวต่อใบ · คีย์กันซ้ำ = `service_orders.id` · `service_order_id` สำหรับรายงาน (ยอดขายรายวันไม่ใส่) · คลังยังเบิกมือที่ `/stock-out`
 
-**`0046` apply production แล้ว 2026-09-20** ผ่าน SSH+psql — มี `sc_receipt_posts` (unique ใบ/คีย์กันซ้ำ) · `sc_fn_post_receipt` · `sc_fn_guard_live_feature` · RLS เปิด · แอปที่ `7bac933+` ลงสมุดผ่าน RPC เป็นแหล่งหลัก JSON ใน `sc_settings` เป็นคิว/ภาพฉาย — **ยังไม่ deploy เส้นนี้ / ยังไม่ backfill แถว JSON เก่า**
+**`0046` apply production แล้ว 2026-09-20** ผ่าน SSH+psql — มี `sc_receipt_posts` (unique ใบ/คีย์กันซ้ำ) · `sc_fn_post_receipt` · `sc_fn_guard_live_feature` · RLS เปิด · แอปที่ `fe94725` ลงสมุดผ่าน RPC เป็นแหล่งหลัก JSON ใน `sc_settings` เป็นคิว/ภาพฉาย — **ยังไม่ deploy เส้นนี้ / ยังไม่ backfill แถว JSON เก่า**
 
 ยังไม่มีทั้งระบบ: ลิ้นชักเงินสด · ตัดสต๊อกอัตโนมัติตอนรับงาน (มีหน้าสูตรแล้วเส้นตัดจริงยังปิด) · ใบลดหนี้ที่กลับรายการ `sc_sales` หรือคืนสต๊อก · VAT effective date · GL/journal · e-Tax ส่งจริง (มีคิว sandbox) · ภ.พ.30 ยื่นจากแอป (บันทึกการยื่นภายนอกได้) · OCR ในแอป / สมุดซื้ออัตโนมัติจากทุกใบโดยไม่ตรวจ
 
@@ -222,5 +232,5 @@
 
 ## การทำงานของ agent ในรอบ harden นี้
 
-รอบ 2026-09-20: เจ้าของสั่ง apply `0046` + commit + push + deploy แล้ว  
+รอบ 2026-09-20 leftover **โค้ดในรีโปปิดแล้ว** ที่ `fe94725` (push แล้ว) · `0046` apply production แล้ว · แอปเส้น RPC **ยังไม่ขึ้น VPS** จนกว่าจะอนุมัติ deploy + backfill เป็นชุดเดียว  
 ยังไม่อนุญาตถ้าไม่ได้สั่งรอบนั้น: เขียน/ลบข้อมูลร้านจริง · สร้างบิลหรือเก็บเงินจริง · ส่งเอกสารให้ลูกค้า · rotate credentials · เปลี่ยนนโยบายภาษี/ต้นทุนหรือย้ายข้อมูลย้อนหลัง · เปิด e-Tax live / ตัดสต๊อกอัตโนมัติ / ออกเลข CN ทางการ
