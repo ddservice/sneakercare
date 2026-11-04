@@ -52,7 +52,7 @@ export async function fetchUsageCatalog(): Promise<{
       .filter((row): row is { id: string; name: string } => Boolean(row.id && row.name))
       .map((row) => ({ id: row.id, name: row.name })),
     items: (itemsRes.data ?? [])
-      .filter((row): row is { id: string; name: string; base_unit: string | null } => Boolean(row.id && row.name))
+      .filter((row) => Boolean(row.id && row.name))
       .map((row) => ({
         id: row.id,
         name: row.name,

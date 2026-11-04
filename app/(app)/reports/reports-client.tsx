@@ -1,5 +1,7 @@
 "use client";
 
+import { fetchAccountantPacket } from "@/app/actions/accountant-handoff";
+import { bangkokToday } from "@/lib/purchase-receipts";
 import { useState, useTransition } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -52,11 +54,13 @@ export type ReportStockRow = {
 };
 
 export function ReportsClient({
+  canManageReports,
   salesData,
   stockData,
   expensesData,
   cogsData,
 }: {
+  canManageReports: boolean;
   salesData: SaleRow[];
   stockData: ReportStockRow[];
   expensesData: ExpenseRow[];
@@ -64,6 +68,36 @@ export function ReportsClient({
 }) {
   const [activeTab, setActiveTab] = useState<"export" | "import" | "cogs">("export");
   const [isPending, startTransition] = useTransition();
+
+  const [accountantMonth, setAccountantMonth] = useState(bangkokToday().slice(0, 7));
+  function exportAccountantPacket() {
+    startTransition(async () => {
+      try {
+        const packet = await fetchAccountantPacket(accountantMonth);
+        const rows = (key: string) => (Array.isArray(packet[key]) ? packet[key] as Record<string, unknown>[] : []).map(row => Object.fromEntries(Object.entries(row).map(([k,v]) => [k, typeof v === "object" && v !== null ? JSON.stringify(v) : v])));
+        const sales = rows("sales"), payments = rows("payments"), balances = rows("balances"), unmatched = rows("unmatched");
+        const sum = (list: Record<string, unknown>[], key: string) => list.reduce((total,row) => total + Number(row[key] || 0),0);
+        const opening = balances.filter(row => String(row.date) < `${accountantMonth}-01`).reduce((total,row) => total + Number(row.total_revenue || 0) - Number(row.amount_paid || 0) - Number(row.receipts_before || 0),0);
+        const closing = sum(balances,"balance_end");
+        const difference = Math.round((opening + sum(sales,"total_revenue") - sum(sales,"amount_paid") - sum(payments,"amount") - closing)*100)/100;
+        const checks = [
+          {รายการ:"กิจการ",ค่า:String(packet.tenant_id)}, {รายการ:"เดือน",ค่า:accountantMonth}, {รายการ:"เวลาส่งออก",ค่า:String(packet.generated_at)},
+          {รายการ:"ลูกหนี้ต้นงวด",ค่า:opening}, {รายการ:"ยอดขายเดือนนี้",ค่า:sum(sales,"total_revenue")}, {รายการ:"เงินรับ ณ วันขาย",ค่า:sum(sales,"amount_paid")},
+          {รายการ:"เงินรับชำระเพิ่มตามวันรับเงินจริง",ค่า:sum(payments,"amount")}, {รายการ:"ลูกหนี้ปลายงวด",ค่า:closing}, {รายการ:"ผลต่างกระทบยอด (ควรเป็น 0)",ค่า:difference},
+          {รายการ:"เงินรับยังไม่จับคู่ (รายการสะสมถึงสิ้นงวด)",ค่า:unmatched.length}, {รายการ:"ลูกหนี้ติดลบที่ต้องตรวจ",ค่า:balances.filter(row=>Number(row.balance_end)<0).length},
+          {รายการ:"ขอบเขต",ค่า:"ข้อมูลบริหารร้านสำหรับสำนักงานบัญชีตรวจ ไม่ใช่งบการเงินหรือหลักฐานยื่นภาษีสำเร็จ"},
+          {รายการ:"เอกสาร",ค่า:"เอกสารกับยอดขายเป็นคนละสายข้อมูล ห้ามบวกรวมซ้ำ ตรวจเลขอ้างอิงและสถานะ VOID/DRAFT ก่อนใช้"},
+          {รายการ:"ค่าใช้จ่าย",ค่า:"expense_entries และ opex_source เป็นแหล่งข้อมูลที่อาจมีรายการสะท้อนกัน ห้ามรวมทั้งสองชุดโดยไม่ตัดซ้ำ"},
+          {รายการ:"รับซื้อเข้าคลัง",ค่า:"ใบรับซื้อเป็นข้อมูลคลัง ยังไม่ลงค่าใช้จ่ายหรือภาษีซื้ออัตโนมัติ สมุดภาษีซื้อและใบเสร็จลงสมุดส่งทั้งชุดทุกงวดเพื่อดูหลักฐาน ห้ามรวมยอดโดยไม่กรองวันที่"},
+        ];
+        downloadJsonWorkbook(`ส่งสำนักงานบัญชี_${accountantMonth}.xlsx`, [{name:"ตรวจยอดและคำอธิบาย",rows:checks},...[
+          ["sales","ยอดขาย"],["payments","เงินรับตามวันที่"],["balances","ลูกหนี้สิ้นงวด"],["unmatched","เงินรับยังไม่จับคู่"],["documents","เอกสาร"],["document_lines","รายการในเอกสาร"],["expense_entries","expense_entries"],["opex_source","opex_source"],["purchase_receipts","รับซื้อเข้าคลัง"],["wht_certificates","หัก ณ ที่จ่าย"],["purchase_vat_settings","สมุดภาษีซื้อทั้งชุด"],["receipt_posts_all","ใบเสร็จลงสมุดทั้งชุด"],["legacy_expenses","รายจ่ายเก่าสายรายงาน"],
+        ].map(([key,name])=>({name,rows:rows(key)}))]);
+        if(difference !== 0 || unmatched.length || balances.some(row=>Number(row.balance_end)<0)) toast.warning("ส่งออกแล้ว มีรายการต้องตรวจในชีตตรวจยอดและคำอธิบาย");
+        else toast.success("ส่งออกชุดสำนักงานบัญชีแล้ว กรุณาให้ผู้ทำบัญชีตรวจเอกสารประกอบก่อนใช้");
+      } catch(err) { toast.error(errorMessage(err,"ส่งออกชุดสำนักงานบัญชีไม่สำเร็จ")); }
+    });
+  }
 
   // Import State
   const [importType, setImportType] = useState<"sales" | "stock" | "expenses">("sales");
@@ -252,7 +286,7 @@ export function ReportsClient({
         onChange={(id) => setActiveTab(id as "export" | "import" | "cogs")}
         items={[
           { id: "export", label: "ส่งออก", icon: Download },
-          { id: "import", label: "นำเข้า", icon: Upload },
+          ...(canManageReports ? [{ id: "import", label: "นำเข้า", icon: Upload }] : []),
           { id: "cogs", label: "รายงานต้นทุน", icon: FileSpreadsheet },
         ]}
       />
@@ -260,6 +294,14 @@ export function ReportsClient({
       {/* ── TAB 1: EXPORT HUB ── */}
       {activeTab === "export" && (
         <div className="space-y-6">
+          {canManageReports && <Card>
+            <CardHeader><CardTitle>ส่งสำนักงานบัญชี</CardTitle><CardDescription>รายการขาย เงินรับตามวันจริง ลูกหนี้ และเอกสารประกอบ พร้อมผลต่างกระทบยอด แยกข้อมูลแต่ละกิจการ</CardDescription></CardHeader>
+            <CardContent className="flex flex-wrap items-end gap-3">
+              <div><Label htmlFor="accountant-month">เดือนที่ส่ง</Label><Input id="accountant-month" type="month" value={accountantMonth} onChange={e=>setAccountantMonth(e.target.value)} /></div>
+              <Button disabled={isPending} onClick={exportAccountantPacket}><Download className="mr-2 h-4 w-4" />ดาวน์โหลดชุดสำนักงานบัญชี</Button>
+              <p className="w-full text-sm text-muted-foreground">ตรวจชีตแรกก่อนส่ง หากยอดไม่ตรงหรือมีเงินรับยังไม่จับคู่ ให้ตรวจหลักฐานร่วมกับผู้ทำบัญชี</p>
+            </CardContent>
+          </Card>}
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {/* 1. Sales Export */}
             <Card className="border-teal-200 shadow-xs hover:border-teal-400 transition-all">
@@ -318,7 +360,7 @@ export function ReportsClient({
                     {expensesData.length} รายการ
                   </Badge>
                 </div>
-                <CardTitle className="text-sm font-bold text-slate-900 pt-2">บันทึกค่าใช้จ่าย & OPEX</CardTitle>
+                <CardTitle className="text-sm font-bold text-slate-900 pt-2">รายจ่ายเก่า (สายรายงาน)</CardTitle>
                 <CardDescription className="text-xs text-slate-500">
                   ค่าใช้จ่ายหน้าร้าน, ค่าดำเนินงาน, หมวดหมู่, ช่องทางชำระ
                 </CardDescription>
@@ -414,6 +456,7 @@ export function ReportsClient({
                 </CardDescription>
               </CardHeader>
               <CardContent className="p-5 space-y-4">
+                <p className="text-sm text-amber-800">ไฟล์ยอดขายนำเข้าได้เฉพาะวันที่ยังไม่มีรายการ ส่วนสต๊อกให้ใช้ <Link href="/stock-in" className="underline">รับซื้อเข้าคลัง</Link> / <Link href="/adjustments" className="underline">ปรับยอดตรวจนับ</Link> และรายจ่ายให้บันทึกที่ <Link href="/expenses" className="underline">ค่าใช้จ่าย</Link> เพื่อเก็บประวัติครบ</p>
                 {/* Select Import Category */}
                 <div className="space-y-1.5">
                   <Label className="text-xs font-bold text-slate-700">เลือกประเภทข้อมูลที่ต้องการนำเข้า</Label>
@@ -431,7 +474,7 @@ export function ReportsClient({
                     </button>
                     <button
                       type="button"
-                      onClick={() => setImportType("stock")}
+                      disabled title="ใช้รับซื้อเข้าคลังหรือปรับยอดตรวจนับแทน"
                       className={`p-2.5 rounded-lg border text-xs font-bold text-center transition-all ${
                         importType === "stock"
                           ? "bg-slate-900 text-white border-slate-900 shadow-xs"
@@ -442,7 +485,7 @@ export function ReportsClient({
                     </button>
                     <button
                       type="button"
-                      onClick={() => setImportType("expenses")}
+                      disabled title="บันทึกจากหน้าค่าใช้จ่ายเพื่อให้เข้ายอดหลัก"
                       className={`p-2.5 rounded-lg border text-xs font-bold text-center transition-all ${
                         importType === "expenses"
                           ? "bg-slate-900 text-white border-slate-900 shadow-xs"

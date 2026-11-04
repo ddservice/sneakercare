@@ -190,7 +190,7 @@ export async function sendPasswordReset(_prev: UserActionState, formData: FormDa
   // super_admin เท่านั้น ส่วน admin ปกติยังต้องตรงกับ tenant ตัวเองเหมือนเดิมทุกประการ
   const { data: targetProfile } = await admin
     .from("profiles")
-    .select("tenant_id")
+    .select("tenant_id, role")
     .eq("id", id)
     .maybeSingle();
   if (!targetProfile) {
@@ -199,6 +199,8 @@ export async function sendPasswordReset(_prev: UserActionState, formData: FormDa
   if (profile.role !== "super_admin" && targetProfile.tenant_id !== (await requireTenantId(profile))) {
     return { error: "ไม่พบผู้ใช้นี้ในระบบของคุณ" };
   }
+
+  if (profile.role !== "super_admin" && targetProfile.role === "super_admin") return { error: "เฉพาะผู้ดูแลระบบเท่านั้นที่จัดการบัญชีผู้ดูแลระบบได้" };
 
   const { data: target, error: getError } = await admin.auth.admin.getUserById(id);
   if (getError || !target?.user?.email) {
@@ -249,9 +251,12 @@ export async function deleteUser(_prev: UserActionState, formData: FormData): Pr
   // ⚠️ [แก้บั๊กจริง 2026-09-17] super_admin ไม่มี tenant ของตัวเอง (requireTenantId เดิมจะ throw
   // ทันที) แต่ควรจัดการผู้ใช้ข้าม tenant ได้ทุกคนตามสิทธิ์ที่ออกแบบไว้ — ข้ามการเช็ค tenant สำหรับ
   // super_admin เท่านั้น ส่วน admin ปกติยังต้องตรงกับ tenant ตัวเองเหมือนเดิมทุกประการ
-  const { data: targetCheck } = await admin.from("profiles").select("tenant_id").eq("id", id).maybeSingle();
+  const { data: targetCheck } = await admin.from("profiles").select("tenant_id, role").eq("id", id).maybeSingle();
   if (!targetCheck) {
     return { error: "ไม่พบผู้ใช้นี้ในระบบ" };
+  }
+  if (profile.role !== "super_admin" && targetCheck.role === "super_admin") {
+    return { error: "เฉพาะผู้ดูแลระบบเท่านั้นที่ลบบัญชีผู้ดูแลระบบได้" };
   }
   const tenantId = profile.role === "super_admin" ? targetCheck.tenant_id : await requireTenantId(profile);
   if (profile.role !== "super_admin" && targetCheck.tenant_id !== tenantId) {

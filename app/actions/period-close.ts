@@ -5,7 +5,7 @@ import { requireProfile, requireAdmin, requireModuleView, requireModuleWrite } f
 import { logAudit } from "@/lib/audit";
 import { requireTenantId, tenantFilter } from "@/lib/tenant";
 import { planClosePeriod, planReopenPeriod } from "@/lib/period-close";
-import { readClosedPeriods, writeClosedPeriods } from "@/lib/period-close-store";
+import { readClosedPeriods, setPeriodState } from "@/lib/period-close-store";
 
 export async function fetchClosedPeriods(): Promise<string[]> {
   const profile = await requireProfile();
@@ -25,8 +25,8 @@ export async function closePeriod(
   const current = await readClosedPeriods(tenantId);
   const planned = planClosePeriod(current, periodYm);
   if (!planned.ok) return { success: false, error: planned.error };
-  const writeError = await writeClosedPeriods(tenantId, planned.next);
-  if (writeError) return { success: false, error: `ปิดงวดไม่สำเร็จ: ${writeError}` };
+  const result = await setPeriodState(tenantId, periodYm, true);
+  if (result.error) return { success: false, error: `ปิดงวดไม่สำเร็จ: ${result.error}` };
   await logAudit({
     action: "UPDATE",
     entity: "settings",
@@ -34,11 +34,11 @@ export async function closePeriod(
     actor_id: profile.id,
     actor_name: profile.display_name,
     tenant_id: tenantId,
-    detail: { setting: "closed_periods", closed: periodYm, periods: planned.next },
+    detail: { setting: "closed_periods", closed: periodYm, periods: result.closed },
   });
   revalidatePath("/tax-filing");
   revalidatePath("/", "layout");
-  return { success: true, closed: planned.next };
+  return { success: true, closed: result.closed! };
 }
 
 export async function reopenPeriod(
@@ -51,8 +51,8 @@ export async function reopenPeriod(
   const current = await readClosedPeriods(tenantId);
   const planned = planReopenPeriod(current, periodYm);
   if (!planned.ok) return { success: false, error: planned.error };
-  const writeError = await writeClosedPeriods(tenantId, planned.next);
-  if (writeError) return { success: false, error: `เปิดงวดไม่สำเร็จ: ${writeError}` };
+  const result = await setPeriodState(tenantId, periodYm, false);
+  if (result.error) return { success: false, error: `เปิดงวดไม่สำเร็จ: ${result.error}` };
   await logAudit({
     action: "UPDATE",
     entity: "settings",
@@ -60,9 +60,9 @@ export async function reopenPeriod(
     actor_id: profile.id,
     actor_name: profile.display_name,
     tenant_id: tenantId,
-    detail: { setting: "closed_periods", reopened: periodYm, periods: planned.next },
+    detail: { setting: "closed_periods", reopened: periodYm, periods: result.closed },
   });
   revalidatePath("/tax-filing");
   revalidatePath("/", "layout");
-  return { success: true, closed: planned.next };
+  return { success: true, closed: result.closed! };
 }

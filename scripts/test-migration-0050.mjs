@@ -1,0 +1,35 @@
+import {fixture,ids as i,uuid,serviceRole} from './lib/release-fixture.mjs';
+import assert from 'node:assert/strict';
+const db=await fixture(['0046_receipt_posts_and_live_guards.sql','0048_security_boundaries.sql','0049_atomic_sales_and_payments.sql','0050_atomic_documents.sql']);
+try{
+ await serviceRole(db);
+ const create=(key,data,tenant=i.tenant)=>db.query('select rrs_create_document($1,$2,$3,$4::jsonb) result',[i.admin,tenant,key,JSON.stringify(data)]).then(r=>r.rows[0].result);
+ const data={branch_id:i.branch,doc_type:'TAX_INVOICE',issue_date:'2026-11-04',charge_vat:true,contact:{company_name:'Customer',tax_id:'1234567890123'},items:[{name:'clean',quantity:2,unit_price:100,discount:0,total:200}],billing_refs:[],notes:'seller snapshot'};
+ const d=await create(uuid(200),data); assert.equal(d.doc_number,'TAX-20261104-0001');
+ assert.equal((await create(uuid(200),data)).id,d.id);
+ await assert.rejects(create(uuid(201),{...data,items:[{...data.items[0],total:1}]}),/ยอดรายการไม่ตรง/);
+ await assert.rejects(create(uuid(201),data,i.other),/ไม่มีสิทธิ์/);
+ const draft=await create(uuid(202),{...data,doc_type:'INVOICE'});assert.match(draft.doc_number,/^DRAFT-/);
+ const issue=()=>db.query('select rrs_issue_document($1,$2,$3) result',[i.admin,i.tenant,draft.id]).then(r=>r.rows[0].result);
+ const issued=await issue();assert.equal(issued.doc_number,'INV-20261104-0001');assert.equal((await issue()).doc_number,issued.doc_number);
+ const cn=await create(uuid(203),{...data,doc_type:'CREDIT_NOTE',source_doc_id:d.id,items:[{name:'discount',quantity:1,unit_price:20,discount:0,total:20}]});assert.match(cn.doc_number,/^DRAFT-/);
+ await assert.rejects(db.query('select rrs_issue_document($1,$2,$3)',[i.admin,i.tenant,cn.id]),/ยังเป็นร่าง/);
+ await assert.rejects(create(uuid(204),{...data,doc_type:'CREDIT_NOTE',source_doc_id:d.id,items:[{name:'too much',quantity:1,unit_price:300,discount:0,total:300}]}),/เกินยอด/);
+ const qa=await create(uuid(205),{...data,doc_type:'QUOTATION'});
+ await create('convert-qa',{...data,doc_type:'INVOICE',source_doc_id:qa.id,convert_source:true});
+ await assert.rejects(create('convert-qa-again',{...data,doc_type:'INVOICE',source_doc_id:qa.id,convert_source:true}),/ถูกแปลงแล้ว/);
+ await assert.rejects(db.query('select rrs_document_lifecycle($1,$2,$3,$4,$5)',[i.admin,i.tenant,d.id,'delete','']),/ใช้ยกเลิก/);
+ await db.exec('reset role'); const before=Number((await db.query('select count(*) n from extension_layer.ext_documents')).rows[0].n);
+ await db.exec(`create function fail_line_test() returns trigger language plpgsql as $$begin raise exception 'forced line failure';end$$;create trigger fail_line before insert on extension_layer.ext_document_items for each row execute function fail_line_test();`);
+ await serviceRole(db);await assert.rejects(create(uuid(206),data),/forced line failure/);
+ await db.exec('reset role');assert.equal(Number((await db.query('select count(*) n from extension_layer.ext_documents')).rows[0].n),before);
+ assert.equal(Number((await db.query(`select current_sequence from extension_layer.ext_numbering_sequences where doc_type='TAX_INVOICE'`)).rows[0].current_sequence),1);
+ await db.exec('set role authenticated');await assert.rejects(create(uuid(207),data),/permission denied/);
+ await db.exec('reset role;drop trigger fail_line on extension_layer.ext_document_items');
+ await db.query("insert into branches values($1,$2,'Other same-tenant branch',true,true)",[uuid(22),i.tenant]);
+ await serviceRole(db);
+ const otherBranch=await create(uuid(220),{...data,branch_id:uuid(22),doc_type:'INVOICE'});
+ await assert.rejects(db.query('select rrs_issue_document($1,$2,$3)',[i.co,i.tenant,otherBranch.id]),/เอกสารสาขานี้/);
+ await assert.rejects(db.query("select rrs_document_lifecycle($1,$2,$3,'delete','')",[i.co,i.tenant,otherBranch.id]),/เอกสารสาขานี้/);
+ console.log('0050 PASS: document+items+number rollback, arithmetic, replay, atomic issue, conversion lock, correction cap and live gate, direct-API denial');
+}finally{await db.close();}

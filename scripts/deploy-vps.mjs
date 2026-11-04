@@ -49,6 +49,7 @@ if (!host || !user || !remotePath || !pm2App) {
   process.exit(1);
 }
 
+const withDatabase = process.argv.includes("--with-database");
 const remoteCommands = `
 set -euo pipefail
 cd "${remotePath}"
@@ -60,6 +61,7 @@ if [ -n "\${DIRTY}" ]; then
   exit 2
 fi
 PREV="$(git rev-parse HEAD)"
+PREV_INTERPRETER="$(pm2 jlist | node -e "let s='';process.stdin.on('data',x=>s+=x);process.stdin.on('end',()=>console.log(JSON.parse(s).find(x=>x.name==='${pm2App}').pm2_env.exec_interpreter));")"
 echo "release ปัจจุบัน \${PREV}"
 echo "==> [2/6] fetch origin/master"
 git fetch origin master
@@ -78,6 +80,11 @@ else
 fi
 RELEASE="$(git rev-parse HEAD)"
 echo "จะปล่อย \${RELEASE}"
+RUNTIME_DIR="$HOME/.local/share/rrs/node-v$(tr -d 'v\\r\\n' < .nvmrc)-linux-x64"
+test -x "\${RUNTIME_DIR}/bin/node"
+export PATH="\${RUNTIME_DIR}/bin:$PATH"
+node --version
+node -e "if(process.version !== 'v26.13.0')process.exit(1)"
 echo "==> [3/6] ติดตั้ง dependencies จาก lockfile (ยังเสิร์ฟ .next เดิม)"
 npm ci
 echo "==> [4/6] build ไป .next-new ไม่ย้าย .next ที่กำลังเสิร์ฟ (ห้ามถอด --webpack)"
@@ -101,6 +108,12 @@ if ! NEXT_DIST_DIR=.next-new npm run build; then
   exit 4
 fi
 git restore --worktree -- tsconfig.json package-lock.json || true
+${withDatabase ? `echo "==> Apply checked release migrations (fresh backup + rollback smoke)"
+if ! bash scripts/apply-release-db.sh --confirm-production=mdlxogfkpwejnqpzhmoy; then
+  restore_source
+  npm ci
+  exit 6
+fi` : ""}
 echo "==> สลับ .next หลัง build ผ่าน"
 rm -rf .next-prev
 if [ -d .next ]; then
@@ -108,15 +121,17 @@ if [ -d .next ]; then
 fi
 mv .next-new .next
 echo "==> [5/6] รีสตาร์ต PM2 ${pm2App}"
-pm2 restart "${pm2App}"
+pm2 restart "${pm2App}" --interpreter "\${RUNTIME_DIR}/bin/node" --update-env
 sleep 3
 echo "==> [6/6] ตรวจ /login บน 127.0.0.1:3003"
 if ! curl -sf -o /dev/null --max-time 20 http://127.0.0.1:3003/login; then
   echo "start ไม่ผ่าน — กู้คืน release เดิม"
   restore_release
-  pm2 restart "${pm2App}"
+  npm ci
+  pm2 restart "${pm2App}" --interpreter "\${PREV_INTERPRETER}" --update-env
   exit 5
 fi
+pm2 save
 echo "==> สำเร็จ release \${RELEASE}"
 echo "กู้คืนฉุกเฉิน: mv .next-prev .next && git switch -C master \${PREV} && pm2 restart ${pm2App}"
 `.trim();
@@ -130,13 +145,16 @@ if (sshKey) {
 if (port && port !== "22") {
   sshArgs.push("-p", port);
 }
-sshArgs.push(`${user}@${host}`, remoteCommands);
+const checkOnly = process.argv.includes("--check");
+sshArgs.push("-o", "BatchMode=yes", "-o", "StrictHostKeyChecking=yes");
+sshArgs.push(`${user}@${host}`, checkOnly ? "bash -n" : remoteCommands);
 
-const sshProc = spawn("ssh", sshArgs, { stdio: "inherit" });
+const sshProc = spawn("ssh", sshArgs, { stdio: checkOnly ? ["pipe", "inherit", "inherit"] : "inherit" });
+if (checkOnly) sshProc.stdin.end(remoteCommands);
 
 sshProc.on("close", (code) => {
   if (code === 0) {
-    console.log(`\n\x1b[32mสำเร็จ: Deploy ไปยัง VPS เรียบร้อยแล้ว\x1b[0m`);
+    console.log(`\n\x1b[32mสำเร็จ: ${checkOnly ? "ตรวจรูปแบบคำสั่ง deploy แล้ว (ยังไม่ deploy)" : "Deploy ไปยัง VPS เรียบร้อยแล้ว"}\x1b[0m`);
   } else {
     console.error(`\n\x1b[31mผิดพลาด: SSH exited with code ${code}\x1b[0m`);
     process.exit(code || 1);

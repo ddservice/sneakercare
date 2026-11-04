@@ -66,6 +66,7 @@ export default async function ReportsPage({
 
   return (
     <ReportsClient
+      canManageReports={profile.role === "admin" || profile.role === "super_admin"}
       salesData={salesRows || []}
       stockData={flatStock}
       expensesData={expensesRows || []}

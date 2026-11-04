@@ -83,6 +83,6 @@ if (headEnd === -1) {
 }
 
 const header = current.slice(0, headEnd); // header + type ที่เขียนมือ (UserRole, ItemType, ...)
-writeFileSync(target, header + generated.slice(at), "utf8");
+writeFileSync(target, (header + generated.slice(at)).replace(/[ \t]+$/gm, ""), "utf8");
 console.log(`\x1b[32m✅ อัปเดต lib/supabase/database.types.ts แล้ว (เก็บ header ที่เขียนมือไว้ครบ)\x1b[0m`);
 console.log("   ต่อไป: npm run typecheck แล้วดูว่ามีจุดไหนที่ types ใหม่ชี้ว่าโค้ดผิดบ้าง");

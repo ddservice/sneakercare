@@ -18,6 +18,8 @@ const eslintConfig = defineConfig([
     "supabase/functions/**",
     // ผลลัพธ์ที่ tsc คอมไพล์ไว้ให้เทสต์ (npm run test:expenses ฯลฯ) — ไม่ใช่โค้ดที่คนเขียน
     ".test-build/**",
+    ".tools/**",
+    ".scratch-*/**",
   ]),
   {
     rules: {

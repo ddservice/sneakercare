@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useRef } from "react";
+import { newRequestId } from "@/lib/idempotency";
 import { createServiceOrder, updateOrderStatus } from "@/app/actions/pos";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -85,6 +86,9 @@ export function PosClient({
   canManageServices: boolean;
   allowLegacyCatalog?: boolean;
 }) {
+  const orderRequestId = useRef(newRequestId());
+  const orderForm = useRef<HTMLFormElement>(null);
+  const allowFormReset = useRef(false);
   const catalogSource =
     services.length > 0 ? services : allowLegacyCatalog ? LEGACY_T1_SERVICES : [];
   const catalog = catalogSource.filter((s) => s.isActive).map((s) => ({
@@ -138,6 +142,7 @@ export function PosClient({
 
   async function handleSubmitOrder(formData: FormData) {
     startTransition(async () => {
+      formData.set("request_id", orderRequestId.current);
       formData.set("shoe_brand", selectedBrand);
       formData.set("shoe_size", selectedSize);
       formData.set("gross_amount", String(grossAmount));
@@ -159,6 +164,7 @@ export function PosClient({
       });
 
       const res = await createServiceOrder(undefined, formData);
+      if (res?.success) { orderRequestId.current = newRequestId(); allowFormReset.current = true; orderForm.current?.reset(); allowFormReset.current = false; }
       if (res?.error) {
         toast.error(res.error);
       } else if (res?.success) {
@@ -172,8 +178,8 @@ export function PosClient({
         setDiscount(0);
         // Refresh orders locally
         const newOrder: OrderItem = {
-          id: `tmp-${Date.now()}`,
-          order_no: res.orderNo || `SC-${Date.now()}`,
+          id: res.orderId!,
+          order_no: res.orderNo!,
           customer_name: String(formData.get("customer_name") ?? ""),
           customer_phone: String(formData.get("customer_phone") ?? ""),
           shoe_brand: selectedBrand,
@@ -195,8 +201,9 @@ export function PosClient({
 
   async function handleStatusChange(orderId: string, newStatus: "received" | "in_progress" | "ready" | "delivered") {
     try {
-      await updateOrderStatus(orderId, newStatus);
+      const result = await updateOrderStatus(orderId, newStatus);
       toast.success("อัปเดตสถานะสำเร็จ");
+      if (result.accountingReview) toast.warning("ยกเลิกงานแล้ว แต่ยังไม่คืนเงินหรือกลับยอดขาย กรุณาบันทึกการคืนเงินจริงและส่งหลักฐานให้สำนักงานบัญชี");
       setOrders(orders.map((o) => (o.id === orderId ? { ...o, status: newStatus } : o)));
     } catch (err) {
       toast.error(errorMessage(err, "เกิดข้อผิดพลาด"));
@@ -235,7 +242,7 @@ export function PosClient({
             </CardHeader>
 
             <CardContent className="p-6">
-              <form action={handleSubmitOrder} className="space-y-6">
+              <form ref={orderForm} onReset={event => { if (!allowFormReset.current) event.preventDefault(); }} action={handleSubmitOrder} className="space-y-6">
                 {/* 1. Customer Information */}
                 <div className="space-y-3">
                   <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">

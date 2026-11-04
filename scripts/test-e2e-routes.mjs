@@ -44,6 +44,7 @@ const gated = [
   "/settings",
   "/stock-out",
   "/stock-in",
+  "/stock-in/prices",
   "/adjustments",
   "/admin/users",
 ];

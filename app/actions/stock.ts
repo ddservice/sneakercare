@@ -5,6 +5,8 @@ import { createClient } from "@/lib/supabase/server";
 import { requireProfile, requireModuleWrite, type Profile } from "@/lib/auth";
 import { assertWritableBranch } from "@/lib/branch";
 import { canRecordWaste, canWrite } from "@/lib/permissions";
+import { validatePurchase, type PurchaseData } from "@/lib/purchase-receipts";
+import { purchaseRpcError } from "@/lib/purchase-rpc-error";
 import { stockWriteError } from "@/lib/stock-errors";
 
 export type StockActionState = { error?: string; success?: boolean } | undefined;
@@ -60,105 +62,36 @@ export async function createStockOut(_prev: StockActionState, formData: FormData
 export async function createStockIn(_prev: StockActionState, formData: FormData): Promise<StockActionState> {
   const profile = await requireProfile();
   requireModuleWrite(profile, "stock-in");
-  const supabase = await createClient();
-
-  const isNewItem = formData.get("is_new_item") === "true";
-  let itemId = String(formData.get("item_id") ?? "");
-  const purchaseQty = Number(formData.get("purchase_qty"));
-  const totalCost = Number(formData.get("total_cost"));
-  const referenceNote = String(formData.get("reference_note") ?? "").trim();
-
-  if (!Number.isFinite(purchaseQty) || purchaseQty <= 0 || !Number.isFinite(totalCost) || totalCost < 0) {
-    return { error: "กรุณากรอกจำนวนที่ซื้อและยอดที่จ่ายให้ถูกต้อง" };
-  }
-
   const branch = resolveBranch(profile, formData);
   if ("error" in branch) return branch;
-  const { branchId } = branch;
-
-  let purchaseUnitQty = 1;
-
-  if (isNewItem) {
-    const newItemName = String(formData.get("new_item_name") ?? "").trim();
-    const newItemCategory = String(formData.get("new_item_category") ?? "อุปกรณ์ทำความสะอาด").trim();
-    const newItemUnit = String(formData.get("new_item_unit") ?? "ชิ้น").trim();
-    const newMinStock = Number(formData.get("new_min_stock") ?? 1);
-
-    if (!newItemName) {
-      return { error: "กรุณาระบุชื่อสินค้าใหม่" };
-    }
-
-    // 🔴 [แก้บั๊กจริง 2026-09-17] เดิม insert ไม่ระบุ tenant_id เลย — migration 0028 ตั้ง DEFAULT
-    // เป็น tenant #1 ตายตัว ⇒ รับของเข้าคลังแล้วเพิ่มสินค้าใหม่ (โหมด "+ เพิ่มสินค้าใหม่" ที่
-    // /stock-in) ของ tenant ไหนก็ตาม (เช่น LUXSU) จะได้แถวไปโผล่ที่แคตตาล็อกของ tenant #1 เสมอ —
-    // หา tenant จาก branchId ที่กำลังรับของเข้าจริงตรงๆ (ผ่านการเช็ค assertWritableBranch แล้ว)
-    // แทนที่จะพึ่ง cookie สาขาที่เลือกไว้แยกต่างหาก ซึ่งอาจไม่ตรงกับ branchId ของฟอร์มนี้เป๊ะ
-    const { data: branchRow } = await supabase.from("branches").select("tenant_id").eq("id", branchId).single();
-    if (!branchRow?.tenant_id) {
-      return { error: "ไม่พบ tenant ของสาขานี้ — ติดต่อผู้ดูแลระบบ" };
-    }
-
-    const { data: createdItem, error: createErr } = await supabase
-      .from("items")
-      .insert({
-        name: newItemName,
-        category: newItemCategory,
-        base_unit: newItemUnit,
-        purchase_unit: newItemUnit,
-        purchase_unit_qty: 1,
-        default_min_stock_level: newMinStock,
-        item_type: "inventory",
-        is_active: true,
-        tenant_id: branchRow.tenant_id,
-      })
-      .select("id, purchase_unit_qty")
-      .single();
-
-    // `items` เป็น VIEW (alias ของ inv_items) types จึงมองว่าทุกคอลัมน์อาจเป็น null ได้
-    // เช็ค id ตรงๆ แทนการ cast — ถ้า insert สำเร็จแต่ไม่ได้ id กลับมาจริงๆ (เช่น view เปลี่ยนรูป)
-    // ต้องหยุดแล้วบอกผู้ใช้ ดีกว่าปล่อยให้ itemId เป็น null แล้วไปพังตอนตัดสต๊อกทีหลัง
-    if (createErr || !createdItem?.id) {
-      return { error: `สร้างสินค้าใหม่ไม่สำเร็จ: ${createErr?.message ?? "ไม่ได้รับรหัสสินค้ากลับมา"}` };
-    }
-
-    itemId = createdItem.id;
-    purchaseUnitQty = createdItem.purchase_unit_qty || 1;
-  } else {
-    if (!itemId) {
-      return { error: "กรุณาเลือกสินค้าที่ต้องการรับเข้า" };
-    }
-
-    const { data: item, error: itemError } = await supabase
-      .from("items")
-      .select("purchase_unit_qty")
-      .eq("id", itemId)
-      .single();
-
-    if (itemError || !item) {
-      return { error: "ไม่พบสินค้านี้ในระบบ" };
-    }
-    purchaseUnitQty = item.purchase_unit_qty || 1;
+  const isNew = formData.get("is_new_item") === "true";
+  const field = (key: string) => String(formData.get(key) ?? "").trim();
+  const numeric = (key: string) => field(key) === "" ? NaN : Number(field(key));
+  const data: PurchaseData = {
+    item_id: isNew ? "" : field("item_id"),
+    new_item_name: isNew ? field("new_item_name") : "",
+    new_item_category: isNew ? field("new_item_category") : "",
+    new_item_unit: isNew ? field("new_item_unit") : "",
+    new_min_stock: isNew ? numeric("new_min_stock") : 0,
+    supplier_name: field("supplier_name"), purchase_date: field("purchase_date"),
+    purchase_unit: field("purchase_unit"), purchase_qty: numeric("purchase_qty"),
+    units_per_pack: numeric("units_per_pack"), goods_amount: numeric("goods_amount"),
+    shipping_amount: numeric("shipping_amount"), discount_amount: numeric("discount_amount"),
+    reference_note: field("reference_note"),
+  };
+  if (!isNew && !data.item_id) return { error: "สินค้า: เลือกสินค้าที่รับเข้า" };
+  const error = validatePurchase(data);
+  if (error) return { error };
+  const requestId = field("request_id");
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(requestId)) {
+    return { error: "ไม่พบคีย์รายการ กรุณาโหลดหน้าใหม่" };
   }
-
-  const baseQty = purchaseQty * purchaseUnitQty;
-  const unitCost = totalCost / baseQty;
-
-  const { error } = await supabase.from("stock_transactions").insert({
-    item_id: itemId,
-    branch_id: branchId,
-    txn_type: "stock_in",
-    quantity_delta: baseQty,
-    unit_cost_snapshot: unitCost,
-    reference_type: "purchase",
-    reference_note: referenceNote || null,
-    performed_by: profile.id,
+  const supabase = await createClient();
+  const result = await supabase.rpc("inv_fn_receive_purchase", {
+    p_branch_id: branch.branchId, p_request_id: requestId, p_data: data,
   });
-
-  if (error) {
-    return { error: `บันทึกไม่สำเร็จ: ${error.message}` };
-  }
-
-  revalidateStock(["/stock-in", "/inventory"]);
+  if (result.error) return { error: purchaseRpcError(result.error) };
+  revalidateStock(["/stock-in", "/stock-in/prices", "/inventory"]);
   return { success: true };
 }
 

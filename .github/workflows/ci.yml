@@ -24,7 +24,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version-file: .nvmrc
           cache: npm
 
       - run: npm ci
@@ -72,6 +72,12 @@ jobs:
       # ของเดือนเดียวกันไม่ตรงกัน เพราะเขียนกฎกรองกันคนละชุด และเป็นตัวเลข "ขาด" ที่ไม่มี error ให้เห็น
       - name: Expense totals (สูตรกลางของค่าใช้จ่าย)
         run: npm run test:expenses
+
+      - name: Security boundaries and atomic finance
+        run: npm run test:security-finance
+
+      - name: Purchase receipts and price comparison
+        run: npm run test:purchases
 
       # migration กลุ่มนี้ต้อง apply ด้วยมือผ่าน Supabase SQL Editor (repo ไม่มีสิทธิ์ DDL
       # ไปที่ SneakerCareDB) เทสต์นี้จึงรันมันใส่ Postgres จริงผ่าน PGlite (WASM ไม่ต้องมี Docker)

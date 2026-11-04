@@ -31,6 +31,7 @@ export async function postReceiptToLedger(
   | { ok: false; kind: "conflict" | "error"; error: string }
 > {
   const supabase = createAdminClient();
+  if (!row.approvedBy) return { ok: false, kind: "error", error: "ต้องมีผู้อนุมัติที่ใช้งานอยู่ก่อนลงสมุดใบเสร็จ" };
   const { data, error } = await supabase.rpc("sc_fn_post_receipt", {
     p_tenant_id: row.tenantId,
     p_receipt_id: row.receiptId,
@@ -38,7 +39,7 @@ export async function postReceiptToLedger(
     p_fingerprint: row.fingerprint,
     p_purchase_amount: row.purchaseAmount,
     p_vat_credit: row.vatCredit,
-    p_approved_by: row.approvedBy ?? null,
+    p_approved_by: row.approvedBy,
   });
   if (error) return { ok: false, ...parseReceiptLedgerError(error.message) };
   const posted = data?.[0];

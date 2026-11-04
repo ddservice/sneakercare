@@ -1,4 +1,48 @@
+# สถานะปัจจุบัน 2026-11-04 — release ความปลอดภัย / รับซื้อ / ส่งสำนักงานบัญชี
+
+- ขอบเขตที่เจ้าของยืนยัน: บริหารร้านและส่งข้อมูลที่กระทบยอดได้ให้สำนักงานบัญชี ไม่จัดทำ GL/งบยื่นเอง
+- Production ได้รับ emergency security migration 0048 และโครงสร้างรับซื้อ 0047 แล้ว; แอปรุ่นใหม่และ0049–0052 กำลังเตรียมปล่อย (อัปเดตผลท้ายรอบก่อนส่งงาน)
+- แก้ self-promotion, stock helper/numbering anonymous EXECUTE, inventory cross-tenant views, receipt direct writes, branding storage tenant prefix และปิดงวด fail-closed
+- เงิน/ใบรับงาน/เอกสารเปลี่ยนเป็น service-only atomic RPC พร้อม actor/tenant/branch, retry key, version และ DB arithmetic; เก็บเงินจริงอิง sale_id ไม่รวมซ้ำตามวันที่
+- เมนูเพิ่มสินค้าเข้าคลังรองรับร้าน/แพ็ก/จำนวน/ค่าส่ง/ส่วนลดแยกครั้ง และสถิติบาทต่อหน่วยฐานรายเดือน/เทียบร้าน
+- /reports เพิ่มชุดสำนักงานบัญชี: ยอดขาย เงินรับตามวันที่จริง ลูกหนี้ต้น/ปลายงวด ผลต่าง เอกสาร/รายการย่อย ค่าใช้จ่ายแยกแหล่ง WHT สมุดภาษีซื้อและใบเสร็จลงสมุด (สองชุดหลังส่งทุกงวด มีคำอธิบายไม่ให้บวกซ้ำ)
+- ปิดตรวจสลิปจำลองที่เคยสร้าง VERIFIED/PAID โดยไม่ตรวจธนาคารจริง; ยังไม่เชื่อม provider จึงตอบว่ายังยืนยันไม่ได้ ไม่มีการเขียนยอด
+- ปิด bulk import สต๊อกที่เคยเขียน current_qty/avg_cost ตรง และรายจ่ายที่เคยเข้าเฉพาะตารางรายงาน: ใช้ /stock-in /adjustments /expenses แทน; sales import ห้ามเขียนทับวันที่มีรายการแล้ว และใช้ command เดียวกับหน้าร้าน
+- Next16.4.5 / React19.3.1 / Node26.13.0 LTS; portable Nodeบน VPS ติดตั้งและตรวจ SHA256 แล้ว การสลับ PM2 อยู่ใน npm run deploy
+- ตรวจผ่าน25กลุ่ม, embedded PostgreSQL สอง connection, hosted security/business smoke rollback และตรวจ0แถวตกค้าง, Edge fixture มือถือ/desktop (รับซื้อ+POS retryรักษาฟอร์ม+ใช้IDจริง+ดาวน์โหลดExcelกระทบยอด)
+- Restore drill บน VPSเดิมเท่านั้น: กู้ public data34/34ตาราง เทียบ5ตารางหลักตรง ไม่ส่งข้อมูลจริงลงเครื่องlocal; ยังไม่ใช่ full Supabase auth/schema disaster-recovery drill
+- Deploy: npm run deploy -- --with-database สร้าง .next-new ก่อน, fresh backup, migrationsพร้อม LF-normalizedSHA256 ledger, hosted rollback smoke แล้วค่อยสลับ PM2 interpreter และ healthcheck; ห้ามแก้0048ที่applyแล้ว
+- ขอบเขตที่ยังไม่เปิด: auto stock issue, official CN/DN effects, e-Tax send, OCR, auto slip verification; ให้สำนักงานบัญชีตรวจภาษี/เอกสารก่อนใช้ยื่นจริง ไม่รับรองว่าระบบไร้ช่องโหว่หรือบัญชีทุกมาตรฐาน
+
+> ส่วนด้านล่างเป็นประวัติก่อนแก้ไข ไม่ใช่สถานะปัจจุบัน
+
 # HANDOFF
+
+## ผลตรวจล่าสุด 2026-11-04 — HOLD ไม่ deploy หลังตรวจ production
+
+- ตรวจ production แบบอ่านอย่างเดียว: HEAD `08081429abd698ea8f89544be9da9fbabb7d3cb9`, PM2 online, login 200, Node 22.23.3 / Next 16.3.5; migration 0047 ยังไม่มี
+- **พบช่องโหว่ที่ยังไม่ได้แก้:** profiles self-update ยกระดับ staff เป็น super_admin; anon เรียก fn_consume_stock_outflow และ extension_layer.fn_generate_document_number; owner-privileged inventory views ขาด tenant filter ทั้ง 4 ประเด็นพิสูจน์ใน PGlite ด้วยข้อมูลสมมติจาก code/policies ที่อ่านจาก production ไม่ได้ทดลองแก้ข้อมูลจริง
+- เพิ่มเติม: period close fail-open เมื่ออ่าน settings พัง/ไม่บังคับที่ DB; สมุดซื้อ sc_receipt_posts ให้ direct writes กว้าง; Storage branding ไม่แยก tenant ครบ; การออกเลข fallback เป็นเลขสุ่ม; POS/เอกสาร/รับชำระยังไม่ atomic; GL/งบการเงิน/ภาษียังไม่ครบ
+- test:guards, tax-recon, VAT, checkout, period-close, docs, receipts (รวม embedded PG สอง connection), migration 0011–0046 ผ่าน แต่ไม่ได้ครอบคลุมช่องโหว่ direct DB/API ที่พบครั้งนี้
+- backup ล่าสุด 20261103_200001 UTC มี TOC 92 tables รวม auth.users/sc_receipt_posts ตรวจด้วย pg_restore 17/18 ได้ ยังไม่ deep restore; default pg_restore 16 เก่าเกินไฟล์ ไม่ได้แปลว่าไฟล์เสีย
+- รายละเอียด หลักฐาน ขอบเขต ข้อกำหนดทางการ และเกณฑ์แก้อยู่ที่ `docs/security-accounting-review-2026-11-04.md` **ห้ามอ้างว่าบัญชีครบมาตรฐานหรือไม่มีช่องโหว่เพราะ build/audit ผ่าน**
+- เงื่อนไขเจ้าของคือพร้อมครบแล้วจึง deploy ผลตรวจไม่ผ่าน จึงไม่ apply migration/ไม่ deploy/ไม่เปิด live flags รอบนี้
+
+## รอบล่าสุด 2026-11-04 — ประวัติรับซื้อและราคา (ยังไม่ deploy)
+
+- อ่าน `CLAUDE.md` และสถานะเดิมแล้ว งานที่เพิ่มรอบนี้คือเก็บการซื้อวัสดุสิ้นเปลืองแยกครั้ง และเปรียบเทียบราคา โดยไม่เปิดฟีเจอร์ live เดิม
+- Next.js / eslint-config-next 16.4.5, React / React DOM 19.3.1; Node LTS 26.13.0 ติดตั้ง portable ใน `.tools` พร้อม SHA256 จากทางการ, `.nvmrc` / engines / CI เปลี่ยนแล้ว แต่ Node ทั้งเครื่องและ VPS / PM2 ยังไม่เปลี่ยน
+- เมนูคลังมี “เพิ่มสินค้าเข้าคลัง” และ “ราคาซื้อ / ร้านค้า” รับเข้าแพ็กต่างขนาดได้ แยก SKU ตามแบบถุง ไม่แยกตามร้าน ราคาเฉลี่ยถ่วงตามจำนวนและราคาแต่ละเดือน เทียบร้านจากราคาซื้อล่าสุด พร้อมวันที่/จำนวน ไม่อ้างเป็นราคาปัจจุบัน
+- `0047` สร้าง immutable receipt + RPC ตรวจ role/tenant/branch, idempotency และ audit สร้างสินค้า/stock/receipt ในธุรกรรมเดียว ใช้ trigger moving average เดิม ไม่ backfill ไม่ลงค่าใช้จ่าย/ภาษีซื้ออัตโนมัติ
+- ทดสอบผ่าน: lint, typecheck, สูตรเงิน, ค่าใช้จ่าย, stock concurrency เดิม, action guards 103 ตัว, UI/role/nav/deploy contracts และ test:purchases (PGlite ทั้ง legacy และ inv_* + aliases พร้อม RLS, replay, audit, rollback)
+- Build Next.js 16.4.5 + Node 26.13.0 ผ่าน; Edge headless + HTTP Supabase fixture ผ่าน: payload จำนวน/ค่าส่ง, error แล้วข้อมูลยังอยู่, retry key เดิม, success lock, รายการถัดไป, ร้าน B ราคาล่าสุด 1.50 บาท/ใบ, มือถือ 390px ไม่ล้น และตรวจภาพ mobile/desktop แล้ว แก้ native select ที่เคย reset เมื่อ action ผิดพลาดด้วยการยกเลิก form reset
+- ภาพทดสอบ `.scratch-ui/stock-in-mobile.png`, `prices-mobile.png`, `prices-desktop.png` (ไม่เข้า git) ไม่ใช่การทดสอบบัญชี production หรืออุปกรณ์มือถือจริง; ทดสอบสอง connection ของ PostgreSQL จริงและ hosted smoke สำหรับ 0047 ยังไม่ได้รัน
+- แพตช์ npm ที่ไม่ข้ามรุ่นแล้ว ระดับ high/critical เหลือ 0 แต่ audit ยังมี 21 รายการ (2 low / 19 moderate: minimatch และ deepmerge ในกลุ่ม tooling) ไม่ใช้ audit fix --force ที่เสนอ downgrade eslint/shadcn
+- ย้าย shadcn CLI ไป devDependencies; `npm audit --omit=dev` รอบสุดท้ายพบ 0 รายการ ส่วน audit รวมเครื่องมือพัฒนายังเป็น 21 รายการข้างต้น Build สุดท้ายกลับมาใช้ `.env.local` เดิมแล้ว ไม่ค้างค่าฐานข้อมูลจำลอง เซิร์ฟเวอร์ทดสอบปิดแล้ว
+- **ยังไม่ apply 0047 / deploy / แตะข้อมูล production** ต้อง apply migration ก่อนแอปใหม่ และตรวจ Node ของ build/PM2 ตาม `.nvmrc` ก่อนปล่อย ใช้ `npm run deploy` ตามกฎเดิม
+- วิธีใช้และขั้นทดสอบ fixture: `docs/purchase-receipts.md` ประวัติเก่าด้านล่างคงไว้เพื่ออ้างอิง ไม่ใช่สถานะปัจจุบัน
+
+งานค้างเดิมที่ยังแยกจากรอบนี้: ทดสอบบัญชีจริงทุก role/อุปกรณ์จริง, ลิ้นชักเงินสด, ตัดสต๊อกอัตโนมัติ (ยังปิด), CN/DN ที่กลับยอดเงินจริง, VAT effective date, GL/journal, e-Tax ส่งจริง และ OCR ในแอป ตาม `docs/IMPLEMENTATION_PLAN.md`
 
 อัปเดต 2026-09-20 (deploy VPS ตรง origin) — อ่านคู่กับ `CLAUDE.md`
 

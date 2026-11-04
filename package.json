@@ -2,12 +2,17 @@
   "name": "shoe-care-inventory",
   "version": "0.1.0",
   "private": true,
+  "engines": {
+    "node": ">=26.13.0 <27"
+  },
   "scripts": {
     "dev": "next dev --webpack",
     "build": "next build --webpack",
     "start": "next start -p 3003 -H 127.0.0.1",
     "lint": "eslint",
     "typecheck": "tsc --noEmit -p tsconfig.typecheck.json",
+    "test:purchases": "tsc lib/purchase-receipts.ts --outDir .test-build --module commonjs --target es2022 --moduleResolution node10 --skipLibCheck && node scripts/test-purchase-receipts.mjs && node scripts/test-migration-0047.mjs",
+    "test:purchases:ui": "node scripts/test-purchase-ui.mjs",
     "test:legacy": "node scripts/test-legacy-estimate-banner.mjs",
     "test:reports": "node --no-warnings=MODULE_TYPELESS_PACKAGE_JSON scripts/test-reports-range.mjs",
     "test:tax": "tsc lib/smartacc/tax-reports.ts --outDir .test-build --module commonjs --target es2022 --moduleResolution node10 --skipLibCheck && node --no-warnings=MODULE_TYPELESS_PACKAGE_JSON scripts/test-tax-reports.mjs",
@@ -41,7 +46,9 @@
     "gen:types": "node --no-warnings=MODULE_TYPELESS_PACKAGE_JSON scripts/gen-types-via-vps.mjs",
     "check:expense-mirror": "tsc lib/expense-totals.ts --outDir .test-build --module commonjs --target es2022 --moduleResolution node10 --skipLibCheck && node --no-warnings=MODULE_TYPELESS_PACKAGE_JSON scripts/check-expense-mirror.mjs",
     "check:payroll-mirror": "node --no-warnings=MODULE_TYPELESS_PACKAGE_JSON scripts/check-payroll-mirror.mjs",
-    "check:money": "node --no-warnings=MODULE_TYPELESS_PACKAGE_JSON scripts/check-money-sanity.mjs"
+    "check:money": "node --no-warnings=MODULE_TYPELESS_PACKAGE_JSON scripts/check-money-sanity.mjs",
+    "test:security-finance": "node scripts/test-migration-0048.mjs && node scripts/test-migration-0049.mjs && node scripts/test-migration-0050.mjs && node scripts/test-migration-0051.mjs && node scripts/test-migration-0052.mjs && node scripts/test-finance-pg.mjs",
+    "verify:release": "node scripts/verify-release.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",
@@ -50,26 +57,28 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "lucide-react": "^1.24.0",
-    "next": "16.3.5",
+    "next": "16.4.5",
     "next-themes": "^0.4.6",
-    "react": "19.2.4",
-    "react-dom": "19.2.4",
-    "shadcn": "^4.13.0",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
     "sonner": "^2.0.7",
     "tailwind-merge": "^3.6.0",
     "tw-animate-css": "^1.4.0",
-    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz",
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@electric-sql/pglite": "^0.5.8",
+    "@playwright/test": "^1.64.1",
     "@tailwindcss/postcss": "^4",
-    "@types/node": "^20",
+    "@types/node": "^26.6.6",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "embedded-postgres": "^18.4.0-beta.17",
     "eslint": "^9",
-    "eslint-config-next": "16.3.5",
+    "eslint-config-next": "16.4.5",
     "pg": "^8.23.0",
+    "shadcn": "^4.23.0",
     "tailwindcss": "^4",
     "typescript": "^5"
   }

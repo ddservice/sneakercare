@@ -113,6 +113,8 @@ export type ExpensesPayload = {
 };
 
 export type ExpenseActionState = {
+  warning?: string;
+  certificateIssued?: boolean;
   error?: string;
   success?: boolean;
 };
@@ -1139,6 +1141,8 @@ export async function addExpense(
   const supabase = createAdminClient();
   const tenantId = await requireTenantId(profile);
 
+  let warning: string | undefined;
+  let certificateIssued = false;
   const title = (formData.get("title") as string)?.trim();
   const category = (formData.get("category") as string)?.trim() || "ค่าดำเนินการ";
   const amount = parseFloat(formData.get("amount") as string);
@@ -1159,7 +1163,8 @@ export async function addExpense(
   const bookedAmount = withhold ? settlement.grossAmount : amount;
 
   if (!title) return { error: "กรุณาระบุชื่อรายการค่าใช้จ่าย" };
-  if (isNaN(amount) || amount <= 0) return { error: "กรุณาระบุจำนวนเงินที่ถูกต้อง" };
+  if (!Number.isFinite(amount) || amount <= 0 || amount > 999999999 || Math.abs(amount*100-Math.round(amount*100)) > 0.00001) return { error: "กรุณาระบุจำนวนเงินที่ถูกต้อง" };
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(expenseDate) || !Number.isFinite(Date.parse(expenseDate)) || new Date(expenseDate).toISOString().slice(0,10) !== expenseDate) return { error: "วันที่ค่าใช้จ่ายไม่ถูกต้อง" };
   const closedErr = await assertPeriodOpen(tenantId, expenseDate);
   if (closedErr) return { error: closedErr };
   if (withhold && settlement.whtAmount > 0) {
@@ -1252,15 +1257,16 @@ export async function addExpense(
           tenantId,
         });
         if (!issued.success) {
+          warning = "บันทึกค่าใช้จ่ายแล้ว แต่ยังออกหนังสือรับรอง 50 ทวิ ไม่สำเร็จ กรุณาให้ผู้ดูแลตรวจจากหลักฐานรายการนี้ ห้ามบันทึกค่าใช้จ่ายซ้ำ";
           console.error("[expenses] ออกหนังสือรับรอง 50 ทวิ ไม่สำเร็จ:", issued.error);
-        }
-      }
+        } else { certificateIssued = true; }
+      } else { warning = "บันทึกค่าใช้จ่ายแล้ว แต่บันทึกผู้รับเงินเพื่อออก 50 ทวิ ไม่สำเร็จ กรุณาตรวจหลักฐานกับผู้ทำบัญชี ห้ามลงค่าใช้จ่ายซ้ำ"; }
     }
   }
 
   revalidatePath("/", "layout");
   revalidatePath("/tax-filing");
-  return { success: true };
+  return { success: true, warning, certificateIssued };
 }
 
 export async function deleteExpense(id: string | number) {

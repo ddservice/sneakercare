@@ -14,7 +14,8 @@ import { canView, type ModuleKey, type Role } from "@/lib/permissions";
 
 const NAV = [
   { href: "/inventory", label: "สต๊อก", icon: Boxes, exact: true, module: "inventory" as const },
-  { href: "/stock-in", label: "รับเข้า", icon: ArrowDownToLine, exact: false, module: "stock-in" as const },
+  { href: "/stock-in", label: "เพิ่มสินค้าเข้าคลัง", icon: ArrowDownToLine, exact: true, module: "stock-in" as const },
+  { href: "/stock-in/prices", label: "ราคาซื้อ / ร้านค้า", icon: History, exact: false, module: "stock-in" as const },
   { href: "/stock-out", label: "เบิกใช้", icon: ArrowUpFromLine, exact: false, module: "stock-out" as const },
   { href: "/adjustments", label: "ตรวจนับ", icon: ClipboardList, exact: false, module: "adjustments" as const },
   { href: "/history", label: "ประวัติ", icon: History, exact: false, module: "history" as const },

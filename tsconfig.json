@@ -38,6 +38,7 @@
   ],
   "exclude": [
     "node_modules",
+    ".tools",
     "supabase/functions",
     ".next",
     "scripts/_repro-layout-slot-never.ts"

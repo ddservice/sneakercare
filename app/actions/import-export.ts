@@ -1,10 +1,11 @@
 "use server";
 
+import { createHash } from "node:crypto";
+import { saveDailySale } from "@/app/actions/daily-sales";
 import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { requireProfile, requireModuleView } from "@/lib/auth";
-import { getSelectedBranchId } from "@/lib/branch";
-import { parseSalesRow, parseStockRow, parseExpensesRow } from "@/lib/schemas/import-schemas";
+import { requireProfile, requireModuleView, requireAdmin } from "@/lib/auth";
+import { parseSalesRow } from "@/lib/schemas/import-schemas";
 import { requireTenantId } from "@/lib/tenant";
 import { assertPeriodOpen } from "@/lib/period-close-store";
 
@@ -23,6 +24,7 @@ export type BulkImportResult = {
 export async function bulkImportSales(rows: Record<string, unknown>[]): Promise<BulkImportResult> {
   const profile = await requireProfile();
   requireModuleView(profile, "reports");
+  requireAdmin(profile);
   const supabase = createAdminClient();
   const tenantId = await requireTenantId(profile);
 
@@ -71,32 +73,24 @@ export async function bulkImportSales(rows: Record<string, unknown>[]): Promise<
         size_l: validated.size_l,
         size_xl: validated.size_xl,
         total_revenue: validated.total_revenue,
-        grand_total: validated.gross_amount || validated.total_revenue,
+        gross_amount: validated.gross_amount || validated.total_revenue + validated.discount,
+        grand_total: validated.total_revenue,
         discount: validated.discount,
         transfer_amount: validated.transfer_amount,
         cash_amount: validated.cash_amount,
         amount_paid: actualPaid,
         payment_status: status,
         recorded_by: profile.display_name || "Import Tool",
-        last_updated: new Date().toISOString(),
         tenant_id: tenantId,
       };
 
-      // Check if row exists on same date
-      const { data: existing } = await supabase.from("sc_sales")
-        .select("id")
-        .eq("date", validated.date)
-        .eq("tenant_id", tenantId)
-        .maybeSingle();
-
-      if (existing) {
-        await supabase.from("sc_sales")
-          .update(payload)
-          .eq("id", existing.id)
-          .eq("tenant_id", tenantId);
-      } else {
-        await supabase.from("sc_sales").insert(payload);
-      }
+      const { data: existing, error: lookupError } = await supabase.from("sc_sales").select("id").eq("date", validated.date).eq("tenant_id", tenantId).limit(1);
+      if (lookupError) throw new Error("อ่านยอดขายเดิมไม่ได้");
+      if (existing?.length) throw new Error("วันนี้มีรายการขายแล้ว กรุณาตรวจและแก้จากหน้ายอดขาย ไม่เขียนทับผ่านไฟล์นำเข้า");
+      const hash = createHash("sha256").update(tenantId + JSON.stringify(payload)).digest("hex").slice(0,32);
+      const requestId = `${hash.slice(0,8)}-${hash.slice(8,12)}-4${hash.slice(13,16)}-a${hash.slice(17,20)}-${hash.slice(20,32)}`;
+      const result = await saveDailySale({ ...payload, clientRequestId: requestId });
+      if (!result.success) throw new Error(result.error || "นำเข้าไม่สำเร็จ");
       imported++;
     } catch (err) {
       failed++;
@@ -120,183 +114,11 @@ export async function bulkImportSales(rows: Record<string, unknown>[]): Promise<
  * Row schema validated via Zod before DB write
  */
 export async function bulkImportStock(rows: Record<string, unknown>[]): Promise<BulkImportResult> {
-  const profile = await requireProfile();
-  requireModuleView(profile, "reports");
-  const branchId = await getSelectedBranchId(profile);
-  const supabase = createAdminClient();
-  const tenantId = await requireTenantId(profile);
-
-  if (!rows || rows.length === 0) {
-    return { success: false, total: 0, imported: 0, failed: 0, errors: ["ไม่พบข้อมูลสำหรับนำเข้า"] };
-  }
-
-  if (rows.length > 500) {
-    return { success: false, total: rows.length, imported: 0, failed: rows.length, errors: ["จำนวนแถวเกิน 500 รายการต่อครั้ง"] };
-  }
-
-  let imported = 0;
-  let failed = 0;
-  const errors: string[] = [];
-
-  for (let i = 0; i < rows.length; i++) {
-    const r = rows[i];
-
-    // ── Zod validation ──
-    const { data: validated, error: validationError } = parseStockRow(r);
-    if (validationError || !validated) {
-      failed++;
-      errors.push(`แถวที่ ${i + 1}: ${validationError ?? "ข้อมูลไม่ถูกต้อง"}`);
-      continue;
-    }
-
-    try {
-      // Check if item exists
-      const { data: existingItem } = await supabase.from("items")
-        .select("id")
-        .eq("name", validated.name)
-        .eq("tenant_id", tenantId)
-        .maybeSingle();
-
-      let itemId = existingItem?.id;
-
-      if (!itemId) {
-        const { data: newItem, error: createError } = await supabase.from("items")
-          .insert({
-            name: validated.name,
-            category: validated.category,
-            base_unit: validated.unit,
-            purchase_unit: validated.unit,
-            default_min_stock_level: validated.min_stock,
-            item_type: "inventory",
-            is_active: true,
-            tenant_id: tenantId,
-          })
-          .select()
-          .single();
-
-        if (createError || !newItem) {
-          failed++;
-          errors.push(`แถวที่ ${i + 1} (${validated.name}): ${createError?.message}`);
-          continue;
-        }
-        itemId = newItem.id;
-      }
-
-      // Upsert item_stock
-      let qStock = supabase.from("item_stock")
-        .select("id")
-        .eq("item_id", itemId!)
-        .eq("tenant_id", tenantId);
-      if (branchId) qStock = qStock.eq("branch_id", branchId);
-      const { data: existingStock } = await qStock.maybeSingle();
-
-      if (existingStock?.id) {
-        await supabase.from("item_stock")
-          .update({
-            current_qty: validated.qty,
-            avg_unit_cost: validated.unit_cost,
-            min_stock_level: validated.min_stock,
-            // ⚠️ (แก้บั๊ก 2026-09-06) item_stock ไม่มีคอลัมน์ last_counted_at — ใส่แล้ว update ล้มทั้ง statement
-            updated_at: new Date().toISOString(),
-          })
-          .eq("id", existingStock.id!)
-          .eq("tenant_id", tenantId);
-      } else {
-        await supabase.from("item_stock").insert({
-          item_id: itemId,
-          branch_id: branchId || null,
-          current_qty: validated.qty,
-          avg_unit_cost: validated.unit_cost,
-          min_stock_level: validated.min_stock,
-          tenant_id: tenantId,
-        });
-      }
-
-      imported++;
-    } catch (err) {
-      failed++;
-      errors.push(`แถวที่ ${i + 1}: ${err instanceof Error ? err.message : String(err)}`);
-    }
-  }
-
-  revalidatePath("/", "layout");
-
-  return {
-    success: imported > 0,
-    total: rows.length,
-    imported,
-    failed,
-    errors,
-  };
+  const profile = await requireProfile(); requireModuleView(profile, "reports"); requireAdmin(profile);
+  return { success: false, total: rows.length, imported: 0, failed: rows.length, errors: ["นำเข้าทับยอดคลังไม่ได้ กรุณาใช้รับซื้อเข้าคลัง หรือปรับยอดตรวจนับพร้อมเหตุผล เพื่อเก็บประวัติและต้นทุนครบถ้วน"] };
 }
 
-/**
- * Bulk Import Expenses from parsed Excel / CSV rows
- * Row schema validated via Zod before DB write
- */
 export async function bulkImportExpenses(rows: Record<string, unknown>[]): Promise<BulkImportResult> {
-  const profile = await requireProfile();
-  requireModuleView(profile, "reports");
-  const supabase = createAdminClient();
-  const tenantId = await requireTenantId(profile);
-
-  if (!rows || rows.length === 0) {
-    return { success: false, total: 0, imported: 0, failed: 0, errors: ["ไม่พบข้อมูลสำหรับนำเข้า"] };
-  }
-
-  if (rows.length > 500) {
-    return { success: false, total: rows.length, imported: 0, failed: rows.length, errors: ["จำนวนแถวเกิน 500 รายการต่อครั้ง"] };
-  }
-
-  let imported = 0;
-  let failed = 0;
-  const errors: string[] = [];
-
-  for (let i = 0; i < rows.length; i++) {
-    const r = rows[i];
-
-    // ── Zod validation ──
-    const { data: validated, error: validationError } = parseExpensesRow(r);
-    if (validationError || !validated) {
-      failed++;
-      errors.push(`แถวที่ ${i + 1}: ${validationError ?? "ข้อมูลไม่ถูกต้อง"}`);
-      continue;
-    }
-
-    const closedExpense = await assertPeriodOpen(tenantId, validated.date);
-    if (closedExpense) {
-      failed++;
-      errors.push(`แถวที่ ${i + 1}: ${closedExpense}`);
-      continue;
-    }
-
-    try {
-      await supabase.from("sc_expenses").insert({
-        date: validated.date,
-        category: validated.category,
-        // ⚠️ (แก้บั๊ก 2026-09-06) sc_expenses ใช้ชื่อ name/amount ไม่ใช่ item_name/total_amount
-        name: validated.name,
-        amount: validated.amount,
-        pay_method: validated.pay_method,
-        recorded_by: profile.display_name || "Import Tool",
-        created_at: new Date().toISOString(),
-        tenant_id: tenantId,
-      });
-
-      imported++;
-    } catch (err) {
-      failed++;
-      errors.push(`แถวที่ ${i + 1}: ${err instanceof Error ? err.message : String(err)}`);
-    }
-  }
-
-  revalidatePath("/", "layout");
-
-  return {
-    success: imported > 0,
-    total: rows.length,
-    imported,
-    failed,
-    errors,
-  };
+  const profile = await requireProfile(); requireModuleView(profile, "reports"); requireAdmin(profile);
+  return { success: false, total: rows.length, imported: 0, failed: rows.length, errors: ["กรุณาบันทึกจากหน้าค่าใช้จ่าย เพื่อให้ยอดและเอกสารหัก ณ ที่จ่ายเข้าระบบหลัก การนำเข้ารายจ่ายเก่าที่ไม่เชื่อมยอดถูกปิดแล้ว"] };
 }

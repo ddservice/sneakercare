@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useMemo, useTransition } from "react";
+import { useState, useMemo, useTransition, useRef } from "react";
+import { newRequestId } from "@/lib/idempotency";
 import { useRouter } from "next/navigation";
 import {
   createSmartAccDocument,
@@ -220,6 +221,7 @@ export function InvoicingClient({
   shopProfile?: ShopProfile;
 }) {
   const router = useRouter();
+  const documentRequestId = useRef(newRequestId());
   const [docType, setDocType] = useState<DocumentType>("INVOICE");
   const vatBranchSelected = shopProfile?.vatBranchSelected !== false;
   const vatRegistered = Boolean(vatBranchSelected && shopProfile?.vatRegistered !== false);
@@ -436,6 +438,7 @@ export function InvoicingClient({
     const parentDoc = visibleDocs.find((d) => d.id === parentDocId);
 
     const payload: CreateDocumentPayload = {
+      requestId: documentRequestId.current,
       docType,
       companyName,
       taxId,
@@ -460,6 +463,7 @@ export function InvoicingClient({
       try {
         const res = await createSmartAccDocument(payload);
         if (res.success) {
+          documentRequestId.current = newRequestId();
           toast.success(`สร้างเอกสาร ${res.docNumber} สำเร็จ`);
           setCreatedDoc({ docNumber: res.docNumber, shareToken: res.shareToken });
           setItems([]);

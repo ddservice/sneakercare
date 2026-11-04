@@ -33,3952 +33,2084 @@ export type StockTxnType =
 export type StockTxnStatus = "approved" | "pending_approval" | "rejected";
 export type AuditAction = "INSERT" | "UPDATE" | "DELETE";
 
-export type Json =
-  | string
-  | number
-  | boolean
-  | null
-  | { [key: string]: Json | undefined }
-  | Json[]
+export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[]
 
 export type Database = {
-  extension_layer: {
-    Tables: {
-      ext_ai_embeddings: {
-        Row: {
-          content_chunk: string
-          embedding: string | null
-          entity_id: string | null
-          id: string
-          source_entity: string | null
-          updated_at: string | null
-        }
-        Insert: {
-          content_chunk: string
-          embedding?: string | null
-          entity_id?: string | null
-          id?: string
-          source_entity?: string | null
-          updated_at?: string | null
-        }
-        Update: {
-          content_chunk?: string
-          embedding?: string | null
-          entity_id?: string | null
-          id?: string
-          source_entity?: string | null
-          updated_at?: string | null
-        }
-        Relationships: []
-      }
-      ext_billing_references: {
-        Row: {
-          balance_due: number
-          billing_note_id: string | null
-          created_at: string | null
-          id: string
-          paid_amount: number | null
-          ref_date: string
-          ref_doc_id: string | null
-          ref_doc_number: string
-          ref_doc_type: string
-          tenant_id: string
-          total_amount: number
-        }
-        Insert: {
-          balance_due: number
-          billing_note_id?: string | null
-          created_at?: string | null
-          id?: string
-          paid_amount?: number | null
-          ref_date: string
-          ref_doc_id?: string | null
-          ref_doc_number: string
-          ref_doc_type: string
-          tenant_id?: string
-          total_amount: number
-        }
-        Update: {
-          balance_due?: number
-          billing_note_id?: string | null
-          created_at?: string | null
-          id?: string
-          paid_amount?: number | null
-          ref_date?: string
-          ref_doc_id?: string | null
-          ref_doc_number?: string
-          ref_doc_type?: string
-          tenant_id?: string
-          total_amount?: number
-        }
-        Relationships: [
-          {
-            foreignKeyName: "ext_billing_references_billing_note_id_fkey"
-            columns: ["billing_note_id"]
-            isOneToOne: false
-            referencedRelation: "ext_documents"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "ext_billing_references_ref_doc_id_fkey"
-            columns: ["ref_doc_id"]
-            isOneToOne: false
-            referencedRelation: "ext_documents"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      ext_branch_stocks: {
-        Row: {
-          branch_id: string
-          item_id: string
-          quantity: number
-        }
-        Insert: {
-          branch_id: string
-          item_id: string
-          quantity?: number
-        }
-        Update: {
-          branch_id?: string
-          item_id?: string
-          quantity?: number
-        }
-        Relationships: [
-          {
-            foreignKeyName: "ext_branch_stocks_branch_id_fkey"
-            columns: ["branch_id"]
-            isOneToOne: false
-            referencedRelation: "ext_branches"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "ext_branch_stocks_item_id_fkey"
-            columns: ["item_id"]
-            isOneToOne: false
-            referencedRelation: "ext_inventory_items"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      ext_branches: {
-        Row: {
-          address: string | null
-          branch_code: string
-          id: string
-          is_active: boolean | null
-          name: string
-        }
-        Insert: {
-          address?: string | null
-          branch_code: string
-          id?: string
-          is_active?: boolean | null
-          name: string
-        }
-        Update: {
-          address?: string | null
-          branch_code?: string
-          id?: string
-          is_active?: boolean | null
-          name?: string
-        }
-        Relationships: []
-      }
-      ext_chart_of_accounts: {
-        Row: {
-          account_category: string
-          account_code: string
-          account_name_th: string
-          default_wht_rate: number | null
-          id: string
-          is_active: boolean | null
-        }
-        Insert: {
-          account_category: string
-          account_code: string
-          account_name_th: string
-          default_wht_rate?: number | null
-          id?: string
-          is_active?: boolean | null
-        }
-        Update: {
-          account_category?: string
-          account_code?: string
-          account_name_th?: string
-          default_wht_rate?: number | null
-          id?: string
-          is_active?: boolean | null
-        }
-        Relationships: []
-      }
-      ext_contacts: {
-        Row: {
-          address: string | null
-          branch_code: string | null
-          company_name: string
-          created_at: string | null
-          email: string | null
-          id: string
-          legacy_contact_id: string | null
-          phone: string | null
-          tax_id: string | null
-          tenant_id: string
-        }
-        Insert: {
-          address?: string | null
-          branch_code?: string | null
-          company_name: string
-          created_at?: string | null
-          email?: string | null
-          id?: string
-          legacy_contact_id?: string | null
-          phone?: string | null
-          tax_id?: string | null
-          tenant_id?: string
-        }
-        Update: {
-          address?: string | null
-          branch_code?: string | null
-          company_name?: string
-          created_at?: string | null
-          email?: string | null
-          id?: string
-          legacy_contact_id?: string | null
-          phone?: string | null
-          tax_id?: string | null
-          tenant_id?: string
-        }
-        Relationships: []
-      }
-      ext_document_items: {
-        Row: {
-          discount: number | null
-          document_id: string | null
-          id: string
-          item_id: string | null
-          item_name: string
-          quantity: number
-          sort_order: number | null
-          tenant_id: string
-          total_line_amount: number
-          unit_price: number
-        }
-        Insert: {
-          discount?: number | null
-          document_id?: string | null
-          id?: string
-          item_id?: string | null
-          item_name: string
-          quantity?: number
-          sort_order?: number | null
-          tenant_id?: string
-          total_line_amount: number
-          unit_price?: number
-        }
-        Update: {
-          discount?: number | null
-          document_id?: string | null
-          id?: string
-          item_id?: string | null
-          item_name?: string
-          quantity?: number
-          sort_order?: number | null
-          tenant_id?: string
-          total_line_amount?: number
-          unit_price?: number
-        }
-        Relationships: [
-          {
-            foreignKeyName: "ext_document_items_document_id_fkey"
-            columns: ["document_id"]
-            isOneToOne: false
-            referencedRelation: "ext_documents"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "ext_document_items_item_id_fkey"
-            columns: ["item_id"]
-            isOneToOne: false
-            referencedRelation: "ext_inventory_items"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      ext_documents: {
-        Row: {
-          branch_id: string | null
-          contact_id: string | null
-          created_at: string | null
-          credit_term_days: number | null
-          discount_amount: number | null
-          doc_number: string
-          doc_type: string
-          due_date: string | null
-          grand_total: number
-          id: string
-          issue_date: string
-          notes: string | null
-          payment_details: string | null
-          promptpay_payload: string | null
-          ref_parent_doc_id: string | null
-          ref_parent_doc_number: string | null
-          share_token: string | null
-          status: string
-          subtotal_amount: number
-          tenant_id: string
-          vat_amount: number | null
-          vat_rate: number | null
-          wht_amount: number | null
-          wht_rate: number | null
-        }
-        Insert: {
-          branch_id?: string | null
-          contact_id?: string | null
-          created_at?: string | null
-          credit_term_days?: number | null
-          discount_amount?: number | null
-          doc_number: string
-          doc_type: string
-          due_date?: string | null
-          grand_total?: number
-          id?: string
-          issue_date?: string
-          notes?: string | null
-          payment_details?: string | null
-          promptpay_payload?: string | null
-          ref_parent_doc_id?: string | null
-          ref_parent_doc_number?: string | null
-          share_token?: string | null
-          status?: string
-          subtotal_amount?: number
-          tenant_id?: string
-          vat_amount?: number | null
-          vat_rate?: number | null
-          wht_amount?: number | null
-          wht_rate?: number | null
-        }
-        Update: {
-          branch_id?: string | null
-          contact_id?: string | null
-          created_at?: string | null
-          credit_term_days?: number | null
-          discount_amount?: number | null
-          doc_number?: string
-          doc_type?: string
-          due_date?: string | null
-          grand_total?: number
-          id?: string
-          issue_date?: string
-          notes?: string | null
-          payment_details?: string | null
-          promptpay_payload?: string | null
-          ref_parent_doc_id?: string | null
-          ref_parent_doc_number?: string | null
-          share_token?: string | null
-          status?: string
-          subtotal_amount?: number
-          tenant_id?: string
-          vat_amount?: number | null
-          vat_rate?: number | null
-          wht_amount?: number | null
-          wht_rate?: number | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "ext_documents_contact_id_fkey"
-            columns: ["contact_id"]
-            isOneToOne: false
-            referencedRelation: "ext_contacts"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "ext_documents_ref_parent_doc_id_fkey"
-            columns: ["ref_parent_doc_id"]
-            isOneToOne: false
-            referencedRelation: "ext_documents"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      ext_etax_logs: {
-        Row: {
-          created_at: string | null
-          doc_type_code: string
-          document_id: string | null
-          id: string
-          pdf_a3_url: string | null
-          rd_error_message: string | null
-          rd_status: string | null
-          rd_transaction_id: string | null
-          recipient_email: string | null
-          signed_at: string | null
-          signed_xml_hash: string | null
-          submission_mode: string
-          xml_payload: string
-        }
-        Insert: {
-          created_at?: string | null
-          doc_type_code: string
-          document_id?: string | null
-          id?: string
-          pdf_a3_url?: string | null
-          rd_error_message?: string | null
-          rd_status?: string | null
-          rd_transaction_id?: string | null
-          recipient_email?: string | null
-          signed_at?: string | null
-          signed_xml_hash?: string | null
-          submission_mode: string
-          xml_payload: string
-        }
-        Update: {
-          created_at?: string | null
-          doc_type_code?: string
-          document_id?: string | null
-          id?: string
-          pdf_a3_url?: string | null
-          rd_error_message?: string | null
-          rd_status?: string | null
-          rd_transaction_id?: string | null
-          recipient_email?: string | null
-          signed_at?: string | null
-          signed_xml_hash?: string | null
-          submission_mode?: string
-          xml_payload?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "ext_etax_logs_document_id_fkey"
-            columns: ["document_id"]
-            isOneToOne: false
-            referencedRelation: "ext_documents"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      ext_inventory_items: {
-        Row: {
-          cost_price: number | null
-          created_at: string | null
-          id: string
-          min_stock_alert: number | null
-          name: string
-          selling_price: number | null
-          sku: string
-          unit: string | null
-        }
-        Insert: {
-          cost_price?: number | null
-          created_at?: string | null
-          id?: string
-          min_stock_alert?: number | null
-          name: string
-          selling_price?: number | null
-          sku: string
-          unit?: string | null
-        }
-        Update: {
-          cost_price?: number | null
-          created_at?: string | null
-          id?: string
-          min_stock_alert?: number | null
-          name?: string
-          selling_price?: number | null
-          sku?: string
-          unit?: string | null
-        }
-        Relationships: []
-      }
-      ext_line_accounts: {
-        Row: {
-          account_type: string
-          contact_id: string | null
-          created_at: string | null
-          display_name: string | null
-          id: string
-          is_verified: boolean | null
-          line_user_id: string
-          picture_url: string | null
-          updated_at: string | null
-        }
-        Insert: {
-          account_type: string
-          contact_id?: string | null
-          created_at?: string | null
-          display_name?: string | null
-          id?: string
-          is_verified?: boolean | null
-          line_user_id: string
-          picture_url?: string | null
-          updated_at?: string | null
-        }
-        Update: {
-          account_type?: string
-          contact_id?: string | null
-          created_at?: string | null
-          display_name?: string | null
-          id?: string
-          is_verified?: boolean | null
-          line_user_id?: string
-          picture_url?: string | null
-          updated_at?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "ext_line_accounts_contact_id_fkey"
-            columns: ["contact_id"]
-            isOneToOne: false
-            referencedRelation: "ext_contacts"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      ext_line_notifications_log: {
-        Row: {
-          id: string
-          line_message_id: string | null
-          line_user_id: string
-          notification_type: string
-          payload: Json | null
-          reference_document_id: string | null
-          sent_at: string | null
-          status: string | null
-        }
-        Insert: {
-          id?: string
-          line_message_id?: string | null
-          line_user_id: string
-          notification_type: string
-          payload?: Json | null
-          reference_document_id?: string | null
-          sent_at?: string | null
-          status?: string | null
-        }
-        Update: {
-          id?: string
-          line_message_id?: string | null
-          line_user_id?: string
-          notification_type?: string
-          payload?: Json | null
-          reference_document_id?: string | null
-          sent_at?: string | null
-          status?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "ext_line_notifications_log_reference_document_id_fkey"
-            columns: ["reference_document_id"]
-            isOneToOne: false
-            referencedRelation: "ext_documents"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      ext_numbering_sequences: {
-        Row: {
-          current_sequence: number
-          doc_type: string
-          id: string
-          prefix: string
-          tenant_id: string
-          year_month: string
-        }
-        Insert: {
-          current_sequence?: number
-          doc_type: string
-          id?: string
-          prefix: string
-          tenant_id?: string
-          year_month: string
-        }
-        Update: {
-          current_sequence?: number
-          doc_type?: string
-          id?: string
-          prefix?: string
-          tenant_id?: string
-          year_month?: string
-        }
-        Relationships: []
-      }
-      ext_slip_verifications: {
-        Row: {
-          amount: number
-          bank_trans_ref: string
-          document_id: string | null
-          id: string
-          raw_payload: Json | null
-          receiving_bank: string | null
-          sending_bank: string | null
-          slip_image_url: string | null
-          trans_date: string
-          verification_status: string | null
-          verified_at: string | null
-        }
-        Insert: {
-          amount: number
-          bank_trans_ref: string
-          document_id?: string | null
-          id?: string
-          raw_payload?: Json | null
-          receiving_bank?: string | null
-          sending_bank?: string | null
-          slip_image_url?: string | null
-          trans_date: string
-          verification_status?: string | null
-          verified_at?: string | null
-        }
-        Update: {
-          amount?: number
-          bank_trans_ref?: string
-          document_id?: string | null
-          id?: string
-          raw_payload?: Json | null
-          receiving_bank?: string | null
-          sending_bank?: string | null
-          slip_image_url?: string | null
-          trans_date?: string
-          verification_status?: string | null
-          verified_at?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "ext_slip_verifications_document_id_fkey"
-            columns: ["document_id"]
-            isOneToOne: false
-            referencedRelation: "ext_documents"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      ext_staged_expenses: {
-        Row: {
-          approval_status: string | null
-          created_at: string | null
-          extracted_date: string | null
-          extracted_tax_id: string | null
-          extracted_vendor_name: string | null
-          id: string
-          raw_ocr_payload: Json | null
-          receipt_image_url: string
-          subtotal: number | null
-          suggested_account_code: string | null
-          tenant_id: string
-          total_amount: number
-          vat_amount: number | null
-          wht_amount: number | null
-        }
-        Insert: {
-          approval_status?: string | null
-          created_at?: string | null
-          extracted_date?: string | null
-          extracted_tax_id?: string | null
-          extracted_vendor_name?: string | null
-          id?: string
-          raw_ocr_payload?: Json | null
-          receipt_image_url: string
-          subtotal?: number | null
-          suggested_account_code?: string | null
-          tenant_id?: string
-          total_amount: number
-          vat_amount?: number | null
-          wht_amount?: number | null
-        }
-        Update: {
-          approval_status?: string | null
-          created_at?: string | null
-          extracted_date?: string | null
-          extracted_tax_id?: string | null
-          extracted_vendor_name?: string | null
-          id?: string
-          raw_ocr_payload?: Json | null
-          receipt_image_url?: string
-          subtotal?: number | null
-          suggested_account_code?: string | null
-          tenant_id?: string
-          total_amount?: number
-          vat_amount?: number | null
-          wht_amount?: number | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "ext_staged_expenses_suggested_account_code_fkey"
-            columns: ["suggested_account_code"]
-            isOneToOne: false
-            referencedRelation: "ext_chart_of_accounts"
-            referencedColumns: ["account_code"]
-          },
-        ]
-      }
-      ext_vat_transactions: {
-        Row: {
-          base_amount: number
-          created_at: string | null
-          id: string
-          invoice_date: string
-          invoice_number: string
-          is_claimable: boolean | null
-          partner_branch_code: string | null
-          partner_name: string
-          partner_tax_id: string
-          tax_period_month: number
-          tax_period_year: number
-          vat_amount: number
-          vat_type: string
-        }
-        Insert: {
-          base_amount?: number
-          created_at?: string | null
-          id?: string
-          invoice_date: string
-          invoice_number: string
-          is_claimable?: boolean | null
-          partner_branch_code?: string | null
-          partner_name: string
-          partner_tax_id: string
-          tax_period_month: number
-          tax_period_year: number
-          vat_amount?: number
-          vat_type: string
-        }
-        Update: {
-          base_amount?: number
-          created_at?: string | null
-          id?: string
-          invoice_date?: string
-          invoice_number?: string
-          is_claimable?: boolean | null
-          partner_branch_code?: string | null
-          partner_name?: string
-          partner_tax_id?: string
-          tax_period_month?: number
-          tax_period_year?: number
-          vat_amount?: number
-          vat_type?: string
-        }
-        Relationships: []
-      }
-      ext_wht_records: {
-        Row: {
-          base_amount: number
-          certificate_number: string
-          created_at: string | null
-          document_id: string | null
-          filing_status: string | null
-          form_type: string
-          id: string
-          income_type_code: string
-          payment_date: string
-          pdf_certificate_url: string | null
-          tax_amount: number
-          tax_period_month: number
-          tax_period_year: number
-          vendor_address: string | null
-          vendor_name: string
-          vendor_tax_id: string
-          wht_rate: number
-        }
-        Insert: {
-          base_amount?: number
-          certificate_number: string
-          created_at?: string | null
-          document_id?: string | null
-          filing_status?: string | null
-          form_type: string
-          id?: string
-          income_type_code: string
-          payment_date: string
-          pdf_certificate_url?: string | null
-          tax_amount?: number
-          tax_period_month: number
-          tax_period_year: number
-          vendor_address?: string | null
-          vendor_name: string
-          vendor_tax_id: string
-          wht_rate?: number
-        }
-        Update: {
-          base_amount?: number
-          certificate_number?: string
-          created_at?: string | null
-          document_id?: string | null
-          filing_status?: string | null
-          form_type?: string
-          id?: string
-          income_type_code?: string
-          payment_date?: string
-          pdf_certificate_url?: string | null
-          tax_amount?: number
-          tax_period_month?: number
-          tax_period_year?: number
-          vendor_address?: string | null
-          vendor_name?: string
-          vendor_tax_id?: string
-          wht_rate?: number
-        }
-        Relationships: [
-          {
-            foreignKeyName: "ext_wht_records_document_id_fkey"
-            columns: ["document_id"]
-            isOneToOne: false
-            referencedRelation: "ext_documents"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
+
+  "extension_layer": {
+          Tables: {
+            "ext_ai_embeddings": {
+                  Row: {
+                    "content_chunk": string,"embedding": string | null,"entity_id": string | null,"id": string,"source_entity": string | null,"updated_at": string | null
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "content_chunk": string,"embedding"?: string | null,"entity_id"?: string | null,"id"?: string,"source_entity"?: string | null,"updated_at"?: string | null
+                  }
+                  Update: {
+                    "content_chunk"?: string,"embedding"?: string | null,"entity_id"?: string | null,"id"?: string,"source_entity"?: string | null,"updated_at"?: string | null
+                  }
+                  Relationships: [
+
+                  ]
+                },"ext_billing_references": {
+                  Row: {
+                    "balance_due": number,"billing_note_id": string | null,"created_at": string | null,"id": string,"paid_amount": number | null,"ref_date": string,"ref_doc_id": string | null,"ref_doc_number": string,"ref_doc_type": string,"tenant_id": string,"total_amount": number
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "balance_due": number,"billing_note_id"?: string | null,"created_at"?: string | null,"id"?: string,"paid_amount"?: number | null,"ref_date": string,"ref_doc_id"?: string | null,"ref_doc_number": string,"ref_doc_type": string,"tenant_id"?: string,"total_amount": number
+                  }
+                  Update: {
+                    "balance_due"?: number,"billing_note_id"?: string | null,"created_at"?: string | null,"id"?: string,"paid_amount"?: number | null,"ref_date"?: string,"ref_doc_id"?: string | null,"ref_doc_number"?: string,"ref_doc_type"?: string,"tenant_id"?: string,"total_amount"?: number
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "ext_billing_references_billing_note_id_fkey"
+      columns: ["billing_note_id"]
+isOneToOne: false
+      referencedRelation: "ext_documents"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "ext_billing_references_ref_doc_id_fkey"
+      columns: ["ref_doc_id"]
+isOneToOne: false
+      referencedRelation: "ext_documents"
+      referencedColumns: ["id"]
     }
-    Views: {
-      [_ in never]: never
+                  ]
+                },"ext_branch_stocks": {
+                  Row: {
+                    "branch_id": string,"item_id": string,"quantity": number
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "branch_id": string,"item_id": string,"quantity"?: number
+                  }
+                  Update: {
+                    "branch_id"?: string,"item_id"?: string,"quantity"?: number
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "ext_branch_stocks_branch_id_fkey"
+      columns: ["branch_id"]
+isOneToOne: false
+      referencedRelation: "ext_branches"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "ext_branch_stocks_item_id_fkey"
+      columns: ["item_id"]
+isOneToOne: false
+      referencedRelation: "ext_inventory_items"
+      referencedColumns: ["id"]
     }
-    Functions: {
-      fn_generate_document_number: {
-        Args: {
-          p_date_str: string
-          p_doc_type: string
-          p_prefix: string
-          p_tenant_id: string
-        }
-        Returns: string
-      }
+                  ]
+                },"ext_branches": {
+                  Row: {
+                    "address": string | null,"branch_code": string,"id": string,"is_active": boolean | null,"name": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "address"?: string | null,"branch_code": string,"id"?: string,"is_active"?: boolean | null,"name": string
+                  }
+                  Update: {
+                    "address"?: string | null,"branch_code"?: string,"id"?: string,"is_active"?: boolean | null,"name"?: string
+                  }
+                  Relationships: [
+
+                  ]
+                },"ext_chart_of_accounts": {
+                  Row: {
+                    "account_category": string,"account_code": string,"account_name_th": string,"default_wht_rate": number | null,"id": string,"is_active": boolean | null
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "account_category": string,"account_code": string,"account_name_th": string,"default_wht_rate"?: number | null,"id"?: string,"is_active"?: boolean | null
+                  }
+                  Update: {
+                    "account_category"?: string,"account_code"?: string,"account_name_th"?: string,"default_wht_rate"?: number | null,"id"?: string,"is_active"?: boolean | null
+                  }
+                  Relationships: [
+
+                  ]
+                },"ext_contacts": {
+                  Row: {
+                    "address": string | null,"branch_code": string | null,"company_name": string,"created_at": string | null,"email": string | null,"id": string,"legacy_contact_id": string | null,"phone": string | null,"tax_id": string | null,"tenant_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "address"?: string | null,"branch_code"?: string | null,"company_name": string,"created_at"?: string | null,"email"?: string | null,"id"?: string,"legacy_contact_id"?: string | null,"phone"?: string | null,"tax_id"?: string | null,"tenant_id"?: string
+                  }
+                  Update: {
+                    "address"?: string | null,"branch_code"?: string | null,"company_name"?: string,"created_at"?: string | null,"email"?: string | null,"id"?: string,"legacy_contact_id"?: string | null,"phone"?: string | null,"tax_id"?: string | null,"tenant_id"?: string
+                  }
+                  Relationships: [
+
+                  ]
+                },"ext_document_items": {
+                  Row: {
+                    "discount": number | null,"document_id": string | null,"id": string,"item_id": string | null,"item_name": string,"quantity": number,"sort_order": number | null,"tenant_id": string,"total_line_amount": number,"unit_price": number
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "discount"?: number | null,"document_id"?: string | null,"id"?: string,"item_id"?: string | null,"item_name": string,"quantity"?: number,"sort_order"?: number | null,"tenant_id"?: string,"total_line_amount": number,"unit_price"?: number
+                  }
+                  Update: {
+                    "discount"?: number | null,"document_id"?: string | null,"id"?: string,"item_id"?: string | null,"item_name"?: string,"quantity"?: number,"sort_order"?: number | null,"tenant_id"?: string,"total_line_amount"?: number,"unit_price"?: number
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "ext_document_items_document_id_fkey"
+      columns: ["document_id"]
+isOneToOne: false
+      referencedRelation: "ext_documents"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "ext_document_items_item_id_fkey"
+      columns: ["item_id"]
+isOneToOne: false
+      referencedRelation: "ext_inventory_items"
+      referencedColumns: ["id"]
     }
-    Enums: {
-      [_ in never]: never
+                  ]
+                },"ext_documents": {
+                  Row: {
+                    "branch_id": string | null,"contact_id": string | null,"created_at": string | null,"credit_term_days": number | null,"discount_amount": number | null,"doc_number": string,"doc_type": string,"due_date": string | null,"grand_total": number,"id": string,"issue_date": string,"notes": string | null,"payment_details": string | null,"promptpay_payload": string | null,"ref_parent_doc_id": string | null,"ref_parent_doc_number": string | null,"share_token": string | null,"status": string,"subtotal_amount": number,"tenant_id": string,"vat_amount": number | null,"vat_rate": number | null,"wht_amount": number | null,"wht_rate": number | null
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "branch_id"?: string | null,"contact_id"?: string | null,"created_at"?: string | null,"credit_term_days"?: number | null,"discount_amount"?: number | null,"doc_number": string,"doc_type": string,"due_date"?: string | null,"grand_total"?: number,"id"?: string,"issue_date"?: string,"notes"?: string | null,"payment_details"?: string | null,"promptpay_payload"?: string | null,"ref_parent_doc_id"?: string | null,"ref_parent_doc_number"?: string | null,"share_token"?: string | null,"status"?: string,"subtotal_amount"?: number,"tenant_id"?: string,"vat_amount"?: number | null,"vat_rate"?: number | null,"wht_amount"?: number | null,"wht_rate"?: number | null
+                  }
+                  Update: {
+                    "branch_id"?: string | null,"contact_id"?: string | null,"created_at"?: string | null,"credit_term_days"?: number | null,"discount_amount"?: number | null,"doc_number"?: string,"doc_type"?: string,"due_date"?: string | null,"grand_total"?: number,"id"?: string,"issue_date"?: string,"notes"?: string | null,"payment_details"?: string | null,"promptpay_payload"?: string | null,"ref_parent_doc_id"?: string | null,"ref_parent_doc_number"?: string | null,"share_token"?: string | null,"status"?: string,"subtotal_amount"?: number,"tenant_id"?: string,"vat_amount"?: number | null,"vat_rate"?: number | null,"wht_amount"?: number | null,"wht_rate"?: number | null
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "ext_documents_contact_id_fkey"
+      columns: ["contact_id"]
+isOneToOne: false
+      referencedRelation: "ext_contacts"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "ext_documents_ref_parent_doc_id_fkey"
+      columns: ["ref_parent_doc_id"]
+isOneToOne: false
+      referencedRelation: "ext_documents"
+      referencedColumns: ["id"]
     }
-    CompositeTypes: {
-      [_ in never]: never
+                  ]
+                },"ext_etax_logs": {
+                  Row: {
+                    "created_at": string | null,"doc_type_code": string,"document_id": string | null,"id": string,"pdf_a3_url": string | null,"rd_error_message": string | null,"rd_status": string | null,"rd_transaction_id": string | null,"recipient_email": string | null,"signed_at": string | null,"signed_xml_hash": string | null,"submission_mode": string,"xml_payload": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "created_at"?: string | null,"doc_type_code": string,"document_id"?: string | null,"id"?: string,"pdf_a3_url"?: string | null,"rd_error_message"?: string | null,"rd_status"?: string | null,"rd_transaction_id"?: string | null,"recipient_email"?: string | null,"signed_at"?: string | null,"signed_xml_hash"?: string | null,"submission_mode": string,"xml_payload": string
+                  }
+                  Update: {
+                    "created_at"?: string | null,"doc_type_code"?: string,"document_id"?: string | null,"id"?: string,"pdf_a3_url"?: string | null,"rd_error_message"?: string | null,"rd_status"?: string | null,"rd_transaction_id"?: string | null,"recipient_email"?: string | null,"signed_at"?: string | null,"signed_xml_hash"?: string | null,"submission_mode"?: string,"xml_payload"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "ext_etax_logs_document_id_fkey"
+      columns: ["document_id"]
+isOneToOne: false
+      referencedRelation: "ext_documents"
+      referencedColumns: ["id"]
     }
-  }
-  public: {
-    Tables: {
-      customers: {
-        Row: {
-          created_at: string
-          id: string
-          name: string
-          phone: string
-          tenant_id: string
-          updated_at: string
-        }
-        Insert: {
-          created_at?: string
-          id?: string
-          name: string
-          phone: string
-          tenant_id?: string
-          updated_at?: string
-        }
-        Update: {
-          created_at?: string
-          id?: string
-          name?: string
-          phone?: string
-          tenant_id?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "customers_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      expenses: {
-        Row: {
-          amount: number
-          branch_id: string | null
-          category: string
-          created_at: string
-          created_by: string | null
-          expense_date: string
-          id: string
-          note: string | null
-          tenant_id: string
-          title: string
-        }
-        Insert: {
-          amount?: number
-          branch_id?: string | null
-          category: string
-          created_at?: string
-          created_by?: string | null
-          expense_date?: string
-          id?: string
-          note?: string | null
-          tenant_id?: string
-          title: string
-        }
-        Update: {
-          amount?: number
-          branch_id?: string | null
-          category?: string
-          created_at?: string
-          created_by?: string | null
-          expense_date?: string
-          id?: string
-          note?: string | null
-          tenant_id?: string
-          title?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "expenses_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      inv_audit_logs: {
-        Row: {
-          action: Database["public"]["Enums"]["inv_audit_action"]
-          after_data: Json | null
-          before_data: Json | null
-          id: number
-          performed_at: string
-          performed_by: string | null
-          reason: string | null
-          record_id: string
-          table_name: string
-          tenant_id: string
-        }
-        Insert: {
-          action: Database["public"]["Enums"]["inv_audit_action"]
-          after_data?: Json | null
-          before_data?: Json | null
-          id?: never
-          performed_at?: string
-          performed_by?: string | null
-          reason?: string | null
-          record_id: string
-          table_name: string
-          tenant_id?: string
-        }
-        Update: {
-          action?: Database["public"]["Enums"]["inv_audit_action"]
-          after_data?: Json | null
-          before_data?: Json | null
-          id?: never
-          performed_at?: string
-          performed_by?: string | null
-          reason?: string | null
-          record_id?: string
-          table_name?: string
-          tenant_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "inv_audit_logs_performed_by_profiles_fkey"
-            columns: ["performed_by"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "inv_audit_logs_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      inv_branches: {
-        Row: {
-          address: string | null
-          close_time: string
-          created_at: string
-          id: string
-          is_active: boolean
-          name: string
-          open_time: string
-          phone: string | null
-          telegram_chat_id: string | null
-          tenant_id: string
-          vat_registered: boolean
-        }
-        Insert: {
-          address?: string | null
-          close_time?: string
-          created_at?: string
-          id?: string
-          is_active?: boolean
-          name: string
-          open_time?: string
-          phone?: string | null
-          telegram_chat_id?: string | null
-          tenant_id?: string
-          vat_registered?: boolean
-        }
-        Update: {
-          address?: string | null
-          close_time?: string
-          created_at?: string
-          id?: string
-          is_active?: boolean
-          name?: string
-          open_time?: string
-          phone?: string | null
-          telegram_chat_id?: string | null
-          tenant_id?: string
-          vat_registered?: boolean
-        }
-        Relationships: [
-          {
-            foreignKeyName: "inv_branches_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      inv_integration_secrets: {
-        Row: {
-          key: string
-          tenant_id: string
-          updated_at: string
-          updated_by: string | null
-          value: string
-        }
-        Insert: {
-          key: string
-          tenant_id?: string
-          updated_at?: string
-          updated_by?: string | null
-          value: string
-        }
-        Update: {
-          key?: string
-          tenant_id?: string
-          updated_at?: string
-          updated_by?: string | null
-          value?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "inv_integration_secrets_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "inv_integration_secrets_updated_by_profiles_fkey"
-            columns: ["updated_by"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      inv_item_stock: {
-        Row: {
-          alert_muted: boolean
-          avg_unit_cost: number
-          branch_id: string
-          current_qty: number
-          id: string
-          item_id: string
-          min_stock_level: number
-          tenant_id: string
-          updated_at: string
-        }
-        Insert: {
-          alert_muted?: boolean
-          avg_unit_cost?: number
-          branch_id: string
-          current_qty?: number
-          id?: string
-          item_id: string
-          min_stock_level?: number
-          tenant_id?: string
-          updated_at?: string
-        }
-        Update: {
-          alert_muted?: boolean
-          avg_unit_cost?: number
-          branch_id?: string
-          current_qty?: number
-          id?: string
-          item_id?: string
-          min_stock_level?: number
-          tenant_id?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "inv_item_stock_branch_id_fkey"
-            columns: ["branch_id"]
-            isOneToOne: false
-            referencedRelation: "branches"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "inv_item_stock_branch_id_fkey"
-            columns: ["branch_id"]
-            isOneToOne: false
-            referencedRelation: "inv_branches"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "inv_item_stock_item_id_fkey"
-            columns: ["item_id"]
-            isOneToOne: false
-            referencedRelation: "inv_items"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "inv_item_stock_item_id_fkey"
-            columns: ["item_id"]
-            isOneToOne: false
-            referencedRelation: "inv_v_low_stock"
-            referencedColumns: ["item_id"]
-          },
-          {
-            foreignKeyName: "inv_item_stock_item_id_fkey"
-            columns: ["item_id"]
-            isOneToOne: false
-            referencedRelation: "inv_v_top_consumed_items_30d"
-            referencedColumns: ["item_id"]
-          },
-          {
-            foreignKeyName: "inv_item_stock_item_id_fkey"
-            columns: ["item_id"]
-            isOneToOne: false
-            referencedRelation: "items"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "inv_item_stock_item_id_fkey"
-            columns: ["item_id"]
-            isOneToOne: false
-            referencedRelation: "v_low_stock"
-            referencedColumns: ["item_id"]
-          },
-          {
-            foreignKeyName: "inv_item_stock_item_id_fkey"
-            columns: ["item_id"]
-            isOneToOne: false
-            referencedRelation: "v_top_consumed_items_30d"
-            referencedColumns: ["item_id"]
-          },
-          {
-            foreignKeyName: "inv_item_stock_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      inv_items: {
-        Row: {
-          base_unit: string
-          category: string
-          created_at: string
-          default_min_stock_level: number
-          id: string
-          is_active: boolean
-          item_type: Database["public"]["Enums"]["inv_item_type"]
-          name: string
-          purchase_unit: string
-          purchase_unit_qty: number
-          sku: string | null
-          tenant_id: string
-          updated_at: string
-        }
-        Insert: {
-          base_unit: string
-          category: string
-          created_at?: string
-          default_min_stock_level?: number
-          id?: string
-          is_active?: boolean
-          item_type: Database["public"]["Enums"]["inv_item_type"]
-          name: string
-          purchase_unit: string
-          purchase_unit_qty?: number
-          sku?: string | null
-          tenant_id?: string
-          updated_at?: string
-        }
-        Update: {
-          base_unit?: string
-          category?: string
-          created_at?: string
-          default_min_stock_level?: number
-          id?: string
-          is_active?: boolean
-          item_type?: Database["public"]["Enums"]["inv_item_type"]
-          name?: string
-          purchase_unit?: string
-          purchase_unit_qty?: number
-          sku?: string | null
-          tenant_id?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "inv_items_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      inv_notification_log: {
-        Row: {
-          branch_id: string
-          channel: string
-          id: string
-          item_id: string
-          message: string
-          sent_at: string
-          tenant_id: string
-        }
-        Insert: {
-          branch_id: string
-          channel: string
-          id?: string
-          item_id: string
-          message: string
-          sent_at?: string
-          tenant_id?: string
-        }
-        Update: {
-          branch_id?: string
-          channel?: string
-          id?: string
-          item_id?: string
-          message?: string
-          sent_at?: string
-          tenant_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "inv_notification_log_branch_id_fkey"
-            columns: ["branch_id"]
-            isOneToOne: false
-            referencedRelation: "branches"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "inv_notification_log_branch_id_fkey"
-            columns: ["branch_id"]
-            isOneToOne: false
-            referencedRelation: "inv_branches"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "inv_notification_log_item_id_fkey"
-            columns: ["item_id"]
-            isOneToOne: false
-            referencedRelation: "inv_items"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "inv_notification_log_item_id_fkey"
-            columns: ["item_id"]
-            isOneToOne: false
-            referencedRelation: "inv_v_low_stock"
-            referencedColumns: ["item_id"]
-          },
-          {
-            foreignKeyName: "inv_notification_log_item_id_fkey"
-            columns: ["item_id"]
-            isOneToOne: false
-            referencedRelation: "inv_v_top_consumed_items_30d"
-            referencedColumns: ["item_id"]
-          },
-          {
-            foreignKeyName: "inv_notification_log_item_id_fkey"
-            columns: ["item_id"]
-            isOneToOne: false
-            referencedRelation: "items"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "inv_notification_log_item_id_fkey"
-            columns: ["item_id"]
-            isOneToOne: false
-            referencedRelation: "v_low_stock"
-            referencedColumns: ["item_id"]
-          },
-          {
-            foreignKeyName: "inv_notification_log_item_id_fkey"
-            columns: ["item_id"]
-            isOneToOne: false
-            referencedRelation: "v_top_consumed_items_30d"
-            referencedColumns: ["item_id"]
-          },
-          {
-            foreignKeyName: "inv_notification_log_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      inv_stock_transactions: {
-        Row: {
-          approved_by: string | null
-          branch_id: string
-          corrects_txn_id: string | null
-          created_at: string
-          id: string
-          item_id: string
-          performed_by: string
-          quantity_delta: number
-          reason: string | null
-          reference_note: string | null
-          reference_type: string | null
-          status: Database["public"]["Enums"]["inv_txn_status"]
-          supplier_id: string | null
-          tenant_id: string
-          total_cost: number | null
-          transaction_date: string
-          txn_type: Database["public"]["Enums"]["inv_txn_type"]
-          unit_cost_snapshot: number
-        }
-        Insert: {
-          approved_by?: string | null
-          branch_id: string
-          corrects_txn_id?: string | null
-          created_at?: string
-          id?: string
-          item_id: string
-          performed_by: string
-          quantity_delta: number
-          reason?: string | null
-          reference_note?: string | null
-          reference_type?: string | null
-          status?: Database["public"]["Enums"]["inv_txn_status"]
-          supplier_id?: string | null
-          tenant_id?: string
-          total_cost?: number | null
-          transaction_date?: string
-          txn_type: Database["public"]["Enums"]["inv_txn_type"]
-          unit_cost_snapshot?: number
-        }
-        Update: {
-          approved_by?: string | null
-          branch_id?: string
-          corrects_txn_id?: string | null
-          created_at?: string
-          id?: string
-          item_id?: string
-          performed_by?: string
-          quantity_delta?: number
-          reason?: string | null
-          reference_note?: string | null
-          reference_type?: string | null
-          status?: Database["public"]["Enums"]["inv_txn_status"]
-          supplier_id?: string | null
-          tenant_id?: string
-          total_cost?: number | null
-          transaction_date?: string
-          txn_type?: Database["public"]["Enums"]["inv_txn_type"]
-          unit_cost_snapshot?: number
-        }
-        Relationships: [
-          {
-            foreignKeyName: "inv_stock_transactions_approved_by_profiles_fkey"
-            columns: ["approved_by"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "inv_stock_transactions_branch_id_fkey"
-            columns: ["branch_id"]
-            isOneToOne: false
-            referencedRelation: "branches"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "inv_stock_transactions_branch_id_fkey"
-            columns: ["branch_id"]
-            isOneToOne: false
-            referencedRelation: "inv_branches"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "inv_stock_transactions_corrects_txn_id_fkey"
-            columns: ["corrects_txn_id"]
-            isOneToOne: false
-            referencedRelation: "inv_stock_transactions"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "inv_stock_transactions_corrects_txn_id_fkey"
-            columns: ["corrects_txn_id"]
-            isOneToOne: false
-            referencedRelation: "stock_transactions"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "inv_stock_transactions_corrects_txn_id_fkey"
-            columns: ["corrects_txn_id"]
-            isOneToOne: false
-            referencedRelation: "v_stock_transactions"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "inv_stock_transactions_item_id_fkey"
-            columns: ["item_id"]
-            isOneToOne: false
-            referencedRelation: "inv_items"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "inv_stock_transactions_item_id_fkey"
-            columns: ["item_id"]
-            isOneToOne: false
-            referencedRelation: "inv_v_low_stock"
-            referencedColumns: ["item_id"]
-          },
-          {
-            foreignKeyName: "inv_stock_transactions_item_id_fkey"
-            columns: ["item_id"]
-            isOneToOne: false
-            referencedRelation: "inv_v_top_consumed_items_30d"
-            referencedColumns: ["item_id"]
-          },
-          {
-            foreignKeyName: "inv_stock_transactions_item_id_fkey"
-            columns: ["item_id"]
-            isOneToOne: false
-            referencedRelation: "items"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "inv_stock_transactions_item_id_fkey"
-            columns: ["item_id"]
-            isOneToOne: false
-            referencedRelation: "v_low_stock"
-            referencedColumns: ["item_id"]
-          },
-          {
-            foreignKeyName: "inv_stock_transactions_item_id_fkey"
-            columns: ["item_id"]
-            isOneToOne: false
-            referencedRelation: "v_top_consumed_items_30d"
-            referencedColumns: ["item_id"]
-          },
-          {
-            foreignKeyName: "inv_stock_transactions_performed_by_profiles_fkey"
-            columns: ["performed_by"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "inv_stock_transactions_supplier_id_fkey"
-            columns: ["supplier_id"]
-            isOneToOne: false
-            referencedRelation: "inv_suppliers"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "inv_stock_transactions_supplier_id_fkey"
-            columns: ["supplier_id"]
-            isOneToOne: false
-            referencedRelation: "suppliers"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "inv_stock_transactions_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      inv_suppliers: {
-        Row: {
-          created_at: string
-          id: string
-          is_active: boolean
-          name: string
-          note: string | null
-          phone: string | null
-          tenant_id: string
-        }
-        Insert: {
-          created_at?: string
-          id?: string
-          is_active?: boolean
-          name: string
-          note?: string | null
-          phone?: string | null
-          tenant_id?: string
-        }
-        Update: {
-          created_at?: string
-          id?: string
-          is_active?: boolean
-          name?: string
-          note?: string | null
-          phone?: string | null
-          tenant_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "inv_suppliers_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      profiles: {
-        Row: {
-          branch_id: string | null
-          created_at: string
-          display_name: string | null
-          fullname: string | null
-          id: string
-          is_active: boolean
-          nickname: string | null
-          role: string | null
-          tenant_id: string | null
-          updated_at: string
-          username: string
-        }
-        Insert: {
-          branch_id?: string | null
-          created_at?: string
-          display_name?: string | null
-          fullname?: string | null
-          id: string
-          is_active?: boolean
-          nickname?: string | null
-          role?: string | null
-          tenant_id?: string | null
-          updated_at?: string
-          username: string
-        }
-        Update: {
-          branch_id?: string | null
-          created_at?: string
-          display_name?: string | null
-          fullname?: string | null
-          id?: string
-          is_active?: boolean
-          nickname?: string | null
-          role?: string | null
-          tenant_id?: string | null
-          updated_at?: string
-          username?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "profiles_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      sc_audit_logs: {
-        Row: {
-          action: string
-          actor_id: string | null
-          actor_name: string
-          browser: string | null
-          created_at: string
-          detail: Json | null
-          device: string | null
-          entity: string
-          entity_id: string | null
-          id: number
-          ip_address: string | null
-          page_path: string | null
-          tenant_id: string
-          user_agent: string | null
-        }
-        Insert: {
-          action: string
-          actor_id?: string | null
-          actor_name?: string
-          browser?: string | null
-          created_at?: string
-          detail?: Json | null
-          device?: string | null
-          entity: string
-          entity_id?: string | null
-          id?: never
-          ip_address?: string | null
-          page_path?: string | null
-          tenant_id?: string
-          user_agent?: string | null
-        }
-        Update: {
-          action?: string
-          actor_id?: string | null
-          actor_name?: string
-          browser?: string | null
-          created_at?: string
-          detail?: Json | null
-          device?: string | null
-          entity?: string
-          entity_id?: string | null
-          id?: never
-          ip_address?: string | null
-          page_path?: string | null
-          tenant_id?: string
-          user_agent?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "sc_audit_logs_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      sc_employees: {
-        Row: {
-          account: string | null
-          bank: string | null
-          bonus_per_pair: number
-          comm_rate: number | null
-          default_day_off: number | null
-          default_shift: string
-          id: number
-          last_updated: string | null
-          name: string
-          nickname: string | null
-          position: string | null
-          salary: number | null
-          sso_exempt: boolean
-          status: string | null
-          tenant_id: string
-          updated_at: string | null
-        }
-        Insert: {
-          account?: string | null
-          bank?: string | null
-          bonus_per_pair?: number
-          comm_rate?: number | null
-          default_day_off?: number | null
-          default_shift?: string
-          id?: number
-          last_updated?: string | null
-          name: string
-          nickname?: string | null
-          position?: string | null
-          salary?: number | null
-          sso_exempt?: boolean
-          status?: string | null
-          tenant_id?: string
-          updated_at?: string | null
-        }
-        Update: {
-          account?: string | null
-          bank?: string | null
-          bonus_per_pair?: number
-          comm_rate?: number | null
-          default_day_off?: number | null
-          default_shift?: string
-          id?: number
-          last_updated?: string | null
-          name?: string
-          nickname?: string | null
-          position?: string | null
-          salary?: number | null
-          sso_exempt?: boolean
-          status?: string | null
-          tenant_id?: string
-          updated_at?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "sc_employees_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      sc_expense_categories: {
-        Row: {
-          created_at: string
-          is_active: boolean
-          key: string
-          label: string
-          short_label: string
-          sort_order: number
-        }
-        Insert: {
-          created_at?: string
-          is_active?: boolean
-          key: string
-          label: string
-          short_label: string
-          sort_order?: number
-        }
-        Update: {
-          created_at?: string
-          is_active?: boolean
-          key?: string
-          label?: string
-          short_label?: string
-          sort_order?: number
-        }
-        Relationships: []
-      }
-      sc_expense_entries: {
-        Row: {
-          amount: number
-          branch_id: string | null
-          category: string
-          created_at: string
-          created_by: string | null
-          entry_date: string
-          id: number
-          legacy_opex_id: number | null
-          legacy_ref: string | null
-          note: string | null
-          pay_method: string
-          stock_txn_id: string | null
-          tenant_id: string
-          title: string
-          updated_at: string
-        }
-        Insert: {
-          amount: number
-          branch_id?: string | null
-          category: string
-          created_at?: string
-          created_by?: string | null
-          entry_date: string
-          id?: number
-          legacy_opex_id?: number | null
-          legacy_ref?: string | null
-          note?: string | null
-          pay_method?: string
-          stock_txn_id?: string | null
-          tenant_id?: string
-          title: string
-          updated_at?: string
-        }
-        Update: {
-          amount?: number
-          branch_id?: string | null
-          category?: string
-          created_at?: string
-          created_by?: string | null
-          entry_date?: string
-          id?: number
-          legacy_opex_id?: number | null
-          legacy_ref?: string | null
-          note?: string | null
-          pay_method?: string
-          stock_txn_id?: string | null
-          tenant_id?: string
-          title?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "sc_expense_entries_branch_id_fkey"
-            columns: ["branch_id"]
-            isOneToOne: false
-            referencedRelation: "branches"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "sc_expense_entries_branch_id_fkey"
-            columns: ["branch_id"]
-            isOneToOne: false
-            referencedRelation: "inv_branches"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "sc_expense_entries_category_fkey"
-            columns: ["category"]
-            isOneToOne: false
-            referencedRelation: "sc_expense_categories"
-            referencedColumns: ["key"]
-          },
-          {
-            foreignKeyName: "sc_expense_entries_created_by_fkey"
-            columns: ["created_by"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "sc_expense_entries_stock_txn_id_fkey"
-            columns: ["stock_txn_id"]
-            isOneToOne: false
-            referencedRelation: "inv_stock_transactions"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "sc_expense_entries_stock_txn_id_fkey"
-            columns: ["stock_txn_id"]
-            isOneToOne: false
-            referencedRelation: "stock_transactions"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "sc_expense_entries_stock_txn_id_fkey"
-            columns: ["stock_txn_id"]
-            isOneToOne: false
-            referencedRelation: "v_stock_transactions"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "sc_expense_entries_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      sc_expenses: {
-        Row: {
-          amount: number | null
-          category: string | null
-          created_at: string | null
-          date: string
-          id: number
-          last_updated: string | null
-          name: string
-          pay_method: string | null
-          recorded_by: string | null
-          tenant_id: string
-        }
-        Insert: {
-          amount?: number | null
-          category?: string | null
-          created_at?: string | null
-          date: string
-          id?: number
-          last_updated?: string | null
-          name: string
-          pay_method?: string | null
-          recorded_by?: string | null
-          tenant_id?: string
-        }
-        Update: {
-          amount?: number | null
-          category?: string | null
-          created_at?: string | null
-          date?: string
-          id?: number
-          last_updated?: string | null
-          name?: string
-          pay_method?: string | null
-          recorded_by?: string | null
-          tenant_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "sc_expenses_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      sc_opex: {
-        Row: {
-          amount: number | null
-          category: string | null
-          created_at: string | null
-          id: number
-          key: string | null
-          last_updated: string | null
-          month: string
-          name: string | null
-          pay_method: string | null
-          recorded_by: string | null
-          tenant_id: string
-        }
-        Insert: {
-          amount?: number | null
-          category?: string | null
-          created_at?: string | null
-          id?: number
-          key?: string | null
-          last_updated?: string | null
-          month: string
-          name?: string | null
-          pay_method?: string | null
-          recorded_by?: string | null
-          tenant_id?: string
-        }
-        Update: {
-          amount?: number | null
-          category?: string | null
-          created_at?: string | null
-          id?: number
-          key?: string | null
-          last_updated?: string | null
-          month?: string
-          name?: string | null
-          pay_method?: string | null
-          recorded_by?: string | null
-          tenant_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "sc_opex_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      sc_opex_history: {
-        Row: {
-          change_note: string | null
-          id: number
-          items: Json
-          month: string
-          saved_at: string | null
-          saved_by: string | null
-          tenant_id: string
-          version: number
-        }
-        Insert: {
-          change_note?: string | null
-          id?: number
-          items: Json
-          month: string
-          saved_at?: string | null
-          saved_by?: string | null
-          tenant_id?: string
-          version?: number
-        }
-        Update: {
-          change_note?: string | null
-          id?: number
-          items?: Json
-          month?: string
-          saved_at?: string | null
-          saved_by?: string | null
-          tenant_id?: string
-          version?: number
-        }
-        Relationships: [
-          {
-            foreignKeyName: "sc_opex_history_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      sc_payments: {
-        Row: {
-          amount: number | null
-          client_request_id: string | null
-          created_at: string | null
-          id: number
-          notes: string | null
-          pay_method: string | null
-          received_date: string
-          recorded_by: string | null
-          sale_date: string
-          tenant_id: string
-        }
-        Insert: {
-          amount?: number | null
-          client_request_id?: string | null
-          created_at?: string | null
-          id?: number
-          notes?: string | null
-          pay_method?: string | null
-          received_date?: string
-          recorded_by?: string | null
-          sale_date: string
-          tenant_id?: string
-        }
-        Update: {
-          amount?: number | null
-          client_request_id?: string | null
-          created_at?: string | null
-          id?: number
-          notes?: string | null
-          pay_method?: string | null
-          received_date?: string
-          recorded_by?: string | null
-          sale_date?: string
-          tenant_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "sc_payments_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      sc_payslip_deductions: {
-        Row: {
-          amount: number
-          created_at: string
-          detail: string | null
-          id: number
-          kind: string | null
-          legacy_ref: string | null
-          minutes: number | null
-          name: string
-          payslip_id: number
-          rate: number | null
-          tenant_id: string
-        }
-        Insert: {
-          amount: number
-          created_at?: string
-          detail?: string | null
-          id?: number
-          kind?: string | null
-          legacy_ref?: string | null
-          minutes?: number | null
-          name: string
-          payslip_id: number
-          rate?: number | null
-          tenant_id?: string
-        }
-        Update: {
-          amount?: number
-          created_at?: string
-          detail?: string | null
-          id?: number
-          kind?: string | null
-          legacy_ref?: string | null
-          minutes?: number | null
-          name?: string
-          payslip_id?: number
-          rate?: number | null
-          tenant_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "sc_payslip_deductions_payslip_id_fkey"
-            columns: ["payslip_id"]
-            isOneToOne: false
-            referencedRelation: "sc_payslips"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "sc_payslip_deductions_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      sc_payslips: {
-        Row: {
-          base_salary: number
-          branch_id: string | null
-          commission_pct: number
-          created_at: string
-          created_by: string | null
-          days_worked: number
-          deduction_total: number
-          diligence: number
-          employee_name: string
-          id: number
-          legacy_ref: string | null
-          month: string
-          net_pay: number
-          ot: number
-          tenant_id: string
-          updated_at: string
-          wht: number
-        }
-        Insert: {
-          base_salary?: number
-          branch_id?: string | null
-          commission_pct?: number
-          created_at?: string
-          created_by?: string | null
-          days_worked?: number
-          deduction_total?: number
-          diligence?: number
-          employee_name: string
-          id?: number
-          legacy_ref?: string | null
-          month: string
-          net_pay?: number
-          ot?: number
-          tenant_id?: string
-          updated_at?: string
-          wht?: number
-        }
-        Update: {
-          base_salary?: number
-          branch_id?: string | null
-          commission_pct?: number
-          created_at?: string
-          created_by?: string | null
-          days_worked?: number
-          deduction_total?: number
-          diligence?: number
-          employee_name?: string
-          id?: number
-          legacy_ref?: string | null
-          month?: string
-          net_pay?: number
-          ot?: number
-          tenant_id?: string
-          updated_at?: string
-          wht?: number
-        }
-        Relationships: [
-          {
-            foreignKeyName: "sc_payslips_branch_id_fkey"
-            columns: ["branch_id"]
-            isOneToOne: false
-            referencedRelation: "branches"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "sc_payslips_branch_id_fkey"
-            columns: ["branch_id"]
-            isOneToOne: false
-            referencedRelation: "inv_branches"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "sc_payslips_created_by_fkey"
-            columns: ["created_by"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "sc_payslips_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      sc_rental_records: {
-        Row: {
-          branch_id: string | null
-          created_at: string
-          curr_meter: number
-          id: number
-          income_amount: number
-          legacy_ref: string | null
-          month: string
-          prev_meter: number
-          rent_amount: number
-          room_index: number
-          room_name: string | null
-          tenant_id: string
-          tenant_name: string | null
-          tenant_tax_id: string | null
-          updated_at: string
-          wht_rate: number
-          wht_withheld: number
-        }
-        Insert: {
-          branch_id?: string | null
-          created_at?: string
-          curr_meter?: number
-          id?: number
-          income_amount?: number
-          legacy_ref?: string | null
-          month: string
-          prev_meter?: number
-          rent_amount?: number
-          room_index: number
-          room_name?: string | null
-          tenant_id?: string
-          tenant_name?: string | null
-          tenant_tax_id?: string | null
-          updated_at?: string
-          wht_rate?: number
-          wht_withheld?: number
-        }
-        Update: {
-          branch_id?: string | null
-          created_at?: string
-          curr_meter?: number
-          id?: number
-          income_amount?: number
-          legacy_ref?: string | null
-          month?: string
-          prev_meter?: number
-          rent_amount?: number
-          room_index?: number
-          room_name?: string | null
-          tenant_id?: string
-          tenant_name?: string | null
-          tenant_tax_id?: string | null
-          updated_at?: string
-          wht_rate?: number
-          wht_withheld?: number
-        }
-        Relationships: [
-          {
-            foreignKeyName: "sc_rental_records_branch_id_fkey"
-            columns: ["branch_id"]
-            isOneToOne: false
-            referencedRelation: "branches"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "sc_rental_records_branch_id_fkey"
-            columns: ["branch_id"]
-            isOneToOne: false
-            referencedRelation: "inv_branches"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "sc_rental_records_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      sc_sales: {
-        Row: {
-          amount_paid: number | null
-          cash_amount: number | null
-          client_request_id: string | null
-          created_at: string | null
-          date: string
-          discount: number | null
-          extra_items: string | null
-          grand_total: number | null
-          id: number
-          last_updated: string | null
-          payment_status: string | null
-          recorded_by: string | null
-          service_order_id: string | null
-          size_l: number | null
-          size_m: number | null
-          size_s: number | null
-          size_xl: number | null
-          tenant_id: string
-          total_revenue: number | null
-          transfer_amount: number | null
-        }
-        Insert: {
-          amount_paid?: number | null
-          cash_amount?: number | null
-          client_request_id?: string | null
-          created_at?: string | null
-          date: string
-          discount?: number | null
-          extra_items?: string | null
-          grand_total?: number | null
-          id?: number
-          last_updated?: string | null
-          payment_status?: string | null
-          recorded_by?: string | null
-          service_order_id?: string | null
-          size_l?: number | null
-          size_m?: number | null
-          size_s?: number | null
-          size_xl?: number | null
-          tenant_id?: string
-          total_revenue?: number | null
-          transfer_amount?: number | null
-        }
-        Update: {
-          amount_paid?: number | null
-          cash_amount?: number | null
-          client_request_id?: string | null
-          created_at?: string | null
-          date?: string
-          discount?: number | null
-          extra_items?: string | null
-          grand_total?: number | null
-          id?: number
-          last_updated?: string | null
-          payment_status?: string | null
-          recorded_by?: string | null
-          service_order_id?: string | null
-          size_l?: number | null
-          size_m?: number | null
-          size_s?: number | null
-          size_xl?: number | null
-          tenant_id?: string
-          total_revenue?: number | null
-          transfer_amount?: number | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "sc_sales_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      sc_receipt_posts: {
-        // เพิ่มมือให้ตรง migration 0046 ที่ apply แล้ว จนกว่าจะรัน gen:types รอบถัดไป
-        Row: {
-          approved_by: string | null
-          created_at: string
-          fingerprint: string
-          purchase_amount: number
-          receipt_id: string
-          request_id: string
-          tenant_id: string
-          vat_credit: number
-        }
-        Insert: {
-          approved_by?: string | null
-          created_at?: string
-          fingerprint: string
-          purchase_amount?: number
-          receipt_id: string
-          request_id: string
-          tenant_id: string
-          vat_credit?: number
-        }
-        Update: {
-          approved_by?: string | null
-          created_at?: string
-          fingerprint?: string
-          purchase_amount?: number
-          receipt_id?: string
-          request_id?: string
-          tenant_id?: string
-          vat_credit?: number
-        }
-        Relationships: []
-      }
-      sc_settings: {
-        Row: {
-          key: string
-          tenant_id: string | null
-          updated_at: string | null
-          value: string | null
-        }
-        Insert: {
-          key: string
-          tenant_id?: string | null
-          updated_at?: string | null
-          value?: string | null
-        }
-        Update: {
-          key?: string
-          tenant_id?: string | null
-          updated_at?: string | null
-          value?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "sc_settings_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      sc_staff_daily_stats: {
-        Row: {
-          attendance_status: string
-          created_at: string
-          created_by: string | null
-          employee_name: string
-          id: number
-          late_minutes: number | null
-          note: string | null
-          ot_hours: number | null
-          pairs_handled: number | null
-          stat_date: string
-          tenant_id: string
-          updated_at: string
-        }
-        Insert: {
-          attendance_status?: string
-          created_at?: string
-          created_by?: string | null
-          employee_name: string
-          id?: number
-          late_minutes?: number | null
-          note?: string | null
-          ot_hours?: number | null
-          pairs_handled?: number | null
-          stat_date: string
-          tenant_id: string
-          updated_at?: string
-        }
-        Update: {
-          attendance_status?: string
-          created_at?: string
-          created_by?: string | null
-          employee_name?: string
-          id?: number
-          late_minutes?: number | null
-          note?: string | null
-          ot_hours?: number | null
-          pairs_handled?: number | null
-          stat_date?: string
-          tenant_id?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "sc_staff_daily_stats_created_by_fkey"
-            columns: ["created_by"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "sc_staff_daily_stats_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      sc_users: {
-        Row: {
-          branch_id: string | null
-          created_at: string | null
-          fullname: string | null
-          id: number
-          nickname: string | null
-          role: string | null
-          user_id: string | null
-          username: string
-        }
-        Insert: {
-          branch_id?: string | null
-          created_at?: string | null
-          fullname?: string | null
-          id?: number
-          nickname?: string | null
-          role?: string | null
-          user_id?: string | null
-          username: string
-        }
-        Update: {
-          branch_id?: string | null
-          created_at?: string | null
-          fullname?: string | null
-          id?: number
-          nickname?: string | null
-          role?: string | null
-          user_id?: string | null
-          username?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "sc_users_branch_id_fkey"
-            columns: ["branch_id"]
-            isOneToOne: false
-            referencedRelation: "branches"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "sc_users_branch_id_fkey"
-            columns: ["branch_id"]
-            isOneToOne: false
-            referencedRelation: "inv_branches"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      sc_wht_certificates: {
-        Row: {
-          base_amount: number
-          certificate_number: string
-          created_at: string
-          created_by: string | null
-          direction: string
-          form_type: string
-          gross_amount: number
-          id: string
-          income_type_code: string
-          income_type_label: string
-          legacy_opex_id: number | null
-          net_payment: number
-          note: string | null
-          payee_id: string | null
-          payment_date: string
-          rental_record_id: number | null
-          tax_amount: number
-          tenant_id: string
-          vat_amount: number
-          wht_rate: number
-        }
-        Insert: {
-          base_amount: number
-          certificate_number: string
-          created_at?: string
-          created_by?: string | null
-          direction?: string
-          form_type: string
-          gross_amount: number
-          id?: string
-          income_type_code?: string
-          income_type_label?: string
-          legacy_opex_id?: number | null
-          net_payment: number
-          note?: string | null
-          payee_id?: string | null
-          payment_date: string
-          rental_record_id?: number | null
-          tax_amount: number
-          tenant_id: string
-          vat_amount?: number
-          wht_rate: number
-        }
-        Update: {
-          base_amount?: number
-          certificate_number?: string
-          created_at?: string
-          created_by?: string | null
-          direction?: string
-          form_type?: string
-          gross_amount?: number
-          id?: string
-          income_type_code?: string
-          income_type_label?: string
-          legacy_opex_id?: number | null
-          net_payment?: number
-          note?: string | null
-          payee_id?: string | null
-          payment_date?: string
-          rental_record_id?: number | null
-          tax_amount?: number
-          tenant_id?: string
-          vat_amount?: number
-          wht_rate?: number
-        }
-        Relationships: [
-          {
-            foreignKeyName: "sc_wht_certificates_created_by_fkey"
-            columns: ["created_by"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "sc_wht_certificates_payee_id_fkey"
-            columns: ["payee_id"]
-            isOneToOne: false
-            referencedRelation: "sc_wht_payees"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "sc_wht_certificates_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      sc_wht_payees: {
-        Row: {
-          address: string | null
-          created_at: string
-          id: string
-          is_active: boolean
-          kind: string
-          name: string
-          tax_id: string
-          tenant_id: string
-          updated_at: string
-        }
-        Insert: {
-          address?: string | null
-          created_at?: string
-          id?: string
-          is_active?: boolean
-          kind: string
-          name: string
-          tax_id: string
-          tenant_id: string
-          updated_at?: string
-        }
-        Update: {
-          address?: string | null
-          created_at?: string
-          id?: string
-          is_active?: boolean
-          kind?: string
-          name?: string
-          tax_id?: string
-          tenant_id?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "sc_wht_payees_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      service_order_items: {
-        Row: {
-          created_at: string
-          id: string
-          order_id: string
-          price: number
-          quantity: number
-          service_id: string | null
-          service_name: string
-          tenant_id: string
-        }
-        Insert: {
-          created_at?: string
-          id?: string
-          order_id: string
-          price?: number
-          quantity?: number
-          service_id?: string | null
-          service_name: string
-          tenant_id?: string
-        }
-        Update: {
-          created_at?: string
-          id?: string
-          order_id?: string
-          price?: number
-          quantity?: number
-          service_id?: string | null
-          service_name?: string
-          tenant_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "service_order_items_order_id_fkey"
-            columns: ["order_id"]
-            isOneToOne: false
-            referencedRelation: "service_orders"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "service_order_items_service_id_fkey"
-            columns: ["service_id"]
-            isOneToOne: false
-            referencedRelation: "services"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "service_order_items_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      service_orders: {
-        Row: {
-          branch_id: string | null
-          cash_amount: number
-          completed_at: string | null
-          created_at: string
-          created_by: string | null
-          customer_id: string | null
-          customer_name: string
-          customer_phone: string
-          delivered_at: string | null
-          discount_amount: number
-          id: string
-          net_amount: number
-          note: string | null
-          order_no: string
-          payment_method: string
-          payment_status: string
-          received_at: string
-          shoe_brand: string | null
-          shoe_color: string | null
-          shoe_model: string | null
-          shoe_size: string | null
-          status: string
-          tenant_id: string
-          total_amount: number
-          transfer_amount: number
-          updated_at: string
-        }
-        Insert: {
-          branch_id?: string | null
-          cash_amount?: number
-          completed_at?: string | null
-          created_at?: string
-          created_by?: string | null
-          customer_id?: string | null
-          customer_name: string
-          customer_phone: string
-          delivered_at?: string | null
-          discount_amount?: number
-          id?: string
-          net_amount?: number
-          note?: string | null
-          order_no: string
-          payment_method?: string
-          payment_status?: string
-          received_at?: string
-          shoe_brand?: string | null
-          shoe_color?: string | null
-          shoe_model?: string | null
-          shoe_size?: string | null
-          status?: string
-          tenant_id?: string
-          total_amount?: number
-          transfer_amount?: number
-          updated_at?: string
-        }
-        Update: {
-          branch_id?: string | null
-          cash_amount?: number
-          completed_at?: string | null
-          created_at?: string
-          created_by?: string | null
-          customer_id?: string | null
-          customer_name?: string
-          customer_phone?: string
-          delivered_at?: string | null
-          discount_amount?: number
-          id?: string
-          net_amount?: number
-          note?: string | null
-          order_no?: string
-          payment_method?: string
-          payment_status?: string
-          received_at?: string
-          shoe_brand?: string | null
-          shoe_color?: string | null
-          shoe_model?: string | null
-          shoe_size?: string | null
-          status?: string
-          tenant_id?: string
-          total_amount?: number
-          transfer_amount?: number
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "service_orders_customer_id_fkey"
-            columns: ["customer_id"]
-            isOneToOne: false
-            referencedRelation: "customers"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "service_orders_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      services: {
-        Row: {
-          base_price: number
-          category: string
-          code: string
-          created_at: string
-          estimated_days: number
-          id: string
-          is_active: boolean
-          name: string
-          tenant_id: string
-        }
-        Insert: {
-          base_price?: number
-          category: string
-          code: string
-          created_at?: string
-          estimated_days?: number
-          id?: string
-          is_active?: boolean
-          name: string
-          tenant_id?: string
-        }
-        Update: {
-          base_price?: number
-          category?: string
-          code?: string
-          created_at?: string
-          estimated_days?: number
-          id?: string
-          is_active?: boolean
-          name?: string
-          tenant_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "services_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      tenants: {
-        Row: {
-          address: string | null
-          created_at: string
-          id: string
-          is_active: boolean
-          legal_name: string | null
-          name: string
-          phone: string | null
-          promptpay_id: string | null
-          tax_id: string | null
-          updated_at: string
-        }
-        Insert: {
-          address?: string | null
-          created_at?: string
-          id?: string
-          is_active?: boolean
-          legal_name?: string | null
-          name: string
-          phone?: string | null
-          promptpay_id?: string | null
-          tax_id?: string | null
-          updated_at?: string
-        }
-        Update: {
-          address?: string | null
-          created_at?: string
-          id?: string
-          is_active?: boolean
-          legal_name?: string | null
-          name?: string
-          phone?: string | null
-          promptpay_id?: string | null
-          tax_id?: string | null
-          updated_at?: string
-        }
-        Relationships: []
-      }
-      ui_permissions: {
-        Row: {
-          feature_key: string
-          role: string
-          updated_at: string
-          updated_by: string | null
-          visible: boolean
-        }
-        Insert: {
-          feature_key: string
-          role: string
-          updated_at?: string
-          updated_by?: string | null
-          visible?: boolean
-        }
-        Update: {
-          feature_key?: string
-          role?: string
-          updated_at?: string
-          updated_by?: string | null
-          visible?: boolean
-        }
-        Relationships: [
-          {
-            foreignKeyName: "ui_permissions_updated_by_profiles_fkey"
-            columns: ["updated_by"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
+                  ]
+                },"ext_inventory_items": {
+                  Row: {
+                    "cost_price": number | null,"created_at": string | null,"id": string,"min_stock_alert": number | null,"name": string,"selling_price": number | null,"sku": string,"unit": string | null
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "cost_price"?: number | null,"created_at"?: string | null,"id"?: string,"min_stock_alert"?: number | null,"name": string,"selling_price"?: number | null,"sku": string,"unit"?: string | null
+                  }
+                  Update: {
+                    "cost_price"?: number | null,"created_at"?: string | null,"id"?: string,"min_stock_alert"?: number | null,"name"?: string,"selling_price"?: number | null,"sku"?: string,"unit"?: string | null
+                  }
+                  Relationships: [
+
+                  ]
+                },"ext_line_accounts": {
+                  Row: {
+                    "account_type": string,"contact_id": string | null,"created_at": string | null,"display_name": string | null,"id": string,"is_verified": boolean | null,"line_user_id": string,"picture_url": string | null,"updated_at": string | null
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "account_type": string,"contact_id"?: string | null,"created_at"?: string | null,"display_name"?: string | null,"id"?: string,"is_verified"?: boolean | null,"line_user_id": string,"picture_url"?: string | null,"updated_at"?: string | null
+                  }
+                  Update: {
+                    "account_type"?: string,"contact_id"?: string | null,"created_at"?: string | null,"display_name"?: string | null,"id"?: string,"is_verified"?: boolean | null,"line_user_id"?: string,"picture_url"?: string | null,"updated_at"?: string | null
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "ext_line_accounts_contact_id_fkey"
+      columns: ["contact_id"]
+isOneToOne: false
+      referencedRelation: "ext_contacts"
+      referencedColumns: ["id"]
     }
-    Views: {
-      audit_logs: {
-        Row: {
-          action: Database["public"]["Enums"]["inv_audit_action"] | null
-          after_data: Json | null
-          before_data: Json | null
-          id: number | null
-          performed_at: string | null
-          performed_by: string | null
-          reason: string | null
-          record_id: string | null
-          table_name: string | null
-          tenant_id: string | null
-        }
-        Insert: {
-          action?: Database["public"]["Enums"]["inv_audit_action"] | null
-          after_data?: Json | null
-          before_data?: Json | null
-          id?: number | null
-          performed_at?: string | null
-          performed_by?: string | null
-          reason?: string | null
-          record_id?: string | null
-          table_name?: string | null
-          tenant_id?: string | null
-        }
-        Update: {
-          action?: Database["public"]["Enums"]["inv_audit_action"] | null
-          after_data?: Json | null
-          before_data?: Json | null
-          id?: number | null
-          performed_at?: string | null
-          performed_by?: string | null
-          reason?: string | null
-          record_id?: string | null
-          table_name?: string | null
-          tenant_id?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "inv_audit_logs_performed_by_profiles_fkey"
-            columns: ["performed_by"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "inv_audit_logs_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      branches: {
-        Row: {
-          address: string | null
-          close_time: string | null
-          created_at: string | null
-          id: string | null
-          is_active: boolean | null
-          name: string | null
-          open_time: string | null
-          phone: string | null
-          telegram_chat_id: string | null
-          tenant_id: string | null
-          vat_registered: boolean | null
-        }
-        Insert: {
-          address?: string | null
-          close_time?: string | null
-          created_at?: string | null
-          id?: string | null
-          is_active?: boolean | null
-          name?: string | null
-          open_time?: string | null
-          phone?: string | null
-          telegram_chat_id?: string | null
-          tenant_id?: string | null
-          vat_registered?: boolean | null
-        }
-        Update: {
-          address?: string | null
-          close_time?: string | null
-          created_at?: string | null
-          id?: string | null
-          is_active?: boolean | null
-          name?: string | null
-          open_time?: string | null
-          phone?: string | null
-          telegram_chat_id?: string | null
-          tenant_id?: string | null
-          vat_registered?: boolean | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "inv_branches_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      integration_secrets: {
-        Row: {
-          key: string | null
-          tenant_id: string | null
-          updated_at: string | null
-          updated_by: string | null
-          value: string | null
-        }
-        Insert: {
-          key?: string | null
-          tenant_id?: string | null
-          updated_at?: string | null
-          updated_by?: string | null
-          value?: string | null
-        }
-        Update: {
-          key?: string | null
-          tenant_id?: string | null
-          updated_at?: string | null
-          updated_by?: string | null
-          value?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "inv_integration_secrets_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "inv_integration_secrets_updated_by_profiles_fkey"
-            columns: ["updated_by"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      inv_v_inventory_value: {
-        Row: {
-          branch_id: string | null
-          branch_name: string | null
-          item_type: Database["public"]["Enums"]["inv_item_type"] | null
-          total_value: number | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "inv_item_stock_branch_id_fkey"
-            columns: ["branch_id"]
-            isOneToOne: false
-            referencedRelation: "branches"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "inv_item_stock_branch_id_fkey"
-            columns: ["branch_id"]
-            isOneToOne: false
-            referencedRelation: "inv_branches"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      inv_v_item_stock: {
-        Row: {
-          alert_muted: boolean | null
-          branch_id: string | null
-          current_qty: number | null
-          id: string | null
-          item_id: string | null
-          min_stock_level: number | null
-          updated_at: string | null
-        }
-        Insert: {
-          alert_muted?: boolean | null
-          branch_id?: string | null
-          current_qty?: number | null
-          id?: string | null
-          item_id?: string | null
-          min_stock_level?: number | null
-          updated_at?: string | null
-        }
-        Update: {
-          alert_muted?: boolean | null
-          branch_id?: string | null
-          current_qty?: number | null
-          id?: string | null
-          item_id?: string | null
-          min_stock_level?: number | null
-          updated_at?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "inv_item_stock_branch_id_fkey"
-            columns: ["branch_id"]
-            isOneToOne: false
-            referencedRelation: "branches"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "inv_item_stock_branch_id_fkey"
-            columns: ["branch_id"]
-            isOneToOne: false
-            referencedRelation: "inv_branches"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "inv_item_stock_item_id_fkey"
-            columns: ["item_id"]
-            isOneToOne: false
-            referencedRelation: "inv_items"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "inv_item_stock_item_id_fkey"
-            columns: ["item_id"]
-            isOneToOne: false
-            referencedRelation: "inv_v_low_stock"
-            referencedColumns: ["item_id"]
-          },
-          {
-            foreignKeyName: "inv_item_stock_item_id_fkey"
-            columns: ["item_id"]
-            isOneToOne: false
-            referencedRelation: "inv_v_top_consumed_items_30d"
-            referencedColumns: ["item_id"]
-          },
-          {
-            foreignKeyName: "inv_item_stock_item_id_fkey"
-            columns: ["item_id"]
-            isOneToOne: false
-            referencedRelation: "items"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "inv_item_stock_item_id_fkey"
-            columns: ["item_id"]
-            isOneToOne: false
-            referencedRelation: "v_low_stock"
-            referencedColumns: ["item_id"]
-          },
-          {
-            foreignKeyName: "inv_item_stock_item_id_fkey"
-            columns: ["item_id"]
-            isOneToOne: false
-            referencedRelation: "v_top_consumed_items_30d"
-            referencedColumns: ["item_id"]
-          },
-        ]
-      }
-      inv_v_low_stock: {
-        Row: {
-          base_unit: string | null
-          branch_id: string | null
-          branch_name: string | null
-          category: string | null
-          current_qty: number | null
-          item_id: string | null
-          item_type: Database["public"]["Enums"]["inv_item_type"] | null
-          min_stock_level: number | null
-          name: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "inv_item_stock_branch_id_fkey"
-            columns: ["branch_id"]
-            isOneToOne: false
-            referencedRelation: "branches"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "inv_item_stock_branch_id_fkey"
-            columns: ["branch_id"]
-            isOneToOne: false
-            referencedRelation: "inv_branches"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      inv_v_monthly_cogs: {
-        Row: {
-          branch_id: string | null
-          cogs: number | null
-          month: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "inv_stock_transactions_branch_id_fkey"
-            columns: ["branch_id"]
-            isOneToOne: false
-            referencedRelation: "branches"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "inv_stock_transactions_branch_id_fkey"
-            columns: ["branch_id"]
-            isOneToOne: false
-            referencedRelation: "inv_branches"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      inv_v_top_consumed_items_30d: {
-        Row: {
-          base_unit: string | null
-          branch_id: string | null
-          item_id: string | null
-          name: string | null
-          total_cost_used: number | null
-          total_qty_used: number | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "inv_stock_transactions_branch_id_fkey"
-            columns: ["branch_id"]
-            isOneToOne: false
-            referencedRelation: "branches"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "inv_stock_transactions_branch_id_fkey"
-            columns: ["branch_id"]
-            isOneToOne: false
-            referencedRelation: "inv_branches"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      item_stock: {
-        Row: {
-          alert_muted: boolean | null
-          avg_unit_cost: number | null
-          branch_id: string | null
-          current_qty: number | null
-          id: string | null
-          item_id: string | null
-          min_stock_level: number | null
-          tenant_id: string | null
-          updated_at: string | null
-        }
-        Insert: {
-          alert_muted?: boolean | null
-          avg_unit_cost?: number | null
-          branch_id?: string | null
-          current_qty?: number | null
-          id?: string | null
-          item_id?: string | null
-          min_stock_level?: number | null
-          tenant_id?: string | null
-          updated_at?: string | null
-        }
-        Update: {
-          alert_muted?: boolean | null
-          avg_unit_cost?: number | null
-          branch_id?: string | null
-          current_qty?: number | null
-          id?: string | null
-          item_id?: string | null
-          min_stock_level?: number | null
-          tenant_id?: string | null
-          updated_at?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "inv_item_stock_branch_id_fkey"
-            columns: ["branch_id"]
-            isOneToOne: false
-            referencedRelation: "branches"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "inv_item_stock_branch_id_fkey"
-            columns: ["branch_id"]
-            isOneToOne: false
-            referencedRelation: "inv_branches"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "inv_item_stock_item_id_fkey"
-            columns: ["item_id"]
-            isOneToOne: false
-            referencedRelation: "inv_items"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "inv_item_stock_item_id_fkey"
-            columns: ["item_id"]
-            isOneToOne: false
-            referencedRelation: "inv_v_low_stock"
-            referencedColumns: ["item_id"]
-          },
-          {
-            foreignKeyName: "inv_item_stock_item_id_fkey"
-            columns: ["item_id"]
-            isOneToOne: false
-            referencedRelation: "inv_v_top_consumed_items_30d"
-            referencedColumns: ["item_id"]
-          },
-          {
-            foreignKeyName: "inv_item_stock_item_id_fkey"
-            columns: ["item_id"]
-            isOneToOne: false
-            referencedRelation: "items"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "inv_item_stock_item_id_fkey"
-            columns: ["item_id"]
-            isOneToOne: false
-            referencedRelation: "v_low_stock"
-            referencedColumns: ["item_id"]
-          },
-          {
-            foreignKeyName: "inv_item_stock_item_id_fkey"
-            columns: ["item_id"]
-            isOneToOne: false
-            referencedRelation: "v_top_consumed_items_30d"
-            referencedColumns: ["item_id"]
-          },
-          {
-            foreignKeyName: "inv_item_stock_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      items: {
-        Row: {
-          base_unit: string | null
-          category: string | null
-          created_at: string | null
-          default_min_stock_level: number | null
-          id: string | null
-          is_active: boolean | null
-          item_type: Database["public"]["Enums"]["inv_item_type"] | null
-          name: string | null
-          purchase_unit: string | null
-          purchase_unit_qty: number | null
-          sku: string | null
-          tenant_id: string | null
-          updated_at: string | null
-        }
-        Insert: {
-          base_unit?: string | null
-          category?: string | null
-          created_at?: string | null
-          default_min_stock_level?: number | null
-          id?: string | null
-          is_active?: boolean | null
-          item_type?: Database["public"]["Enums"]["inv_item_type"] | null
-          name?: string | null
-          purchase_unit?: string | null
-          purchase_unit_qty?: number | null
-          sku?: string | null
-          tenant_id?: string | null
-          updated_at?: string | null
-        }
-        Update: {
-          base_unit?: string | null
-          category?: string | null
-          created_at?: string | null
-          default_min_stock_level?: number | null
-          id?: string | null
-          is_active?: boolean | null
-          item_type?: Database["public"]["Enums"]["inv_item_type"] | null
-          name?: string | null
-          purchase_unit?: string | null
-          purchase_unit_qty?: number | null
-          sku?: string | null
-          tenant_id?: string | null
-          updated_at?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "inv_items_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      stock_transactions: {
-        Row: {
-          approved_by: string | null
-          branch_id: string | null
-          corrects_txn_id: string | null
-          created_at: string | null
-          id: string | null
-          item_id: string | null
-          performed_by: string | null
-          quantity_delta: number | null
-          reason: string | null
-          reference_note: string | null
-          reference_type: string | null
-          status: Database["public"]["Enums"]["inv_txn_status"] | null
-          supplier_id: string | null
-          tenant_id: string | null
-          total_cost: number | null
-          transaction_date: string | null
-          txn_type: Database["public"]["Enums"]["inv_txn_type"] | null
-          unit_cost_snapshot: number | null
-        }
-        Insert: {
-          approved_by?: string | null
-          branch_id?: string | null
-          corrects_txn_id?: string | null
-          created_at?: string | null
-          id?: string | null
-          item_id?: string | null
-          performed_by?: string | null
-          quantity_delta?: number | null
-          reason?: string | null
-          reference_note?: string | null
-          reference_type?: string | null
-          status?: Database["public"]["Enums"]["inv_txn_status"] | null
-          supplier_id?: string | null
-          tenant_id?: string | null
-          total_cost?: number | null
-          transaction_date?: string | null
-          txn_type?: Database["public"]["Enums"]["inv_txn_type"] | null
-          unit_cost_snapshot?: number | null
-        }
-        Update: {
-          approved_by?: string | null
-          branch_id?: string | null
-          corrects_txn_id?: string | null
-          created_at?: string | null
-          id?: string | null
-          item_id?: string | null
-          performed_by?: string | null
-          quantity_delta?: number | null
-          reason?: string | null
-          reference_note?: string | null
-          reference_type?: string | null
-          status?: Database["public"]["Enums"]["inv_txn_status"] | null
-          supplier_id?: string | null
-          tenant_id?: string | null
-          total_cost?: number | null
-          transaction_date?: string | null
-          txn_type?: Database["public"]["Enums"]["inv_txn_type"] | null
-          unit_cost_snapshot?: number | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "inv_stock_transactions_approved_by_profiles_fkey"
-            columns: ["approved_by"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "inv_stock_transactions_branch_id_fkey"
-            columns: ["branch_id"]
-            isOneToOne: false
-            referencedRelation: "branches"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "inv_stock_transactions_branch_id_fkey"
-            columns: ["branch_id"]
-            isOneToOne: false
-            referencedRelation: "inv_branches"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "inv_stock_transactions_corrects_txn_id_fkey"
-            columns: ["corrects_txn_id"]
-            isOneToOne: false
-            referencedRelation: "inv_stock_transactions"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "inv_stock_transactions_corrects_txn_id_fkey"
-            columns: ["corrects_txn_id"]
-            isOneToOne: false
-            referencedRelation: "stock_transactions"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "inv_stock_transactions_corrects_txn_id_fkey"
-            columns: ["corrects_txn_id"]
-            isOneToOne: false
-            referencedRelation: "v_stock_transactions"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "inv_stock_transactions_item_id_fkey"
-            columns: ["item_id"]
-            isOneToOne: false
-            referencedRelation: "inv_items"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "inv_stock_transactions_item_id_fkey"
-            columns: ["item_id"]
-            isOneToOne: false
-            referencedRelation: "inv_v_low_stock"
-            referencedColumns: ["item_id"]
-          },
-          {
-            foreignKeyName: "inv_stock_transactions_item_id_fkey"
-            columns: ["item_id"]
-            isOneToOne: false
-            referencedRelation: "inv_v_top_consumed_items_30d"
-            referencedColumns: ["item_id"]
-          },
-          {
-            foreignKeyName: "inv_stock_transactions_item_id_fkey"
-            columns: ["item_id"]
-            isOneToOne: false
-            referencedRelation: "items"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "inv_stock_transactions_item_id_fkey"
-            columns: ["item_id"]
-            isOneToOne: false
-            referencedRelation: "v_low_stock"
-            referencedColumns: ["item_id"]
-          },
-          {
-            foreignKeyName: "inv_stock_transactions_item_id_fkey"
-            columns: ["item_id"]
-            isOneToOne: false
-            referencedRelation: "v_top_consumed_items_30d"
-            referencedColumns: ["item_id"]
-          },
-          {
-            foreignKeyName: "inv_stock_transactions_performed_by_profiles_fkey"
-            columns: ["performed_by"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "inv_stock_transactions_supplier_id_fkey"
-            columns: ["supplier_id"]
-            isOneToOne: false
-            referencedRelation: "inv_suppliers"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "inv_stock_transactions_supplier_id_fkey"
-            columns: ["supplier_id"]
-            isOneToOne: false
-            referencedRelation: "suppliers"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "inv_stock_transactions_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      suppliers: {
-        Row: {
-          created_at: string | null
-          id: string | null
-          is_active: boolean | null
-          name: string | null
-          note: string | null
-          phone: string | null
-          tenant_id: string | null
-        }
-        Insert: {
-          created_at?: string | null
-          id?: string | null
-          is_active?: boolean | null
-          name?: string | null
-          note?: string | null
-          phone?: string | null
-          tenant_id?: string | null
-        }
-        Update: {
-          created_at?: string | null
-          id?: string | null
-          is_active?: boolean | null
-          name?: string | null
-          note?: string | null
-          phone?: string | null
-          tenant_id?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "inv_suppliers_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      v_inventory_value: {
-        Row: {
-          branch_id: string | null
-          branch_name: string | null
-          item_type: Database["public"]["Enums"]["inv_item_type"] | null
-          total_value: number | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "inv_item_stock_branch_id_fkey"
-            columns: ["branch_id"]
-            isOneToOne: false
-            referencedRelation: "branches"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "inv_item_stock_branch_id_fkey"
-            columns: ["branch_id"]
-            isOneToOne: false
-            referencedRelation: "inv_branches"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      v_item_stock: {
-        Row: {
-          alert_muted: boolean | null
-          branch_id: string | null
-          current_qty: number | null
-          id: string | null
-          item_id: string | null
-          min_stock_level: number | null
-          updated_at: string | null
-        }
-        Insert: {
-          alert_muted?: boolean | null
-          branch_id?: string | null
-          current_qty?: number | null
-          id?: string | null
-          item_id?: string | null
-          min_stock_level?: number | null
-          updated_at?: string | null
-        }
-        Update: {
-          alert_muted?: boolean | null
-          branch_id?: string | null
-          current_qty?: number | null
-          id?: string | null
-          item_id?: string | null
-          min_stock_level?: number | null
-          updated_at?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "inv_item_stock_branch_id_fkey"
-            columns: ["branch_id"]
-            isOneToOne: false
-            referencedRelation: "branches"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "inv_item_stock_branch_id_fkey"
-            columns: ["branch_id"]
-            isOneToOne: false
-            referencedRelation: "inv_branches"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "inv_item_stock_item_id_fkey"
-            columns: ["item_id"]
-            isOneToOne: false
-            referencedRelation: "inv_items"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "inv_item_stock_item_id_fkey"
-            columns: ["item_id"]
-            isOneToOne: false
-            referencedRelation: "inv_v_low_stock"
-            referencedColumns: ["item_id"]
-          },
-          {
-            foreignKeyName: "inv_item_stock_item_id_fkey"
-            columns: ["item_id"]
-            isOneToOne: false
-            referencedRelation: "inv_v_top_consumed_items_30d"
-            referencedColumns: ["item_id"]
-          },
-          {
-            foreignKeyName: "inv_item_stock_item_id_fkey"
-            columns: ["item_id"]
-            isOneToOne: false
-            referencedRelation: "items"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "inv_item_stock_item_id_fkey"
-            columns: ["item_id"]
-            isOneToOne: false
-            referencedRelation: "v_low_stock"
-            referencedColumns: ["item_id"]
-          },
-          {
-            foreignKeyName: "inv_item_stock_item_id_fkey"
-            columns: ["item_id"]
-            isOneToOne: false
-            referencedRelation: "v_top_consumed_items_30d"
-            referencedColumns: ["item_id"]
-          },
-        ]
-      }
-      v_low_stock: {
-        Row: {
-          base_unit: string | null
-          branch_id: string | null
-          branch_name: string | null
-          category: string | null
-          current_qty: number | null
-          item_id: string | null
-          item_type: Database["public"]["Enums"]["inv_item_type"] | null
-          min_stock_level: number | null
-          name: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "inv_item_stock_branch_id_fkey"
-            columns: ["branch_id"]
-            isOneToOne: false
-            referencedRelation: "branches"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "inv_item_stock_branch_id_fkey"
-            columns: ["branch_id"]
-            isOneToOne: false
-            referencedRelation: "inv_branches"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      v_stock_transactions: {
-        Row: {
-          approved_by: string | null
-          branch_id: string | null
-          branch_name: string | null
-          corrects_txn_id: string | null
-          created_at: string | null
-          id: string | null
-          item_id: string | null
-          item_name: string | null
-          performed_by: string | null
-          performed_by_name: string | null
-          quantity_delta: number | null
-          reason: string | null
-          reference_note: string | null
-          reference_type: string | null
-          status: Database["public"]["Enums"]["inv_txn_status"] | null
-          transaction_date: string | null
-          txn_type: Database["public"]["Enums"]["inv_txn_type"] | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "inv_stock_transactions_approved_by_profiles_fkey"
-            columns: ["approved_by"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "inv_stock_transactions_branch_id_fkey"
-            columns: ["branch_id"]
-            isOneToOne: false
-            referencedRelation: "branches"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "inv_stock_transactions_branch_id_fkey"
-            columns: ["branch_id"]
-            isOneToOne: false
-            referencedRelation: "inv_branches"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "inv_stock_transactions_corrects_txn_id_fkey"
-            columns: ["corrects_txn_id"]
-            isOneToOne: false
-            referencedRelation: "inv_stock_transactions"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "inv_stock_transactions_corrects_txn_id_fkey"
-            columns: ["corrects_txn_id"]
-            isOneToOne: false
-            referencedRelation: "stock_transactions"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "inv_stock_transactions_corrects_txn_id_fkey"
-            columns: ["corrects_txn_id"]
-            isOneToOne: false
-            referencedRelation: "v_stock_transactions"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "inv_stock_transactions_item_id_fkey"
-            columns: ["item_id"]
-            isOneToOne: false
-            referencedRelation: "inv_items"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "inv_stock_transactions_item_id_fkey"
-            columns: ["item_id"]
-            isOneToOne: false
-            referencedRelation: "inv_v_low_stock"
-            referencedColumns: ["item_id"]
-          },
-          {
-            foreignKeyName: "inv_stock_transactions_item_id_fkey"
-            columns: ["item_id"]
-            isOneToOne: false
-            referencedRelation: "inv_v_top_consumed_items_30d"
-            referencedColumns: ["item_id"]
-          },
-          {
-            foreignKeyName: "inv_stock_transactions_item_id_fkey"
-            columns: ["item_id"]
-            isOneToOne: false
-            referencedRelation: "items"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "inv_stock_transactions_item_id_fkey"
-            columns: ["item_id"]
-            isOneToOne: false
-            referencedRelation: "v_low_stock"
-            referencedColumns: ["item_id"]
-          },
-          {
-            foreignKeyName: "inv_stock_transactions_item_id_fkey"
-            columns: ["item_id"]
-            isOneToOne: false
-            referencedRelation: "v_top_consumed_items_30d"
-            referencedColumns: ["item_id"]
-          },
-          {
-            foreignKeyName: "inv_stock_transactions_performed_by_profiles_fkey"
-            columns: ["performed_by"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      v_top_consumed_items_30d: {
-        Row: {
-          base_unit: string | null
-          branch_id: string | null
-          item_id: string | null
-          name: string | null
-          total_cost_used: number | null
-          total_qty_used: number | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "inv_stock_transactions_branch_id_fkey"
-            columns: ["branch_id"]
-            isOneToOne: false
-            referencedRelation: "branches"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "inv_stock_transactions_branch_id_fkey"
-            columns: ["branch_id"]
-            isOneToOne: false
-            referencedRelation: "inv_branches"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
+                  ]
+                },"ext_line_notifications_log": {
+                  Row: {
+                    "id": string,"line_message_id": string | null,"line_user_id": string,"notification_type": string,"payload": Json | null,"reference_document_id": string | null,"sent_at": string | null,"status": string | null
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "id"?: string,"line_message_id"?: string | null,"line_user_id": string,"notification_type": string,"payload"?: Json | null,"reference_document_id"?: string | null,"sent_at"?: string | null,"status"?: string | null
+                  }
+                  Update: {
+                    "id"?: string,"line_message_id"?: string | null,"line_user_id"?: string,"notification_type"?: string,"payload"?: Json | null,"reference_document_id"?: string | null,"sent_at"?: string | null,"status"?: string | null
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "ext_line_notifications_log_reference_document_id_fkey"
+      columns: ["reference_document_id"]
+isOneToOne: false
+      referencedRelation: "ext_documents"
+      referencedColumns: ["id"]
     }
-    Functions: {
-      fn_current_tenant: { Args: never; Returns: string }
-      fn_integration_secret_status: {
-        Args: { p_key: string }
-        Returns: {
-          is_set: boolean
-          updated_at: string
-          value_suffix: string
-        }[]
-      }
-      fn_sc_is_admin: { Args: never; Returns: boolean }
-      inv_fn_approve_adjustment: {
-        Args: { p_approve: boolean; p_txn_id: string }
-        Returns: undefined
-      }
-      inv_fn_current_branch: { Args: never; Returns: string }
-      inv_fn_current_role: { Args: never; Returns: string }
-      inv_fn_integration_secret_status: {
-        Args: { p_key: string }
-        Returns: {
-          is_set: boolean
-          updated_at: string
-          value_suffix: string
-        }[]
-      }
-      inv_fn_set_alert_muted: {
-        Args: { p_branch_id: string; p_item_id: string; p_muted: boolean }
-        Returns: undefined
-      }
-      inv_fn_set_integration_secret: {
-        Args: { p_key: string; p_value: string }
-        Returns: undefined
-      }
-      inv_fn_set_min_stock_level: {
-        Args: { p_branch_id: string; p_item_id: string; p_new_min: number }
-        Returns: undefined
-      }
-      sc_fn_guard_live_feature: { Args: { p_feature: string }; Returns: undefined }
-      sc_fn_post_receipt: {
-        Args: {
-          p_approved_by: string | null
-          p_fingerprint: string
-          p_purchase_amount: number
-          p_receipt_id: string
-          p_request_id: string
-          p_tenant_id: string
-          p_vat_credit: number
+                  ]
+                },"ext_numbering_sequences": {
+                  Row: {
+                    "current_sequence": number,"doc_type": string,"id": string,"prefix": string,"tenant_id": string,"year_month": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "current_sequence"?: number,"doc_type": string,"id"?: string,"prefix": string,"tenant_id"?: string,"year_month": string
+                  }
+                  Update: {
+                    "current_sequence"?: number,"doc_type"?: string,"id"?: string,"prefix"?: string,"tenant_id"?: string,"year_month"?: string
+                  }
+                  Relationships: [
+
+                  ]
+                },"ext_slip_verifications": {
+                  Row: {
+                    "amount": number,"bank_trans_ref": string,"document_id": string | null,"id": string,"raw_payload": Json | null,"receiving_bank": string | null,"sending_bank": string | null,"slip_image_url": string | null,"trans_date": string,"verification_status": string | null,"verified_at": string | null
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "amount": number,"bank_trans_ref": string,"document_id"?: string | null,"id"?: string,"raw_payload"?: Json | null,"receiving_bank"?: string | null,"sending_bank"?: string | null,"slip_image_url"?: string | null,"trans_date": string,"verification_status"?: string | null,"verified_at"?: string | null
+                  }
+                  Update: {
+                    "amount"?: number,"bank_trans_ref"?: string,"document_id"?: string | null,"id"?: string,"raw_payload"?: Json | null,"receiving_bank"?: string | null,"sending_bank"?: string | null,"slip_image_url"?: string | null,"trans_date"?: string,"verification_status"?: string | null,"verified_at"?: string | null
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "ext_slip_verifications_document_id_fkey"
+      columns: ["document_id"]
+isOneToOne: false
+      referencedRelation: "ext_documents"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"ext_staged_expenses": {
+                  Row: {
+                    "approval_status": string | null,"created_at": string | null,"extracted_date": string | null,"extracted_tax_id": string | null,"extracted_vendor_name": string | null,"id": string,"raw_ocr_payload": Json | null,"receipt_image_url": string,"subtotal": number | null,"suggested_account_code": string | null,"tenant_id": string,"total_amount": number,"vat_amount": number | null,"wht_amount": number | null
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "approval_status"?: string | null,"created_at"?: string | null,"extracted_date"?: string | null,"extracted_tax_id"?: string | null,"extracted_vendor_name"?: string | null,"id"?: string,"raw_ocr_payload"?: Json | null,"receipt_image_url": string,"subtotal"?: number | null,"suggested_account_code"?: string | null,"tenant_id"?: string,"total_amount": number,"vat_amount"?: number | null,"wht_amount"?: number | null
+                  }
+                  Update: {
+                    "approval_status"?: string | null,"created_at"?: string | null,"extracted_date"?: string | null,"extracted_tax_id"?: string | null,"extracted_vendor_name"?: string | null,"id"?: string,"raw_ocr_payload"?: Json | null,"receipt_image_url"?: string,"subtotal"?: number | null,"suggested_account_code"?: string | null,"tenant_id"?: string,"total_amount"?: number,"vat_amount"?: number | null,"wht_amount"?: number | null
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "ext_staged_expenses_suggested_account_code_fkey"
+      columns: ["suggested_account_code"]
+isOneToOne: false
+      referencedRelation: "ext_chart_of_accounts"
+      referencedColumns: ["account_code"]
+    }
+                  ]
+                },"ext_vat_transactions": {
+                  Row: {
+                    "base_amount": number,"created_at": string | null,"id": string,"invoice_date": string,"invoice_number": string,"is_claimable": boolean | null,"partner_branch_code": string | null,"partner_name": string,"partner_tax_id": string,"tax_period_month": number,"tax_period_year": number,"vat_amount": number,"vat_type": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "base_amount"?: number,"created_at"?: string | null,"id"?: string,"invoice_date": string,"invoice_number": string,"is_claimable"?: boolean | null,"partner_branch_code"?: string | null,"partner_name": string,"partner_tax_id": string,"tax_period_month": number,"tax_period_year": number,"vat_amount"?: number,"vat_type": string
+                  }
+                  Update: {
+                    "base_amount"?: number,"created_at"?: string | null,"id"?: string,"invoice_date"?: string,"invoice_number"?: string,"is_claimable"?: boolean | null,"partner_branch_code"?: string | null,"partner_name"?: string,"partner_tax_id"?: string,"tax_period_month"?: number,"tax_period_year"?: number,"vat_amount"?: number,"vat_type"?: string
+                  }
+                  Relationships: [
+
+                  ]
+                },"ext_wht_records": {
+                  Row: {
+                    "base_amount": number,"certificate_number": string,"created_at": string | null,"document_id": string | null,"filing_status": string | null,"form_type": string,"id": string,"income_type_code": string,"payment_date": string,"pdf_certificate_url": string | null,"tax_amount": number,"tax_period_month": number,"tax_period_year": number,"vendor_address": string | null,"vendor_name": string,"vendor_tax_id": string,"wht_rate": number
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "base_amount"?: number,"certificate_number": string,"created_at"?: string | null,"document_id"?: string | null,"filing_status"?: string | null,"form_type": string,"id"?: string,"income_type_code": string,"payment_date": string,"pdf_certificate_url"?: string | null,"tax_amount"?: number,"tax_period_month": number,"tax_period_year": number,"vendor_address"?: string | null,"vendor_name": string,"vendor_tax_id": string,"wht_rate"?: number
+                  }
+                  Update: {
+                    "base_amount"?: number,"certificate_number"?: string,"created_at"?: string | null,"document_id"?: string | null,"filing_status"?: string | null,"form_type"?: string,"id"?: string,"income_type_code"?: string,"payment_date"?: string,"pdf_certificate_url"?: string | null,"tax_amount"?: number,"tax_period_month"?: number,"tax_period_year"?: number,"vendor_address"?: string | null,"vendor_name"?: string,"vendor_tax_id"?: string,"wht_rate"?: number
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "ext_wht_records_document_id_fkey"
+      columns: ["document_id"]
+isOneToOne: false
+      referencedRelation: "ext_documents"
+      referencedColumns: ["id"]
+    }
+                  ]
+                }
+          }
+          Views: {
+            [_ in never]: never
+          }
+          Functions: {
+            "fn_generate_document_number":
+{ Args: { "p_date_str": string,"p_doc_type": string,"p_prefix": string,"p_tenant_id": string }; Returns: string
+                           }
+          }
+          Enums: {
+            [_ in never]: never
+          }
+          CompositeTypes: {
+            [_ in never]: never
+          }
+        },"public": {
+          Tables: {
+            "customers": {
+                  Row: {
+                    "created_at": string,"id": string,"name": string,"phone": string,"tenant_id": string,"updated_at": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "created_at"?: string,"id"?: string,"name": string,"phone": string,"tenant_id"?: string,"updated_at"?: string
+                  }
+                  Update: {
+                    "created_at"?: string,"id"?: string,"name"?: string,"phone"?: string,"tenant_id"?: string,"updated_at"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "customers_tenant_id_fkey"
+      columns: ["tenant_id"]
+isOneToOne: false
+      referencedRelation: "tenants"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"expenses": {
+                  Row: {
+                    "amount": number,"branch_id": string | null,"category": string,"created_at": string,"created_by": string | null,"expense_date": string,"id": string,"note": string | null,"tenant_id": string,"title": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "amount"?: number,"branch_id"?: string | null,"category": string,"created_at"?: string,"created_by"?: string | null,"expense_date"?: string,"id"?: string,"note"?: string | null,"tenant_id"?: string,"title": string
+                  }
+                  Update: {
+                    "amount"?: number,"branch_id"?: string | null,"category"?: string,"created_at"?: string,"created_by"?: string | null,"expense_date"?: string,"id"?: string,"note"?: string | null,"tenant_id"?: string,"title"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "expenses_tenant_id_fkey"
+      columns: ["tenant_id"]
+isOneToOne: false
+      referencedRelation: "tenants"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"inv_audit_logs": {
+                  Row: {
+                    "action": Database["public"]['Enums']["inv_audit_action"],"after_data": Json | null,"before_data": Json | null,"id": number,"performed_at": string,"performed_by": string | null,"reason": string | null,"record_id": string,"table_name": string,"tenant_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "action": Database["public"]['Enums']["inv_audit_action"],"after_data"?: Json | null,"before_data"?: Json | null,"id"?: never,"performed_at"?: string,"performed_by"?: string | null,"reason"?: string | null,"record_id": string,"table_name": string,"tenant_id"?: string
+                  }
+                  Update: {
+                    "action"?: Database["public"]['Enums']["inv_audit_action"],"after_data"?: Json | null,"before_data"?: Json | null,"id"?: never,"performed_at"?: string,"performed_by"?: string | null,"reason"?: string | null,"record_id"?: string,"table_name"?: string,"tenant_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "inv_audit_logs_performed_by_profiles_fkey"
+      columns: ["performed_by"]
+isOneToOne: false
+      referencedRelation: "profiles"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "inv_audit_logs_tenant_id_fkey"
+      columns: ["tenant_id"]
+isOneToOne: false
+      referencedRelation: "tenants"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"inv_branches": {
+                  Row: {
+                    "address": string | null,"close_time": string,"created_at": string,"id": string,"is_active": boolean,"name": string,"open_time": string,"phone": string | null,"telegram_chat_id": string | null,"tenant_id": string,"vat_registered": boolean
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "address"?: string | null,"close_time"?: string,"created_at"?: string,"id"?: string,"is_active"?: boolean,"name": string,"open_time"?: string,"phone"?: string | null,"telegram_chat_id"?: string | null,"tenant_id"?: string,"vat_registered"?: boolean
+                  }
+                  Update: {
+                    "address"?: string | null,"close_time"?: string,"created_at"?: string,"id"?: string,"is_active"?: boolean,"name"?: string,"open_time"?: string,"phone"?: string | null,"telegram_chat_id"?: string | null,"tenant_id"?: string,"vat_registered"?: boolean
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "inv_branches_tenant_id_fkey"
+      columns: ["tenant_id"]
+isOneToOne: false
+      referencedRelation: "tenants"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"inv_integration_secrets": {
+                  Row: {
+                    "key": string,"tenant_id": string,"updated_at": string,"updated_by": string | null,"value": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "key": string,"tenant_id"?: string,"updated_at"?: string,"updated_by"?: string | null,"value": string
+                  }
+                  Update: {
+                    "key"?: string,"tenant_id"?: string,"updated_at"?: string,"updated_by"?: string | null,"value"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "inv_integration_secrets_tenant_id_fkey"
+      columns: ["tenant_id"]
+isOneToOne: false
+      referencedRelation: "tenants"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "inv_integration_secrets_updated_by_profiles_fkey"
+      columns: ["updated_by"]
+isOneToOne: false
+      referencedRelation: "profiles"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"inv_item_stock": {
+                  Row: {
+                    "alert_muted": boolean,"avg_unit_cost": number,"branch_id": string,"current_qty": number,"id": string,"item_id": string,"min_stock_level": number,"tenant_id": string,"updated_at": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "alert_muted"?: boolean,"avg_unit_cost"?: number,"branch_id": string,"current_qty"?: number,"id"?: string,"item_id": string,"min_stock_level"?: number,"tenant_id"?: string,"updated_at"?: string
+                  }
+                  Update: {
+                    "alert_muted"?: boolean,"avg_unit_cost"?: number,"branch_id"?: string,"current_qty"?: number,"id"?: string,"item_id"?: string,"min_stock_level"?: number,"tenant_id"?: string,"updated_at"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "inv_item_stock_branch_id_fkey"
+      columns: ["branch_id"]
+isOneToOne: false
+      referencedRelation: "branches"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "inv_item_stock_branch_id_fkey"
+      columns: ["branch_id"]
+isOneToOne: false
+      referencedRelation: "inv_branches"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "inv_item_stock_item_id_fkey"
+      columns: ["item_id"]
+isOneToOne: false
+      referencedRelation: "inv_items"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "inv_item_stock_item_id_fkey"
+      columns: ["item_id"]
+isOneToOne: false
+      referencedRelation: "inv_v_low_stock"
+      referencedColumns: ["item_id"]
+    },{
+      foreignKeyName: "inv_item_stock_item_id_fkey"
+      columns: ["item_id"]
+isOneToOne: false
+      referencedRelation: "inv_v_top_consumed_items_30d"
+      referencedColumns: ["item_id"]
+    },{
+      foreignKeyName: "inv_item_stock_item_id_fkey"
+      columns: ["item_id"]
+isOneToOne: false
+      referencedRelation: "items"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "inv_item_stock_item_id_fkey"
+      columns: ["item_id"]
+isOneToOne: false
+      referencedRelation: "v_low_stock"
+      referencedColumns: ["item_id"]
+    },{
+      foreignKeyName: "inv_item_stock_item_id_fkey"
+      columns: ["item_id"]
+isOneToOne: false
+      referencedRelation: "v_top_consumed_items_30d"
+      referencedColumns: ["item_id"]
+    },{
+      foreignKeyName: "inv_item_stock_tenant_id_fkey"
+      columns: ["tenant_id"]
+isOneToOne: false
+      referencedRelation: "tenants"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"inv_items": {
+                  Row: {
+                    "base_unit": string,"category": string,"created_at": string,"default_min_stock_level": number,"id": string,"is_active": boolean,"item_type": Database["public"]['Enums']["inv_item_type"],"name": string,"purchase_unit": string,"purchase_unit_qty": number,"sku": string | null,"tenant_id": string,"updated_at": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "base_unit": string,"category": string,"created_at"?: string,"default_min_stock_level"?: number,"id"?: string,"is_active"?: boolean,"item_type": Database["public"]['Enums']["inv_item_type"],"name": string,"purchase_unit": string,"purchase_unit_qty"?: number,"sku"?: string | null,"tenant_id"?: string,"updated_at"?: string
+                  }
+                  Update: {
+                    "base_unit"?: string,"category"?: string,"created_at"?: string,"default_min_stock_level"?: number,"id"?: string,"is_active"?: boolean,"item_type"?: Database["public"]['Enums']["inv_item_type"],"name"?: string,"purchase_unit"?: string,"purchase_unit_qty"?: number,"sku"?: string | null,"tenant_id"?: string,"updated_at"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "inv_items_tenant_id_fkey"
+      columns: ["tenant_id"]
+isOneToOne: false
+      referencedRelation: "tenants"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"inv_notification_log": {
+                  Row: {
+                    "branch_id": string,"channel": string,"id": string,"item_id": string,"message": string,"sent_at": string,"tenant_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "branch_id": string,"channel": string,"id"?: string,"item_id": string,"message": string,"sent_at"?: string,"tenant_id"?: string
+                  }
+                  Update: {
+                    "branch_id"?: string,"channel"?: string,"id"?: string,"item_id"?: string,"message"?: string,"sent_at"?: string,"tenant_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "inv_notification_log_branch_id_fkey"
+      columns: ["branch_id"]
+isOneToOne: false
+      referencedRelation: "branches"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "inv_notification_log_branch_id_fkey"
+      columns: ["branch_id"]
+isOneToOne: false
+      referencedRelation: "inv_branches"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "inv_notification_log_item_id_fkey"
+      columns: ["item_id"]
+isOneToOne: false
+      referencedRelation: "inv_items"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "inv_notification_log_item_id_fkey"
+      columns: ["item_id"]
+isOneToOne: false
+      referencedRelation: "inv_v_low_stock"
+      referencedColumns: ["item_id"]
+    },{
+      foreignKeyName: "inv_notification_log_item_id_fkey"
+      columns: ["item_id"]
+isOneToOne: false
+      referencedRelation: "inv_v_top_consumed_items_30d"
+      referencedColumns: ["item_id"]
+    },{
+      foreignKeyName: "inv_notification_log_item_id_fkey"
+      columns: ["item_id"]
+isOneToOne: false
+      referencedRelation: "items"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "inv_notification_log_item_id_fkey"
+      columns: ["item_id"]
+isOneToOne: false
+      referencedRelation: "v_low_stock"
+      referencedColumns: ["item_id"]
+    },{
+      foreignKeyName: "inv_notification_log_item_id_fkey"
+      columns: ["item_id"]
+isOneToOne: false
+      referencedRelation: "v_top_consumed_items_30d"
+      referencedColumns: ["item_id"]
+    },{
+      foreignKeyName: "inv_notification_log_tenant_id_fkey"
+      columns: ["tenant_id"]
+isOneToOne: false
+      referencedRelation: "tenants"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"inv_purchase_receipts": {
+                  Row: {
+                    "base_quantity": number,"base_unit": string,"branch_id": string,"created_at": string,"discount_amount": number,"goods_amount": number,"id": string,"item_id": string,"item_name": string,"pack_count": number,"paid_amount": number,"payload": NonNullable<Json>,"performed_by": string,"purchase_date": string,"purchase_unit": string,"reference_note": string,"request_id": string,"shipping_amount": number,"stock_transaction_id": string,"supplier_name": string,"tenant_id": string,"units_per_pack": number
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "base_quantity": number,"base_unit": string,"branch_id": string,"created_at"?: string,"discount_amount": number,"goods_amount": number,"id"?: string,"item_id": string,"item_name": string,"pack_count": number,"paid_amount": number,"payload": NonNullable<Json>,"performed_by": string,"purchase_date": string,"purchase_unit": string,"reference_note"?: string,"request_id": string,"shipping_amount": number,"stock_transaction_id": string,"supplier_name": string,"tenant_id": string,"units_per_pack": number
+                  }
+                  Update: {
+                    "base_quantity"?: number,"base_unit"?: string,"branch_id"?: string,"created_at"?: string,"discount_amount"?: number,"goods_amount"?: number,"id"?: string,"item_id"?: string,"item_name"?: string,"pack_count"?: number,"paid_amount"?: number,"payload"?: NonNullable<Json>,"performed_by"?: string,"purchase_date"?: string,"purchase_unit"?: string,"reference_note"?: string,"request_id"?: string,"shipping_amount"?: number,"stock_transaction_id"?: string,"supplier_name"?: string,"tenant_id"?: string,"units_per_pack"?: number
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "inv_purchase_receipts_performed_by_fkey"
+      columns: ["performed_by"]
+isOneToOne: false
+      referencedRelation: "profiles"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "inv_purchase_receipts_tenant_id_fkey"
+      columns: ["tenant_id"]
+isOneToOne: false
+      referencedRelation: "tenants"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "inv_purchase_receipts_txn_fk"
+      columns: ["stock_transaction_id"]
+isOneToOne: true
+      referencedRelation: "inv_stock_transactions"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "inv_purchase_receipts_txn_fk"
+      columns: ["stock_transaction_id"]
+isOneToOne: true
+      referencedRelation: "stock_transactions"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "inv_purchase_receipts_txn_fk"
+      columns: ["stock_transaction_id"]
+isOneToOne: true
+      referencedRelation: "v_stock_transactions"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"inv_stock_transactions": {
+                  Row: {
+                    "approved_by": string | null,"branch_id": string,"corrects_txn_id": string | null,"created_at": string,"id": string,"item_id": string,"performed_by": string,"quantity_delta": number,"reason": string | null,"reference_note": string | null,"reference_type": string | null,"status": Database["public"]['Enums']["inv_txn_status"],"supplier_id": string | null,"tenant_id": string,"total_cost": number | null,"transaction_date": string,"txn_type": Database["public"]['Enums']["inv_txn_type"],"unit_cost_snapshot": number
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "approved_by"?: string | null,"branch_id": string,"corrects_txn_id"?: string | null,"created_at"?: string,"id"?: string,"item_id": string,"performed_by": string,"quantity_delta": number,"reason"?: string | null,"reference_note"?: string | null,"reference_type"?: string | null,"status"?: Database["public"]['Enums']["inv_txn_status"],"supplier_id"?: string | null,"tenant_id"?: string,"total_cost"?: never,"transaction_date"?: string,"txn_type": Database["public"]['Enums']["inv_txn_type"],"unit_cost_snapshot"?: number
+                  }
+                  Update: {
+                    "approved_by"?: string | null,"branch_id"?: string,"corrects_txn_id"?: string | null,"created_at"?: string,"id"?: string,"item_id"?: string,"performed_by"?: string,"quantity_delta"?: number,"reason"?: string | null,"reference_note"?: string | null,"reference_type"?: string | null,"status"?: Database["public"]['Enums']["inv_txn_status"],"supplier_id"?: string | null,"tenant_id"?: string,"total_cost"?: never,"transaction_date"?: string,"txn_type"?: Database["public"]['Enums']["inv_txn_type"],"unit_cost_snapshot"?: number
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "inv_stock_transactions_approved_by_profiles_fkey"
+      columns: ["approved_by"]
+isOneToOne: false
+      referencedRelation: "profiles"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "inv_stock_transactions_branch_id_fkey"
+      columns: ["branch_id"]
+isOneToOne: false
+      referencedRelation: "branches"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "inv_stock_transactions_branch_id_fkey"
+      columns: ["branch_id"]
+isOneToOne: false
+      referencedRelation: "inv_branches"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "inv_stock_transactions_corrects_txn_id_fkey"
+      columns: ["corrects_txn_id"]
+isOneToOne: false
+      referencedRelation: "inv_stock_transactions"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "inv_stock_transactions_corrects_txn_id_fkey"
+      columns: ["corrects_txn_id"]
+isOneToOne: false
+      referencedRelation: "stock_transactions"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "inv_stock_transactions_corrects_txn_id_fkey"
+      columns: ["corrects_txn_id"]
+isOneToOne: false
+      referencedRelation: "v_stock_transactions"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "inv_stock_transactions_item_id_fkey"
+      columns: ["item_id"]
+isOneToOne: false
+      referencedRelation: "inv_items"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "inv_stock_transactions_item_id_fkey"
+      columns: ["item_id"]
+isOneToOne: false
+      referencedRelation: "inv_v_low_stock"
+      referencedColumns: ["item_id"]
+    },{
+      foreignKeyName: "inv_stock_transactions_item_id_fkey"
+      columns: ["item_id"]
+isOneToOne: false
+      referencedRelation: "inv_v_top_consumed_items_30d"
+      referencedColumns: ["item_id"]
+    },{
+      foreignKeyName: "inv_stock_transactions_item_id_fkey"
+      columns: ["item_id"]
+isOneToOne: false
+      referencedRelation: "items"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "inv_stock_transactions_item_id_fkey"
+      columns: ["item_id"]
+isOneToOne: false
+      referencedRelation: "v_low_stock"
+      referencedColumns: ["item_id"]
+    },{
+      foreignKeyName: "inv_stock_transactions_item_id_fkey"
+      columns: ["item_id"]
+isOneToOne: false
+      referencedRelation: "v_top_consumed_items_30d"
+      referencedColumns: ["item_id"]
+    },{
+      foreignKeyName: "inv_stock_transactions_performed_by_profiles_fkey"
+      columns: ["performed_by"]
+isOneToOne: false
+      referencedRelation: "profiles"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "inv_stock_transactions_supplier_id_fkey"
+      columns: ["supplier_id"]
+isOneToOne: false
+      referencedRelation: "inv_suppliers"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "inv_stock_transactions_supplier_id_fkey"
+      columns: ["supplier_id"]
+isOneToOne: false
+      referencedRelation: "suppliers"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "inv_stock_transactions_tenant_id_fkey"
+      columns: ["tenant_id"]
+isOneToOne: false
+      referencedRelation: "tenants"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"inv_suppliers": {
+                  Row: {
+                    "created_at": string,"id": string,"is_active": boolean,"name": string,"note": string | null,"phone": string | null,"tenant_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "created_at"?: string,"id"?: string,"is_active"?: boolean,"name": string,"note"?: string | null,"phone"?: string | null,"tenant_id"?: string
+                  }
+                  Update: {
+                    "created_at"?: string,"id"?: string,"is_active"?: boolean,"name"?: string,"note"?: string | null,"phone"?: string | null,"tenant_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "inv_suppliers_tenant_id_fkey"
+      columns: ["tenant_id"]
+isOneToOne: false
+      referencedRelation: "tenants"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"profiles": {
+                  Row: {
+                    "branch_id": string | null,"created_at": string,"display_name": string | null,"fullname": string | null,"id": string,"is_active": boolean,"nickname": string | null,"role": string | null,"tenant_id": string | null,"updated_at": string,"username": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "branch_id"?: string | null,"created_at"?: string,"display_name"?: string | null,"fullname"?: string | null,"id": string,"is_active"?: boolean,"nickname"?: string | null,"role"?: string | null,"tenant_id"?: string | null,"updated_at"?: string,"username": string
+                  }
+                  Update: {
+                    "branch_id"?: string | null,"created_at"?: string,"display_name"?: string | null,"fullname"?: string | null,"id"?: string,"is_active"?: boolean,"nickname"?: string | null,"role"?: string | null,"tenant_id"?: string | null,"updated_at"?: string,"username"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "profiles_tenant_id_fkey"
+      columns: ["tenant_id"]
+isOneToOne: false
+      referencedRelation: "tenants"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"sc_audit_logs": {
+                  Row: {
+                    "action": string,"actor_id": string | null,"actor_name": string,"browser": string | null,"created_at": string,"detail": Json | null,"device": string | null,"entity": string,"entity_id": string | null,"id": number,"ip_address": string | null,"page_path": string | null,"tenant_id": string,"user_agent": string | null
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "action": string,"actor_id"?: string | null,"actor_name"?: string,"browser"?: string | null,"created_at"?: string,"detail"?: Json | null,"device"?: string | null,"entity": string,"entity_id"?: string | null,"id"?: never,"ip_address"?: string | null,"page_path"?: string | null,"tenant_id"?: string,"user_agent"?: string | null
+                  }
+                  Update: {
+                    "action"?: string,"actor_id"?: string | null,"actor_name"?: string,"browser"?: string | null,"created_at"?: string,"detail"?: Json | null,"device"?: string | null,"entity"?: string,"entity_id"?: string | null,"id"?: never,"ip_address"?: string | null,"page_path"?: string | null,"tenant_id"?: string,"user_agent"?: string | null
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "sc_audit_logs_tenant_id_fkey"
+      columns: ["tenant_id"]
+isOneToOne: false
+      referencedRelation: "tenants"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"sc_employees": {
+                  Row: {
+                    "account": string | null,"bank": string | null,"bonus_per_pair": number,"comm_rate": number | null,"default_day_off": number | null,"default_shift": string,"id": number,"last_updated": string | null,"name": string,"nickname": string | null,"position": string | null,"salary": number | null,"sso_exempt": boolean,"status": string | null,"tenant_id": string,"updated_at": string | null
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "account"?: string | null,"bank"?: string | null,"bonus_per_pair"?: number,"comm_rate"?: number | null,"default_day_off"?: number | null,"default_shift"?: string,"id"?: number,"last_updated"?: string | null,"name": string,"nickname"?: string | null,"position"?: string | null,"salary"?: number | null,"sso_exempt"?: boolean,"status"?: string | null,"tenant_id"?: string,"updated_at"?: string | null
+                  }
+                  Update: {
+                    "account"?: string | null,"bank"?: string | null,"bonus_per_pair"?: number,"comm_rate"?: number | null,"default_day_off"?: number | null,"default_shift"?: string,"id"?: number,"last_updated"?: string | null,"name"?: string,"nickname"?: string | null,"position"?: string | null,"salary"?: number | null,"sso_exempt"?: boolean,"status"?: string | null,"tenant_id"?: string,"updated_at"?: string | null
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "sc_employees_tenant_id_fkey"
+      columns: ["tenant_id"]
+isOneToOne: false
+      referencedRelation: "tenants"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"sc_expense_categories": {
+                  Row: {
+                    "created_at": string,"is_active": boolean,"key": string,"label": string,"short_label": string,"sort_order": number
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "created_at"?: string,"is_active"?: boolean,"key": string,"label": string,"short_label": string,"sort_order"?: number
+                  }
+                  Update: {
+                    "created_at"?: string,"is_active"?: boolean,"key"?: string,"label"?: string,"short_label"?: string,"sort_order"?: number
+                  }
+                  Relationships: [
+
+                  ]
+                },"sc_expense_entries": {
+                  Row: {
+                    "amount": number,"branch_id": string | null,"category": string,"created_at": string,"created_by": string | null,"entry_date": string,"id": number,"legacy_opex_id": number | null,"legacy_ref": string | null,"note": string | null,"pay_method": string,"stock_txn_id": string | null,"tenant_id": string,"title": string,"updated_at": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "amount": number,"branch_id"?: string | null,"category": string,"created_at"?: string,"created_by"?: string | null,"entry_date": string,"id"?: number,"legacy_opex_id"?: number | null,"legacy_ref"?: string | null,"note"?: string | null,"pay_method"?: string,"stock_txn_id"?: string | null,"tenant_id"?: string,"title": string,"updated_at"?: string
+                  }
+                  Update: {
+                    "amount"?: number,"branch_id"?: string | null,"category"?: string,"created_at"?: string,"created_by"?: string | null,"entry_date"?: string,"id"?: number,"legacy_opex_id"?: number | null,"legacy_ref"?: string | null,"note"?: string | null,"pay_method"?: string,"stock_txn_id"?: string | null,"tenant_id"?: string,"title"?: string,"updated_at"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "sc_expense_entries_branch_id_fkey"
+      columns: ["branch_id"]
+isOneToOne: false
+      referencedRelation: "branches"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "sc_expense_entries_branch_id_fkey"
+      columns: ["branch_id"]
+isOneToOne: false
+      referencedRelation: "inv_branches"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "sc_expense_entries_category_fkey"
+      columns: ["category"]
+isOneToOne: false
+      referencedRelation: "sc_expense_categories"
+      referencedColumns: ["key"]
+    },{
+      foreignKeyName: "sc_expense_entries_created_by_fkey"
+      columns: ["created_by"]
+isOneToOne: false
+      referencedRelation: "profiles"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "sc_expense_entries_stock_txn_id_fkey"
+      columns: ["stock_txn_id"]
+isOneToOne: false
+      referencedRelation: "inv_stock_transactions"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "sc_expense_entries_stock_txn_id_fkey"
+      columns: ["stock_txn_id"]
+isOneToOne: false
+      referencedRelation: "stock_transactions"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "sc_expense_entries_stock_txn_id_fkey"
+      columns: ["stock_txn_id"]
+isOneToOne: false
+      referencedRelation: "v_stock_transactions"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "sc_expense_entries_tenant_id_fkey"
+      columns: ["tenant_id"]
+isOneToOne: false
+      referencedRelation: "tenants"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"sc_expenses": {
+                  Row: {
+                    "amount": number | null,"category": string | null,"created_at": string | null,"date": string,"id": number,"last_updated": string | null,"name": string,"pay_method": string | null,"recorded_by": string | null,"tenant_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "amount"?: number | null,"category"?: string | null,"created_at"?: string | null,"date": string,"id"?: number,"last_updated"?: string | null,"name": string,"pay_method"?: string | null,"recorded_by"?: string | null,"tenant_id"?: string
+                  }
+                  Update: {
+                    "amount"?: number | null,"category"?: string | null,"created_at"?: string | null,"date"?: string,"id"?: number,"last_updated"?: string | null,"name"?: string,"pay_method"?: string | null,"recorded_by"?: string | null,"tenant_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "sc_expenses_tenant_id_fkey"
+      columns: ["tenant_id"]
+isOneToOne: false
+      referencedRelation: "tenants"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"sc_opex": {
+                  Row: {
+                    "amount": number | null,"category": string | null,"created_at": string | null,"id": number,"key": string | null,"last_updated": string | null,"month": string,"name": string | null,"pay_method": string | null,"recorded_by": string | null,"tenant_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "amount"?: number | null,"category"?: string | null,"created_at"?: string | null,"id"?: number,"key"?: string | null,"last_updated"?: string | null,"month": string,"name"?: string | null,"pay_method"?: string | null,"recorded_by"?: string | null,"tenant_id"?: string
+                  }
+                  Update: {
+                    "amount"?: number | null,"category"?: string | null,"created_at"?: string | null,"id"?: number,"key"?: string | null,"last_updated"?: string | null,"month"?: string,"name"?: string | null,"pay_method"?: string | null,"recorded_by"?: string | null,"tenant_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "sc_opex_tenant_id_fkey"
+      columns: ["tenant_id"]
+isOneToOne: false
+      referencedRelation: "tenants"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"sc_opex_history": {
+                  Row: {
+                    "change_note": string | null,"id": number,"items": NonNullable<Json>,"month": string,"saved_at": string | null,"saved_by": string | null,"tenant_id": string,"version": number
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "change_note"?: string | null,"id"?: number,"items": NonNullable<Json>,"month": string,"saved_at"?: string | null,"saved_by"?: string | null,"tenant_id"?: string,"version"?: number
+                  }
+                  Update: {
+                    "change_note"?: string | null,"id"?: number,"items"?: NonNullable<Json>,"month"?: string,"saved_at"?: string | null,"saved_by"?: string | null,"tenant_id"?: string,"version"?: number
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "sc_opex_history_tenant_id_fkey"
+      columns: ["tenant_id"]
+isOneToOne: false
+      referencedRelation: "tenants"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"sc_payments": {
+                  Row: {
+                    "amount": number | null,"client_request_id": string | null,"created_at": string | null,"id": number,"notes": string | null,"pay_method": string | null,"received_date": string,"recorded_by": string | null,"sale_date": string,"tenant_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "amount"?: number | null,"client_request_id"?: string | null,"created_at"?: string | null,"id"?: number,"notes"?: string | null,"pay_method"?: string | null,"received_date"?: string,"recorded_by"?: string | null,"sale_date": string,"tenant_id"?: string
+                  }
+                  Update: {
+                    "amount"?: number | null,"client_request_id"?: string | null,"created_at"?: string | null,"id"?: number,"notes"?: string | null,"pay_method"?: string | null,"received_date"?: string,"recorded_by"?: string | null,"sale_date"?: string,"tenant_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "sc_payments_tenant_id_fkey"
+      columns: ["tenant_id"]
+isOneToOne: false
+      referencedRelation: "tenants"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"sc_payslip_deductions": {
+                  Row: {
+                    "amount": number,"created_at": string,"detail": string | null,"id": number,"kind": string | null,"legacy_ref": string | null,"minutes": number | null,"name": string,"payslip_id": number,"rate": number | null,"tenant_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "amount": number,"created_at"?: string,"detail"?: string | null,"id"?: number,"kind"?: string | null,"legacy_ref"?: string | null,"minutes"?: number | null,"name": string,"payslip_id": number,"rate"?: number | null,"tenant_id"?: string
+                  }
+                  Update: {
+                    "amount"?: number,"created_at"?: string,"detail"?: string | null,"id"?: number,"kind"?: string | null,"legacy_ref"?: string | null,"minutes"?: number | null,"name"?: string,"payslip_id"?: number,"rate"?: number | null,"tenant_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "sc_payslip_deductions_payslip_id_fkey"
+      columns: ["payslip_id"]
+isOneToOne: false
+      referencedRelation: "sc_payslips"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "sc_payslip_deductions_tenant_id_fkey"
+      columns: ["tenant_id"]
+isOneToOne: false
+      referencedRelation: "tenants"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"sc_payslips": {
+                  Row: {
+                    "base_salary": number,"branch_id": string | null,"commission_pct": number,"created_at": string,"created_by": string | null,"days_worked": number,"deduction_total": number,"diligence": number,"employee_name": string,"id": number,"legacy_ref": string | null,"month": string,"net_pay": number,"ot": number,"tenant_id": string,"updated_at": string,"wht": number
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "base_salary"?: number,"branch_id"?: string | null,"commission_pct"?: number,"created_at"?: string,"created_by"?: string | null,"days_worked"?: number,"deduction_total"?: number,"diligence"?: number,"employee_name": string,"id"?: number,"legacy_ref"?: string | null,"month": string,"net_pay"?: number,"ot"?: number,"tenant_id"?: string,"updated_at"?: string,"wht"?: number
+                  }
+                  Update: {
+                    "base_salary"?: number,"branch_id"?: string | null,"commission_pct"?: number,"created_at"?: string,"created_by"?: string | null,"days_worked"?: number,"deduction_total"?: number,"diligence"?: number,"employee_name"?: string,"id"?: number,"legacy_ref"?: string | null,"month"?: string,"net_pay"?: number,"ot"?: number,"tenant_id"?: string,"updated_at"?: string,"wht"?: number
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "sc_payslips_branch_id_fkey"
+      columns: ["branch_id"]
+isOneToOne: false
+      referencedRelation: "branches"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "sc_payslips_branch_id_fkey"
+      columns: ["branch_id"]
+isOneToOne: false
+      referencedRelation: "inv_branches"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "sc_payslips_created_by_fkey"
+      columns: ["created_by"]
+isOneToOne: false
+      referencedRelation: "profiles"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "sc_payslips_tenant_id_fkey"
+      columns: ["tenant_id"]
+isOneToOne: false
+      referencedRelation: "tenants"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"sc_receipt_posts": {
+                  Row: {
+                    "approved_by": string | null,"created_at": string,"fingerprint": string,"purchase_amount": number,"receipt_id": string,"request_id": string,"tenant_id": string,"vat_credit": number
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "approved_by"?: string | null,"created_at"?: string,"fingerprint": string,"purchase_amount"?: number,"receipt_id": string,"request_id": string,"tenant_id": string,"vat_credit"?: number
+                  }
+                  Update: {
+                    "approved_by"?: string | null,"created_at"?: string,"fingerprint"?: string,"purchase_amount"?: number,"receipt_id"?: string,"request_id"?: string,"tenant_id"?: string,"vat_credit"?: number
+                  }
+                  Relationships: [
+
+                  ]
+                },"sc_rental_records": {
+                  Row: {
+                    "branch_id": string | null,"created_at": string,"curr_meter": number,"id": number,"income_amount": number,"legacy_ref": string | null,"month": string,"prev_meter": number,"rent_amount": number,"room_index": number,"room_name": string | null,"tenant_id": string,"tenant_name": string | null,"tenant_tax_id": string | null,"updated_at": string,"wht_rate": number,"wht_withheld": number
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "branch_id"?: string | null,"created_at"?: string,"curr_meter"?: number,"id"?: number,"income_amount"?: number,"legacy_ref"?: string | null,"month": string,"prev_meter"?: number,"rent_amount"?: number,"room_index": number,"room_name"?: string | null,"tenant_id"?: string,"tenant_name"?: string | null,"tenant_tax_id"?: string | null,"updated_at"?: string,"wht_rate"?: number,"wht_withheld"?: number
+                  }
+                  Update: {
+                    "branch_id"?: string | null,"created_at"?: string,"curr_meter"?: number,"id"?: number,"income_amount"?: number,"legacy_ref"?: string | null,"month"?: string,"prev_meter"?: number,"rent_amount"?: number,"room_index"?: number,"room_name"?: string | null,"tenant_id"?: string,"tenant_name"?: string | null,"tenant_tax_id"?: string | null,"updated_at"?: string,"wht_rate"?: number,"wht_withheld"?: number
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "sc_rental_records_branch_id_fkey"
+      columns: ["branch_id"]
+isOneToOne: false
+      referencedRelation: "branches"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "sc_rental_records_branch_id_fkey"
+      columns: ["branch_id"]
+isOneToOne: false
+      referencedRelation: "inv_branches"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "sc_rental_records_tenant_id_fkey"
+      columns: ["tenant_id"]
+isOneToOne: false
+      referencedRelation: "tenants"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"sc_sales": {
+                  Row: {
+                    "amount_paid": number | null,"cash_amount": number | null,"client_request_id": string | null,"created_at": string | null,"date": string,"discount": number | null,"extra_items": string | null,"grand_total": number | null,"id": number,"last_updated": string | null,"payment_status": string | null,"recorded_by": string | null,"service_order_id": string | null,"size_l": number | null,"size_m": number | null,"size_s": number | null,"size_xl": number | null,"tenant_id": string,"total_revenue": number | null,"transfer_amount": number | null
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "amount_paid"?: number | null,"cash_amount"?: number | null,"client_request_id"?: string | null,"created_at"?: string | null,"date": string,"discount"?: number | null,"extra_items"?: string | null,"grand_total"?: number | null,"id"?: number,"last_updated"?: string | null,"payment_status"?: string | null,"recorded_by"?: string | null,"service_order_id"?: string | null,"size_l"?: number | null,"size_m"?: number | null,"size_s"?: number | null,"size_xl"?: number | null,"tenant_id"?: string,"total_revenue"?: number | null,"transfer_amount"?: number | null
+                  }
+                  Update: {
+                    "amount_paid"?: number | null,"cash_amount"?: number | null,"client_request_id"?: string | null,"created_at"?: string | null,"date"?: string,"discount"?: number | null,"extra_items"?: string | null,"grand_total"?: number | null,"id"?: number,"last_updated"?: string | null,"payment_status"?: string | null,"recorded_by"?: string | null,"service_order_id"?: string | null,"size_l"?: number | null,"size_m"?: number | null,"size_s"?: number | null,"size_xl"?: number | null,"tenant_id"?: string,"total_revenue"?: number | null,"transfer_amount"?: number | null
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "sc_sales_tenant_id_fkey"
+      columns: ["tenant_id"]
+isOneToOne: false
+      referencedRelation: "tenants"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"sc_settings": {
+                  Row: {
+                    "key": string,"tenant_id": string | null,"updated_at": string | null,"value": string | null
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "key": string,"tenant_id"?: string | null,"updated_at"?: string | null,"value"?: string | null
+                  }
+                  Update: {
+                    "key"?: string,"tenant_id"?: string | null,"updated_at"?: string | null,"value"?: string | null
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "sc_settings_tenant_id_fkey"
+      columns: ["tenant_id"]
+isOneToOne: false
+      referencedRelation: "tenants"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"sc_staff_daily_stats": {
+                  Row: {
+                    "attendance_status": string,"created_at": string,"created_by": string | null,"employee_name": string,"id": number,"late_minutes": number | null,"note": string | null,"ot_hours": number | null,"pairs_handled": number | null,"stat_date": string,"tenant_id": string,"updated_at": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "attendance_status"?: string,"created_at"?: string,"created_by"?: string | null,"employee_name": string,"id"?: number,"late_minutes"?: number | null,"note"?: string | null,"ot_hours"?: number | null,"pairs_handled"?: number | null,"stat_date": string,"tenant_id": string,"updated_at"?: string
+                  }
+                  Update: {
+                    "attendance_status"?: string,"created_at"?: string,"created_by"?: string | null,"employee_name"?: string,"id"?: number,"late_minutes"?: number | null,"note"?: string | null,"ot_hours"?: number | null,"pairs_handled"?: number | null,"stat_date"?: string,"tenant_id"?: string,"updated_at"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "sc_staff_daily_stats_created_by_fkey"
+      columns: ["created_by"]
+isOneToOne: false
+      referencedRelation: "profiles"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "sc_staff_daily_stats_tenant_id_fkey"
+      columns: ["tenant_id"]
+isOneToOne: false
+      referencedRelation: "tenants"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"sc_users": {
+                  Row: {
+                    "branch_id": string | null,"created_at": string | null,"fullname": string | null,"id": number,"nickname": string | null,"role": string | null,"user_id": string | null,"username": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "branch_id"?: string | null,"created_at"?: string | null,"fullname"?: string | null,"id"?: number,"nickname"?: string | null,"role"?: string | null,"user_id"?: string | null,"username": string
+                  }
+                  Update: {
+                    "branch_id"?: string | null,"created_at"?: string | null,"fullname"?: string | null,"id"?: number,"nickname"?: string | null,"role"?: string | null,"user_id"?: string | null,"username"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "sc_users_branch_id_fkey"
+      columns: ["branch_id"]
+isOneToOne: false
+      referencedRelation: "branches"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "sc_users_branch_id_fkey"
+      columns: ["branch_id"]
+isOneToOne: false
+      referencedRelation: "inv_branches"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"sc_wht_certificates": {
+                  Row: {
+                    "base_amount": number,"certificate_number": string,"created_at": string,"created_by": string | null,"direction": string,"form_type": string,"gross_amount": number,"id": string,"income_type_code": string,"income_type_label": string,"legacy_opex_id": number | null,"net_payment": number,"note": string | null,"payee_id": string | null,"payment_date": string,"rental_record_id": number | null,"tax_amount": number,"tenant_id": string,"vat_amount": number,"wht_rate": number
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "base_amount": number,"certificate_number": string,"created_at"?: string,"created_by"?: string | null,"direction"?: string,"form_type": string,"gross_amount": number,"id"?: string,"income_type_code"?: string,"income_type_label"?: string,"legacy_opex_id"?: number | null,"net_payment": number,"note"?: string | null,"payee_id"?: string | null,"payment_date": string,"rental_record_id"?: number | null,"tax_amount": number,"tenant_id": string,"vat_amount"?: number,"wht_rate": number
+                  }
+                  Update: {
+                    "base_amount"?: number,"certificate_number"?: string,"created_at"?: string,"created_by"?: string | null,"direction"?: string,"form_type"?: string,"gross_amount"?: number,"id"?: string,"income_type_code"?: string,"income_type_label"?: string,"legacy_opex_id"?: number | null,"net_payment"?: number,"note"?: string | null,"payee_id"?: string | null,"payment_date"?: string,"rental_record_id"?: number | null,"tax_amount"?: number,"tenant_id"?: string,"vat_amount"?: number,"wht_rate"?: number
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "sc_wht_certificates_created_by_fkey"
+      columns: ["created_by"]
+isOneToOne: false
+      referencedRelation: "profiles"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "sc_wht_certificates_payee_id_fkey"
+      columns: ["payee_id"]
+isOneToOne: false
+      referencedRelation: "sc_wht_payees"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "sc_wht_certificates_tenant_id_fkey"
+      columns: ["tenant_id"]
+isOneToOne: false
+      referencedRelation: "tenants"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"sc_wht_payees": {
+                  Row: {
+                    "address": string | null,"created_at": string,"id": string,"is_active": boolean,"kind": string,"name": string,"tax_id": string,"tenant_id": string,"updated_at": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "address"?: string | null,"created_at"?: string,"id"?: string,"is_active"?: boolean,"kind": string,"name": string,"tax_id": string,"tenant_id": string,"updated_at"?: string
+                  }
+                  Update: {
+                    "address"?: string | null,"created_at"?: string,"id"?: string,"is_active"?: boolean,"kind"?: string,"name"?: string,"tax_id"?: string,"tenant_id"?: string,"updated_at"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "sc_wht_payees_tenant_id_fkey"
+      columns: ["tenant_id"]
+isOneToOne: false
+      referencedRelation: "tenants"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"service_order_items": {
+                  Row: {
+                    "created_at": string,"id": string,"order_id": string,"price": number,"quantity": number,"service_id": string | null,"service_name": string,"tenant_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "created_at"?: string,"id"?: string,"order_id": string,"price"?: number,"quantity"?: number,"service_id"?: string | null,"service_name": string,"tenant_id"?: string
+                  }
+                  Update: {
+                    "created_at"?: string,"id"?: string,"order_id"?: string,"price"?: number,"quantity"?: number,"service_id"?: string | null,"service_name"?: string,"tenant_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "service_order_items_order_id_fkey"
+      columns: ["order_id"]
+isOneToOne: false
+      referencedRelation: "service_orders"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "service_order_items_service_id_fkey"
+      columns: ["service_id"]
+isOneToOne: false
+      referencedRelation: "services"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "service_order_items_tenant_id_fkey"
+      columns: ["tenant_id"]
+isOneToOne: false
+      referencedRelation: "tenants"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"service_orders": {
+                  Row: {
+                    "branch_id": string | null,"cash_amount": number,"completed_at": string | null,"created_at": string,"created_by": string | null,"customer_id": string | null,"customer_name": string,"customer_phone": string,"delivered_at": string | null,"discount_amount": number,"id": string,"net_amount": number,"note": string | null,"order_no": string,"payment_method": string,"payment_status": string,"received_at": string,"shoe_brand": string | null,"shoe_color": string | null,"shoe_model": string | null,"shoe_size": string | null,"status": string,"tenant_id": string,"total_amount": number,"transfer_amount": number,"updated_at": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "branch_id"?: string | null,"cash_amount"?: number,"completed_at"?: string | null,"created_at"?: string,"created_by"?: string | null,"customer_id"?: string | null,"customer_name": string,"customer_phone": string,"delivered_at"?: string | null,"discount_amount"?: number,"id"?: string,"net_amount"?: number,"note"?: string | null,"order_no": string,"payment_method"?: string,"payment_status"?: string,"received_at"?: string,"shoe_brand"?: string | null,"shoe_color"?: string | null,"shoe_model"?: string | null,"shoe_size"?: string | null,"status"?: string,"tenant_id"?: string,"total_amount"?: number,"transfer_amount"?: number,"updated_at"?: string
+                  }
+                  Update: {
+                    "branch_id"?: string | null,"cash_amount"?: number,"completed_at"?: string | null,"created_at"?: string,"created_by"?: string | null,"customer_id"?: string | null,"customer_name"?: string,"customer_phone"?: string,"delivered_at"?: string | null,"discount_amount"?: number,"id"?: string,"net_amount"?: number,"note"?: string | null,"order_no"?: string,"payment_method"?: string,"payment_status"?: string,"received_at"?: string,"shoe_brand"?: string | null,"shoe_color"?: string | null,"shoe_model"?: string | null,"shoe_size"?: string | null,"status"?: string,"tenant_id"?: string,"total_amount"?: number,"transfer_amount"?: number,"updated_at"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "service_orders_customer_id_fkey"
+      columns: ["customer_id"]
+isOneToOne: false
+      referencedRelation: "customers"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "service_orders_tenant_id_fkey"
+      columns: ["tenant_id"]
+isOneToOne: false
+      referencedRelation: "tenants"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"services": {
+                  Row: {
+                    "base_price": number,"category": string,"code": string,"created_at": string,"estimated_days": number,"id": string,"is_active": boolean,"name": string,"tenant_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "base_price"?: number,"category": string,"code": string,"created_at"?: string,"estimated_days"?: number,"id"?: string,"is_active"?: boolean,"name": string,"tenant_id"?: string
+                  }
+                  Update: {
+                    "base_price"?: number,"category"?: string,"code"?: string,"created_at"?: string,"estimated_days"?: number,"id"?: string,"is_active"?: boolean,"name"?: string,"tenant_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "services_tenant_id_fkey"
+      columns: ["tenant_id"]
+isOneToOne: false
+      referencedRelation: "tenants"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"tenants": {
+                  Row: {
+                    "address": string | null,"created_at": string,"id": string,"is_active": boolean,"legal_name": string | null,"name": string,"phone": string | null,"promptpay_id": string | null,"tax_id": string | null,"updated_at": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "address"?: string | null,"created_at"?: string,"id"?: string,"is_active"?: boolean,"legal_name"?: string | null,"name": string,"phone"?: string | null,"promptpay_id"?: string | null,"tax_id"?: string | null,"updated_at"?: string
+                  }
+                  Update: {
+                    "address"?: string | null,"created_at"?: string,"id"?: string,"is_active"?: boolean,"legal_name"?: string | null,"name"?: string,"phone"?: string | null,"promptpay_id"?: string | null,"tax_id"?: string | null,"updated_at"?: string
+                  }
+                  Relationships: [
+
+                  ]
+                },"ui_permissions": {
+                  Row: {
+                    "feature_key": string,"role": string,"updated_at": string,"updated_by": string | null,"visible": boolean
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "feature_key": string,"role": string,"updated_at"?: string,"updated_by"?: string | null,"visible"?: boolean
+                  }
+                  Update: {
+                    "feature_key"?: string,"role"?: string,"updated_at"?: string,"updated_by"?: string | null,"visible"?: boolean
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "ui_permissions_updated_by_profiles_fkey"
+      columns: ["updated_by"]
+isOneToOne: false
+      referencedRelation: "profiles"
+      referencedColumns: ["id"]
+    }
+                  ]
+                }
+          }
+          Views: {
+            "audit_logs": {
+                  Row: {
+                    "action": Database["public"]['Enums']["inv_audit_action"],"after_data": Json | null,"before_data": Json | null,"id": number,"performed_at": string,"performed_by": string | null,"reason": string | null,"record_id": string,"table_name": string,"tenant_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                           "action"?: Database["public"]['Enums']["inv_audit_action"] | null,"after_data"?: Json | null,"before_data"?: Json | null,"id"?: number | null,"performed_at"?: string | null,"performed_by"?: string | null,"reason"?: string | null,"record_id"?: string | null,"table_name"?: string | null,"tenant_id"?: string | null
+                         }
+                        Update: {
+                           "action"?: Database["public"]['Enums']["inv_audit_action"] | null,"after_data"?: Json | null,"before_data"?: Json | null,"id"?: number | null,"performed_at"?: string | null,"performed_by"?: string | null,"reason"?: string | null,"record_id"?: string | null,"table_name"?: string | null,"tenant_id"?: string | null
+                         }
+                        Relationships: [
+                    {
+      foreignKeyName: "inv_audit_logs_performed_by_profiles_fkey"
+      columns: ["performed_by"]
+isOneToOne: false
+      referencedRelation: "profiles"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "inv_audit_logs_tenant_id_fkey"
+      columns: ["tenant_id"]
+isOneToOne: false
+      referencedRelation: "tenants"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"branches": {
+                  Row: {
+                    "address": string | null,"close_time": string,"created_at": string,"id": string,"is_active": boolean,"name": string,"open_time": string,"phone": string | null,"telegram_chat_id": string | null,"tenant_id": string,"vat_registered": boolean
+                  }
+                  ComputedFields: never
+                  Insert: {
+                           "address"?: string | null,"close_time"?: string | null,"created_at"?: string | null,"id"?: string | null,"is_active"?: boolean | null,"name"?: string | null,"open_time"?: string | null,"phone"?: string | null,"telegram_chat_id"?: string | null,"tenant_id"?: string | null,"vat_registered"?: boolean | null
+                         }
+                        Update: {
+                           "address"?: string | null,"close_time"?: string | null,"created_at"?: string | null,"id"?: string | null,"is_active"?: boolean | null,"name"?: string | null,"open_time"?: string | null,"phone"?: string | null,"telegram_chat_id"?: string | null,"tenant_id"?: string | null,"vat_registered"?: boolean | null
+                         }
+                        Relationships: [
+                    {
+      foreignKeyName: "inv_branches_tenant_id_fkey"
+      columns: ["tenant_id"]
+isOneToOne: false
+      referencedRelation: "tenants"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"integration_secrets": {
+                  Row: {
+                    "key": string,"tenant_id": string,"updated_at": string,"updated_by": string | null,"value": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                           "key"?: string | null,"tenant_id"?: string | null,"updated_at"?: string | null,"updated_by"?: string | null,"value"?: string | null
+                         }
+                        Update: {
+                           "key"?: string | null,"tenant_id"?: string | null,"updated_at"?: string | null,"updated_by"?: string | null,"value"?: string | null
+                         }
+                        Relationships: [
+                    {
+      foreignKeyName: "inv_integration_secrets_tenant_id_fkey"
+      columns: ["tenant_id"]
+isOneToOne: false
+      referencedRelation: "tenants"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "inv_integration_secrets_updated_by_profiles_fkey"
+      columns: ["updated_by"]
+isOneToOne: false
+      referencedRelation: "profiles"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"inv_v_inventory_value": {
+                  Row: {
+                    "branch_id": string,"branch_name": string,"item_type": Database["public"]['Enums']["inv_item_type"],"total_value": number | null
+                  }
+                  ComputedFields: never
+                  Relationships: [
+                    {
+      foreignKeyName: "inv_item_stock_branch_id_fkey"
+      columns: ["branch_id"]
+isOneToOne: false
+      referencedRelation: "branches"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "inv_item_stock_branch_id_fkey"
+      columns: ["branch_id"]
+isOneToOne: false
+      referencedRelation: "inv_branches"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"inv_v_item_stock": {
+                  Row: {
+                    "alert_muted": boolean,"branch_id": string,"current_qty": number,"id": string,"item_id": string,"min_stock_level": number,"updated_at": string
+                  }
+                  ComputedFields: never
+                  Relationships: [
+                    {
+      foreignKeyName: "inv_item_stock_branch_id_fkey"
+      columns: ["branch_id"]
+isOneToOne: false
+      referencedRelation: "branches"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "inv_item_stock_branch_id_fkey"
+      columns: ["branch_id"]
+isOneToOne: false
+      referencedRelation: "inv_branches"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "inv_item_stock_item_id_fkey"
+      columns: ["item_id"]
+isOneToOne: false
+      referencedRelation: "inv_items"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "inv_item_stock_item_id_fkey"
+      columns: ["item_id"]
+isOneToOne: false
+      referencedRelation: "inv_v_low_stock"
+      referencedColumns: ["item_id"]
+    },{
+      foreignKeyName: "inv_item_stock_item_id_fkey"
+      columns: ["item_id"]
+isOneToOne: false
+      referencedRelation: "inv_v_top_consumed_items_30d"
+      referencedColumns: ["item_id"]
+    },{
+      foreignKeyName: "inv_item_stock_item_id_fkey"
+      columns: ["item_id"]
+isOneToOne: false
+      referencedRelation: "items"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "inv_item_stock_item_id_fkey"
+      columns: ["item_id"]
+isOneToOne: false
+      referencedRelation: "v_low_stock"
+      referencedColumns: ["item_id"]
+    },{
+      foreignKeyName: "inv_item_stock_item_id_fkey"
+      columns: ["item_id"]
+isOneToOne: false
+      referencedRelation: "v_top_consumed_items_30d"
+      referencedColumns: ["item_id"]
+    }
+                  ]
+                },"inv_v_low_stock": {
+                  Row: {
+                    "base_unit": string,"branch_id": string,"branch_name": string,"category": string,"current_qty": number,"item_id": string,"item_type": Database["public"]['Enums']["inv_item_type"],"min_stock_level": number,"name": string
+                  }
+                  ComputedFields: never
+                  Relationships: [
+                    {
+      foreignKeyName: "inv_item_stock_branch_id_fkey"
+      columns: ["branch_id"]
+isOneToOne: false
+      referencedRelation: "branches"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "inv_item_stock_branch_id_fkey"
+      columns: ["branch_id"]
+isOneToOne: false
+      referencedRelation: "inv_branches"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"inv_v_monthly_cogs": {
+                  Row: {
+                    "branch_id": string,"cogs": number | null,"month": string | null
+                  }
+                  ComputedFields: never
+                  Relationships: [
+                    {
+      foreignKeyName: "inv_stock_transactions_branch_id_fkey"
+      columns: ["branch_id"]
+isOneToOne: false
+      referencedRelation: "branches"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "inv_stock_transactions_branch_id_fkey"
+      columns: ["branch_id"]
+isOneToOne: false
+      referencedRelation: "inv_branches"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"inv_v_top_consumed_items_30d": {
+                  Row: {
+                    "base_unit": string,"branch_id": string,"item_id": string,"name": string,"total_cost_used": number | null,"total_qty_used": number | null
+                  }
+                  ComputedFields: never
+                  Relationships: [
+                    {
+      foreignKeyName: "inv_stock_transactions_branch_id_fkey"
+      columns: ["branch_id"]
+isOneToOne: false
+      referencedRelation: "branches"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "inv_stock_transactions_branch_id_fkey"
+      columns: ["branch_id"]
+isOneToOne: false
+      referencedRelation: "inv_branches"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"item_stock": {
+                  Row: {
+                    "alert_muted": boolean,"avg_unit_cost": number,"branch_id": string,"current_qty": number,"id": string,"item_id": string,"min_stock_level": number,"tenant_id": string,"updated_at": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                           "alert_muted"?: boolean | null,"avg_unit_cost"?: number | null,"branch_id"?: string | null,"current_qty"?: number | null,"id"?: string | null,"item_id"?: string | null,"min_stock_level"?: number | null,"tenant_id"?: string | null,"updated_at"?: string | null
+                         }
+                        Update: {
+                           "alert_muted"?: boolean | null,"avg_unit_cost"?: number | null,"branch_id"?: string | null,"current_qty"?: number | null,"id"?: string | null,"item_id"?: string | null,"min_stock_level"?: number | null,"tenant_id"?: string | null,"updated_at"?: string | null
+                         }
+                        Relationships: [
+                    {
+      foreignKeyName: "inv_item_stock_branch_id_fkey"
+      columns: ["branch_id"]
+isOneToOne: false
+      referencedRelation: "branches"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "inv_item_stock_branch_id_fkey"
+      columns: ["branch_id"]
+isOneToOne: false
+      referencedRelation: "inv_branches"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "inv_item_stock_item_id_fkey"
+      columns: ["item_id"]
+isOneToOne: false
+      referencedRelation: "inv_items"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "inv_item_stock_item_id_fkey"
+      columns: ["item_id"]
+isOneToOne: false
+      referencedRelation: "inv_v_low_stock"
+      referencedColumns: ["item_id"]
+    },{
+      foreignKeyName: "inv_item_stock_item_id_fkey"
+      columns: ["item_id"]
+isOneToOne: false
+      referencedRelation: "inv_v_top_consumed_items_30d"
+      referencedColumns: ["item_id"]
+    },{
+      foreignKeyName: "inv_item_stock_item_id_fkey"
+      columns: ["item_id"]
+isOneToOne: false
+      referencedRelation: "items"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "inv_item_stock_item_id_fkey"
+      columns: ["item_id"]
+isOneToOne: false
+      referencedRelation: "v_low_stock"
+      referencedColumns: ["item_id"]
+    },{
+      foreignKeyName: "inv_item_stock_item_id_fkey"
+      columns: ["item_id"]
+isOneToOne: false
+      referencedRelation: "v_top_consumed_items_30d"
+      referencedColumns: ["item_id"]
+    },{
+      foreignKeyName: "inv_item_stock_tenant_id_fkey"
+      columns: ["tenant_id"]
+isOneToOne: false
+      referencedRelation: "tenants"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"items": {
+                  Row: {
+                    "base_unit": string,"category": string,"created_at": string,"default_min_stock_level": number,"id": string,"is_active": boolean,"item_type": Database["public"]['Enums']["inv_item_type"],"name": string,"purchase_unit": string,"purchase_unit_qty": number,"sku": string | null,"tenant_id": string,"updated_at": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                           "base_unit"?: string | null,"category"?: string | null,"created_at"?: string | null,"default_min_stock_level"?: number | null,"id"?: string | null,"is_active"?: boolean | null,"item_type"?: Database["public"]['Enums']["inv_item_type"] | null,"name"?: string | null,"purchase_unit"?: string | null,"purchase_unit_qty"?: number | null,"sku"?: string | null,"tenant_id"?: string | null,"updated_at"?: string | null
+                         }
+                        Update: {
+                           "base_unit"?: string | null,"category"?: string | null,"created_at"?: string | null,"default_min_stock_level"?: number | null,"id"?: string | null,"is_active"?: boolean | null,"item_type"?: Database["public"]['Enums']["inv_item_type"] | null,"name"?: string | null,"purchase_unit"?: string | null,"purchase_unit_qty"?: number | null,"sku"?: string | null,"tenant_id"?: string | null,"updated_at"?: string | null
+                         }
+                        Relationships: [
+                    {
+      foreignKeyName: "inv_items_tenant_id_fkey"
+      columns: ["tenant_id"]
+isOneToOne: false
+      referencedRelation: "tenants"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"stock_transactions": {
+                  Row: {
+                    "approved_by": string | null,"branch_id": string,"corrects_txn_id": string | null,"created_at": string,"id": string,"item_id": string,"performed_by": string,"quantity_delta": number,"reason": string | null,"reference_note": string | null,"reference_type": string | null,"status": Database["public"]['Enums']["inv_txn_status"],"supplier_id": string | null,"tenant_id": string,"total_cost": number | null,"transaction_date": string,"txn_type": Database["public"]['Enums']["inv_txn_type"],"unit_cost_snapshot": number
+                  }
+                  ComputedFields: never
+                  Insert: {
+                           "approved_by"?: string | null,"branch_id"?: string | null,"corrects_txn_id"?: string | null,"created_at"?: string | null,"id"?: string | null,"item_id"?: string | null,"performed_by"?: string | null,"quantity_delta"?: number | null,"reason"?: string | null,"reference_note"?: string | null,"reference_type"?: string | null,"status"?: Database["public"]['Enums']["inv_txn_status"] | null,"supplier_id"?: string | null,"tenant_id"?: string | null,"total_cost"?: number | null,"transaction_date"?: string | null,"txn_type"?: Database["public"]['Enums']["inv_txn_type"] | null,"unit_cost_snapshot"?: number | null
+                         }
+                        Update: {
+                           "approved_by"?: string | null,"branch_id"?: string | null,"corrects_txn_id"?: string | null,"created_at"?: string | null,"id"?: string | null,"item_id"?: string | null,"performed_by"?: string | null,"quantity_delta"?: number | null,"reason"?: string | null,"reference_note"?: string | null,"reference_type"?: string | null,"status"?: Database["public"]['Enums']["inv_txn_status"] | null,"supplier_id"?: string | null,"tenant_id"?: string | null,"total_cost"?: number | null,"transaction_date"?: string | null,"txn_type"?: Database["public"]['Enums']["inv_txn_type"] | null,"unit_cost_snapshot"?: number | null
+                         }
+                        Relationships: [
+                    {
+      foreignKeyName: "inv_stock_transactions_approved_by_profiles_fkey"
+      columns: ["approved_by"]
+isOneToOne: false
+      referencedRelation: "profiles"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "inv_stock_transactions_branch_id_fkey"
+      columns: ["branch_id"]
+isOneToOne: false
+      referencedRelation: "branches"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "inv_stock_transactions_branch_id_fkey"
+      columns: ["branch_id"]
+isOneToOne: false
+      referencedRelation: "inv_branches"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "inv_stock_transactions_corrects_txn_id_fkey"
+      columns: ["corrects_txn_id"]
+isOneToOne: false
+      referencedRelation: "inv_stock_transactions"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "inv_stock_transactions_corrects_txn_id_fkey"
+      columns: ["corrects_txn_id"]
+isOneToOne: false
+      referencedRelation: "stock_transactions"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "inv_stock_transactions_corrects_txn_id_fkey"
+      columns: ["corrects_txn_id"]
+isOneToOne: false
+      referencedRelation: "v_stock_transactions"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "inv_stock_transactions_item_id_fkey"
+      columns: ["item_id"]
+isOneToOne: false
+      referencedRelation: "inv_items"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "inv_stock_transactions_item_id_fkey"
+      columns: ["item_id"]
+isOneToOne: false
+      referencedRelation: "inv_v_low_stock"
+      referencedColumns: ["item_id"]
+    },{
+      foreignKeyName: "inv_stock_transactions_item_id_fkey"
+      columns: ["item_id"]
+isOneToOne: false
+      referencedRelation: "inv_v_top_consumed_items_30d"
+      referencedColumns: ["item_id"]
+    },{
+      foreignKeyName: "inv_stock_transactions_item_id_fkey"
+      columns: ["item_id"]
+isOneToOne: false
+      referencedRelation: "items"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "inv_stock_transactions_item_id_fkey"
+      columns: ["item_id"]
+isOneToOne: false
+      referencedRelation: "v_low_stock"
+      referencedColumns: ["item_id"]
+    },{
+      foreignKeyName: "inv_stock_transactions_item_id_fkey"
+      columns: ["item_id"]
+isOneToOne: false
+      referencedRelation: "v_top_consumed_items_30d"
+      referencedColumns: ["item_id"]
+    },{
+      foreignKeyName: "inv_stock_transactions_performed_by_profiles_fkey"
+      columns: ["performed_by"]
+isOneToOne: false
+      referencedRelation: "profiles"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "inv_stock_transactions_supplier_id_fkey"
+      columns: ["supplier_id"]
+isOneToOne: false
+      referencedRelation: "inv_suppliers"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "inv_stock_transactions_supplier_id_fkey"
+      columns: ["supplier_id"]
+isOneToOne: false
+      referencedRelation: "suppliers"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "inv_stock_transactions_tenant_id_fkey"
+      columns: ["tenant_id"]
+isOneToOne: false
+      referencedRelation: "tenants"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"suppliers": {
+                  Row: {
+                    "created_at": string,"id": string,"is_active": boolean,"name": string,"note": string | null,"phone": string | null,"tenant_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                           "created_at"?: string | null,"id"?: string | null,"is_active"?: boolean | null,"name"?: string | null,"note"?: string | null,"phone"?: string | null,"tenant_id"?: string | null
+                         }
+                        Update: {
+                           "created_at"?: string | null,"id"?: string | null,"is_active"?: boolean | null,"name"?: string | null,"note"?: string | null,"phone"?: string | null,"tenant_id"?: string | null
+                         }
+                        Relationships: [
+                    {
+      foreignKeyName: "inv_suppliers_tenant_id_fkey"
+      columns: ["tenant_id"]
+isOneToOne: false
+      referencedRelation: "tenants"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"v_inventory_value": {
+                  Row: {
+                    "branch_id": string,"branch_name": string,"item_type": Database["public"]['Enums']["inv_item_type"],"total_value": number | null
+                  }
+                  ComputedFields: never
+                  Relationships: [
+                    {
+      foreignKeyName: "inv_item_stock_branch_id_fkey"
+      columns: ["branch_id"]
+isOneToOne: false
+      referencedRelation: "branches"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "inv_item_stock_branch_id_fkey"
+      columns: ["branch_id"]
+isOneToOne: false
+      referencedRelation: "inv_branches"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"v_item_stock": {
+                  Row: {
+                    "alert_muted": boolean,"branch_id": string,"current_qty": number,"id": string,"item_id": string,"min_stock_level": number,"updated_at": string
+                  }
+                  ComputedFields: never
+                  Relationships: [
+                    {
+      foreignKeyName: "inv_item_stock_branch_id_fkey"
+      columns: ["branch_id"]
+isOneToOne: false
+      referencedRelation: "branches"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "inv_item_stock_branch_id_fkey"
+      columns: ["branch_id"]
+isOneToOne: false
+      referencedRelation: "inv_branches"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "inv_item_stock_item_id_fkey"
+      columns: ["item_id"]
+isOneToOne: false
+      referencedRelation: "inv_items"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "inv_item_stock_item_id_fkey"
+      columns: ["item_id"]
+isOneToOne: false
+      referencedRelation: "inv_v_low_stock"
+      referencedColumns: ["item_id"]
+    },{
+      foreignKeyName: "inv_item_stock_item_id_fkey"
+      columns: ["item_id"]
+isOneToOne: false
+      referencedRelation: "inv_v_top_consumed_items_30d"
+      referencedColumns: ["item_id"]
+    },{
+      foreignKeyName: "inv_item_stock_item_id_fkey"
+      columns: ["item_id"]
+isOneToOne: false
+      referencedRelation: "items"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "inv_item_stock_item_id_fkey"
+      columns: ["item_id"]
+isOneToOne: false
+      referencedRelation: "v_low_stock"
+      referencedColumns: ["item_id"]
+    },{
+      foreignKeyName: "inv_item_stock_item_id_fkey"
+      columns: ["item_id"]
+isOneToOne: false
+      referencedRelation: "v_top_consumed_items_30d"
+      referencedColumns: ["item_id"]
+    }
+                  ]
+                },"v_low_stock": {
+                  Row: {
+                    "base_unit": string,"branch_id": string,"branch_name": string,"category": string,"current_qty": number,"item_id": string,"item_type": Database["public"]['Enums']["inv_item_type"],"min_stock_level": number,"name": string
+                  }
+                  ComputedFields: never
+                  Relationships: [
+                    {
+      foreignKeyName: "inv_item_stock_branch_id_fkey"
+      columns: ["branch_id"]
+isOneToOne: false
+      referencedRelation: "branches"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "inv_item_stock_branch_id_fkey"
+      columns: ["branch_id"]
+isOneToOne: false
+      referencedRelation: "inv_branches"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"v_stock_transactions": {
+                  Row: {
+                    "approved_by": string | null,"branch_id": string,"branch_name": string,"corrects_txn_id": string | null,"created_at": string,"id": string,"item_id": string,"item_name": string,"performed_by": string,"performed_by_name": string | null,"quantity_delta": number,"reason": string | null,"reference_note": string | null,"reference_type": string | null,"status": Database["public"]['Enums']["inv_txn_status"],"transaction_date": string,"txn_type": Database["public"]['Enums']["inv_txn_type"]
+                  }
+                  ComputedFields: never
+                  Relationships: [
+                    {
+      foreignKeyName: "inv_stock_transactions_approved_by_profiles_fkey"
+      columns: ["approved_by"]
+isOneToOne: false
+      referencedRelation: "profiles"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "inv_stock_transactions_branch_id_fkey"
+      columns: ["branch_id"]
+isOneToOne: false
+      referencedRelation: "branches"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "inv_stock_transactions_branch_id_fkey"
+      columns: ["branch_id"]
+isOneToOne: false
+      referencedRelation: "inv_branches"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "inv_stock_transactions_corrects_txn_id_fkey"
+      columns: ["corrects_txn_id"]
+isOneToOne: false
+      referencedRelation: "inv_stock_transactions"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "inv_stock_transactions_corrects_txn_id_fkey"
+      columns: ["corrects_txn_id"]
+isOneToOne: false
+      referencedRelation: "stock_transactions"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "inv_stock_transactions_corrects_txn_id_fkey"
+      columns: ["corrects_txn_id"]
+isOneToOne: false
+      referencedRelation: "v_stock_transactions"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "inv_stock_transactions_item_id_fkey"
+      columns: ["item_id"]
+isOneToOne: false
+      referencedRelation: "inv_items"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "inv_stock_transactions_item_id_fkey"
+      columns: ["item_id"]
+isOneToOne: false
+      referencedRelation: "inv_v_low_stock"
+      referencedColumns: ["item_id"]
+    },{
+      foreignKeyName: "inv_stock_transactions_item_id_fkey"
+      columns: ["item_id"]
+isOneToOne: false
+      referencedRelation: "inv_v_top_consumed_items_30d"
+      referencedColumns: ["item_id"]
+    },{
+      foreignKeyName: "inv_stock_transactions_item_id_fkey"
+      columns: ["item_id"]
+isOneToOne: false
+      referencedRelation: "items"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "inv_stock_transactions_item_id_fkey"
+      columns: ["item_id"]
+isOneToOne: false
+      referencedRelation: "v_low_stock"
+      referencedColumns: ["item_id"]
+    },{
+      foreignKeyName: "inv_stock_transactions_item_id_fkey"
+      columns: ["item_id"]
+isOneToOne: false
+      referencedRelation: "v_top_consumed_items_30d"
+      referencedColumns: ["item_id"]
+    },{
+      foreignKeyName: "inv_stock_transactions_performed_by_profiles_fkey"
+      columns: ["performed_by"]
+isOneToOne: false
+      referencedRelation: "profiles"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"v_top_consumed_items_30d": {
+                  Row: {
+                    "base_unit": string,"branch_id": string,"item_id": string,"name": string,"total_cost_used": number | null,"total_qty_used": number | null
+                  }
+                  ComputedFields: never
+                  Relationships: [
+                    {
+      foreignKeyName: "inv_stock_transactions_branch_id_fkey"
+      columns: ["branch_id"]
+isOneToOne: false
+      referencedRelation: "branches"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "inv_stock_transactions_branch_id_fkey"
+      columns: ["branch_id"]
+isOneToOne: false
+      referencedRelation: "inv_branches"
+      referencedColumns: ["id"]
+    }
+                  ]
+                }
+          }
+          Functions: {
+            "fn_consume_stock_outflow":
+{ Args: { "p_branch_id": string,"p_delta": number,"p_item_id": string }; Returns: undefined
+                           },
+"fn_current_tenant":
+{ Args: Record<PropertyKey, never>; Returns: string
+                           },
+"fn_integration_secret_status":
+{ Args: { "p_key": string }; Returns: {
+              "is_set": boolean,"updated_at": string,"value_suffix": string
+            }[]
+                           },
+"fn_sc_is_admin":
+{ Args: Record<PropertyKey, never>; Returns: boolean
+                           },
+"inv_fn_approve_adjustment":
+{ Args: { "p_approve": boolean,"p_txn_id": string }; Returns: undefined
+                           },
+"inv_fn_current_branch":
+{ Args: Record<PropertyKey, never>; Returns: string
+                           },
+"inv_fn_current_role":
+{ Args: Record<PropertyKey, never>; Returns: string
+                           },
+"inv_fn_integration_secret_status":
+{ Args: { "p_key": string }; Returns: {
+              "is_set": boolean,"updated_at": string,"value_suffix": string
+            }[]
+                           },
+"inv_fn_purchase_actor":
+{ Args: { "p_branch_id": string }; Returns: string
+                           },
+"inv_fn_purchase_history":
+{ Args: { "p_branch_id": string,"p_from": string,"p_to": string }; Returns: Json
+                           },
+"inv_fn_purchase_uid":
+{ Args: Record<PropertyKey, never>; Returns: string
+                           },
+"inv_fn_receive_purchase":
+{ Args: { "p_branch_id": string,"p_data": Json,"p_request_id": string }; Returns: string
+                           },
+"inv_fn_set_alert_muted":
+{ Args: { "p_branch_id": string,"p_item_id": string,"p_muted": boolean }; Returns: undefined
+                           },
+"inv_fn_set_integration_secret":
+{ Args: { "p_key": string,"p_value": string }; Returns: undefined
+                           },
+"inv_fn_set_min_stock_level":
+{ Args: { "p_branch_id": string,"p_item_id": string,"p_new_min": number }; Returns: undefined
+                           },
+"rrs_set_period":
+{ Args: { "p_closed": boolean,"p_period": string,"p_tenant": string }; Returns: Json
+                           },
+"sc_fn_guard_live_feature":
+{ Args: { "p_feature": string }; Returns: undefined
+                           },
+"sc_fn_post_receipt":
+{ Args: { "p_approved_by": string,"p_fingerprint": string,"p_purchase_amount": number,"p_receipt_id": string,"p_request_id": string,"p_tenant_id": string,"p_vat_credit": number }; Returns: {
+              "purchase_amount": number,"replay": boolean,"vat_credit": number
+            }[]
+                           },
+"sc_get_my_role":
+{ Args: Record<PropertyKey, never>; Returns: string
+                           }
+          }
+          Enums: {
+            "inv_audit_action": "INSERT"|"UPDATE"|"DELETE","inv_item_type": "inventory"|"consumable","inv_txn_status": "approved"|"pending_approval"|"rejected","inv_txn_type": "stock_in"|"stock_out"|"adjustment_increase"|"adjustment_decrease"|"waste"
+          }
+          CompositeTypes: {
+            [_ in never]: never
+          }
         }
-        Returns: {
-          purchase_amount: number
-          replay: boolean
-          vat_credit: number
-        }[]
-      }
-      sc_get_my_role: { Args: never; Returns: string }
-    }
-    Enums: {
-      inv_audit_action: "INSERT" | "UPDATE" | "DELETE"
-      inv_item_type: "inventory" | "consumable"
-      inv_txn_status: "approved" | "pending_approval" | "rejected"
-      inv_txn_type:
-        | "stock_in"
-        | "stock_out"
-        | "adjustment_increase"
-        | "adjustment_decrease"
-        | "waste"
-    }
-    CompositeTypes: {
-      [_ in never]: never
-    }
-  }
 }
 
-type DatabaseWithoutInternals = Omit<Database, "__InternalSupabase">
+type DatabaseWithoutInternals = Omit<Database, '__InternalSupabase'>
 
 type DefaultSchema = DatabaseWithoutInternals[Extract<keyof Database, "public">]
 
@@ -3986,132 +2118,111 @@ export type Tables<
   DefaultSchemaTableNameOrOptions extends
     | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends (DefaultSchemaTableNameOrOptions extends {
+  TableName extends DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
         DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
-    : never) = never,
-> = DefaultSchemaTableNameOrOptions extends {
-  schema: keyof DatabaseWithoutInternals
-}
+    : never = never
+> = DefaultSchemaTableNameOrOptions extends { schema: keyof DatabaseWithoutInternals }
   ? (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
       DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])[TableName] extends {
       Row: infer R
     }
     ? R
     : never
-  : DefaultSchemaTableNameOrOptions extends keyof (DefaultSchema["Tables"] &
-        DefaultSchema["Views"])
-    ? (DefaultSchema["Tables"] &
-        DefaultSchema["Views"])[DefaultSchemaTableNameOrOptions] extends {
-        Row: infer R
-      }
-      ? R
-      : never
+  : DefaultSchemaTableNameOrOptions extends keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
+  ? (DefaultSchema["Tables"] & DefaultSchema["Views"])[DefaultSchemaTableNameOrOptions] extends {
+      Row: infer R
+    }
+    ? R
     : never
+  : never
 
 export type TablesInsert<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends (DefaultSchemaTableNameOrOptions extends {
+  TableName extends DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never) = never,
-> = DefaultSchemaTableNameOrOptions extends {
-  schema: keyof DatabaseWithoutInternals
-}
+    : never = never
+> = DefaultSchemaTableNameOrOptions extends { schema: keyof DatabaseWithoutInternals }
   ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
       Insert: infer I
     }
     ? I
     : never
   : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
-    ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
-        Insert: infer I
-      }
-      ? I
-      : never
+  ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
+      Insert: infer I
+    }
+    ? I
     : never
+  : never
 
 export type TablesUpdate<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends (DefaultSchemaTableNameOrOptions extends {
+  TableName extends DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never) = never,
-> = DefaultSchemaTableNameOrOptions extends {
-  schema: keyof DatabaseWithoutInternals
-}
+    : never = never
+> = DefaultSchemaTableNameOrOptions extends { schema: keyof DatabaseWithoutInternals }
   ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
       Update: infer U
     }
     ? U
     : never
   : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
-    ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
-        Update: infer U
-      }
-      ? U
-      : never
+  ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
+      Update: infer U
+    }
+    ? U
     : never
+  : never
 
 export type Enums<
   DefaultSchemaEnumNameOrOptions extends
     | keyof DefaultSchema["Enums"]
     | { schema: keyof DatabaseWithoutInternals },
-  EnumName extends (DefaultSchemaEnumNameOrOptions extends {
+  EnumName extends DefaultSchemaEnumNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
-    : never) = never,
-> = DefaultSchemaEnumNameOrOptions extends {
-  schema: keyof DatabaseWithoutInternals
-}
+    : never = never
+> = DefaultSchemaEnumNameOrOptions extends { schema: keyof DatabaseWithoutInternals }
   ? DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"][EnumName]
   : DefaultSchemaEnumNameOrOptions extends keyof DefaultSchema["Enums"]
-    ? DefaultSchema["Enums"][DefaultSchemaEnumNameOrOptions]
-    : never
+  ? DefaultSchema["Enums"][DefaultSchemaEnumNameOrOptions]
+  : never
 
 export type CompositeTypes<
   PublicCompositeTypeNameOrOptions extends
     | keyof DefaultSchema["CompositeTypes"]
     | { schema: keyof DatabaseWithoutInternals },
-  CompositeTypeName extends (PublicCompositeTypeNameOrOptions extends {
+  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
-    : never) = never,
-> = PublicCompositeTypeNameOrOptions extends {
-  schema: keyof DatabaseWithoutInternals
-}
+    : never = never
+> = PublicCompositeTypeNameOrOptions extends { schema: keyof DatabaseWithoutInternals }
   ? DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"][CompositeTypeName]
   : PublicCompositeTypeNameOrOptions extends keyof DefaultSchema["CompositeTypes"]
-    ? DefaultSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
-    : never
+  ? DefaultSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
+  : never
 
 export const Constants = {
-  extension_layer: {
-    Enums: {},
-  },
-  public: {
-    Enums: {
-      inv_audit_action: ["INSERT", "UPDATE", "DELETE"],
-      inv_item_type: ["inventory", "consumable"],
-      inv_txn_status: ["approved", "pending_approval", "rejected"],
-      inv_txn_type: [
-        "stock_in",
-        "stock_out",
-        "adjustment_increase",
-        "adjustment_decrease",
-        "waste",
-      ],
-    },
-  },
-} as const
+  "extension_layer": {
+          Enums: {
 
+          }
+        },"public": {
+          Enums: {
+            "inv_audit_action": ["INSERT", "UPDATE", "DELETE"],"inv_item_type": ["inventory", "consumable"],"inv_txn_status": ["approved", "pending_approval", "rejected"],"inv_txn_type": ["stock_in", "stock_out", "adjustment_increase", "adjustment_decrease", "waste"]
+          }
+        }
+} as const

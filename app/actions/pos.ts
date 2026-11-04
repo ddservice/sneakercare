@@ -1,16 +1,14 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { financeRpc } from "@/lib/finance-rpc";
+import { posCommandSchema, validationMessage } from "@/lib/finance-validation";
+import { resolveBranchVat } from "@/lib/branch-vat";
 import { requireProfile, requireModuleWrite } from "@/lib/auth";
 import { getSelectedBranchId } from "@/lib/branch";
-import { createClient } from "@/lib/supabase/server";
 import { logAudit } from "@/lib/audit";
 import { requireTenantId } from "@/lib/tenant";
 import { errorMessage } from "@/lib/errors";
-import { isYmd, receivedAtFromYmd, ymdToOrderDateCode } from "@/lib/local-date";
-import { planCheckout, shouldPostSale, type CheckoutPayment } from "@/lib/checkout";
-import { saveDailySale } from "@/app/actions/daily-sales";
-import { assertPeriodOpen } from "@/lib/period-close-store";
 import { mayLiveAutoIssue, planLiveStockIssue } from "@/lib/service-usage";
 import { readServiceUsageConfig } from "@/lib/service-usage-store";
 
@@ -18,306 +16,46 @@ export type PosActionState = {
   error?: string;
   success?: boolean;
   orderNo?: string;
+  orderId?: string;
   postedToBooks?: boolean;
 } | undefined;
 
-export async function createServiceOrder(
-  _prev: PosActionState,
-  formData: FormData
-): Promise<PosActionState> {
+export async function createServiceOrder(_prev: PosActionState, formData: FormData): Promise<PosActionState> {
   const profile = await requireProfile();
   requireModuleWrite(profile, "pos");
-  const selectedBranchId = await getSelectedBranchId(profile);
-
-  let tenantId: string;
   try {
-    tenantId = await requireTenantId(profile);
-  } catch (err) {
-    return { error: errorMessage(err, "กรุณาเลือกสาขาของกิจการก่อนรับงาน") };
-  }
-
-  const customerName = String(formData.get("customer_name") ?? "").trim();
-  const customerPhone = String(formData.get("customer_phone") ?? "").trim();
-  const shoeBrand = String(formData.get("shoe_brand") ?? "").trim();
-  const shoeModel = String(formData.get("shoe_model") ?? "").trim();
-  const shoeColor = String(formData.get("shoe_color") ?? "").trim();
-  const shoeSize = String(formData.get("shoe_size") ?? "M").trim();
-  const serviceIdsRaw = formData.getAll("service_items");
-  const grossAmount = Number(formData.get("gross_amount") ?? 0);
-  const discountAmount = Number(formData.get("discount_amount") ?? 0);
-  const netAmount = Number(formData.get("net_amount") ?? 0);
-  const cashAmount = Number(formData.get("cash_amount") ?? 0);
-  const transferAmount = Number(formData.get("transfer_amount") ?? 0);
-  const paymentMethod = String(formData.get("payment_method") ?? "cash") as CheckoutPayment;
-  const notes = String(formData.get("notes") ?? "").trim();
-  const receivedDate = String(formData.get("received_date") ?? "").trim();
-
-  if (!customerName || !customerPhone) {
-    return { error: "กรุณากรอกชื่อและเบอร์โทรศัพท์ของลูกค้า" };
-  }
-
-  if (!isYmd(receivedDate)) {
-    return { error: "กรุณาเลือกวันที่รับงาน" };
-  }
-
-  if (netAmount < 0) {
-    return { error: "ยอดสุทธิไม่ถูกต้อง" };
-  }
-
-  if (shouldPostSale(paymentMethod)) {
-    const closedErr = await assertPeriodOpen(tenantId, receivedDate);
-    if (closedErr) return { error: closedErr };
-  }
-
-  const supabase = await createClient();
-  const receivedAt = receivedAtFromYmd(receivedDate);
-
-  // 1. Create or update customer record
-  let customerId: string | null = null;
-  const { data: existingCustomer } = await supabase
-    .from("customers")
-    .select("id")
-    .eq("phone", customerPhone)
-    .eq("tenant_id", tenantId)
-    .maybeSingle();
-
-  if (existingCustomer) {
-    customerId = existingCustomer.id;
-    await supabase
-      .from("customers")
-      .update({ name: customerName, updated_at: new Date().toISOString() })
-      .eq("id", customerId)
-      .eq("tenant_id", tenantId);
-  } else {
-    const { data: newCustomer } = await supabase
-      .from("customers")
-      .insert({
-        name: customerName,
-        phone: customerPhone,
-        tenant_id: tenantId,
-      })
-      .select("id")
-      .single();
-    if (newCustomer) customerId = newCustomer.id;
-  }
-
-  // 2. Generate Order No จากวันที่ที่กรอก ไม่ใช่ UTC ของเซิร์ฟเวอร์
-  const dateStr = ymdToOrderDateCode(receivedDate);
-  const randomSuffix = Math.floor(100 + Math.random() * 900);
-  const orderNo = `SC-${dateStr}-${randomSuffix}`;
-
-  // 3. Insert Service Order
-  const { data: order, error: orderError } = await supabase
-    .from("service_orders")
-    .insert({
-      order_no: orderNo,
-      branch_id: selectedBranchId,
-      tenant_id: tenantId,
-      customer_id: customerId,
-      customer_name: customerName,
-      customer_phone: customerPhone,
-      shoe_brand: shoeBrand || null,
-      shoe_model: shoeModel || null,
-      shoe_color: shoeColor || null,
-      shoe_size: shoeSize || "M",
-      status: "received",
-      payment_method: paymentMethod,
-      total_amount: grossAmount,
-      discount_amount: discountAmount,
-      net_amount: netAmount,
-      cash_amount: cashAmount,
-      transfer_amount: transferAmount,
-      payment_status: paymentMethod !== "unpaid" ? "paid" : "unpaid",
-      note: notes || null,
-      created_by: profile.id,
-      received_at: receivedAt,
-    })
-    .select("id")
-    .single();
-
-  if (orderError || !order) {
-    return { error: `บันทึกรับงานไม่สำเร็จ: ${orderError?.message ?? "ไม่สามารถสร้างรายการได้"}` };
-  }
-
-  // 4. Insert service items if any
-  if (serviceIdsRaw.length > 0) {
-    const itemsToInsert = serviceIdsRaw.map((itemStr) => {
-      try {
-        const item = JSON.parse(String(itemStr));
-        return {
-          order_id: order.id,
-          service_id: item.id || null,
-          service_name: item.name,
-          price: Number(item.price ?? 0),
-          quantity: 1,
-        };
-      } catch {
-        return {
-          order_id: order.id,
-          service_name: String(itemStr),
-          price: 0,
-          quantity: 1,
-        };
-      }
+    const tenantId = await requireTenantId(profile);
+    const branchId = await getSelectedBranchId(profile) || (await resolveBranchVat(profile)).branchId;
+    const field = (key: string) => String(formData.get(key) ?? "").trim();
+    const requestId = field("request_id");
+    if (!/^[0-9a-f-]{36}$/i.test(requestId)) return { error: "ไม่พบคีย์รายการ กรุณาโหลดหน้าใหม่" };
+    const services = formData.getAll("service_items").map(raw => {
+      const item = JSON.parse(String(raw)) as { id?: string; name?: string; price?: number };
+      return { id: item.id && /^[0-9a-f-]{36}$/i.test(item.id) ? item.id : null, name: String(item.name ?? ""), price: Number(item.price) };
     });
-
-    await supabase.from("service_order_items").insert(itemsToInsert);
-  }
-
-  const serviceNames = serviceIdsRaw.map((itemStr) => {
-    try {
-      const item = JSON.parse(String(itemStr));
-      return String(item.name ?? "");
-    } catch {
-      return String(itemStr);
-    }
-  });
-
-  // ยอดทางการอยู่ที่ sc_sales — ใบรับงานที่ชำระแล้วลงแถวขายหนึ่งใบ (คีย์ = order.id)
-  // ตัดสต๊อกอัตโนมัติยังปิด: เบิกมือที่ /stock-out จนกว่าสูตร+จุดตัด+ธุรกรรมจะผ่านเงื่อนไข
-  const usage = await readServiceUsageConfig(tenantId);
-  const liveIssue = planLiveStockIssue({ flags: usage.flags, requestedPoint: "receive" });
-  if (mayLiveAutoIssue(usage.flags) || liveIssue.ok) {
-    console.warn("[pos] live auto-issue is blocked at server — skipped stock posting");
-  }
-  const plan = planCheckout({
-    orderId: order.id,
-    orderNo,
-    date: receivedDate,
-    paymentMethod,
-    gross: grossAmount,
-    discount: discountAmount,
-    net: netAmount,
-    cash: cashAmount,
-    transfer: transferAmount,
-    serviceNames,
-  });
-
-  let postedToBooks = false;
-  if (plan.sale) {
-    const saleRes = await saveDailySale({
-      date: plan.sale.date,
-      size_s: 0,
-      size_m: 0,
-      size_l: 0,
-      size_xl: 0,
-      cash_amount: plan.sale.cash,
-      transfer_amount: plan.sale.transfer,
-      amount_paid: plan.sale.amountPaid,
-      discount: plan.sale.discount,
-      gross_amount: plan.sale.gross,
-      grand_total: plan.sale.net,
-      extra_items: plan.sale.extraItems,
-      payment_status: plan.sale.paymentStatus,
-      clientRequestId: plan.sale.clientRequestId,
-      serviceOrderId: plan.sale.serviceOrderId,
+    const parsed = posCommandSchema.safeParse({
+      branch_id: branchId, date: field("received_date"), customer_name: field("customer_name"), customer_phone: field("customer_phone"),
+      shoe_brand: field("shoe_brand"), shoe_model: field("shoe_model"), shoe_color: field("shoe_color"), shoe_size: field("shoe_size"), notes: field("notes"),
+      gross: Number(field("gross_amount")), discount: Number(field("discount_amount")), net: Number(field("net_amount")), payment_method: field("payment_method"), services,
     });
-    if (!saleRes.success) {
-      await logAudit({
-        action: "CREATE",
-        entity: "service_order",
-        entity_id: order.id,
-        actor_id: profile.id,
-        actor_name: profile.display_name,
-        tenant_id: tenantId,
-        detail: {
-          order_no: orderNo,
-          received_date: receivedDate,
-          received_at: receivedAt,
-          customer_name: customerName,
-          customer_phone: customerPhone,
-          net_amount: netAmount,
-          payment_method: paymentMethod,
-          services: serviceIdsRaw.length,
-          posted_to_books: false,
-          books_error: saleRes.error ?? "ไม่ทราบสาเหตุ",
-        },
-      });
-      return {
-        error: `รับงาน ${orderNo} แล้ว แต่ลงบัญชีไม่สำเร็จ: ${saleRes.error ?? "ไม่ทราบสาเหตุ"}`,
-        orderNo,
-      };
-    }
-    postedToBooks = true;
-  }
-
-  await logAudit({
-    action: "CREATE",
-    entity: "service_order",
-    entity_id: order.id,
-    actor_id: profile.id,
-    actor_name: profile.display_name,
-    tenant_id: tenantId,
-    detail: {
-      order_no: orderNo,
-      received_date: receivedDate,
-      received_at: receivedAt,
-      customer_name: customerName,
-      customer_phone: customerPhone,
-      net_amount: netAmount,
-      payment_method: paymentMethod,
-      services: serviceIdsRaw.length,
-      posted_to_books: postedToBooks,
-    },
-  });
-
-  revalidatePath("/pos");
-  revalidatePath("/dashboard");
-  return { success: true, orderNo, postedToBooks };
+    if (!parsed.success) return { error: validationMessage(parsed.error) };
+    // Automatic issue remains blocked until its existing feature gate is approved.
+    const usage = await readServiceUsageConfig(tenantId);
+    const liveIssue = planLiveStockIssue({ flags: usage.flags, requestedPoint: "receive" });
+    if (mayLiveAutoIssue(usage.flags) || liveIssue.ok) console.warn("[pos] live auto-issue is blocked at server");
+    const result = await financeRpc("rrs_create_service_order", { p_actor: profile.id, p_tenant: tenantId, p_request: requestId, p_data: parsed.data });
+    await logAudit({ action: "CREATE", entity: "service_order", entity_id: String(result.id), actor_id: profile.id, actor_name: profile.display_name, tenant_id: tenantId, detail: { order_no: result.order_no, posted_to_books: result.posted_to_books, replay: result.replay } });
+    revalidatePath("/pos"); revalidatePath("/dashboard");
+    return { success: true, orderNo: String(result.order_no), orderId: String(result.id), postedToBooks: result.posted_to_books === true };
+  } catch (err) { return { error: errorMessage(err, "รับงานไม่สำเร็จ กรุณาลองซ้ำด้วยรายการเดิม") }; }
 }
 
 export async function updateOrderStatus(orderId: string, status: "received" | "in_progress" | "ready" | "delivered" | "cancelled") {
   const profile = await requireProfile();
   requireModuleWrite(profile, "pos");
-  const supabase = await createClient();
-
-  const { data: before } = await supabase
-    .from("service_orders")
-    .select("id, order_no, status, customer_name")
-    .eq("id", orderId)
-    .maybeSingle();
-
-  const updatePayload: {
-    status: "received" | "in_progress" | "ready" | "delivered" | "cancelled";
-    updated_at: string;
-    completed_at?: string;
-    delivered_at?: string;
-  } = {
-    status,
-    updated_at: new Date().toISOString(),
-  };
-
-  if (status === "ready") {
-    updatePayload.completed_at = new Date().toISOString();
-  } else if (status === "delivered") {
-    updatePayload.delivered_at = new Date().toISOString();
-  }
-
-  const { error } = await supabase
-    .from("service_orders")
-    .update(updatePayload)
-    .eq("id", orderId);
-
-  if (error) {
-    throw new Error(`ไม่สามารถอัปเดตสถานะได้: ${error.message}`);
-  }
-
-  await logAudit({
-    action: "UPDATE",
-    entity: "service_order",
-    entity_id: orderId,
-    actor_id: profile.id,
-    actor_name: profile.display_name,
-    tenant_id: profile.tenant_id,
-    detail: {
-      order_no: before?.order_no,
-      from_status: before?.status,
-      to_status: status,
-      customer_name: before?.customer_name,
-    },
-  });
-
-  revalidatePath("/pos");
-  revalidatePath("/dashboard");
-  return { success: true };
+  const tenantId = await requireTenantId(profile);
+  const result = await financeRpc("rrs_set_order_status", { p_actor: profile.id,p_tenant: tenantId,p_id: orderId,p_status: status });
+  await logAudit({ action:"UPDATE",entity:"service_order",entity_id:orderId,actor_id:profile.id,actor_name:profile.display_name,tenant_id:tenantId,detail:{to_status:status,accounting_review:result.accounting_review} });
+  revalidatePath("/pos");revalidatePath("/dashboard");
+  return { success:true,accountingReview:result.accounting_review === true };
 }

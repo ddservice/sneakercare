@@ -14,7 +14,8 @@ export async function verifyBankSlipAction(
   targetDocumentId?: string
 ): Promise<SlipVerificationResult> {
   const profile = await requireProfile();
-  requireModuleView(profile, "expenses");
+  requireModuleWrite(profile, "expenses");
+  await requireTenantId(profile);
   return verifyBankSlip(qrPayload, targetDocumentId);
 }
 

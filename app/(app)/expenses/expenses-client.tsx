@@ -618,8 +618,9 @@ export function ExpensesClient({
 
       const res = await addExpense(undefined, formData);
       if (res.success) {
-        toast.success(
-          expWithhold
+        if (res.warning) toast.warning(res.warning, { duration: 15000 });
+        else toast.success(
+          res.certificateIssued
             ? `บันทึก "${expTitle}" พร้อมออกหนังสือรับรอง 50 ทวิ แล้ว`
             : `บันทึกค่าใช้จ่าย "${expTitle}" สำเร็จเรียบร้อย`
         );

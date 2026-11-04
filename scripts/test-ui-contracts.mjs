@@ -75,7 +75,7 @@ check(taxClient.includes("คิว sandbox") && taxClient.includes("แอป�
 const pos = fs.readFileSync("app/actions/pos.ts", "utf8");
 check(pos.includes("planLiveStockIssue"), "POS เรียกปิดเส้นตัดฝั่งเซิร์ฟเวอร์", "POS ไม่ได้ปิดเส้นตัด");
 const issueAction = fs.readFileSync("app/actions/smartacc-documents.ts", "utf8");
-check(issueAction.includes("correctionOfficialIssueBlockedReason"), "ออกเลข CN ถูกบล็อกใน server action", "action ไม่อ้างตัวบล็อก CN");
+check((issueAction.includes("rrs_issue_document") && fs.readFileSync("supabase/migrations/0050_atomic_documents.sql", "utf8").includes("ใบลดหนี้/เพิ่มหนี้ยังเป็นร่าง")), "ออกเลข CN ผ่านคำสั่งที่ฐานข้อมูลบล็อกไว้", "action ไม่อ้างตัวบล็อก CN");
 const invoicingClient = fs.readFileSync("app/(app)/invoicing/invoicing-client.tsx", "utf8");
 check(!invoicingClient.includes("ใบลด-เพิ่มหนี้ออกเลขทันที"), "หน้าเอกสารไม่บอกว่า CN ออกเลขทันที", "ยังบอกว่า CN ออกเลขทันที");
 const ocrAction = fs.readFileSync("app/actions/smartacc-expenses.ts", "utf8");
@@ -87,3 +87,6 @@ if (failures) {
 } else {
   console.log("\n[ui-contracts] ผ่านทั้งหมด — ยังไม่ใช่การคลิกเบราว์เซอร์");
 }
+
+const slipVerifier = fs.readFileSync("lib/smartacc/slip-verifier.ts", "utf8");
+if (!slipVerifier.includes("isValid: false") || slipVerifier.includes("isValid: true") || slipVerifier.includes(".from(")) throw new Error("Unconfigured slip verification must fail closed without financial writes");

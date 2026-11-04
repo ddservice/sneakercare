@@ -27,8 +27,7 @@ export async function generateDocumentNumber(
   });
 
   if (error || !data) {
-    const randomSeq = Math.floor(1000 + Math.random() * 9000);
-    return `${config.prefix}-${dateStr}-${randomSeq}`;
+    throw new Error('ออกเลขเอกสารไม่สำเร็จ ยังไม่บันทึกเอกสาร กรุณาลองใหม่ด้วยรายการเดิม');
   }
 
   return String(data);

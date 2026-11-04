@@ -3,13 +3,13 @@
 import { useState, useTransition, useMemo, useRef } from "react";
 import { newRequestId } from "@/lib/idempotency";
 import {
+  fetchRecentDailySales,
   saveDailySale,
   deleteDailySale,
   recordArPayment,
   deleteArPayment,
   type DailySaleInput,
   type DailySaleWithPayments,
-  type ArPaymentRecord,
 } from "@/app/actions/daily-sales";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -107,6 +107,7 @@ export function DailyEntryClient({
 
   // Form State
   const [editingId, setEditingId] = useState<number | null>(null);
+  const [editingVersion, setEditingVersion] = useState<number | undefined>();
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
   const [sizeS, setSizeS] = useState<number>(0);
   const [sizeM, setSizeM] = useState<number>(0);
@@ -269,106 +270,39 @@ export function DailyEntryClient({
     setCollectTarget(null);
   }
 
-  // Handle AR payment submit
+  async function reloadRecords() {
+    try { setRecords(await fetchRecentDailySales()); }
+    catch { toast.error("บันทึกแล้ว แต่โหลดรายการใหม่ไม่สำเร็จ กรุณาโหลดหน้าใหม่"); }
+  }
+
   async function handleCollectSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!collectTarget) return;
-    if (collectAmount <= 0) {
-      toast.error("กรุณาระบุจำนวนเงินที่รับชำระ");
-      return;
-    }
-
+    if (collectTarget.legacy_unallocated > 0) { toast.error("มีเงินรับเก่าที่ยังไม่จับคู่ กรุณากระทบยอดก่อนรับเพิ่ม"); return; }
     startTransition(async () => {
-      const res = await recordArPayment({
-        sale_date: collectTarget.date,
-        received_date: collectDate,
-        amount: collectAmount,
-        pay_method: collectMethod,
-        notes: collectNotes,
-        clientRequestId: paymentRequestIdRef.current,
-      });
-
+      const res = await recordArPayment({ sale_id: collectTarget.id,received_date:collectDate,amount:collectAmount,pay_method:collectMethod,notes:collectNotes,clientRequestId:paymentRequestIdRef.current });
       if (res.success) {
         paymentRequestIdRef.current = newRequestId();
-        toast.success(`บันทึกการรับชำระยอดค้าง ${collectAmount.toLocaleString()} ฿ เรียบร้อย`);
-        setRecords((prev) =>
-          prev.map((r) => {
-            if (r.date === collectTarget.date) {
-              const newPayments: ArPaymentRecord[] = [
-                {
-                  id: Date.now(),
-                  sale_date: collectTarget.date,
-                  received_date: collectDate,
-                  amount: collectAmount,
-                  pay_method: collectMethod,
-                  notes: collectNotes,
-                  recorded_by: "คุณ",
-                  created_at: new Date().toISOString(),
-                },
-                ...(r.payments || []),
-              ];
-              const newArPaid = r.total_ar_paid + collectAmount;
-              const newTotalPaid = r.amount_paid + newArPaid;
-              const newOutstanding = Math.max(0, r.total_revenue - newTotalPaid);
-              const newStatus = newOutstanding <= 0 ? "ชำระครบ" : "ค้างชำระ";
-
-              return {
-                ...r,
-                payments: newPayments,
-                total_ar_paid: newArPaid,
-                total_paid: newTotalPaid,
-                outstanding: newOutstanding,
-                payment_status: newStatus,
-              };
-            }
-            return r;
-          })
-        );
-        closeCollectModal();
-      } else {
-        toast.error(res.error || "เกิดข้อผิดพลาดในการบันทึกการรับชำระ");
-      }
+        toast.success("บันทึกรับชำระแล้ว"); await reloadRecords(); closeCollectModal();
+      } else toast.error(res.error || "บันทึกไม่สำเร็จ");
     });
   }
 
-  // Delete AR payment
   async function handleDeleteArPayment(paymentId: number, saleDate: string, amount: number) {
-    if (!confirm(`คุณต้องการลบประวัติการรับชำระ ${amount.toLocaleString()} ฿ ใช่หรือไม่?`)) return;
-
+    if (!confirm(`ลบรายการรับชำระ ${amount.toLocaleString()} บาทหรือไม่?`)) return;
     startTransition(async () => {
-      const res = await deleteArPayment(paymentId, saleDate);
-      if (res.success) {
-        toast.success("ลบประวัติการรับชำระเงินเรียบร้อย");
-        setRecords((prev) =>
-          prev.map((r) => {
-            if (r.date === saleDate) {
-              const newPayments = (r.payments || []).filter((p) => p.id !== paymentId);
-              const newArPaid = Math.max(0, r.total_ar_paid - amount);
-              const newTotalPaid = r.amount_paid + newArPaid;
-              const newOutstanding = Math.max(0, r.total_revenue - newTotalPaid);
-              const newStatus = newOutstanding <= 0 ? "ชำระครบ" : "ค้างชำระ";
-
-              return {
-                ...r,
-                payments: newPayments,
-                total_ar_paid: newArPaid,
-                total_paid: newTotalPaid,
-                outstanding: newOutstanding,
-                payment_status: newStatus,
-              };
-            }
-            return r;
-          })
-        );
-      } else {
-        toast.error(res.error || "ไม่สามารถลบรายการได้");
-      }
+      const res = await deleteArPayment(paymentId,saleDate);
+      if (res.success) { toast.success("ลบรายการรับชำระแล้ว"); await reloadRecords(); }
+      else toast.error(res.error || "ลบไม่สำเร็จ");
     });
   }
 
   // Edit record
   function handleEdit(record: DailySaleWithPayments) {
+    if (record.service_order_id) { toast.error("ยอดนี้มาจากใบรับงาน กรุณาตรวจจากหน้ารับงานเพื่อไม่ให้ยอดแยกกัน"); return; }
     setEditingId(record.id);
+    setEditingVersion(record.version);
+    saleRequestIdRef.current = newRequestId();
     setDate(record.date);
     setSizeS(Number(record.size_s || 0));
     setSizeM(Number(record.size_m || 0));
@@ -406,6 +340,7 @@ export function DailyEntryClient({
   // Reset form
   function handleReset() {
     setEditingId(null);
+    setEditingVersion(undefined);
     setDate(new Date().toISOString().slice(0, 10));
     setSizeS(0);
     setSizeM(0);
@@ -436,6 +371,7 @@ export function DailyEntryClient({
     startTransition(async () => {
       const payload: DailySaleInput = {
         id: editingId || undefined,
+        version: editingVersion,
         date,
         size_s: sizeS,
         size_m: sizeM,
@@ -449,58 +385,15 @@ export function DailyEntryClient({
         grand_total: netTotal,
         payment_status: currentPaymentStatus,
         extra_items: extraSummaryStr,
-        clientRequestId: editingId ? undefined : saleRequestIdRef.current,
+        clientRequestId: saleRequestIdRef.current,
       };
 
       const res = await saveDailySale(payload);
       if (res.success) {
-        if (!editingId) saleRequestIdRef.current = newRequestId();
-        toast.success(editingId ? "อัปเดตบันทึกยอดขายรายวันสำเร็จ" : "บันทึกยอดขายประจำวันสำเร็จ");
-        handleReset();
-
-        setRecords((prev) => {
-          if (editingId) {
-            return prev.map((r) =>
-              r.id === editingId
-                ? {
-                    ...r,
-                    ...payload,
-                    id: editingId,
-                    total_revenue: netTotal,
-                    amount_paid: actualReceived,
-                    grand_total: grossTotal,
-                    transfer_amount: transferAmount,
-                    cash_amount: cashAmount,
-                    total_paid: actualReceived + (r.total_ar_paid || 0),
-                    outstanding: Math.max(0, netTotal - (actualReceived + (r.total_ar_paid || 0))),
-                    payment_status: currentPaymentStatus,
-                  }
-                : r
-            );
-          } else {
-            return [
-              {
-                id: Date.now(),
-                ...payload,
-                total_revenue: netTotal,
-                amount_paid: actualReceived,
-                grand_total: grossTotal,
-                transfer_amount: transferAmount,
-                cash_amount: cashAmount,
-                payments: [],
-                total_ar_paid: 0,
-                total_paid: actualReceived,
-                outstanding: Math.max(0, netTotal - actualReceived),
-                payment_status: currentPaymentStatus,
-                recorded_by: "คุณ",
-              } as DailySaleWithPayments,
-              ...prev,
-            ];
-          }
-        });
-      } else {
-        toast.error(res.error || "เกิดข้อผิดพลาดในการบันทึกยอดขาย");
-      }
+        saleRequestIdRef.current = newRequestId();
+        toast.success(editingId ? "แก้ไขยอดขายแล้ว" : "บันทึกยอดขายแล้ว");
+        handleReset(); await reloadRecords();
+      } else toast.error(res.error || "บันทึกไม่สำเร็จ");
     });
   }
 
@@ -509,10 +402,10 @@ export function DailyEntryClient({
     if (!confirm("คุณต้องการลบบันทึกยอดขายของวันนี้ใช่หรือไม่?")) return;
 
     startTransition(async () => {
-      const res = await deleteDailySale(id);
+      const res = await deleteDailySale(id, records.find(r => r.id === id)?.version ?? 0);
       if (res.success) {
         toast.success("ลบบันทึกยอดขายเรียบร้อย");
-        setRecords((prev) => prev.filter((r) => r.id !== id));
+        await reloadRecords();
       } else {
         toast.error(res.error || "ไม่สามารถลบรายการได้");
       }
@@ -1321,13 +1214,14 @@ export function DailyEntryClient({
 
         {/* ── RIGHT COLUMN: Historical Log, AR & View Analytics (6 Cols) ── */}
         <div className="lg:col-span-6 space-y-6">
+          {records.some(record => record.legacy_unallocated > 0) && <p role="alert" className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">มีเงินรับเก่าที่ยังจับคู่ยอดขายไม่ได้ ระบบจะกันรับเพิ่มในวันที่เกี่ยวข้องไว้ก่อน กรุณาส่งชุดสำนักงานบัญชีจากหน้ารายงานเพื่อตรวจหลักฐาน</p>}
           <Card className="border-slate-200 shadow-sm">
             <CardHeader className="p-4 bg-slate-50 border-b border-slate-200 space-y-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div>
                   <CardTitle className="text-sm font-bold text-slate-900 flex items-center gap-1.5">
                     <BarChart3 className="h-4 w-4 text-teal-700" />
-                    สรุปยอดขาย ({filteredRecords.length} วัน)
+                    สรุปยอดขาย ({filteredRecords.length} รายการ)
                   </CardTitle>
                   <CardDescription className="text-xs text-slate-500">
                     รวม {viewStats.pairs} คู่ | ยอดขายรวม {viewStats.revenue.toLocaleString()} ฿ | ค้างชำระ {viewStats.outstanding.toLocaleString()} ฿

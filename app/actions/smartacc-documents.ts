@@ -4,13 +4,16 @@
 // ext_billing_references มี tenant_id แล้ว (migration 0036) — ทุก query ในไฟล์นี้กรอง/ระบุ
 // tenant_id ตามด้วย tenantFilter()/requireTenantId() แล้วครบทุกจุด
 import { revalidatePath } from "next/cache";
-import { requireProfile, requireModuleView, requireModuleWrite } from "@/lib/auth";
+import { financeRpc } from "@/lib/finance-rpc";
+import { documentPayloadSchema, validationMessage } from "@/lib/finance-validation";
+import { moneyNumber } from "@/lib/money";
+import { bangkokToday } from "@/lib/purchase-receipts";
+import { requireProfile, requireModuleView, requireModuleWrite, type Profile } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { generateDocumentNumber, isDocumentType, type DocumentType } from "@/lib/smartacc/numbering";
+import { type DocumentType } from "@/lib/smartacc/numbering";
 import { generatePromptPayPayload } from "@/lib/smartacc/promptpay";
 import { withId, text } from "@/lib/db-rows";
 import { requireTenantId, tenantFilter } from "@/lib/tenant";
-import { getSelectedBranchId } from "@/lib/branch";
 import { resolveBranchVat } from "@/lib/branch-vat";
 import { errorMessage } from "@/lib/errors";
 import { logAudit } from "@/lib/audit";
@@ -18,31 +21,16 @@ import { fetchWhtCertificates } from "@/app/actions/wht";
 import { fetchShopProfile } from "@/app/actions/shop-settings";
 import { certificateToWhtRecord } from "@/lib/wht";
 import {
-  canIssueTaxInvoice,
   documentVatRate,
   settleDocumentVat,
 } from "@/lib/vat";
 import {
   canConvertDocument,
-  canDeleteDocument,
-  canVoidDocument,
-  deleteBlockedReason,
-  voidBlockedReason,
-  appendVoidNote,
 } from "@/lib/smartacc/lifecycle";
 import {
   isCorrectionType,
-  marksSourceConverted,
-  planCorrection,
 } from "@/lib/smartacc/correction";
 import { embedSellerSnapshot, planSellerSnapshot } from "@/lib/smartacc/snapshot";
-import {
-  canIssueOfficialNumber,
-  consumesOfficialNumberOnCreate,
-  correctionOfficialIssueBlockedReason,
-  issueBlockedReason,
-  planDraftNumber,
-} from "@/lib/smartacc/issue";
 
 /** หนึ่งรายการในสมุดที่อยู่ลูกค้า (sc_settings.dbd_company_registry) */
 export type DbdRegistryEntry = {
@@ -63,6 +51,7 @@ export type DocumentItemInput = {
 };
 
 export type CreateDocumentPayload = {
+  requestId: string;
   docType: DocumentType;
   companyName: string;
   taxId?: string;
@@ -371,6 +360,7 @@ export async function fetchSmartAccDocuments(filterType?: DocumentType) {
 
   const docsTenantId = await tenantFilter(profile);
   if (docsTenantId) query = query.eq("tenant_id", docsTenantId);
+  if (profile.role === "co_admin") query = query.eq("branch_id", profile.branch_id!);
   if (filterType) {
     query = query.eq("doc_type", filterType);
   }
@@ -380,291 +370,61 @@ export async function fetchSmartAccDocuments(filterType?: DocumentType) {
   return data ?? [];
 }
 
-async function notesWithSellerSnapshot(notes: string | undefined): Promise<string> {
-  try {
-    const shop = await fetchShopProfile();
-    return embedSellerSnapshot(notes, planSellerSnapshot(shop));
-  } catch (err) {
-    console.error("[createDocument] เก็บภาพผู้ขายไม่สำเร็จ:", err);
-    return String(notes ?? "").trim();
-  }
-}
-
 /**
  * Create or save a new document with dynamic numbering and PromptPay payload
  */
 export async function createSmartAccDocument(payload: CreateDocumentPayload) {
   const profile = await requireProfile();
   requireModuleWrite(profile, "invoicing");
-  const supabase = createAdminClient();
-  let tenantId: string;
+  const tenantId = await requireTenantId(profile);
+  return commitSmartAccDocument(profile, tenantId, payload, false);
+}
+
+async function commitSmartAccDocument(profile: Profile, tenantId: string, raw: CreateDocumentPayload, convertSource: boolean) {
+  const parsed = documentPayloadSchema.safeParse(raw);
+  if (!parsed.success) return { success: false as const, error: validationMessage(parsed.error) };
+  const payload = parsed.data;
   try {
-    tenantId = await requireTenantId(profile);
-  } catch (err) {
-    return { success: false as const, error: errorMessage(err, "ไม่สามารถระบุกิจการที่จะออกเอกสารได้") };
-  }
-
-  // 1. VAT — อ่านจากสาขาที่เลือก ไม่เชื่อค่าจากหน้าจอ (แต่ละสาขาคนละนิติบุคคล)
-  const vatCtx = await resolveBranchVat(profile);
-  if (payload.docType === "TAX_INVOICE" && !vatCtx.branchSelected) {
-    return {
-      success: false as const,
-      error: "เลือกสาขาที่หัวเว็บก่อน — VAT เป็นของแต่ละสาขา (คนละนิติบุคคล)",
-    };
-  }
-  const vatRegistered = vatCtx.vatRegistered;
-
-  if (payload.docType === "TAX_INVOICE" && !canIssueTaxInvoice(vatRegistered)) {
-    const branchHint = vatCtx.branchName ? `สาขา ${vatCtx.branchName}` : "สาขานี้";
-    return {
-      success: false as const,
-      error: `${branchHint} ยังไม่จด VAT จึงออกใบกำกับภาษีไม่ได้ — ตั้งค่าในการ์ดสาขาที่ /settings หรือออกใบเสร็จเงินสด`,
-    };
-  }
-
-  const subtotal = payload.items.reduce((sum, item) => sum + item.totalLineAmount, 0);
-  const vatRate = documentVatRate(vatRegistered, payload.docType, payload.chargeVat);
-  const totals = settleDocumentVat(subtotal, vatRate);
-  const vatAmount = totals.vatAmount;
-  const grandTotal = totals.grandTotal;
-
-  if (isCorrectionType(payload.docType)) {
-    if (!payload.refParentDocId) {
-      return { success: false as const, error: "ใบลดหนี้/เพิ่มหนี้ต้องอ้างเอกสารต้นทาง" };
+    const ctx = await resolveBranchVat(profile);
+    if (!ctx.branchId) return { success: false as const, error: "เลือกสาขาที่หัวเว็บก่อนออกเอกสาร" };
+    let rate = documentVatRate(ctx.vatRegistered, payload.docType, payload.chargeVat);
+    if (isCorrectionType(payload.docType) && payload.refParentDocId) {
+      const db = createAdminClient();
+      const { data: parent } = await db.schema("extension_layer").from("ext_documents").select("vat_rate").eq("id", payload.refParentDocId).eq("tenant_id", tenantId).maybeSingle();
+      if (!parent) return { success: false as const, error: "ไม่พบเอกสารต้นทาง" };
+      rate = Number(parent.vat_rate) === 7 ? 7 : 0;
     }
-    const { data: parent } = await supabase
-      .schema("extension_layer")
-      .from("ext_documents")
-      .select("id, doc_type, status, grand_total")
-      .eq("id", payload.refParentDocId)
-      .eq("tenant_id", tenantId)
-      .maybeSingle();
-    if (!parent) {
-      return { success: false as const, error: "ไม่พบเอกสารต้นทางในกิจการนี้" };
-    }
-    const { data: siblings } = await supabase
-      .schema("extension_layer")
-      .from("ext_documents")
-      .select("doc_type, grand_total, status")
-      .eq("ref_parent_doc_id", parent.id)
-      .eq("tenant_id", tenantId)
-      .neq("status", "VOID");
-    const existingCreditTotal = (siblings ?? [])
-      .filter((row) => row.doc_type === "CREDIT_NOTE")
-      .reduce((sum, row) => sum + Number(row.grand_total || 0), 0);
-    const existingDebitTotal = (siblings ?? [])
-      .filter((row) => row.doc_type === "DEBIT_NOTE")
-      .reduce((sum, row) => sum + Number(row.grand_total || 0), 0);
-    const planned = planCorrection({
-      kind: payload.docType,
-      parentType: String(parent.doc_type),
-      parentStatus: String(parent.status),
-      parentGrandTotal: Number(parent.grand_total || 0),
-      existingCreditTotal,
-      existingDebitTotal,
-      requestAmount: grandTotal,
+    if (payload.docType === "TAX_INVOICE" && !ctx.vatRegistered) return { success: false as const, error: "สาขานี้ยังไม่จด VAT" };
+    const lines = payload.items.map(item => {
+      const total = moneyNumber(item.quantity * item.unitPrice - item.discount);
+      if (total < 0 || Math.abs(total - item.totalLineAmount) > 0.005) throw new Error("ยอดรายการไม่ตรงกับจำนวน ราคา และส่วนลด");
+      return { name: item.itemName, quantity: item.quantity, unit_price: item.unitPrice, discount: item.discount, total };
     });
-    if (!planned.ok) {
-      return { success: false as const, error: planned.error };
-    }
-  }
-
-  // 2. ใบกำกับ/ใบเสร็จ/ใบลด-เพิ่มหนี้กินเลขตอนสร้าง · ประเภทอื่นใช้เลขร่างจนกว่าจะกดออกเลข
-  const docNumber = consumesOfficialNumberOnCreate(payload.docType)
-    ? await generateDocumentNumber(payload.docType, tenantId, new Date(payload.issueDate))
-    : planDraftNumber(payload.issueDate, Math.random().toString(36).slice(2, 10));
-  const shareToken = "doc_" + Math.random().toString(36).substring(2, 10) + Date.now().toString(36);
-
-  // 3. Generate Dynamic PromptPay QR Payload
-  let promptpayPayload: string | null = null;
-  if (payload.promptPayTarget) {
-    promptpayPayload = generatePromptPayPayload(payload.promptPayTarget, grandTotal);
-  }
-
-  const customerName = payload.companyName.trim();
-  if (!customerName) {
-    return { success: false as const, error: "กรุณาระบุชื่อลูกค้าบนเอกสาร" };
-  }
-
-  // 4. Upsert Contact — ต้องได้ contact_id จริงก่อนออกเอกสาร ไม่งั้นใบเสนอราคา/ใบแจ้งหนี้
-  // พิมพ์โดยไม่มีชื่อลูกค้า (เจอจริง: เดิมประกาศ contactId = null แล้วไม่เคย insert ext_contacts)
-  const taxDigits = (payload.taxId || "").replace(/\D/g, "");
-  let contactQuery = supabase
-    .schema("extension_layer")
-    .from("ext_contacts")
-    .select("id")
-    .eq("tenant_id", tenantId);
-  if (taxDigits.length === 13) {
-    contactQuery = contactQuery.eq("tax_id", taxDigits);
-  } else {
-    contactQuery = contactQuery.eq("company_name", customerName);
-  }
-  const { data: existingRows } = await contactQuery.limit(1);
-  const existingContact = existingRows?.[0] ?? null;
-
-  const contactFields = {
-    company_name: customerName,
-    tax_id: taxDigits || payload.taxId || null,
-    branch_code: payload.branchCode || "00000",
-    address: payload.address || null,
-    phone: payload.phone || null,
-    email: payload.email || null,
-    tenant_id: tenantId,
-  };
-
-  let contactId: string | null = existingContact?.id ?? null;
-  if (contactId) {
-    await supabase.schema("extension_layer").from("ext_contacts").update(contactFields).eq("id", contactId);
-  } else {
-    const { data: insertedContact, error: contactErr } = await supabase
-      .schema("extension_layer")
-      .from("ext_contacts")
-      .insert(contactFields)
-      .select("id")
-      .single();
-    if (contactErr || !insertedContact) {
-      return { success: false as const, error: `บันทึกชื่อลูกค้าไม่สำเร็จ: ${contactErr?.message ?? "ไม่ทราบสาเหตุ"}` };
-    }
-    contactId = insertedContact.id;
-  }
-
-  if (payload.companyName) {
-    try {
-      // สมุดที่อยู่ลูกค้าเป็นข้อมูลต่อ tenant ไม่ใช่ของกลาง — ใช้ tenantId ที่ได้มาแล้วตอนต้นฟังก์ชัน
-      const { data: regSetting } = await supabase.from("sc_settings")
-        .select("value")
-        .eq("key", "dbd_company_registry")
-        .eq("tenant_id", tenantId)
-        .maybeSingle();
-
-      // สมุดที่อยู่ลูกค้าที่เก็บเป็น JSON ก้อนเดียวใน sc_settings (ดูหัวข้อ SmartAcc ข้อ 4 ใน CLAUDE.md)
-      let currentRegistry: DbdRegistryEntry[] = [];
-      if (regSetting?.value) {
-        currentRegistry = JSON.parse(regSetting.value);
+    const totals = settleDocumentVat(lines.reduce((sum, line) => sum + line.total, 0), rate);
+    const seller = await fetchShopProfile();
+    if (rate === 7 || payload.docType === "TAX_INVOICE") {
+      if (!seller.name.trim() || !seller.address.trim() || !/^\d{13}$/.test(seller.taxId) || /^0+$/.test(seller.taxId)) {
+        return { success: false as const, error: "กรอกชื่อ ที่อยู่ และเลขผู้เสียภาษีของร้านให้ครบก่อนออกเอกสาร VAT" };
       }
-
-      const existingIdx = currentRegistry.findIndex(
-        (c) => (payload.taxId && c.taxId === payload.taxId) || c.companyName === payload.companyName
-      );
-
-      const newEntry = {
-        companyName: payload.companyName,
-        taxId: payload.taxId || "",
-        branchCode: payload.branchCode || "00000",
-        address: payload.address || "",
-        phone: payload.phone || "",
-        email: payload.email || "",
-      };
-
-      if (existingIdx >= 0) {
-        currentRegistry[existingIdx] = { ...currentRegistry[existingIdx], ...newEntry };
-      } else {
-        currentRegistry.unshift(newEntry);
-      }
-
-      await supabase.from("sc_settings").upsert(
-        {
-          key: "dbd_company_registry",
-          value: JSON.stringify(currentRegistry.slice(0, 100)),
-          tenant_id: tenantId,
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: "tenant_id,key" }
-      );
-    } catch (err) {
-      // เอกสารหลักสร้างสำเร็จไปแล้ว แค่การ "จำลูกค้าไว้ค้นครั้งถัดไป" ล้มเหลว — ไม่ทำให้ทั้ง
-      // ฟังก์ชันพัง แต่ log ไว้ ไม่งั้นจะดูเหมือนฟีเจอร์จำลูกค้าใช้งานได้ทั้งที่จริงๆ เขียนไม่ลง
-      console.error("[createDocument] บันทึกลูกค้าลง dbd_company_registry ล้มเหลว:", err);
     }
+    const result = await financeRpc("rrs_create_document", {
+      p_actor: profile.id, p_tenant: tenantId, p_request: payload.requestId,
+      p_data: {
+        branch_id: ctx.branchId, doc_type: payload.docType, issue_date: payload.issueDate,
+        due_date: payload.dueDate || null, credit_term_days: payload.creditTermDays || 0,
+        charge_vat: rate === 7, contact: { company_name: payload.companyName, tax_id: payload.taxId || "", branch_code: payload.branchCode || "00000", address: payload.address || "", phone: payload.phone || "", email: payload.email || "" },
+        items: lines, billing_refs: [...new Set(payload.billingRefDocIds || [])],
+        source_doc_id: payload.refParentDocId || null, convert_source: convertSource,
+        notes: embedSellerSnapshot(payload.notes, planSellerSnapshot(seller)),
+        promptpay_payload: payload.promptPayTarget ? generatePromptPayPayload(payload.promptPayTarget, totals.grandTotal) : null,
+      },
+    });
+    await logAudit({ action: "CREATE", entity: "document", entity_id: String(result.id), actor_id: profile.id, actor_name: profile.display_name, tenant_id: tenantId, detail: { doc_number: result.doc_number, doc_type: payload.docType, replay: result.replay } });
+    revalidatePath("/invoicing"); revalidatePath("/billing-notes"); revalidatePath("/tax-filing");
+    return { success: true as const, docId: String(result.id), docNumber: String(result.doc_number), shareToken: String(result.share_token) };
+  } catch (err) {
+    return { success: false as const, error: errorMessage(err, "บันทึกเอกสารไม่สำเร็จ") };
   }
-
-  // 5. Insert Document
-  //
-  // ⚠️ [แก้บั๊กจริง 2026-09-17] เดิมใส่ `profile.branch_id` ตรงๆ แต่คอลัมน์นี้ FK ไป
-  // `extension_layer.ext_branches` (ตารางว่างที่แอปไม่เคยใช้) ในขณะที่ UUID ของโปรไฟล์ชี้
-  // `inv_branches` ⇒ insert โดนปฏิเสธทุกครั้ง แล้ว `throw` ทำให้ Next โชว์ overlay
-  // "Server Components render" แทนข้อความไทย ตอนนี้ใช้สาขาที่เลือกที่หัวเว็บ (คุกกี้) และถ้า
-  // FK เก่ายังไม่ย้าย (ก่อน apply 0039) ลองใส่ null อีกรอบ — เอกสารผูก tenant อยู่แล้ว
-  const selectedBranchId = await getSelectedBranchId(profile);
-  const docRow = {
-    doc_type: payload.docType,
-    doc_number: docNumber,
-    contact_id: contactId,
-    tenant_id: tenantId,
-    issue_date: payload.issueDate,
-    due_date: payload.dueDate || null,
-    credit_term_days: payload.creditTermDays || 0,
-    status: "DRAFT" as const,
-    subtotal_amount: totals.subtotal,
-    discount_amount: 0.0,
-    vat_rate: vatRate,
-    vat_amount: vatAmount,
-    grand_total: grandTotal,
-    promptpay_payload: promptpayPayload,
-    share_token: shareToken,
-    notes: await notesWithSellerSnapshot(payload.notes),
-    ref_parent_doc_id: payload.refParentDocId || null,
-    ref_parent_doc_number: payload.refParentDocNumber || null,
-  };
-
-  const insertDoc = (branchId: string | null) =>
-    supabase
-      .schema("extension_layer")
-      .from("ext_documents")
-      .insert({ ...docRow, branch_id: branchId })
-      .select("id, doc_number")
-      .single();
-
-  let { data: doc, error: docErr } = await insertDoc(selectedBranchId);
-  if (docErr && selectedBranchId && /ext_documents_branch_id_fkey/.test(docErr.message)) {
-    ({ data: doc, error: docErr } = await insertDoc(null));
-  }
-
-  if (docErr || !doc) {
-    return { success: false as const, error: `สร้างเอกสารไม่สำเร็จ: ${docErr?.message ?? "ไม่ทราบสาเหตุ"}` };
-  }
-
-  // 6. Insert Line Items
-  if (payload.items.length > 0) {
-    const lineItems = payload.items.map((item, idx) => ({
-      document_id: doc.id,
-      item_name: item.itemName,
-      quantity: item.quantity,
-      unit_price: item.unitPrice,
-      discount: item.discount,
-      total_line_amount: item.totalLineAmount,
-      sort_order: idx,
-      tenant_id: tenantId,
-    }));
-
-    await supabase
-      .schema("extension_layer")
-      .from("ext_document_items")
-      .insert(lineItems);
-  }
-
-  // 7. Insert Billing References if converting DOs
-  if (payload.billingRefDocIds && payload.billingRefDocIds.length > 0) {
-    for (const refId of payload.billingRefDocIds) {
-      await supabase
-        .schema("extension_layer")
-        .from("ext_billing_references")
-        .insert({
-          billing_note_id: doc.id,
-          ref_doc_id: refId,
-          ref_doc_type: "DO",
-          ref_doc_number: docNumber,
-          ref_date: payload.issueDate,
-          total_amount: grandTotal,
-          balance_due: grandTotal,
-          tenant_id: tenantId,
-        });
-    }
-  }
-
-  revalidatePath("/invoicing");
-  revalidatePath("/billing-notes");
-  return { success: true, docId: doc.id, docNumber: doc.doc_number, shareToken };
 }
 
 /**
@@ -712,6 +472,7 @@ export async function convertDocument(sourceDocId: string, targetDocType: Docume
   }));
 
   const payload: CreateDocumentPayload = {
+    requestId: `convert:${sourceDocId}:${targetDocType}`,
     docType: targetDocType,
     companyName: sourceDoc.ext_contacts?.company_name || "ลูกค้าทั่วไป",
     taxId: sourceDoc.ext_contacts?.tax_id || undefined,
@@ -719,7 +480,7 @@ export async function convertDocument(sourceDocId: string, targetDocType: Docume
     address: sourceDoc.ext_contacts?.address || undefined,
     phone: sourceDoc.ext_contacts?.phone || undefined,
     email: sourceDoc.ext_contacts?.email || undefined,
-    issueDate: new Date().toISOString().slice(0, 10),
+    issueDate: bangkokToday(),
     dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
     creditTermDays: sourceDoc.credit_term_days || 30,
     items,
@@ -729,17 +490,8 @@ export async function convertDocument(sourceDocId: string, targetDocType: Docume
     ...(Number(sourceDoc.vat_rate) === 7 ? { chargeVat: true } : {}),
   };
 
-  const res = await createSmartAccDocument(payload);
+  const res = await commitSmartAccDocument(profile, tenantId, payload, !isCorrectionType(targetDocType));
   if (!res.success) return res;
-
-  if (marksSourceConverted(targetDocType)) {
-    await supabase
-      .schema("extension_layer")
-      .from("ext_documents")
-      .update({ status: "CONVERTED" })
-      .eq("id", sourceDocId)
-      .eq("tenant_id", tenantId);
-  }
 
   revalidatePath("/invoicing");
   return res;
@@ -754,279 +506,37 @@ export async function convertDocument(sourceDocId: string, targetDocType: Docume
 export async function deleteSmartAccDocument(docId: string) {
   const profile = await requireProfile();
   requireModuleWrite(profile, "invoicing");
-  const supabase = createAdminClient();
-  let tenantId: string;
-  try {
-    tenantId = await requireTenantId(profile);
-  } catch (err) {
-    return { success: false as const, error: errorMessage(err, "ไม่สามารถระบุกิจการที่จะลบเอกสารได้") };
-  }
-
-  const { data: doomed, error: fetchErr } = await supabase
-    .schema("extension_layer")
-    .from("ext_documents")
-    .select("id, doc_type, doc_number, issue_date, status, grand_total, notes, ref_parent_doc_number, ext_contacts(company_name, tax_id)")
-    .eq("id", docId)
-    .eq("tenant_id", tenantId)
-    .maybeSingle();
-
-  if (fetchErr || !doomed) {
-    return { success: false as const, error: "ไม่พบเอกสารที่ต้องการลบ" };
-  }
-
-  const { data: billedAs } = await supabase
-    .schema("extension_layer")
-    .from("ext_billing_references")
-    .select("billing_note_id")
-    .eq("ref_doc_id", docId)
-    .eq("tenant_id", tenantId)
-    .limit(8);
-
-  const hasBillingRef = Boolean(billedAs && billedAs.length > 0);
-  const lifecycle = {
-    status: String(doomed.status),
-    hasBillingRef,
-    docType: String(doomed.doc_type),
-    docNumber: String(doomed.doc_number),
-  };
-  if (!canDeleteDocument(lifecycle)) {
-    if (hasBillingRef) {
-      const noteIds = (billedAs ?? [])
-        .map((row) => row.billing_note_id)
-        .filter((id): id is string => Boolean(id));
-      const { data: notes } = noteIds.length
-        ? await supabase
-            .schema("extension_layer")
-            .from("ext_documents")
-            .select("doc_number")
-            .in("id", noteIds)
-            .eq("tenant_id", tenantId)
-        : { data: [] as { doc_number: string }[] };
-      const nums = (notes ?? []).map((n) => n.doc_number).filter(Boolean).join(", ");
-      return {
-        success: false as const,
-        error: `เอกสารถูกอ้างในใบวางบิล${nums ? ` (${nums})` : ""} — ใช้ยกเลิก ไม่ใช่ลบ`,
-      };
-    }
-    return {
-      success: false as const,
-      error: deleteBlockedReason(lifecycle) ?? "ห้ามลบเอกสารนี้ — ใช้ยกเลิก",
-    };
-  }
-
-  const { error: slipErr } = await supabase
-    .schema("extension_layer")
-    .from("ext_slip_verifications")
-    .delete()
-    .eq("document_id", docId);
-  if (slipErr) {
-    console.error("[invoicing] ลบสลิปที่ผูกเอกสารไม่สำเร็จ:", slipErr.message);
-  }
-
-  const { error } = await supabase
-    .schema("extension_layer")
-    .from("ext_documents")
-    .delete()
-    .eq("id", docId)
-    .eq("tenant_id", tenantId);
-
-  if (error) {
-    return { success: false as const, error: `ลบเอกสารไม่ได้: ${error.message}` };
-  }
-
-  const contact = doomed.ext_contacts;
-  await logAudit({
-    action: "DELETE",
-    entity: "document",
-    entity_id: doomed.doc_number,
-    actor_id: profile.id,
-    actor_name: profile.display_name,
-    tenant_id: tenantId,
-    detail: {
-      id: doomed.id,
-      doc_type: doomed.doc_type,
-      doc_number: doomed.doc_number,
-      issue_date: doomed.issue_date,
-      status: doomed.status,
-      grand_total: doomed.grand_total,
-      company_name: contact?.company_name ?? null,
-      tax_id: contact?.tax_id ?? null,
-      notes: doomed.notes,
-    },
-  });
-
-  revalidatePath("/invoicing");
-  revalidatePath("/billing-notes");
-  revalidatePath("/tax-filing");
-  return { success: true as const, docNumber: doomed.doc_number };
+  return changeDocumentLifecycle(profile, docId, "delete", "");
 }
 
-/**
- * ยกเลิกเอกสารที่ห้ามลบ — เก็บเลขที่เดิม ตัวนับไม่ย้อน
- * ไม่แตะ sc_sales / sc_payments (คนละสายกับเอกสาร SmartAcc)
- */
 export async function voidSmartAccDocument(docId: string, reason: string) {
   const profile = await requireProfile();
   requireModuleWrite(profile, "invoicing");
-  const supabase = createAdminClient();
-  let tenantId: string;
+  if (reason.trim().length < 2) return { success: false as const, error: "กรุณาระบุเหตุผลที่ยกเลิก" };
+  return changeDocumentLifecycle(profile, docId, "void", reason.trim());
+}
+
+async function changeDocumentLifecycle(profile: Profile, docId: string, action: "delete" | "void", reason: string) {
+  const tenantId = await requireTenantId(profile);
   try {
-    tenantId = await requireTenantId(profile);
-  } catch (err) {
-    return { success: false as const, error: errorMessage(err, "ไม่สามารถระบุกิจการที่จะยกเลิกเอกสารได้") };
-  }
-
-  const why = String(reason ?? "").trim();
-  if (why.length < 2) {
-    return { success: false as const, error: "กรุณาระบุเหตุผลที่ยกเลิก" };
-  }
-
-  const { data: doc, error: fetchErr } = await supabase
-    .schema("extension_layer")
-    .from("ext_documents")
-    .select("id, doc_type, doc_number, status, notes, grand_total")
-    .eq("id", docId)
-    .eq("tenant_id", tenantId)
-    .maybeSingle();
-
-  if (fetchErr || !doc) {
-    return { success: false as const, error: "ไม่พบเอกสารที่ต้องการยกเลิก" };
-  }
-
-  const { count: billedCount } = await supabase
-    .schema("extension_layer")
-    .from("ext_billing_references")
-    .select("billing_note_id", { count: "exact", head: true })
-    .eq("ref_doc_id", docId)
-    .eq("tenant_id", tenantId);
-
-  const lifecycle = {
-    status: String(doc.status),
-    hasBillingRef: (billedCount ?? 0) > 0,
-    docType: String(doc.doc_type),
-  };
-  if (!canVoidDocument(lifecycle)) {
-    return { success: false as const, error: voidBlockedReason(lifecycle) ?? "ยกเลิกเอกสารนี้ไม่ได้" };
-  }
-
-  const { error } = await supabase
-    .schema("extension_layer")
-    .from("ext_documents")
-    .update({
-      status: "VOID",
-      notes: appendVoidNote(doc.notes, why),
-    })
-    .eq("id", docId)
-    .eq("tenant_id", tenantId)
-    .neq("status", "VOID");
-
-  if (error) {
-    return { success: false as const, error: `ยกเลิกเอกสารไม่ได้: ${error.message}` };
-  }
-
-  await logAudit({
-    action: "UPDATE",
-    entity: "document",
-    entity_id: doc.doc_number,
-    actor_id: profile.id,
-    actor_name: profile.display_name,
-    tenant_id: tenantId,
-    detail: {
-      id: doc.id,
-      doc_type: doc.doc_type,
-      doc_number: doc.doc_number,
-      from_status: doc.status,
-      to_status: "VOID",
-      reason: why,
-      official_books_touched: false,
-    },
-  });
-
-  revalidatePath("/invoicing");
-  revalidatePath("/billing-notes");
-  revalidatePath("/tax-filing");
-  return { success: true as const, docNumber: doc.doc_number };
+    const result = await financeRpc("rrs_document_lifecycle", { p_actor: profile.id, p_tenant: tenantId, p_id: docId, p_action: action, p_reason: reason });
+    await logAudit({ action: action === "delete" ? "DELETE" : "UPDATE", entity: "document", entity_id: docId, actor_id: profile.id, actor_name: profile.display_name, tenant_id: tenantId, detail: { lifecycle: action, doc_number: result.doc_number, reason, replay: result.replay } });
+    revalidatePath("/invoicing"); revalidatePath("/billing-notes"); revalidatePath("/tax-filing");
+    return { success: true as const, docNumber: String(result.doc_number) };
+  } catch (err) { return { success: false as const, error: errorMessage(err, "เปลี่ยนสถานะเอกสารไม่สำเร็จ") }; }
 }
 
 /** เปลี่ยนเลขร่างเป็นเลขทางการ — กินตัวนับครั้งเดียว เลขร่างไม่คืน */
 export async function issueSmartAccDocument(docId: string) {
   const profile = await requireProfile();
   requireModuleWrite(profile, "invoicing");
-  const supabase = createAdminClient();
-  let tenantId: string;
+  const tenantId = await requireTenantId(profile);
   try {
-    tenantId = await requireTenantId(profile);
-  } catch (err) {
-    return { success: false as const, error: errorMessage(err, "ไม่สามารถระบุกิจการที่จะออกเลขได้") };
-  }
-
-  const { data: doc, error: fetchErr } = await supabase
-    .schema("extension_layer")
-    .from("ext_documents")
-    .select("id, doc_type, doc_number, status, issue_date")
-    .eq("id", docId)
-    .eq("tenant_id", tenantId)
-    .maybeSingle();
-
-  if (fetchErr || !doc) {
-    return { success: false as const, error: "ไม่พบเอกสารที่ต้องการออกเลข" };
-  }
-
-  if (!canIssueOfficialNumber(String(doc.status), String(doc.doc_number), String(doc.doc_type))) {
-    const blocked = issueBlockedReason(String(doc.status), String(doc.doc_number), String(doc.doc_type));
-    if (correctionOfficialIssueBlockedReason(String(doc.doc_type))) {
-      return { success: false as const, error: blocked ?? "ออกเลขไม่ได้" };
-    }
-    if (String(doc.status) !== "VOID" && !String(doc.doc_number).startsWith("DRAFT-")) {
-      return { success: true as const, docNumber: doc.doc_number };
-    }
-    return {
-      success: false as const,
-      error: blocked ?? "ออกเลขไม่ได้",
-    };
-  }
-
-  if (!isDocumentType(doc.doc_type)) {
-    return { success: false as const, error: "ประเภทเอกสารนี้ยังออกเลขทางการไม่ได้" };
-  }
-
-  const official = await generateDocumentNumber(
-    doc.doc_type,
-    tenantId,
-    new Date(doc.issue_date)
-  );
-
-  const { error } = await supabase
-    .schema("extension_layer")
-    .from("ext_documents")
-    .update({ doc_number: official })
-    .eq("id", docId)
-    .eq("tenant_id", tenantId)
-    .eq("doc_number", doc.doc_number);
-
-  if (error) {
-    return { success: false as const, error: `ออกเลขไม่ได้: ${error.message}` };
-  }
-
-  await logAudit({
-    action: "UPDATE",
-    entity: "document",
-    entity_id: official,
-    actor_id: profile.id,
-    actor_name: profile.display_name,
-    tenant_id: tenantId,
-    detail: {
-      id: doc.id,
-      doc_type: doc.doc_type,
-      from_number: doc.doc_number,
-      to_number: official,
-    },
-  });
-
-  revalidatePath("/invoicing");
-  revalidatePath("/billing-notes");
-  revalidatePath("/tax-filing");
-  return { success: true as const, docNumber: official };
+    const result = await financeRpc("rrs_issue_document", { p_actor: profile.id, p_tenant: tenantId, p_id: docId });
+    await logAudit({ action: "UPDATE", entity: "document", entity_id: docId, actor_id: profile.id, actor_name: profile.display_name, tenant_id: tenantId, detail: { doc_number: result.doc_number, replay: result.replay } });
+    revalidatePath("/invoicing"); revalidatePath("/billing-notes"); revalidatePath("/tax-filing");
+    return { success: true as const, docNumber: String(result.doc_number) };
+  } catch (err) { return { success: false as const, error: errorMessage(err, "ออกเลขเอกสารไม่สำเร็จ") }; }
 }
 
 /** ใบส่งของ/ใบแจ้งหนี้ที่ยังไม่ชำระ — อนุมานจาก query จริงเช่นกัน */
@@ -1046,6 +556,7 @@ export async function fetchPendingDeliveryOrders() {
     .neq("status", "VOID");
   const pendingTenantId = await tenantFilter(profile);
   if (pendingTenantId) query = query.eq("tenant_id", pendingTenantId);
+  if (profile.role === "co_admin") query = query.eq("branch_id", profile.branch_id!);
 
   const { data, error } = await query.order("issue_date", { ascending: false });
 
