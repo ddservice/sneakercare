@@ -1019,17 +1019,23 @@ isOneToOne: false
                   ]
                 },"sc_payments": {
                   Row: {
-                    "amount": number | null,"client_request_id": string | null,"created_at": string | null,"id": number,"notes": string | null,"pay_method": string | null,"received_date": string,"recorded_by": string | null,"sale_date": string,"tenant_id": string
+                    "amount": number | null,"client_request_id": string | null,"created_at": string | null,"id": number,"notes": string | null,"pay_method": string | null,"received_date": string,"recorded_by": string | null,"sale_date": string,"sale_id": number | null,"tenant_id": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "amount"?: number | null,"client_request_id"?: string | null,"created_at"?: string | null,"id"?: number,"notes"?: string | null,"pay_method"?: string | null,"received_date"?: string,"recorded_by"?: string | null,"sale_date": string,"tenant_id"?: string
+                    "amount"?: number | null,"client_request_id"?: string | null,"created_at"?: string | null,"id"?: number,"notes"?: string | null,"pay_method"?: string | null,"received_date"?: string,"recorded_by"?: string | null,"sale_date": string,"sale_id"?: number | null,"tenant_id"?: string
                   }
                   Update: {
-                    "amount"?: number | null,"client_request_id"?: string | null,"created_at"?: string | null,"id"?: number,"notes"?: string | null,"pay_method"?: string | null,"received_date"?: string,"recorded_by"?: string | null,"sale_date"?: string,"tenant_id"?: string
+                    "amount"?: number | null,"client_request_id"?: string | null,"created_at"?: string | null,"id"?: number,"notes"?: string | null,"pay_method"?: string | null,"received_date"?: string,"recorded_by"?: string | null,"sale_date"?: string,"sale_id"?: number | null,"tenant_id"?: string
                   }
                   Relationships: [
                     {
+      foreignKeyName: "sc_payments_sale_id_fkey"
+      columns: ["sale_id"]
+isOneToOne: false
+      referencedRelation: "sc_sales"
+      referencedColumns: ["id"]
+    },{
       foreignKeyName: "sc_payments_tenant_id_fkey"
       columns: ["tenant_id"]
 isOneToOne: false
@@ -1149,14 +1155,14 @@ isOneToOne: false
                   ]
                 },"sc_sales": {
                   Row: {
-                    "amount_paid": number | null,"cash_amount": number | null,"client_request_id": string | null,"created_at": string | null,"date": string,"discount": number | null,"extra_items": string | null,"grand_total": number | null,"id": number,"last_updated": string | null,"payment_status": string | null,"recorded_by": string | null,"service_order_id": string | null,"size_l": number | null,"size_m": number | null,"size_s": number | null,"size_xl": number | null,"tenant_id": string,"total_revenue": number | null,"transfer_amount": number | null
+                    "amount_paid": number | null,"cash_amount": number | null,"client_request_id": string | null,"created_at": string | null,"date": string,"discount": number | null,"extra_items": string | null,"grand_total": number | null,"id": number,"last_updated": string | null,"payment_status": string | null,"recorded_by": string | null,"service_order_id": string | null,"size_l": number | null,"size_m": number | null,"size_s": number | null,"size_xl": number | null,"tenant_id": string,"total_revenue": number | null,"transfer_amount": number | null,"version": number
                   }
                   ComputedFields: never
                   Insert: {
-                    "amount_paid"?: number | null,"cash_amount"?: number | null,"client_request_id"?: string | null,"created_at"?: string | null,"date": string,"discount"?: number | null,"extra_items"?: string | null,"grand_total"?: number | null,"id"?: number,"last_updated"?: string | null,"payment_status"?: string | null,"recorded_by"?: string | null,"service_order_id"?: string | null,"size_l"?: number | null,"size_m"?: number | null,"size_s"?: number | null,"size_xl"?: number | null,"tenant_id"?: string,"total_revenue"?: number | null,"transfer_amount"?: number | null
+                    "amount_paid"?: number | null,"cash_amount"?: number | null,"client_request_id"?: string | null,"created_at"?: string | null,"date": string,"discount"?: number | null,"extra_items"?: string | null,"grand_total"?: number | null,"id"?: number,"last_updated"?: string | null,"payment_status"?: string | null,"recorded_by"?: string | null,"service_order_id"?: string | null,"size_l"?: number | null,"size_m"?: number | null,"size_s"?: number | null,"size_xl"?: number | null,"tenant_id"?: string,"total_revenue"?: number | null,"transfer_amount"?: number | null,"version"?: number
                   }
                   Update: {
-                    "amount_paid"?: number | null,"cash_amount"?: number | null,"client_request_id"?: string | null,"created_at"?: string | null,"date"?: string,"discount"?: number | null,"extra_items"?: string | null,"grand_total"?: number | null,"id"?: number,"last_updated"?: string | null,"payment_status"?: string | null,"recorded_by"?: string | null,"service_order_id"?: string | null,"size_l"?: number | null,"size_m"?: number | null,"size_s"?: number | null,"size_xl"?: number | null,"tenant_id"?: string,"total_revenue"?: number | null,"transfer_amount"?: number | null
+                    "amount_paid"?: number | null,"cash_amount"?: number | null,"client_request_id"?: string | null,"created_at"?: string | null,"date"?: string,"discount"?: number | null,"extra_items"?: string | null,"grand_total"?: number | null,"id"?: number,"last_updated"?: string | null,"payment_status"?: string | null,"recorded_by"?: string | null,"service_order_id"?: string | null,"size_l"?: number | null,"size_m"?: number | null,"size_s"?: number | null,"size_xl"?: number | null,"tenant_id"?: string,"total_revenue"?: number | null,"transfer_amount"?: number | null,"version"?: number
                   }
                   Relationships: [
                     {
@@ -2085,6 +2091,39 @@ isOneToOne: false
                            },
 "inv_fn_set_min_stock_level":
 { Args: { "p_branch_id": string,"p_item_id": string,"p_new_min": number }; Returns: undefined
+                           },
+"rrs_accountant_packet":
+{ Args: { "p_actor": string,"p_month": string,"p_tenant": string }; Returns: Json
+                           },
+"rrs_create_document":
+{ Args: { "p_actor": string,"p_data": Json,"p_request": string,"p_tenant": string }; Returns: Json
+                           },
+"rrs_create_service_order":
+{ Args: { "p_actor": string,"p_data": Json,"p_request": string,"p_tenant": string }; Returns: Json
+                           },
+"rrs_delete_payment":
+{ Args: { "p_actor": string,"p_id": number,"p_tenant": string }; Returns: Json
+                           },
+"rrs_delete_sale":
+{ Args: { "p_actor": string,"p_id": number,"p_tenant": string,"p_version": number }; Returns: Json
+                           },
+"rrs_document_lifecycle":
+{ Args: { "p_action": string,"p_actor": string,"p_id": string,"p_reason": string,"p_tenant": string }; Returns: Json
+                           },
+"rrs_issue_document":
+{ Args: { "p_actor": string,"p_id": string,"p_tenant": string }; Returns: Json
+                           },
+"rrs_read_sales":
+{ Args: { "p_actor": string,"p_limit": number,"p_tenant": string }; Returns: Json
+                           },
+"rrs_record_payment":
+{ Args: { "p_actor": string,"p_data": Json,"p_request": string,"p_tenant": string }; Returns: Json
+                           },
+"rrs_save_sale":
+{ Args: { "p_actor": string,"p_data": Json,"p_request": string,"p_tenant": string }; Returns: Json
+                           },
+"rrs_set_order_status":
+{ Args: { "p_actor": string,"p_id": string,"p_status": string,"p_tenant": string }; Returns: Json
                            },
 "rrs_set_period":
 { Args: { "p_closed": boolean,"p_period": string,"p_tenant": string }; Returns: Json

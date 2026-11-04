@@ -1,17 +1,18 @@
 # สถานะปัจจุบัน 2026-11-04 — release ความปลอดภัย / รับซื้อ / ส่งสำนักงานบัญชี
 
 - ขอบเขตที่เจ้าของยืนยัน: บริหารร้านและส่งข้อมูลที่กระทบยอดได้ให้สำนักงานบัญชี ไม่จัดทำ GL/งบยื่นเอง
-- Production ได้รับ emergency security migration 0048 และโครงสร้างรับซื้อ 0047 แล้ว; แอปรุ่นใหม่และ0049–0052 กำลังเตรียมปล่อย (อัปเดตผลท้ายรอบก่อนส่งงาน)
+- Production deployสำเร็จที่3e26f0092dc6054b71a6490b518e8d93bb8cb41f; 0047–0052ติดตั้งแล้ว (0048เป็นemergencyก่อนหน้า) Next16.4.5 / PM2 Node26.13.0 online; source/dependenciesของรุ่นเดิมถูกเก็บสำหรับย้อนกลับ
 - แก้ self-promotion, stock helper/numbering anonymous EXECUTE, inventory cross-tenant views, receipt direct writes, branding storage tenant prefix และปิดงวด fail-closed
 - เงิน/ใบรับงาน/เอกสารเปลี่ยนเป็น service-only atomic RPC พร้อม actor/tenant/branch, retry key, version และ DB arithmetic; เก็บเงินจริงอิง sale_id ไม่รวมซ้ำตามวันที่
 - เมนูเพิ่มสินค้าเข้าคลังรองรับร้าน/แพ็ก/จำนวน/ค่าส่ง/ส่วนลดแยกครั้ง และสถิติบาทต่อหน่วยฐานรายเดือน/เทียบร้าน
 - /reports เพิ่มชุดสำนักงานบัญชี: ยอดขาย เงินรับตามวันที่จริง ลูกหนี้ต้น/ปลายงวด ผลต่าง เอกสาร/รายการย่อย ค่าใช้จ่ายแยกแหล่ง WHT สมุดภาษีซื้อและใบเสร็จลงสมุด (สองชุดหลังส่งทุกงวด มีคำอธิบายไม่ให้บวกซ้ำ)
 - ปิดตรวจสลิปจำลองที่เคยสร้าง VERIFIED/PAID โดยไม่ตรวจธนาคารจริง; ยังไม่เชื่อม provider จึงตอบว่ายังยืนยันไม่ได้ ไม่มีการเขียนยอด
 - ปิด bulk import สต๊อกที่เคยเขียน current_qty/avg_cost ตรง และรายจ่ายที่เคยเข้าเฉพาะตารางรายงาน: ใช้ /stock-in /adjustments /expenses แทน; sales import ห้ามเขียนทับวันที่มีรายการแล้ว และใช้ command เดียวกับหน้าร้าน
-- Next16.4.5 / React19.3.1 / Node26.13.0 LTS; portable Nodeบน VPS ติดตั้งและตรวจ SHA256 แล้ว การสลับ PM2 อยู่ใน npm run deploy
-- ตรวจผ่าน25กลุ่ม, embedded PostgreSQL สอง connection, hosted security/business smoke rollback และตรวจ0แถวตกค้าง, Edge fixture มือถือ/desktop (รับซื้อ+POS retryรักษาฟอร์ม+ใช้IDจริง+ดาวน์โหลดExcelกระทบยอด)
+- Next16.4.5 / React19.3.1 / Node26.13.0 LTS; portable Nodeบน VPS ติดตั้งและตรวจ SHA256 แล้ว PM2 ของแอปสลับเป็น26.13.0แล้ว (ไม่เปลี่ยนNodeของแอปอื่นบนhost)
+- ตรวจ25กลุ่มจาก.test-buildว่าง: พบexpectedcaseCNdraftเก่าที่ขัดกฎsource/SQL แก้ให้เก็บประวัติใช้voidแทนdelete แล้วtest:docsผ่าน; กลุ่มที่เหลือ24ผ่านจากสภาพสะอาด. ตรวจผ่าน embedded PostgreSQL สอง connection, hosted security/business smoke rollback และตรวจ0แถวตกค้าง, Edge fixture มือถือ/desktop (รับซื้อ+POS retryรักษาฟอร์ม+ใช้IDจริง+ดาวน์โหลดExcelกระทบยอด)
 - Restore drill บน VPSเดิมเท่านั้น: กู้ public data34/34ตาราง เทียบ5ตารางหลักตรง ไม่ส่งข้อมูลจริงลงเครื่องlocal; ยังไม่ใช่ full Supabase auth/schema disaster-recovery drill
 - CI พบ test imports ชี้ไฟล์ compiled เก่าผิดตำแหน่ง แก้ให้ใช้ smartacc/ และรันจาก .test-build ว่าง; pgTAPเดิมใช้0001–0007 inventory fixturesแยกจากcurrent-schema tests ไม่อ้างว่าreplayประวัติproductionทั้งหมดได้ (มีout-of-band inv_* aliases/text-role)
+- หลังdeploy: โดเมนจริง /login200; /stock-in /stock-in/prices /reports307ไปloginเมื่อยังไม่เข้าสู่ระบบ; ledger5ไฟล์SHA256ตรงsource, anon executeและauthenticated direct financial/slip writesปิดครบ, dedicatedowners3ตัวNOLOGIN/NOBYPASSRLS, เงินรับเก่าที่ไม่จับคู่0รายการ
 - รอบdeployครั้งแรกหยุดก่อนสลับเพราะprintfแปลง\endifเป็นESC ฐานrollback/ซอร์สและdependenciesคืน0808142 เว็บยัง200 แก้ตัวติดตั้งและเพิ่ม--dry-runโดยทดสอบตัวจริงบนVPSก่อนลองใหม่
 - Deploy: npm run deploy -- --with-database สร้าง .next-new ก่อน, fresh backup, migrationsพร้อม LF-normalizedSHA256 ledger, hosted rollback smoke แล้วค่อยสลับ PM2 interpreter และ healthcheck; ห้ามแก้0048ที่applyแล้ว
 - ขอบเขตที่ยังไม่เปิด: auto stock issue, official CN/DN effects, e-Tax send, OCR, auto slip verification; ให้สำนักงานบัญชีตรวจภาษี/เอกสารก่อนใช้ยื่นจริง ไม่รับรองว่าระบบไร้ช่องโหว่หรือบัญชีทุกมาตรฐาน

@@ -48,7 +48,7 @@ node --version
 npm run dev
 ```
 
-เครื่องอื่นติดตั้ง Node ตาม `.nvmrc` ก่อน `npm ci` VPS ติดตั้ง portable Node26.13.0 แล้ว การสลับ PM2 อยู่ใน release ก่อนปล่อยต้องตรวจ Node ของทั้ง build และ PM2 ให้ตรงกัน
+เครื่องอื่นติดตั้ง Node ตาม `.nvmrc` ก่อน `npm ci` VPS / PM2 ของแอปใช้Node26.13.0แล้ว ก่อนปล่อยต้องตรวจ Node ของทั้ง build และ PM2 ให้ตรงกัน
 
 `npm run test:purchases` ทดสอบสูตรและ migration บน PGlite ทั้ง unprefixed tables และ inv_* + aliases ใช้ authenticated/anon จริงในฐานจำลอง ทดสอบ replay, payload conflict, ข้าม tenant, staff, audit และ rollback หลัง stock insert พัง ไม่ใช่เทสต์สอง connection ของ PostgreSQL จริง
 
@@ -67,6 +67,6 @@ npm run test:purchases:ui
 
 ## ก่อนปล่อย
 
-0047 apply productionแล้ว ก่อน deployรุ่นนี้ต้องติดตั้ง0049–0052พร้อมแอปใหม่ มิฉะนั้นหน้ารับเข้าจะแจ้งว่าฐานข้อมูลยังไม่พร้อม ใช้ `npm run deploy` ตามกฎเดิมเมื่อได้รับอนุญาต ไม่เปิด etax_live / auto_issue / cn_official
+0047–0052 apply productionแล้ว และแอปdeployสำเร็จที่3e26f00 มิฉะนั้นหน้ารับเข้าจะแจ้งว่าฐานข้อมูลยังไม่พร้อม ใช้ `npm run deploy` ตามกฎเดิมเมื่อได้รับอนุญาต ไม่เปิด etax_live / auto_issue / cn_official
 
 รอบ releaseเพิ่ม browserตรวจ POSรักษาฟอร์มเมื่อผิดพลาด/ใช้IDจริง และดาวน์โหลดชุดสำนักงานบัญชี; hosted business smokeผ่านแล้ว รวมรับซื้อใน transactionที่rollbackและตรวจไม่มีแถวตกค้าง

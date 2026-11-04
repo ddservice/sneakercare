@@ -2,9 +2,9 @@
 
 ## รอบล่าสุด 2026-11-04 — security / รับซื้อ / ส่งสำนักงานบัญชี
 
-- Next.js / eslint-config-next `16.4.5`, React `19.3.1`; Node.js LTS `26.13.0` ที่ `.nvmrc` / CI / package engines เครื่องนี้ติดตั้ง portable เฉพาะโปรเจกต์ VPS ติดตั้ง portable แล้ว รอสลับ PM2 ใน release
+- Next.js / eslint-config-next `16.4.5`, React `19.3.1`; Node.js LTS `26.13.0` ที่ `.nvmrc` / CI / package engines เครื่องนี้ติดตั้ง portable เฉพาะโปรเจกต์ VPS / PM2 ของแอปใช้26.13.0แล้ว
 - `/stock-in` รับซื้อแยกครั้ง: ร้าน วันที่ แพ็ก จำนวนต่อแพ็ก ค่าส่ง ส่วนลด และหน่วยฐาน; `/stock-in/prices` สถิติรายเดือนและเทียบร้านตามราคาซื้อล่าสุด
-- `0047` + emergency `0048` apply แล้ว; `0049–0052` ผ่าน hosted rollback smoke และจะติดตั้งระหว่าง deploy ก่อนสลับแอป; ธุรกรรม receipt + stock + new item พร้อมกัน ไม่เปลี่ยนต้นทุน moving average ไม่ลงค่าใช้จ่ายอัตโนมัติ
+- `0047–0052` applyแล้ว; deployสำเร็จที่3e26f00 ผ่านhosted rollback smokeและpublic healthcheck; ธุรกรรม receipt + stock + new item พร้อมกัน ไม่เปลี่ยนต้นทุน moving average ไม่ลงค่าใช้จ่ายอัตโนมัติ
 - ขอบเขตบัญชี: บริหารร้านและส่งสำนักงานบัญชี ไม่ใช่ full GL/ยื่นเอง; รายละเอียด release อ่านหัว HANDOFF. วิธีใช้ ขอบเขต และการทดสอบ: `docs/purchase-receipts.md`; สถานะล่าสุดอ่านหัว `HANDOFF.md` ข้อความประวัติรุ่นเก่าด้านล่างไม่ใช่รุ่นปัจจุบัน
 
 ระบบบริหารร้านบริการรองเท้า / สปา — Next.js + Supabase บน VPS  
