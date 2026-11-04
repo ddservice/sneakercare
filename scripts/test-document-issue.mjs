@@ -5,7 +5,7 @@ const {
   planDraftNumber,
   canIssueOfficialNumber,
   issueBlockedReason,
-} = await import(new URL("../.test-build/issue.js", import.meta.url).href);
+} = await import(new URL("../.test-build/smartacc/issue.js", import.meta.url).href);
 
 let failures = 0;
 const ok = (msg) => console.log(`  ✓ ${msg}`);

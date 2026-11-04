@@ -5,7 +5,7 @@ const {
   embedSellerSnapshot,
   visibleNotes,
   resolveDocumentSeller,
-} = await import(new URL("../.test-build/snapshot.js", import.meta.url).href);
+} = await import(new URL("../.test-build/smartacc/snapshot.js", import.meta.url).href);
 
 let failures = 0;
 const ok = (msg) => console.log(`  ✓ ${msg}`);

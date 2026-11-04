@@ -11,6 +11,8 @@
 - Next16.4.5 / React19.3.1 / Node26.13.0 LTS; portable Nodeบน VPS ติดตั้งและตรวจ SHA256 แล้ว การสลับ PM2 อยู่ใน npm run deploy
 - ตรวจผ่าน25กลุ่ม, embedded PostgreSQL สอง connection, hosted security/business smoke rollback และตรวจ0แถวตกค้าง, Edge fixture มือถือ/desktop (รับซื้อ+POS retryรักษาฟอร์ม+ใช้IDจริง+ดาวน์โหลดExcelกระทบยอด)
 - Restore drill บน VPSเดิมเท่านั้น: กู้ public data34/34ตาราง เทียบ5ตารางหลักตรง ไม่ส่งข้อมูลจริงลงเครื่องlocal; ยังไม่ใช่ full Supabase auth/schema disaster-recovery drill
+- CI พบ test imports ชี้ไฟล์ compiled เก่าผิดตำแหน่ง แก้ให้ใช้ smartacc/ และรันจาก .test-build ว่าง; pgTAPเดิมใช้0001–0007 inventory fixturesแยกจากcurrent-schema tests ไม่อ้างว่าreplayประวัติproductionทั้งหมดได้ (มีout-of-band inv_* aliases/text-role)
+- รอบdeployครั้งแรกหยุดก่อนสลับเพราะprintfแปลง\endifเป็นESC ฐานrollback/ซอร์สและdependenciesคืน0808142 เว็บยัง200 แก้ตัวติดตั้งและเพิ่ม--dry-runโดยทดสอบตัวจริงบนVPSก่อนลองใหม่
 - Deploy: npm run deploy -- --with-database สร้าง .next-new ก่อน, fresh backup, migrationsพร้อม LF-normalizedSHA256 ledger, hosted rollback smoke แล้วค่อยสลับ PM2 interpreter และ healthcheck; ห้ามแก้0048ที่applyแล้ว
 - ขอบเขตที่ยังไม่เปิด: auto stock issue, official CN/DN effects, e-Tax send, OCR, auto slip verification; ให้สำนักงานบัญชีตรวจภาษี/เอกสารก่อนใช้ยื่นจริง ไม่รับรองว่าระบบไร้ช่องโหว่หรือบัญชีทุกมาตรฐาน
 

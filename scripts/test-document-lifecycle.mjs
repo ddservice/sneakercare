@@ -7,7 +7,7 @@ const {
   voidBlockedReason,
   voidAffectsOfficialBooks,
   appendVoidNote,
-} = await import(new URL("../.test-build/lifecycle.js", import.meta.url).href);
+} = await import(new URL("../.test-build/smartacc/lifecycle.js", import.meta.url).href);
 
 let failures = 0;
 const ok = (msg) => console.log(`  ✓ ${msg}`);
@@ -36,9 +36,9 @@ check(
 );
 check(!canDeleteDocument(draftTax), "ใบกำกับห้ามลบ", "TAX ร่างยังลบได้");
 check(
-  canDeleteDocument({ status: "DRAFT", hasBillingRef: false, docType: "CREDIT_NOTE", docNumber: "DRAFT-20260919-CN" }),
-  "ใบลดหนี้เลขร่างลบได้",
-  "CN ร่างลบไม่ได้"
+  !canDeleteDocument({ status: "DRAFT", hasBillingRef: false, docType: "CREDIT_NOTE", docNumber: "DRAFT-20260919-CN" }),
+  "ใบลดหนี้เลขร่างเก็บประวัติ ใช้ยกเลิกแทนลบ",
+  "CN ร่างถูกลบได้"
 );
 check(
   !canDeleteDocument({ status: "DRAFT", hasBillingRef: false, docType: "CREDIT_NOTE", docNumber: "CN-20260919-0001" }),

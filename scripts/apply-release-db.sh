@@ -2,6 +2,8 @@
 # Run on the VPS after the new app builds and immediately before switching it live.
 set -euo pipefail
 test "${1:-}" = '--confirm-production=mdlxogfkpwejnqpzhmoy'
+MODE="${2:---apply}"
+case "$MODE" in --apply|--dry-run) ;; *) exit 9;; esac
 set -a
 . /home/ddservice/sneakercare-backup.env
 set +a
@@ -19,12 +21,14 @@ echo 'Fresh database backup verified'
  for FILE in "${FILES[@]}"; do
   HASH=$(sed 's/\r$//' "supabase/migrations/$FILE" | sha256sum | cut -d' ' -f1)
   printf "do \$\$ begin if exists(select 1 from rrs_private.release_migrations where name='%s' and sha256<>'%s') then raise exception 'Applied migration checksum changed'; end if; end \$\$;\n" "$FILE" "$HASH"
-  printf "select not exists(select 1 from rrs_private.release_migrations where name='%s') as needs_migration \\gset\n\\if :needs_migration\n" "$FILE"
+  printf "select not exists(select 1 from rrs_private.release_migrations where name='%s') as needs_migration " "$FILE"
+  printf '%s\n' '\gset' '\if :needs_migration'
   cat "supabase/migrations/$FILE"
-  printf "\ninsert into rrs_private.release_migrations(name,sha256) values('%s','%s');\n\\endif\n" "$FILE" "$HASH"
+  printf "\ninsert into rrs_private.release_migrations(name,sha256) values('%s','%s');\n" "$FILE" "$HASH"
+  printf '%s\n' '\endif'
  done
  cat supabase/release-security-smoke.sql
  cat supabase/release-business-smoke.sql
- echo 'commit;'
+ if [ "$MODE" = --dry-run ]; then echo 'rollback;'; else echo 'commit;'; fi
 } | psql "$SUPABASE_DB_URL" -X -q -v ON_ERROR_STOP=1
-echo 'RELEASE_DATABASE_APPLIED_AND_SMOKED'
+echo "RELEASE_DATABASE_CHECKED $MODE"

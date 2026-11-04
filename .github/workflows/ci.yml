@@ -101,7 +101,7 @@ jobs:
         run: npm run build
 
   database:
-    name: pgTAP migrations & tests
+    name: Legacy inventory pgTAP
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -110,14 +110,22 @@ jobs:
         with:
           version: latest
 
-      # `supabase start` ยก stack ท้องถิ่นขึ้นใน Docker แล้วรัน migration ใน supabase/migrations
-      # ตามลำดับให้ก่อน — จึงจับได้ทั้ง migration ที่เขียนผิดและ business rule ที่พัง
+      # pgTAP เดิมใช้ fixtures ของ inventory 0001-0007; release SQL รุ่นปัจจุบันตรวจแยก
+      # ใน test:migration / test:security-finance และ hosted rollback smoke ก่อน deploy
+      # ประวัติ production มี inv_* aliases/text roles นอก migration จึงไม่อ้างว่ารอบนี้ replay ทั้งประวัติ
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+
+      - name: Stage original inventory invariants
+        run: node scripts/prepare-ci-database.mjs
+
       - name: Start local Supabase
-        run: supabase start
+        run: supabase start --workdir .scratch-ci-inventory
 
       - name: Run pgTAP tests
-        run: supabase test db
+        run: supabase test db --workdir .scratch-ci-inventory
 
       - name: Stop local Supabase
         if: always()
-        run: supabase stop --no-backup
+        run: supabase stop --no-backup --workdir .scratch-ci-inventory

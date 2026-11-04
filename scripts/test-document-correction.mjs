@@ -6,7 +6,7 @@ const {
   planCorrection,
   correctionAffectsOfficialBooks,
   correctionAffectsStock,
-} = await import(new URL("../.test-build/correction.js", import.meta.url).href);
+} = await import(new URL("../.test-build/smartacc/correction.js", import.meta.url).href);
 
 let failures = 0;
 const ok = (msg) => console.log(`  ✓ ${msg}`);

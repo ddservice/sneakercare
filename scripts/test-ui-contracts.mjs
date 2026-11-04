@@ -5,7 +5,7 @@
 import fs from "node:fs";
 
 const { canIssueOfficialNumber, consumesOfficialNumberOnCreate } = await import(
-  new URL("../.test-build/issue.js", import.meta.url).href
+  new URL("../.test-build/smartacc/issue.js", import.meta.url).href
 );
 const { LIVE_ETAX_SEND_ALLOWED, enqueueETax, mockETaxAdapter } = await import(
   new URL("../.test-build/etax-pipeline.js", import.meta.url).href
