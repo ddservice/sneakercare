@@ -26,6 +26,8 @@ import { type ExpenseEntryLike } from "@/lib/expense-totals";
 import {
   DEFAULT_REVENUE_BASIS,
   planDashboardBooks,
+  dashboardSaleKey,
+  saleNet,
   type DashboardPeriod,
   type RevenueBasis,
 } from "@/lib/dashboard-books";
@@ -127,7 +129,7 @@ export function DashboardClient({
     cashRevenueForPeriod,
     rentalIncomeForPeriod,
     outstandingForPeriod,
-    paidBySaleDate,
+    paidBySaleKey,
     billRevenueForPeriod,
     posTicketPaid,
     dailyEntryPaid,
@@ -616,8 +618,8 @@ export function DashboardClient({
                   const net = Number(
                     sale.total_revenue || (Number(sale.grand_total || 0) - Number(sale.discount || 0))
                   );
-                  const extraPaid = paidBySaleDate[sale.date] || 0;
-                  const totalPaid = Number(sale.transfer_amount || 0) + Number(sale.cash_amount || 0) + extraPaid;
+                  const extraPaid = paidBySaleKey[dashboardSaleKey(sale)] || 0;
+                  const totalPaid = Number(sale.amount_paid ?? Number(sale.transfer_amount || 0) + Number(sale.cash_amount || 0)) + extraPaid;
                   const isPaid = totalPaid >= net;
 
                   return (

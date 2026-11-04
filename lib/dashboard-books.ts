@@ -20,6 +20,8 @@ export const DEFAULT_REVENUE_BASIS: RevenueBasis = "cash";
 export const DASHBOARD_LOOKBACK_MONTHS = 14;
 
 export type DashboardSaleLike = {
+  id?: number | string | null;
+  tenant_id?: string | null;
   date?: string | null;
   amount_paid?: number | string | null;
   cash_amount?: number | string | null;
@@ -32,6 +34,8 @@ export type DashboardSaleLike = {
 };
 
 export type DashboardPaymentLike = {
+  sale_id?: number | string | null;
+  tenant_id?: string | null;
   sale_date?: string | null;
   received_date?: string | null;
   amount?: number | string | null;
@@ -58,13 +62,16 @@ function num(value: unknown): number {
 }
 
 export function saleNet(sale: DashboardSaleLike): number {
-  return num(sale.total_revenue || num(sale.grand_total) - num(sale.discount));
+  return num(sale.total_revenue ?? num(sale.grand_total) - num(sale.discount));
 }
 
 export function isPosTicketSale(sale: DashboardSaleLike): boolean {
-  return Boolean(
-    String(sale.client_request_id ?? "").trim() || String(sale.service_order_id ?? "").trim()
-  );
+  // Request keys also belong to ordinary daily entries; only a proven order link is POS.
+  return Boolean(String(sale.service_order_id ?? "").trim());
+}
+
+export function dashboardSaleKey(sale: DashboardSaleLike): string {
+  return sale.id != null ? `id:${sale.id}` : `legacy:${sale.tenant_id || ""}:${sale.date || ""}`;
 }
 
 export function countsTowardDashboardRevenue(
@@ -116,6 +123,7 @@ export function planDashboardBooks(input: DashboardBooksInput): {
   dailyEntryPaid: number;
   posTicketCount: number;
   paidBySaleDate: Record<string, number>;
+  paidBySaleKey: Record<string, number>;
   serviceRevenueForPeriod: number;
   totalIncomeForPeriod: number;
   netProfit: number;
@@ -200,17 +208,26 @@ export function planDashboardBooks(input: DashboardBooksInput): {
             : "9999-12-31";
 
   const paidBySaleDate: Record<string, number> = {};
-  input.payments.forEach((p) => {
-    if (!p.sale_date) return;
+  const paidBySaleKey: Record<string, number> = {};
+  const salesOnDate = new Map<string, DashboardSaleLike[]>();
+  input.sales.forEach(s => {
+    const key = `${s.tenant_id || ""}:${s.date || ""}`;
+    salesOnDate.set(key, [...(salesOnDate.get(key) || []), s]);
+  });
+  input.payments.forEach(p => {
     const received = String(p.received_date || "");
     if (received && received > periodEnd) return;
-    paidBySaleDate[p.sale_date] = (paidBySaleDate[p.sale_date] || 0) + num(p.amount);
+    if (p.sale_date) paidBySaleDate[p.sale_date] = (paidBySaleDate[p.sale_date] || 0) + num(p.amount);
+    let key = p.sale_id != null ? `id:${p.sale_id}` : null;
+    if (!key) {
+      const candidates = salesOnDate.get(`${p.tenant_id || ""}:${p.sale_date || ""}`) || [];
+      if (candidates.length === 1) key = dashboardSaleKey(candidates[0]);
+    }
+    if (key) paidBySaleKey[key] = (paidBySaleKey[key] || 0) + num(p.amount);
   });
-
   const outstanding = filteredSales.reduce((acc, s) => {
-    const net = saleNet(s);
-    const paid = num(s.cash_amount) + num(s.transfer_amount) + (paidBySaleDate[String(s.date)] || 0);
-    return acc + Math.max(0, net - paid);
+    const paid = num(s.amount_paid ?? num(s.cash_amount) + num(s.transfer_amount)) + (paidBySaleKey[dashboardSaleKey(s)] || 0);
+    return acc + Math.max(0, saleNet(s) - paid);
   }, 0);
 
   const cashRevenueForPeriod = money(paidOnBills + arReceived);
@@ -234,6 +251,7 @@ export function planDashboardBooks(input: DashboardBooksInput): {
     dailyEntryPaid: money(dailyEntryPaid),
     posTicketCount: posTicketSales.length,
     paidBySaleDate,
+    paidBySaleKey,
     serviceRevenueForPeriod,
     totalIncomeForPeriod,
     netProfit: money(totalIncomeForPeriod - totalExpensesForPeriod),

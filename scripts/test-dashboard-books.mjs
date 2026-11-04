@@ -7,6 +7,7 @@ const {
   dashboardLookbackStart,
   isPosTicketSale,
   planDashboardBooks,
+  saleNet,
 } = await import(new URL("../.test-build/dashboard-books.js", import.meta.url).href);
 
 let failures = 0;
@@ -51,6 +52,7 @@ const sales = [
     transfer_amount: 500,
     total_revenue: 500,
     client_request_id: "order-1",
+    service_order_id: "order-1",
   },
   {
     date: "2026-09-01",
@@ -75,7 +77,7 @@ check(countsTowardDashboardRevenue("sc_sales"), "sc_sales นับเป็น�
 check(countsTowardDashboardRevenue("sc_payments"), "sc_payments นับเป็นรายได้ภาพรวม", "sc_payments ไม่ถูกนับ");
 check(!countsTowardDashboardRevenue("service_orders"), "service_orders ไม่นับเป็นรายได้", "ใบรับงานถูกนับเป็นรายได้");
 check(!countsTowardDashboardRevenue("ext_documents"), "เอกสารขายไม่นับเป็นรายได้ภาพรวม", "เอกสารขายถูกนับ");
-check(isPosTicketSale({ client_request_id: "order-1" }), "แถวที่มีคีย์ใบรับงานคืองานจาก /pos", "ไม่จำแนกใบรับงาน");
+check(!isPosTicketSale({ client_request_id: "daily-retry-key" }), "คีย์กันซ้ำของยอดรายวันไม่ถูกนับเป็น POS", "คีย์กันซ้ำถูกนับเป็น POS");
 check(isPosTicketSale({ service_order_id: "order-3" }), "แถวที่มี service_order_id คืองานจาก /pos", "ไม่จำแนก service_order_id");
 check(!isPosTicketSale({ client_request_id: null }), "แถวไม่มีคีย์คือยอดขายรายวัน", "แถวว่างถูกนับเป็น POS");
 
@@ -124,6 +126,14 @@ check(opexKeys.includes("08/2025") && opexKeys.includes("2025-08"), "มีเ�
 check(opexKeys.includes("09/2026") && opexKeys.includes("2026-09"), "มีเดือนปัจจุบันสองรูปแบบ", "ขาดเดือนปัจจุบัน");
 check(opexKeys.length === 28, "14 เดือน × 2 รูปแบบ", `ได้ ${opexKeys.length}`);
 
+check(saleNet({total_revenue:0,grand_total:100,discount:0})===0,"ยอดสุทธิศูนย์ไม่ถูกแทนด้วยยอดก่อนลด","ยอดศูนย์ถูกอ่านเป็นยอดก่อนลด");
+const sameDay = planDashboardBooks({ ...monthInput, opex:[], revenueBasis:"cash", sales:[{id:1,tenant_id:"A",date:"2026-08-10",total_revenue:100,amount_paid:0,client_request_id:"daily-key"},{id:2,tenant_id:"A",date:"2026-08-10",total_revenue:100,amount_paid:0}], payments:[{sale_id:1,tenant_id:"A",sale_date:"2026-08-10",received_date:"2026-08-10",amount:100}] });
+check(sameDay.outstandingForPeriod===100,"ขายสองรายการวันเดียวกัน รับเงินครั้งเดียวไม่หักสองรอบ",`ได้ ${sameDay.outstandingForPeriod}`);
+check(sameDay.paidBySaleKey['id:1']===100&&!sameDay.paidBySaleKey['id:2'],"ตารางยอดขายจับคู่เงินด้วย sale_id", "เงินเข้าผิดรายการ");
+const ambiguous = planDashboardBooks({ ...monthInput, opex:[], sales:[{id:1,tenant_id:"A",date:"2026-08-10",total_revenue:100},{id:2,tenant_id:"A",date:"2026-08-10",total_revenue:100}], payments:[{tenant_id:"A",sale_date:"2026-08-10",received_date:"2026-08-10",amount:100}] });
+check(ambiguous.outstandingForPeriod===200,"เงินรับเก่าที่มีขายหลายรายการไม่เดาจับคู่",`ได้ ${ambiguous.outstandingForPeriod}`);
+const tenants = planDashboardBooks({ ...monthInput, opex:[], sales:[{tenant_id:"A",date:"2026-08-10",total_revenue:100},{tenant_id:"B",date:"2026-08-10",total_revenue:100}], payments:[{tenant_id:"A",sale_date:"2026-08-10",received_date:"2026-08-10",amount:100}] });
+check(tenants.outstandingForPeriod===100,"fallback รายการเก่าไม่หักเงินข้ามกิจการ",`ได้ ${tenants.outstandingForPeriod}`);
 if (failures) {
   console.log(`\n[dashboard-books] ล้ม ${failures} ข้อ`);
   process.exitCode = 1;

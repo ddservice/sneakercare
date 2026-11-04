@@ -89,6 +89,9 @@ jobs:
       - name: Expense totals (สูตรกลางของค่าใช้จ่าย)
         run: npm run test:expenses
 
+      - name: Dashboard receipt allocation
+        run: npm run test:dashboard
+
       - name: Security boundaries and atomic finance
         run: npm run test:security-finance
 
@@ -109,8 +112,10 @@ jobs:
       - uses: actions/checkout@v4
 
       - uses: supabase/setup-cli@v1
+        id: supabase_cli
         with:
           version: latest
+          github-token: ${{ github.token }}
 
       # pgTAP เดิมใช้ fixtures ของ inventory 0001-0007; release SQL รุ่นปัจจุบันตรวจแยก
       # ใน test:migration / test:security-finance และ hosted rollback smoke ก่อน deploy
@@ -129,5 +134,5 @@ jobs:
         run: supabase test db --workdir .scratch-ci-inventory
 
       - name: Stop local Supabase
-        if: always()
+        if: always() && steps.supabase_cli.outcome == 'success'
         run: supabase stop --no-backup --workdir .scratch-ci-inventory
