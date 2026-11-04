@@ -615,9 +615,7 @@ export function DashboardClient({
                     Number(sale.size_l || 0) +
                     Number(sale.size_xl || 0);
 
-                  const net = Number(
-                    sale.total_revenue || (Number(sale.grand_total || 0) - Number(sale.discount || 0))
-                  );
+                  const net = saleNet(sale);
                   const extraPaid = paidBySaleKey[dashboardSaleKey(sale)] || 0;
                   const totalPaid = Number(sale.amount_paid ?? Number(sale.transfer_amount || 0) + Number(sale.cash_amount || 0)) + extraPaid;
                   const isPaid = totalPaid >= net;
