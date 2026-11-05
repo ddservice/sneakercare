@@ -1,5 +1,6 @@
-## งานพัฒนารอบ 2026-11-05 — รุ่น0053/0054
+## งานพัฒนารอบ 2026-11-05 — รุ่น0053/0054 deployแล้ว
 
+- Productionยืนยันรุ่นแอปb1999f2, PM2online, /login200, private pages307ไปlogin; ledger7รายการ/checksumตรงและ client write boundariesปิดครบ. รอบเอกสารถัดมาไม่เปลี่ยนโค้ดแอป
 - การตรวจ release: 25/25 ผ่าน, production-build browser fixture ผ่าน (expense error/input preservation/stable retry พร้อม purchase/POS/accountant regression), hosted smoke ทั้งค่าใช้จ่ายและค่าเช่า rollback ครบ, full release-script dry-run พร้อม fresh verified backup ผ่าน
 - Migration0053 ปิดช่อง throttle แข่งกัน: ล็อกต่อผู้ใช้ก่อนคีย์รายการ พร้อม index และ native PostgreSQL 2 connections regression (59+2 รับเพิ่มได้เพียง1; retry เดิมยังใช้ได้)
 - Migration0054 เพิ่ม `rrs_create_expense` / `rrs_delete_expense`: ค่าใช้จ่าย custom, รายละเอียดรายวัน, ผู้รับเงิน/50ทวิ, audit และ replay บันทึกใน transaction เดียว; failure ขั้นท้าย rollback ทุกส่วน
@@ -12,9 +13,9 @@
 - ขอบเขตคงเดิม: บัญชีบริหารและชุดส่งสำนักงานบัญชี ไม่ใช่ GL/การรับรองแบบภาษีครบมาตรฐาน; ต้องให้ผู้ทำบัญชีตรวจเอกสารก่อนใช้ยื่น
 - งานถัดไป: monthly payroll/rental create ยังมี legacy multi-write; แผนเปลี่ยน SSH/firewall/แยก runtime user และอัปเดตเว็บอื่นบน VPS ต้องทำแยกตาม dependency ของแต่ละบริการ
 
-## ผลตรวจ VPS ล่าสุด 2026-11-05 — audit เท่านั้น ยังไม่แก้ config
+## ประวัติผลตรวจ VPS 2026-11-05 ก่อนแก้0053/0054 — ไม่เปลี่ยน configVPS
 
-- รายละเอียด: `docs/security-vps-2026-11-05.md` และ HTML ใน visualization workspace; production ยัง commit `1e0036d`, Next16.4.5 / Node26.13.0, runtime npm advisory ของ RRS=0, RLS/การปิด direct financial writes หลักยังอยู่ครบ
+- รายละเอียด: `docs/security-vps-2026-11-05.md` และ HTML ใน visualization workspace; ขณะตรวจ productionเป็นcommit `1e0036d` (ปัจจุบันใช้รุ่นด้านบน), Next16.4.5 / Node26.13.0, runtime npm advisory ของ RRS=0, RLS/การปิด direct financial writes หลักยังอยู่ครบ
 - ความเสี่ยงสูง: เว็บอื่นใช้ Next รุ่นเก่า (horpak14.2.24, pems16.2.12, cnxhaircutz16.4.4, local-seo16.3.8); หลายเว็บรันด้วย ddservice ที่มี Docker group + NOPASSWD wg/wg-quick จึงไม่แยกขอบเขตความเสียหายระหว่างแอป
 - SSH ยืนยันผ่าน authentication negotiation ว่ายังรับ password; accepted password6ครั้งใน24h (ไม่ใช่root), failed/invalid1672บรรทัด ไม่ใช่หลักฐานบุกรุกโดยตัวมันเอง
 - จากเครื่องตรวจเชื่อม9000/8080/6789/8880/8843/8443ได้; 9000 เป็นSpider-Bot HTTP, HEAD /admin/dashboard200ไม่ส่งcookie แต่ยังไม่อ่าน/พิสูจน์สิทธิ์APIภายใน; อย่าปิดUniFiportsทั้งหมดโดยไม่ตรวจการใช้งาน

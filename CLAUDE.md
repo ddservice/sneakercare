@@ -1,10 +1,17 @@
-## รอบพัฒนา 2026-11-05 (รุ่น0053/0054)
+## สถานะล่าสุด 2026-11-05 — deploy0053/0054 แล้ว
 
-ดู HANDOFF.md ส่วนบน: 0053 actor throttle + 0054 atomic custom expenses/WHT, RPC rental WHT, stable expense retry และ browser DML revokes. Migration เก่ายังคง append-only; ใช้ `npm run deploy -- --with-database` หลัง checks ผ่าน. ยังมีงาน VPS และ legacy monthly writers ตาม handoff.
+- โค้ดแอปรุ่น `b1999f2934f656732797ed845e22bf2b8f83c8e1` deployสำเร็จที่ https://sneakercare.ddserviceth.com; รอบอัปเดตเอกสารนี้ไม่เปลี่ยนโค้ดแอป
+- Production: Next.js16.4.5 / Node26.13.0, PM2 online และ /login ตอบ200; หน้า /expenses, /stock-in, /reports ส่งผู้ที่ยังไม่ล็อกอินไป /login
+- ฐานข้อมูลติดตั้ง0053/0054แล้ว: migration ledger7รายการและ checksum ตรงไฟล์, owner roles NOLOGIN/NOBYPASSRLS; ปิด client DML ของค่าใช้จ่ายและ WHT แล้ว
+- 0053: ปิดช่อง actor throttle เมื่อคำขอพร้อมกัน; 0054: เพิ่ม/ลบค่าใช้จ่าย custom และ rental WHT แบบ atomic, เลข WHTไม่ซ้ำ, stable expense retry, ป้องกันลบค่าใช้จ่ายที่มีหลักฐานภาษี
+- ตรวจครบ25/25, production-build browser fixtureผ่าน, hosted smoke rollbackไม่มีข้อมูลทดสอบคงอยู่, backupก่อนdeployผ่าน; CIผ่าน https://github.com/ddservice/sneakercare/actions/runs/41961483267
+- งานค้าง: monthly payroll/rental create บางเส้นทางยังเป็น legacy multi-write; VPSยังมีความเสี่ยงจากแอปอื่น/บัญชีruntimeร่วม, SSH password และพอร์ตบริการ ตาม docs/security-vps-2026-11-05.md
+- ขอบเขตบัญชี: บริหารร้านและส่งสำนักงานบัญชี ไม่ใช่ full GL หรือการรับรองแบบภาษีครบชุด; ต้องให้ผู้ทำบัญชีตรวจเอกสารก่อนยื่น
+- อ่าน HANDOFF.md ส่วนบนก่อนทำต่อ; migrationเก่า append-only ห้ามแก้ไฟล์ที่ applyแล้ว. ปล่อยโค้ดด้วย `npm run deploy`; ใช้ `--with-database` เมื่อมี migrationใหม่ที่ผ่านการตรวจแล้ว
 
 # DD-Management (RRS)
 
-ผลตรวจ VPS หลังอัปเดต 2026-11-05: อ่าน `docs/security-vps-2026-11-05.md` และหัว HANDOFF ก่อนสรุปว่าปลอดภัยครบ — RRS ยังเป็น1e0036d แต่พบความเสี่ยงจากแอปอื่น/บัญชีruntimeร่วมกัน และ concurrency throttle ที่ยังรอแก้; รอบตรวจนี้ไม่เปลี่ยน production
+ผลตรวจ VPS วันที่2026-11-05ก่อนแก้ไขอยู่ใน `docs/security-vps-2026-11-05.md`; ช่อง actor throttle และ direct expense writes แก้และdeployด้วย0053/0054แล้ว ส่วนความเสี่ยงระดับVPSยังคงเป็นงานแยก. ยึดสถานะล่าสุดด้านบนและหัว HANDOFF แทนข้อความประวัติรุ่นเก่าด้านล่าง
 
 ## รอบล่าสุด 2026-11-04 — security / รับซื้อ / ส่งสำนักงานบัญชี
 
