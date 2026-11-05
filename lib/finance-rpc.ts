@@ -1,6 +1,6 @@
 import 'server-only';
 import { createAdminClient } from '@/lib/supabase/admin';
-export type FinanceCommand='rrs_save_sale'|'rrs_record_payment'|'rrs_delete_payment'|'rrs_create_service_order'|'rrs_create_document'|'rrs_issue_document'|'rrs_document_lifecycle'|'rrs_read_sales'|'rrs_delete_sale'|'rrs_set_order_status'|'rrs_accountant_packet';
+export type FinanceCommand='rrs_save_sale'|'rrs_record_payment'|'rrs_delete_payment'|'rrs_create_service_order'|'rrs_create_document'|'rrs_issue_document'|'rrs_document_lifecycle'|'rrs_read_sales'|'rrs_delete_sale'|'rrs_set_order_status'|'rrs_accountant_packet'|'rrs_create_expense'|'rrs_delete_expense'|'rrs_record_rental_wht';
 /** New migration RPCs are isolated here until production types are regenerated. */
 export async function financeRpc(name:FinanceCommand,args:Record<string,unknown>):Promise<Record<string,unknown>>{
  const db=createAdminClient();

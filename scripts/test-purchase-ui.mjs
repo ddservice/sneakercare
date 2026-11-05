@@ -20,7 +20,7 @@ const profile = { id:uid,username:'fixture',display_name:'ผู้ทดสอ�
 const user = { id:uid,aud:'authenticated',role:'authenticated',email:'fixture@example.test',app_metadata:{provider:'email'},user_metadata:{},created_at:new Date().toISOString() };
 let rejectNext = true;
 const submissions = [];
-const financeCalls=[]; let rejectOrder=true;
+const financeCalls=[]; let rejectOrder=true; let rejectExpense=true;
 const receipts = [
   { id:'old-a',branch_id:branch,item_id:item,item_name:'ถุงหูรูดผ้า 30×40 ซม.',base_unit:'ใบ',purchase_unit:'แพ็ก',pack_count:1,units_per_pack:100,base_quantity:100,goods_amount:180,shipping_amount:20,discount_amount:0,paid_amount:200,supplier_name:'ร้าน A',purchase_date:'2026-09-01',created_at:'2026-09-01T10:00:00Z',reference_note:'ตัวอย่างทดสอบ',stock_transaction_id:'old-txn-a' },
   { id:'old-b',branch_id:branch,item_id:item,item_name:'ถุงหูรูดผ้า 30×40 ซม.',base_unit:'ใบ',purchase_unit:'แพ็ก',pack_count:3,units_per_pack:50,base_quantity:150,goods_amount:200,shipping_amount:25,discount_amount:0,paid_amount:225,supplier_name:'ร้าน B',purchase_date:'2026-10-01',created_at:'2026-10-01T10:00:00Z',reference_note:'ตัวอย่างทดสอบ',stock_transaction_id:'old-txn-b' },
@@ -41,6 +41,11 @@ const server = http.createServer(async (req,res)=>{
     else data={id:'60000000-0000-4000-8000-000000000001',order_no:'SC-TEST-000001',posted_to_books:true};
   }
   else if(path==='/rest/v1/rpc/rrs_set_order_status'){financeCalls.push({name:'status',...JSON.parse(body)});data={replay:false};}
+  else if(path==='/rest/v1/rpc/rrs_create_expense') {
+    const call=JSON.parse(body);financeCalls.push({name:'expense',...call});
+    if(rejectExpense){rejectExpense=false;status=400;data={code:'P0001',message:'ทดสอบ: ค่าใช้จ่ายยังไม่สำเร็จ'};}
+    else data={id:91,entry_id:92,certificateIssued:false,replay:false};
+  }
   else if(path==='/rest/v1/rpc/rrs_read_sales') data={rows:[]};
   else if(path==='/rest/v1/rpc/rrs_accountant_packet') {
     const call=JSON.parse(body);financeCalls.push({name:'packet',...call});
@@ -123,6 +128,19 @@ try {
   await page.getByRole('button',{name:'✓ ซักเสร็จแล้ว (พร้อมรับ)',exact:true}).waitFor();
   assert.equal(financeCalls.find(c=>c.name==='status').p_id,'60000000-0000-4000-8000-000000000001');
   await page.goto(`${base}/pos/daily-entry`);assert.ok(!(await page.locator('body').innerText()).includes('Application error'));
+  await page.goto(`${base}/expenses`);
+  await page.getByRole('button',{name:'บันทึกค่าใช้จ่ายใหม่',exact:true}).first().click();
+  await page.getByLabel('ชื่อรายการค่าใช้จ่าย *',{exact:true}).fill('ค่าใช้จ่ายทดสอบ');
+  await page.getByLabel('จำนวนเงิน (บาท) *',{exact:true}).fill('120.50');
+  await page.getByRole('button',{name:'บันทึกค่าใช้จ่าย',exact:true}).click();
+  await page.getByText('ทดสอบ: ค่าใช้จ่ายยังไม่สำเร็จ',{exact:true}).waitFor();
+  assert.equal(Number(await page.getByLabel('จำนวนเงิน (บาท) *',{exact:true}).inputValue()),120.5);
+  await page.screenshot({path:'.scratch-ui/expense-retry-desktop.png',fullPage:true});
+  await page.getByRole('button',{name:'บันทึกค่าใช้จ่าย',exact:true}).click();
+  await page.getByRole('heading',{name:'บันทึกค่าใช้จ่ายใหม่ (หมวดหมู่มาตรฐาน)',exact:true}).waitFor({state:'hidden'});
+  const expenseCalls=financeCalls.filter(c=>c.name==='expense');assert.equal(expenseCalls.length,2);
+  assert.equal(expenseCalls[0].p_request,expenseCalls[1].p_request);assert.equal(expenseCalls[1].p_data.amount,120.5);
+  assert.equal(expenseCalls[1].p_actor,uid);assert.equal(expenseCalls[1].p_tenant,tenant);
   await page.goto(`${base}/reports`);
   const downloadPromise=page.waitForEvent('download');
   await page.getByRole('button',{name:'ดาวน์โหลดชุดสำนักงานบัญชี',exact:true}).click();
@@ -134,7 +152,7 @@ try {
   await page.setViewportSize({width:390,height:844});await page.screenshot({path:'.scratch-ui/accountant-mobile.png',fullPage:true});assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
   assert.deepEqual(errors,[]);
   await context.close();
-  console.log('Browser fixture PASS: purchase retry/payload, supplier prices, POS failure preservation/retry/real ID, daily route, accountant workbook reconciliation, mobile overflow');
+  console.log('Browser fixture PASS: purchase retry/payload, supplier prices, POS failure preservation/retry/real ID, daily route, expense failure preservation/stable retry, accountant workbook reconciliation, mobile overflow');
 } catch (error) {
   fs.mkdirSync('.scratch-ui',{recursive:true});
   await page?.screenshot({path:'.scratch-ui/failure.png',fullPage:true});

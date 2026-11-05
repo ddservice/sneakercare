@@ -8,6 +8,9 @@ do $$ begin
  if has_table_privilege('authenticated','public.sc_receipt_posts','insert') or has_table_privilege('authenticated','public.sc_receipt_posts','update') then
    raise exception 'Direct ledger writes remain';
  end if;
+ if has_table_privilege('authenticated','public.sc_opex','insert') or has_table_privilege('authenticated','public.sc_expense_entries','update')
+ or has_table_privilege('authenticated','public.sc_wht_certificates','delete') or has_function_privilege('authenticated','public.rrs_create_expense(uuid,uuid,text,jsonb)','execute')
+ or has_function_privilege('anon','public.rrs_delete_expense(uuid,uuid,text,jsonb)','execute') then raise exception 'Expense command boundary missing';end if;
  if not exists(select 1 from pg_trigger where tgrelid='public.profiles'::regclass and tgname='rrs_guard_profile') then raise exception 'Profile guard missing'; end if;
 end $$;
 do $$ declare actor uuid; begin

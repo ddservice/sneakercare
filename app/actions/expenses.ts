@@ -6,11 +6,14 @@ import { revalidatePath } from "next/cache";
 import { logAudit } from "@/lib/audit";
 import { calculateExpenseBreakdown, applyEntriesToBreakdown } from "@/lib/expense-totals";
 import { SUPPLY_CATEGORIES, sumStockPurchases, monthBounds } from "@/lib/stock-purchases";
-import { mirrorExpenseEntry, unmirrorExpenseEntry, mirrorPayslip } from "@/lib/expense-mirror";
+import { mirrorPayslip } from "@/lib/expense-mirror";
 import { requireTenantId, tenantFilter } from "@/lib/tenant";
 import { fetchStaffMonthlyStatSummary } from "@/app/actions/roster";
-import { issuePayableCertificate, upsertWhtPayee, deleteCertificatesForOpex, recordRentalWht } from "@/app/actions/wht";
-import { settleWht, BUILDING_RENT_CATEGORY } from "@/lib/wht";
+import { recordRentalWht } from "@/app/actions/wht";
+import { settleWht } from "@/lib/wht";
+import { financeRpc } from "@/lib/finance-rpc";
+import { validationMessage } from "@/lib/finance-validation";
+import { parseExpenseForm } from "@/lib/expense-command";
 import { assertPeriodOpen } from "@/lib/period-close-store";
 
 /** เดือนปัจจุบันในรูปแบบ "MM/YYYY" ที่ตาราง sc_opex ใช้ทั้งไฟล์ */
@@ -1138,189 +1141,30 @@ export async function addExpense(
 ): Promise<ExpenseActionState> {
   const profile = await requireProfile();
   requireModuleWrite(profile, "expenses");
-  const supabase = createAdminClient();
   const tenantId = await requireTenantId(profile);
-
-  let warning: string | undefined;
-  let certificateIssued = false;
-  const title = (formData.get("title") as string)?.trim();
-  const category = (formData.get("category") as string)?.trim() || "ค่าดำเนินการ";
-  const amount = parseFloat(formData.get("amount") as string);
-  const payMethod = (formData.get("pay_method") as string) || "บัญชีร้าน";
-  const expenseDate = (formData.get("expense_date") as string) || new Date().toISOString().slice(0, 10);
-  const withhold = formData.get("withhold") === "1";
-  const vatRate = formData.get("vat_rate") === "7" ? 7 : 0;
-  const whtRateRaw = Number(formData.get("wht_rate") || 0);
-  const categoryKey = category === "ค่าเช่าอาคาร/สถานที่" ? BUILDING_RENT_CATEGORY : undefined;
-  const settlement = withhold
-    ? settleWht({
-        baseAmount: amount,
-        vatRate,
-        whtRate: whtRateRaw,
-        category: categoryKey,
-      })
-    : settleWht({ baseAmount: amount, vatRate: 0, whtRate: 0 });
-  const bookedAmount = withhold ? settlement.grossAmount : amount;
-
-  if (!title) return { error: "กรุณาระบุชื่อรายการค่าใช้จ่าย" };
-  if (!Number.isFinite(amount) || amount <= 0 || amount > 999999999 || Math.abs(amount*100-Math.round(amount*100)) > 0.00001) return { error: "กรุณาระบุจำนวนเงินที่ถูกต้อง" };
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(expenseDate) || !Number.isFinite(Date.parse(expenseDate)) || new Date(expenseDate).toISOString().slice(0,10) !== expenseDate) return { error: "วันที่ค่าใช้จ่ายไม่ถูกต้อง" };
-  const closedErr = await assertPeriodOpen(tenantId, expenseDate);
-  if (closedErr) return { error: closedErr };
-  if (withhold && settlement.whtAmount > 0) {
-    const taxId = String(formData.get("payee_tax_id") ?? "").replace(/[^0-9]/g, "");
-    if (taxId.length !== 13) {
-      return { error: "หัก ณ ที่จ่ายต้องมีเลขผู้เสียภาษีผู้รับเงิน 13 หลัก" };
-    }
+  const requestId = String(formData.get("request_id") ?? "");
+  if (!requestId || requestId.length > 120) return { error: "ไม่พบคีย์รายการ กรุณาโหลดหน้าใหม่" };
+  const parsed = parseExpenseForm(formData);
+  if (!parsed.success) return { error: validationMessage(parsed.error) };
+  try {
+    const result = await financeRpc("rrs_create_expense", { p_actor: profile.id, p_tenant: tenantId, p_request: requestId, p_data: parsed.data });
+    revalidatePath("/", "layout");
+    revalidatePath("/tax-filing");
+    return { success: true, certificateIssued: result.certificateIssued === true };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : "บันทึกไม่สำเร็จ กรุณาลองซ้ำด้วยรายการเดิม" };
   }
-
-  const [y, m] = expenseDate.split("-");
-  const monthKey = `${m}/${y}`;
-
-  const expenseKey = `custom_${Date.now()}`;
-  const { data: inserted, error } = await supabase.from("sc_opex")
-    .insert({
-      month: monthKey,
-      category,
-      name: title,
-      amount: bookedAmount,
-      pay_method: payMethod,
-      recorded_by: profile.display_name,
-      key: expenseKey,
-      last_updated: new Date().toISOString(),
-      tenant_id: tenantId,
-    })
-    .select("id")
-    .maybeSingle();
-
-  if (error) {
-    return { error: `ไม่สามารถบันทึกได้: ${error.message}` };
-  }
-
-  await logAudit({
-    action: "CREATE",
-    entity: "expense",
-    entity_id: inserted?.id ?? expenseKey,
-    actor_id: profile.id,
-    actor_name: profile.display_name,
-    detail: {
-      month: monthKey,
-      category,
-      name: title,
-      amount: bookedAmount,
-      pay_method: payMethod,
-      expense_date: expenseDate,
-      vat_amount: settlement.vatAmount,
-      wht_amount: settlement.whtAmount,
-      net_payment: settlement.netPayment,
-    },
-  });
-
-  // เขียนกระจกเงาลงตารางใหม่ด้วย (ขั้นที่ 2 ของ docs/sc-opex-refactor-plan.md)
-  // sc_opex ยังเป็นแหล่งข้อมูลจริง — ตัวนี้พลาดแล้วต้องไม่ทำให้การบันทึกของผู้ใช้ล้มตาม
-  if (inserted?.id !== undefined && inserted?.id !== null) {
-    await mirrorExpenseEntry({
-      legacyOpexId: inserted.id,
-      entryDate: expenseDate,
-      amount: bookedAmount,
-      rawCategory: category,
-      title,
-      payMethod,
-      createdBy: profile.id,
-      tenantId,
-    });
-
-    if (withhold && settlement.whtAmount > 0) {
-      const payeeName = String(formData.get("payee_name") ?? "").trim();
-      const payeeKind = formData.get("payee_kind") === "juristic" ? "juristic" : "person";
-      const payeeTaxId = String(formData.get("payee_tax_id") ?? "").replace(/[^0-9]/g, "");
-      const payeeAddress = String(formData.get("payee_address") ?? "").trim();
-      const existingPayeeId = String(formData.get("payee_id") ?? "").trim();
-      const payee = existingPayeeId
-        ? { success: true as const, id: existingPayeeId }
-        : await upsertWhtPayee({
-            kind: payeeKind,
-            name: payeeName || title,
-            taxId: payeeTaxId,
-            address: payeeAddress,
-          });
-      if (payee.success) {
-        const issued = await issuePayableCertificate({
-          payeeId: payee.id,
-          paymentDate: expenseDate,
-          baseAmount: settlement.baseAmount,
-          vatRate: settlement.vatRate,
-          whtRate: settlement.whtRate,
-          category: categoryKey,
-          legacyOpexId: Number(inserted.id),
-          createdBy: profile.id,
-          tenantId,
-        });
-        if (!issued.success) {
-          warning = "บันทึกค่าใช้จ่ายแล้ว แต่ยังออกหนังสือรับรอง 50 ทวิ ไม่สำเร็จ กรุณาให้ผู้ดูแลตรวจจากหลักฐานรายการนี้ ห้ามบันทึกค่าใช้จ่ายซ้ำ";
-          console.error("[expenses] ออกหนังสือรับรอง 50 ทวิ ไม่สำเร็จ:", issued.error);
-        } else { certificateIssued = true; }
-      } else { warning = "บันทึกค่าใช้จ่ายแล้ว แต่บันทึกผู้รับเงินเพื่อออก 50 ทวิ ไม่สำเร็จ กรุณาตรวจหลักฐานกับผู้ทำบัญชี ห้ามลงค่าใช้จ่ายซ้ำ"; }
-    }
-  }
-
-  revalidatePath("/", "layout");
-  revalidatePath("/tax-filing");
-  return { success: true, warning, certificateIssued };
 }
 
 export async function deleteExpense(id: string | number) {
   const profile = await requireProfile();
   requireModuleWrite(profile, "expenses");
-  const supabase = createAdminClient();
   const tenantId = await requireTenantId(profile);
-
-  // อ่านรายการเก็บไว้ก่อนลบ — ยอดค่าใช้จ่ายที่หายไปต้องตรวจย้อนหลังได้
-  // sc_opex.id เป็น bigint — แปลงเป็นตัวเลขก่อนเสมอ (ฝั่งเรียกส่งมาเป็น string ได้)
   const numericId = Number(id);
-  // กันกรณีถูกเรียกด้วย id สังเคราะห์ของรายการย่อย ("123-misc-0") ซึ่งต้องไปที่
-  // deleteMiscExpenseItem() แทน — เดิม Number() จะได้ NaN แล้วลบไม่โดนอะไรเลยแบบเงียบๆ
-  if (!Number.isFinite(numericId)) {
-    throw new Error(`รหัสรายการไม่ถูกต้อง: ${id} (รายการย่อยของรายจ่ายเบ็ดเตล็ดต้องลบผ่าน deleteMiscExpenseItem)`);
-  }
-  const { data: doomed } = await supabase.from("sc_opex")
-    .select("month, category, key, name, amount, pay_method, recorded_by")
-    .eq("id", numericId)
-    .eq("tenant_id", tenantId)
-    .maybeSingle();
-
-  if (doomed?.month) {
-    const closedErr = await assertPeriodOpen(tenantId, doomed.month);
-    if (closedErr) throw new Error(closedErr);
-  }
-
-  // ⚠️ .eq("tenant_id", ...) กัน id ของ tenant อื่นถูกลบข้ามฝั่ง
-  const { error } = await supabase.from("sc_opex")
-    .delete()
-    .eq("id", numericId)
-    .eq("tenant_id", tenantId);
-
-  if (error) {
-    throw new Error(`ไม่สามารถลบรายการได้: ${error.message}`);
-  }
-
-  await deleteCertificatesForOpex(numericId, tenantId);
-
-  // ลบกระจกเงาในตารางใหม่ให้ตรงกัน ไม่งั้นสองฝั่งจะเพี้ยนทันทีที่มีคนลบรายการ
-  await unmirrorExpenseEntry(numericId);
-
-  await logAudit({
-    action: "DELETE",
-    entity: "expense",
-    entity_id: String(id),
-    actor_id: profile.id,
-    actor_name: profile.display_name,
-    detail: doomed
-      ? { expense_id: id, ...doomed }
-      : { expense_id: id, note: "อ่านข้อมูลเดิมไม่ได้ก่อนลบ" },
-  });
-
+  if (!Number.isSafeInteger(numericId) || numericId <= 0) throw new Error("รหัสรายการค่าใช้จ่ายไม่ถูกต้อง");
+  await financeRpc("rrs_delete_expense", { p_actor: profile.id, p_tenant: tenantId, p_request: `expense-delete:${numericId}`, p_data: { id: numericId } });
   revalidatePath("/", "layout");
+  revalidatePath("/tax-filing");
   return { success: true };
 }
 
@@ -1409,14 +1253,15 @@ export async function saveRentalIncome(input: {
   tenantTaxId?: string;
   amount: number;
   whtRate?: number;
-}): Promise<{ success: true } | { success: false; error: string }> {
+}): Promise<{ success: true; warning?: string } | { success: false; error: string }> {
   const profile = await requireProfile();
   requireModuleWrite(profile, "expenses");
   const supabase = createAdminClient();
   const tenantId = await requireTenantId(profile);
 
+  let warning: string | undefined;
   const month = input.month.trim();
-  if (!/^\d{2}\/\d{4}$/.test(month)) {
+  if (!/^(0[1-9]|1[0-2])\/\d{4}$/.test(month)) {
     return { success: false, error: "เลือกงวดเดือนก่อน จึงจะบันทึกรายได้ค่าเช่าห้องได้" };
   }
   const tenantName = input.tenantName.trim();
@@ -1432,6 +1277,7 @@ export async function saveRentalIncome(input: {
     .from("sc_rental_records")
     .select("room_index")
     .eq("month", month)
+    .eq("tenant_id", tenantId)
     .order("room_index", { ascending: false })
     .limit(1)
     .maybeSingle();
@@ -1492,6 +1338,7 @@ export async function saveRentalIncome(input: {
       whtRate: settlement.whtRate,
     });
     if (!withheld.success) {
+      warning = "บันทึกรายได้ค่าเช่าแล้ว แต่ยังบันทึกหลักฐานหัก ณ ที่จ่ายไม่สำเร็จ กรุณาให้ผู้ทำบัญชีตรวจรายการนี้ ห้ามบันทึกค่าเช่าซ้ำ";
       console.error("[expenses] บันทึก WHT รายได้ค่าเช่าไม่สำเร็จ:", withheld.error);
     }
   }
@@ -1514,6 +1361,6 @@ export async function saveRentalIncome(input: {
 
   revalidatePath("/", "layout");
   revalidatePath("/tax-filing");
-  return { success: true };
+  return { success: true, warning };
 }
 

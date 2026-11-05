@@ -1,6 +1,10 @@
 "use client";
 
-import { useState, useMemo, useTransition } from "react";
+import { parseExpenseForm } from "@/lib/expense-command";
+import { validationMessage } from "@/lib/finance-validation";
+import { bangkokToday } from "@/lib/purchase-receipts";
+import { newRequestId } from "@/lib/idempotency";
+import { useState, useMemo, useTransition, useRef } from "react";
 import {
   fetchAllExpensesData,
   addExpense,
@@ -170,12 +174,13 @@ export function ExpensesClient({
   const [newStaffSsoExempt, setNewStaffSsoExempt] = useState(false);
 
   // Add Expense Modal State
+  const expenseRequest = useRef<string | null>(null);
   const [showAddExpenseModal, setShowAddExpenseModal] = useState(false);
   const [expCategory, setExpCategory] = useState<ExpenseCategoryKey>("facility_utilities");
   const [expTitle, setExpTitle] = useState("");
   const [expAmount, setExpAmount] = useState<number>(0);
   const [expPayMethod, setExpPayMethod] = useState("บัญชีร้าน (โอน)");
-  const [expDate, setExpDate] = useState(new Date().toISOString().slice(0, 10));
+  const [expDate, setExpDate] = useState(bangkokToday);
   const [expWithhold, setExpWithhold] = useState(false);
   const [expVat, setExpVat] = useState(false);
   const [expWhtRate, setExpWhtRate] = useState<number>(0);
@@ -600,6 +605,8 @@ export function ExpensesClient({
 
     startTransition(async () => {
       const formData = new FormData();
+      expenseRequest.current ??= newRequestId();
+      formData.set("request_id", expenseRequest.current);
       formData.set("title", expTitle.trim());
       formData.set("category", categoryName);
       formData.set("amount", String(expAmount));
@@ -616,8 +623,13 @@ export function ExpensesClient({
         formData.set("payee_address", expPayeeAddress.trim());
       }
 
-      const res = await addExpense(undefined, formData);
+      const checked = parseExpenseForm(formData);
+      if (!checked.success) { toast.error(validationMessage(checked.error)); return; }
+      let res;
+      try { res = await addExpense(undefined, formData); }
+      catch { toast.error("ยังยืนยันผลไม่ได้ กรุณาลองบันทึกซ้ำด้วยข้อมูลเดิม ระบบจะไม่เพิ่มรายการซ้ำ"); return; }
       if (res.success) {
+        expenseRequest.current = null;
         if (res.warning) toast.warning(res.warning, { duration: 15000 });
         else toast.success(
           res.certificateIssued
@@ -928,7 +940,8 @@ export function ExpensesClient({
                     toast.error(res.error);
                     return;
                   }
-                  toast.success(`บันทึกรายได้ค่าเช่าจาก ${payer} แล้ว`);
+                  if (res.warning) toast.warning(res.warning, { duration: 15000 });
+                  else toast.success(`บันทึกรายได้ค่าเช่าจาก ${payer} แล้ว`);
                   setNewRentPayer("");
                   setNewRentPayerCustom("");
                   setNewRentAmount(0);
@@ -1840,9 +1853,10 @@ export function ExpensesClient({
               </div>
 
               <div className="space-y-1">
-                <Label className="font-bold text-slate-700">ชื่อรายการค่าใช้จ่าย *</Label>
+                <Label htmlFor="expense-title" className="font-bold text-slate-700">ชื่อรายการค่าใช้จ่าย *</Label>
                 <Input
                   type="text"
+                  id="expense-title"
                   value={expTitle}
                   onChange={(e) => setExpTitle(e.target.value)}
                   placeholder="เช่น ค่าน้ำประปาประจำเดือน, ซื้อแปรงขนม้า 3 อัน"
@@ -1853,10 +1867,13 @@ export function ExpensesClient({
 
               <div className="grid grid-cols-2 gap-2">
                 <div className="space-y-1">
-                  <Label className="font-bold text-slate-700">จำนวนเงิน (บาท) *</Label>
+                  <Label htmlFor="expense-amount" className="font-bold text-slate-700">จำนวนเงิน (บาท) *</Label>
                   <Input
                     type="number"
-                    step="any"
+                    step="0.01"
+                    id="expense-amount"
+                    min="0.01"
+                    max="9999999.99"
                     value={expAmount || ""}
                     onChange={(e) => setExpAmount(parseFloat(e.target.value) || 0)}
                     placeholder="0.00"

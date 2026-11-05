@@ -1,4 +1,10 @@
+## รอบพัฒนา 2026-11-05 (รุ่น0053/0054)
+
+ดู HANDOFF.md ส่วนบน: 0053 actor throttle + 0054 atomic custom expenses/WHT, RPC rental WHT, stable expense retry และ browser DML revokes. Migration เก่ายังคง append-only; ใช้ `npm run deploy -- --with-database` หลัง checks ผ่าน. ยังมีงาน VPS และ legacy monthly writers ตาม handoff.
+
 # DD-Management (RRS)
+
+ผลตรวจ VPS หลังอัปเดต 2026-11-05: อ่าน `docs/security-vps-2026-11-05.md` และหัว HANDOFF ก่อนสรุปว่าปลอดภัยครบ — RRS ยังเป็น1e0036d แต่พบความเสี่ยงจากแอปอื่น/บัญชีruntimeร่วมกัน และ concurrency throttle ที่ยังรอแก้; รอบตรวจนี้ไม่เปลี่ยน production
 
 ## รอบล่าสุด 2026-11-04 — security / รับซื้อ / ส่งสำนักงานบัญชี
 

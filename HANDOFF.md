@@ -1,3 +1,30 @@
+## งานพัฒนารอบ 2026-11-05 — รุ่น0053/0054
+
+- การตรวจ release: 25/25 ผ่าน, production-build browser fixture ผ่าน (expense error/input preservation/stable retry พร้อม purchase/POS/accountant regression), hosted smoke ทั้งค่าใช้จ่ายและค่าเช่า rollback ครบ, full release-script dry-run พร้อม fresh verified backup ผ่าน
+- Migration0053 ปิดช่อง throttle แข่งกัน: ล็อกต่อผู้ใช้ก่อนคีย์รายการ พร้อม index และ native PostgreSQL 2 connections regression (59+2 รับเพิ่มได้เพียง1; retry เดิมยังใช้ได้)
+- Migration0054 เพิ่ม `rrs_create_expense` / `rrs_delete_expense`: ค่าใช้จ่าย custom, รายละเอียดรายวัน, ผู้รับเงิน/50ทวิ, audit และ replay บันทึกใน transaction เดียว; failure ขั้นท้าย rollback ทุกส่วน
+- UI ค่าใช้จ่ายใช้ schema ร่วม client/server, stable request ID ข้าม retry, เก็บข้อมูลเมื่อผิดพลาด, วันที่เริ่มต้นตามกรุงเทพฯ และ label ที่กด/อ่านได้
+- เลข WHT ออกใน INSERT trigger ด้วย counter ต่อกิจการ/เดือน อิง MAX suffix เดิม ไม่ใช่ COUNT; concurrent ไม่ซ้ำ และ rollback ไม่กินเลข
+- ปิด authenticated/anon DML ของ OPEX, expense entries, WHT payees/certificates; คำสั่งใหม่ service_role-only พร้อม actor/tenant/role/period checks
+- WHT Server Actions ไม่เชื่อ tenant/actor จากผู้เรียก; คืนเลขจากแถวที่ DB บันทึกจริง; ไม่ลบหนังสือรับรองผ่าน helper; FK แบบ NOT VALID ป้องกันลบค่าใช้จ่ายที่มีหลักฐาน โดยไม่แก้ประวัติเก่า
+- `rrs_record_rental_wht` บันทึกข้อมูลหัก ณ ที่จ่ายค่าเช่า atomically, replay ได้, ตรวจงวดและไม่แทนที่หนังสือรับรองเดิม; ค่าเช่าใหม่ยังเป็น legacy หลาย transaction แต่หาก WHT ไม่สำเร็จต้องแจ้ง warning ห้ามลงค่าเช่าซ้ำ
+- Hosted smoke ตรวจทั้งสอง migration ใน transaction rollback พร้อม expense/WHT/replay/delete-denial และนับแถว/เคาน์เตอร์หลัง rollback; ไม่มีข้อมูลทดสอบคงอยู่
+- ขอบเขตคงเดิม: บัญชีบริหารและชุดส่งสำนักงานบัญชี ไม่ใช่ GL/การรับรองแบบภาษีครบมาตรฐาน; ต้องให้ผู้ทำบัญชีตรวจเอกสารก่อนใช้ยื่น
+- งานถัดไป: monthly payroll/rental create ยังมี legacy multi-write; แผนเปลี่ยน SSH/firewall/แยก runtime user และอัปเดตเว็บอื่นบน VPS ต้องทำแยกตาม dependency ของแต่ละบริการ
+
+## ผลตรวจ VPS ล่าสุด 2026-11-05 — audit เท่านั้น ยังไม่แก้ config
+
+- รายละเอียด: `docs/security-vps-2026-11-05.md` และ HTML ใน visualization workspace; production ยัง commit `1e0036d`, Next16.4.5 / Node26.13.0, runtime npm advisory ของ RRS=0, RLS/การปิด direct financial writes หลักยังอยู่ครบ
+- ความเสี่ยงสูง: เว็บอื่นใช้ Next รุ่นเก่า (horpak14.2.24, pems16.2.12, cnxhaircutz16.4.4, local-seo16.3.8); หลายเว็บรันด้วย ddservice ที่มี Docker group + NOPASSWD wg/wg-quick จึงไม่แยกขอบเขตความเสียหายระหว่างแอป
+- SSH ยืนยันผ่าน authentication negotiation ว่ายังรับ password; accepted password6ครั้งใน24h (ไม่ใช่root), failed/invalid1672บรรทัด ไม่ใช่หลักฐานบุกรุกโดยตัวมันเอง
+- จากเครื่องตรวจเชื่อม9000/8080/6789/8880/8843/8443ได้; 9000 เป็นSpider-Bot HTTP, HEAD /admin/dashboard200ไม่ส่งcookie แต่ยังไม่อ่าน/พิสูจน์สิทธิ์APIภายใน; อย่าปิดUniFiportsทั้งหมดโดยไม่ตรวจการใช้งาน
+- RRS throttle60/min พิสูจน์สองPostgresconnectionsในฐานชั่วคราว: 59เดิม+2พร้อมกัน=61; MD5prosrcจริงตรงโค้ดที่ทดสอบ. ยังไม่ได้แก้ ต้องappendmigrationใหม่หากอนุมัติ
+- sc_opex ยังมีDMLสำหรับadmin/co-adminในtenantตนเอง (เป็นสิทธิ์ที่แอปอนุญาต ไม่ใช่role bypass) แต่ bypass validation/mirror/WHTของServerActionได้ ควรย้ายatomiccommandก่อนrevoke
+- backupล่าสุด 904629bytes, TOC96TABLE DATAรวมauth.users/receiptpostsอ่านได้ด้วยpg_restore17/18; TLSoriginปฏิเสธ1.0/1.1และรองรับ1.2/1.3; .env600และdotfilesHTTP404
+- ยังอ่านeffectiveUFW/fail2ban/sshd-Tและcloud-initconfบางส่วนไม่ได้เพราะsudoต้องpassword; ไม่ใช้Docker/wgข้ามสิทธิ์. การauditlockfilesแอปอื่นผ่านnpmถูกauto-reviewปฏิเสธ จึงเทียบเฉพาะเวอร์ชันกับadvisoryสาธารณะแทน
+- Nodeมีประกาศsecurityrelease11พ.ย.2026ระดับสูงสุดHIGH ต้องติดตามหลังออกจริง. ไม่ได้สร้างautomationหรือส่งข้อความภายนอก
+- รอบนี้ไม่เปลี่ยนVPSconfig/restart/deploy/แก้ข้อมูลธุรกิจ; ไม่ยืนยันว่าไร้ช่องโหว่หรือมี/ไม่มีการบุกรุก
+
 # สถานะปัจจุบัน 2026-11-04 — release ความปลอดภัย / รับซื้อ / ส่งสำนักงานบัญชี
 
 - ขอบเขตที่เจ้าของยืนยัน: บริหารร้านและส่งข้อมูลที่กระทบยอดได้ให้สำนักงานบัญชี ไม่จัดทำ GL/งบยื่นเอง

@@ -4,7 +4,9 @@ import { revalidatePath } from "next/cache";
 import { requireProfile, requireModuleView, requireModuleWrite } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireTenantId, tenantFilter } from "@/lib/tenant";
-import { logAudit } from "@/lib/audit";
+import { createHash } from "node:crypto";
+import { financeRpc } from "@/lib/finance-rpc";
+import { assertPeriodOpen } from "@/lib/period-close-store";
 import { errorMessage } from "@/lib/errors";
 import {
   settleWht,
@@ -189,6 +191,15 @@ export async function issuePayableCertificate(input: {
 }): Promise<{ success: true; certificateNumber: string } | { success: false; error: string }> {
   const profile = await requireProfile();
   requireModuleWrite(profile, "expenses");
+  // This function is a public Server Action: never trust tenant/actor arguments.
+  const tenantId = await requireTenantId(profile);
+  if (input.tenantId !== tenantId) return { success: false, error: "ไม่มีสิทธิ์ทำรายการของกิจการนี้" };
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(input.paymentDate) || !Number.isFinite(Date.parse(input.paymentDate)) || new Date(input.paymentDate).toISOString().slice(0, 10) !== input.paymentDate) {
+    return { success: false, error: "วันที่จ่ายไม่ถูกต้อง" };
+  }
+  const closedError = await assertPeriodOpen(tenantId, input.paymentDate);
+  if (closedError) return { success: false, error: closedError };
+
   const settlement = settleWht({
     baseAmount: input.baseAmount,
     vatRate: input.vatRate,
@@ -200,11 +211,19 @@ export async function issuePayableCertificate(input: {
   }
 
   const supabase = createAdminClient();
+  if (input.legacyOpexId !== undefined) {
+    if (!Number.isSafeInteger(input.legacyOpexId) || input.legacyOpexId <= 0) return { success: false, error: "รหัสค่าใช้จ่ายไม่ถูกต้อง" };
+    const { data: expense, error: expenseError } = await supabase.from("sc_opex")
+      .select("id,amount").eq("id", input.legacyOpexId).eq("tenant_id", tenantId).maybeSingle();
+    if (expenseError || !expense || Math.abs(Number(expense.amount) - settlement.grossAmount) > 0.001) {
+      return { success: false, error: "ไม่พบค่าใช้จ่ายที่มียอดตรงกันของกิจการนี้" };
+    }
+  }
   const { data: payee, error: payeeErr } = await supabase
     .from("sc_wht_payees")
     .select("id, kind, name")
     .eq("id", input.payeeId)
-    .eq("tenant_id", input.tenantId)
+    .eq("tenant_id", tenantId)
     .maybeSingle();
   if (payeeErr || !payee) return { success: false, error: "ไม่พบผู้รับเงินของกิจการนี้" };
 
@@ -213,16 +232,17 @@ export async function issuePayableCertificate(input: {
   const income = incomeTypeForCategory(input.category);
   const periodYm = periodYmFromIsoDate(input.paymentDate);
   const from = `${periodYm}-01`;
+  const nextMonth = new Date(Date.UTC(Number(periodYm.slice(0, 4)), Number(periodYm.slice(5, 7)), 1)).toISOString().slice(0, 10);
   const { count } = await supabase
     .from("sc_wht_certificates")
     .select("id", { count: "exact", head: true })
-    .eq("tenant_id", input.tenantId)
+    .eq("tenant_id", tenantId)
     .gte("payment_date", from)
-    .lte("payment_date", `${periodYm}-31`);
+    .lt("payment_date", nextMonth);
   const certNo = certificateNumber(periodYm, (count ?? 0) + 1);
 
-  const { error } = await supabase.from("sc_wht_certificates").insert({
-    tenant_id: input.tenantId,
+  const { data: insertedCertificate, error } = await supabase.from("sc_wht_certificates").insert({
+    tenant_id: tenantId,
     payee_id: payee.id,
     direction: "payable",
     form_type: formType,
@@ -237,10 +257,11 @@ export async function issuePayableCertificate(input: {
     tax_amount: settlement.whtAmount,
     net_payment: settlement.netPayment,
     legacy_opex_id: input.legacyOpexId ?? null,
-    created_by: input.createdBy ?? null,
-  });
+    created_by: profile.id,
+  }).select("certificate_number").single();
   if (error) return { success: false, error: error.message };
-  return { success: true, certificateNumber: certNo };
+  if (!insertedCertificate?.certificate_number) return { success: false, error: "ไม่พบเลขหนังสือรับรองที่บันทึก" };
+  return { success: true, certificateNumber: insertedCertificate.certificate_number };
 }
 
 export async function recordRentalWht(input: {
@@ -252,108 +273,32 @@ export async function recordRentalWht(input: {
   const profile = await requireProfile();
   requireModuleWrite(profile, "expenses");
   const tenantId = await requireTenantId(profile);
-  const supabase = createAdminClient();
-
-  const { data: room, error: findErr } = await supabase
-    .from("sc_rental_records")
-    .select("id, month, income_amount, tenant_id")
-    .eq("id", input.rentalId)
-    .eq("tenant_id", tenantId)
-    .maybeSingle();
-  if (findErr || !room) return { success: false, error: "ไม่พบรายการค่าเช่าห้อง" };
-
-  const settlement = settleWht({
-    baseAmount: Number(room.income_amount),
-    whtRate: input.whtRate,
-    category: "rental_income",
-  });
-
+  const name = String(input.tenantName ?? "").trim();
   const taxId = digits(input.tenantTaxId || "");
-  const { error } = await supabase
-    .from("sc_rental_records")
-    .update({
-      tenant_name: input.tenantName.trim() || null,
-      tenant_tax_id: taxId.length === 13 ? taxId : null,
-      wht_rate: settlement.whtRate,
-      wht_withheld: settlement.whtAmount,
-    })
-    .eq("id", room.id)
-    .eq("tenant_id", tenantId);
-  if (error) return { success: false, error: error.message };
-
-  if (settlement.whtAmount > 0 && taxId.length === 13) {
-    const kind = classifyPayeeKindFromTaxId(taxId);
-    const payee = await upsertWhtPayee({
-      kind,
-      name: input.tenantName.trim() || "ผู้เช่า",
-      taxId,
-    });
-    if (payee.success) {
-      await supabase
-        .from("sc_wht_certificates")
-        .delete()
-        .eq("rental_record_id", room.id)
-        .eq("tenant_id", tenantId);
-      const [mm, yyyy] = String(room.month).split("/");
-      const paymentDate = yyyy && mm ? `${yyyy}-${mm}-01` : new Date().toISOString().slice(0, 10);
-      const income = incomeTypeForCategory("rental_income");
-      const periodYm = periodYmFromIsoDate(paymentDate);
-      const { count } = await supabase
-        .from("sc_wht_certificates")
-        .select("id", { count: "exact", head: true })
-        .eq("tenant_id", tenantId)
-        .gte("payment_date", `${periodYm}-01`)
-        .lte("payment_date", `${periodYm}-31`);
-      await supabase.from("sc_wht_certificates").insert({
-        tenant_id: tenantId,
-        payee_id: payee.id,
-        direction: "receivable",
-        form_type: pndFormForPayee(kind),
-        income_type_code: income.code,
-        income_type_label: income.label,
-        certificate_number: certificateNumber(periodYm, (count ?? 0) + 1),
-        payment_date: paymentDate,
-        base_amount: settlement.baseAmount,
-        vat_amount: 0,
-        gross_amount: settlement.grossAmount,
-        wht_rate: settlement.whtRate,
-        tax_amount: settlement.whtAmount,
-        net_payment: settlement.netPayment,
-        rental_record_id: room.id,
-        created_by: profile.id,
-      });
-    }
+  if (!Number.isSafeInteger(input.rentalId) || input.rentalId <= 0 || !name || name.length > 300 || ![0,1,2,3,5].includes(input.whtRate) || (input.whtRate > 0 && taxId.length !== 13)) {
+    return { success: false, error: "ข้อมูลหัก ณ ที่จ่ายค่าเช่าไม่ถูกต้อง" };
   }
-
-  await logAudit({
-    action: "UPDATE",
-    entity: "expense",
-    entity_id: String(room.id),
-    actor_id: profile.id,
-    actor_name: profile.display_name,
-    detail: {
-      kind: "rental_wht_receivable",
-      withheld: settlement.whtAmount,
-      cash_in: settlement.netPayment,
-      income: settlement.grossAmount,
-    },
-  });
-  revalidatePath("/expenses");
-  revalidatePath("/tax-filing");
-  revalidatePath("/dashboard");
-  return { success: true };
+  const payload = { id: input.rentalId, name, tax_id: taxId, kind: classifyPayeeKindFromTaxId(taxId), wht_rate: input.whtRate };
+  const requestId = `rental-wht:${createHash("sha256").update(JSON.stringify(payload)).digest("hex")}`;
+  try {
+    await financeRpc("rrs_record_rental_wht", { p_actor: profile.id, p_tenant: tenantId, p_request: requestId, p_data: payload });
+    revalidatePath("/expenses");
+    revalidatePath("/tax-filing");
+    revalidatePath("/dashboard");
+    return { success: true };
+  } catch (error) { return { success: false, error: errorMessage(error, "บันทึกข้อมูลหัก ณ ที่จ่ายไม่สำเร็จ") }; }
 }
 
+/** Retained for server callers; issued tax evidence cannot be silently deleted. */
 export async function deleteCertificatesForOpex(legacyOpexId: number, tenantId: string): Promise<void> {
   const profile = await requireProfile();
   requireModuleWrite(profile, "expenses");
+  const currentTenant = await requireTenantId(profile);
+  if (tenantId !== currentTenant) throw new Error("ไม่มีสิทธิ์ทำรายการของกิจการนี้");
+  if (!Number.isSafeInteger(legacyOpexId) || legacyOpexId <= 0) throw new Error("รหัสค่าใช้จ่ายไม่ถูกต้อง");
   const supabase = createAdminClient();
-  const { error } = await supabase
-    .from("sc_wht_certificates")
-    .delete()
-    .eq("legacy_opex_id", legacyOpexId)
-    .eq("tenant_id", tenantId);
-  if (error) {
-    console.error("[wht] ลบหนังสือรับรองไม่สำเร็จ:", error.message);
-  }
+  const { data, error } = await supabase.from("sc_wht_certificates").select("id")
+    .eq("legacy_opex_id", legacyOpexId).eq("tenant_id", currentTenant).limit(1);
+  if (error) throw new Error("ตรวจสอบหนังสือรับรองไม่สำเร็จ จึงยังลบค่าใช้จ่ายไม่ได้");
+  if (data?.length) throw new Error("รายการนี้ออกหนังสือรับรอง 50 ทวิแล้ว กรุณาให้ผู้ทำบัญชีตรวจแก้เอกสารก่อน ห้ามลบหลักฐานเดิม");
 }

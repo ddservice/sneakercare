@@ -8,7 +8,7 @@ set -a
 . /home/ddservice/sneakercare-backup.env
 set +a
 case "$SUPABASE_DB_URL" in *mdlxogfkpwejnqpzhmoy*) ;; *) echo 'Database reference mismatch'; exit 9;; esac
-FILES=(0047_purchase_receipts.sql 0049_atomic_sales_and_payments.sql 0050_atomic_documents.sql 0051_finance_read_and_guards.sql 0052_accountant_handoff.sql)
+FILES=(0047_purchase_receipts.sql 0049_atomic_sales_and_payments.sql 0050_atomic_documents.sql 0051_finance_read_and_guards.sql 0052_accountant_handoff.sql 0053_actor_write_throttle.sql 0054_atomic_custom_expenses.sql)
 umask 077
 BACKUP_FILE="$LOCAL_BACKUP_DIR/rrs-pre-release-$(date -u +%Y%m%d_%H%M%S)-$$.dump"
 /usr/lib/postgresql/17/bin/pg_dump "$SUPABASE_DB_URL" --format=custom --no-owner --no-acl --file="$BACKUP_FILE"

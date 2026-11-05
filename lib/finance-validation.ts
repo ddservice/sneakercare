@@ -22,3 +22,17 @@ export const documentPayloadSchema=z.object({
  notes:text(4000).optional(),promptPayTarget:text(30).optional(),billingRefDocIds:z.array(z.string().uuid()).max(100).optional(),refParentDocId:z.string().uuid().optional(),refParentDocNumber:text(50).optional(),chargeVat:z.boolean().optional(),
 }).strict();
 export function validationMessage(error:z.ZodError){return error.issues.map(i=>`${i.path.join('.')||'ข้อมูล'}: ${i.message}`).join(' · ');}
+
+export const expenseCommandSchema=z.object({
+ date,title:text(500).min(1,'ระบุชื่อรายการ'),category_key:text(100).min(1),
+ amount:money.positive('จำนวนเงินต้องมากกว่า 0').lt(10000000,'ยอดต้องน้อยกว่า 10,000,000 บาท'),
+ pay_method:text(100).min(1,'ระบุช่องทางจ่าย'),withhold:z.boolean(),vat_rate:z.union([z.literal(0),z.literal(7)]),
+ wht_rate:z.union([z.literal(0),z.literal(1),z.literal(2),z.literal(3),z.literal(5)]),
+ payee_id:z.union([z.string().uuid(),z.literal('')]),payee_kind:z.enum(['person','juristic']),
+ payee_name:text(300),payee_tax_id:text(13),payee_address:text(2000),
+}).strict().superRefine((v,ctx)=>{
+ if(v.withhold&&v.wht_rate===0)ctx.addIssue({code:'custom',path:['wht_rate'],message:'ระบุอัตราหัก ณ ที่จ่าย'});
+ if(!v.withhold&&(v.wht_rate!==0||v.vat_rate!==0))ctx.addIssue({code:'custom',path:['withhold'],message:'อัตราภาษีไม่ตรงกับรายการ'});
+ if(v.withhold&&!v.payee_id&&(!v.payee_name||!/^\d{13}$/.test(v.payee_tax_id)))ctx.addIssue({code:'custom',path:['payee_name'],message:'ระบุชื่อและเลขผู้เสียภาษีผู้รับเงิน 13 หลัก'});
+ if(v.amount+Math.round(v.amount*v.vat_rate)/100>=10000000)ctx.addIssue({code:'custom',path:['amount'],message:'ยอดรวม VAT ต้องน้อยกว่า 10,000,000 บาท'});
+});
